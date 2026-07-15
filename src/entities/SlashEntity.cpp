@@ -756,7 +756,7 @@ void SlashEntity::OnTouchActive(float x, float y) {
             _Vector3<float> step(lastCenter.x + unitDir.x * travelled,
                                  lastCenter.y + unitDir.y * travelled, 0.0f);
             const float pressure = headThick + (travelled / dist) * (1.0f - headThick);
-            AddPoint(pressure, &step, &dir);
+            AddPoint(step, dir, pressure);
             travelled += POINT_SPACING;
         }
 #ifdef FN_DEBUG_TOUCH
@@ -774,7 +774,7 @@ void SlashEntity::OnTouchActive(float x, float y) {
     }
 
     // Always lay the head point at the live touch position (full pressure, binary: 1.0).
-    AddPoint(1.0f, &newPos, &dir);
+    AddPoint(newPos, dir, 1.0f);
 
     // Binary end-of-frame anchor history shift (UpdateTouchDown epilogue):
     // prevhead <- head <- tail <- touchPos.
@@ -847,19 +847,18 @@ void SlashEntity::OnTouchReleased() {
 // Scroll cap: if m_SplitPoint-2 <= m_PointCount, slide buffers down by one pair
 //   and set m_PointCount = m_SplitPoint-4.
 // ---------------------------------------------------------------------------
-void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vector3<float>* dir) {
+void SlashEntity::AddPoint(_Vector3<float> center, _Vector3<float> dir, float pressure) {
     if (!m_pLeftBuffer || !m_pRightBuffer) return;
-    if (!center || !dir) return;
 
     // ASM-spec v1.6.1 T_1399 @0x1e8340: skip only if dir AND m_BladeDir both zero.
     // Binary OR-guard: if both are (0,0,0) there is no direction to draw with.
     // With raw dir (Fix A), a near-stationary frame gives tiny-but-nonzero distVec;
     // the binary still appends (m_BladeDir nonzero from prior frame), so we must not
     // gate on dir-magnitude alone.
-    if (dir->MagnitudeSqr() < 1e-8f && m_BladeDir.MagnitudeSqr() < 1e-8f) {
+    if (dir.MagnitudeSqr() < 1e-8f && m_BladeDir.MagnitudeSqr() < 1e-8f) {
 #ifdef FN_DEBUG_TOUCH
         LOG_DEBUG("SLASH", "AddPoint[%d]: SKIP dir+bladeDir both zero pos=(%.2f,%.2f) pointCount=%d",
-                 m_FingerId, center->x, center->y, m_PointCount);
+                 m_FingerId, center.x, center.y, m_PointCount);
 #endif
         return;
     }
@@ -878,17 +877,18 @@ void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vecto
     {
         int slot = (int)m_GhostIndex;   // 0..5 invariant maintained below
 
-        if (dir->x == 0.0f && dir->y == 0.0f && dir->z == 0.0f) {
+        if (dir.x == 0.0f && dir.y == 0.0f && dir.z == 0.0f) {
             // dir zero: binary substitutes m_BladeDir for the rest of AddPoint
-            // so that downstream m_BladeDir=*dir keeps the previous direction.
-            *dir = m_BladeDir;
+            // so that downstream m_BladeDir=dir keeps the previous direction.
+            // dir is by value (binary ABI), so this write never propagates to the caller.
+            dir = m_BladeDir;
             m_GhostDirRing[slot] = _Vector3<float>(0.0f, 0.0f, 0.0f);
         } else if (m_GhostCount == 0) {
             // First stroke point: write zero to ring (binary special case).
             m_GhostDirRing[slot] = _Vector3<float>(0.0f, 0.0f, 0.0f);
         } else {
             // Normal: copy dir then normalize in-place (binary _Vector3::Normalise @0x00138ce8).
-            m_GhostDirRing[slot] = *dir;
+            m_GhostDirRing[slot] = dir;
             m_GhostDirRing[slot].Normalise();
         }
 
@@ -919,8 +919,8 @@ void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vecto
     }
 
     // Update blade direction and angle index.
-    m_BladeDir = *dir;
-    short angle = Math::Atan2Idx(-dir->x, dir->y);
+    m_BladeDir = dir;
+    short angle = Math::Atan2Idx(-dir.x, dir.y);
     m_AngleIndex = angle;
     m_Angle      = (uint16_t)angle;
 
@@ -948,9 +948,9 @@ void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vecto
     const int edgeIdx   = m_PointCount + 1;
 
     // Center vertex (spine): written identically to both buffers.
-    m_pLeftBuffer[centerIdx].x      = center->x;
-    m_pLeftBuffer[centerIdx].y      = center->y;
-    m_pLeftBuffer[centerIdx].z      = center->z;
+    m_pLeftBuffer[centerIdx].x      = center.x;
+    m_pLeftBuffer[centerIdx].y      = center.y;
+    m_pLeftBuffer[centerIdx].z      = center.z;
     m_pLeftBuffer[centerIdx].nx     = 0.0f;
     m_pLeftBuffer[centerIdx].ny     = 0.0f;
     m_pLeftBuffer[centerIdx].nz     = 1.0f;
@@ -958,9 +958,9 @@ void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vecto
     m_pLeftBuffer[centerIdx].u      = 0.5f;
     m_pLeftBuffer[centerIdx].v      = 0.5f;
 
-    m_pRightBuffer[centerIdx].x      = center->x;
-    m_pRightBuffer[centerIdx].y      = center->y;
-    m_pRightBuffer[centerIdx].z      = center->z;
+    m_pRightBuffer[centerIdx].x      = center.x;
+    m_pRightBuffer[centerIdx].y      = center.y;
+    m_pRightBuffer[centerIdx].z      = center.z;
     m_pRightBuffer[centerIdx].nx     = 0.0f;
     m_pRightBuffer[centerIdx].ny     = 0.0f;
     m_pRightBuffer[centerIdx].nz     = 1.0f;
@@ -971,9 +971,9 @@ void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vecto
     // Edge vertex: center +/- unitPerp*halfWidth.
     // V maps ACROSS ribbon width: left-edge=0.0, center=0.5, right-edge=1.0.
     // blade.tex body is opaque by design; only the last few texel rows fade.
-    m_pLeftBuffer[edgeIdx].x      = center->x - halfX;
-    m_pLeftBuffer[edgeIdx].y      = center->y - halfY;
-    m_pLeftBuffer[edgeIdx].z      = center->z;
+    m_pLeftBuffer[edgeIdx].x      = center.x - halfX;
+    m_pLeftBuffer[edgeIdx].y      = center.y - halfY;
+    m_pLeftBuffer[edgeIdx].z      = center.z;
     m_pLeftBuffer[edgeIdx].nx     = 0.0f;
     m_pLeftBuffer[edgeIdx].ny     = 0.0f;
     m_pLeftBuffer[edgeIdx].nz     = 1.0f;
@@ -981,9 +981,9 @@ void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vecto
     m_pLeftBuffer[edgeIdx].u      = 0.5f;
     m_pLeftBuffer[edgeIdx].v      = 0.0f;
 
-    m_pRightBuffer[edgeIdx].x      = center->x + halfX;
-    m_pRightBuffer[edgeIdx].y      = center->y + halfY;
-    m_pRightBuffer[edgeIdx].z      = center->z;
+    m_pRightBuffer[edgeIdx].x      = center.x + halfX;
+    m_pRightBuffer[edgeIdx].y      = center.y + halfY;
+    m_pRightBuffer[edgeIdx].z      = center.z;
     m_pRightBuffer[edgeIdx].nx     = 0.0f;
     m_pRightBuffer[edgeIdx].ny     = 0.0f;
     m_pRightBuffer[edgeIdx].nz     = 1.0f;
@@ -995,11 +995,11 @@ void SlashEntity::AddPoint(float pressure, const _Vector3<float>* center, _Vecto
 
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("SLASH", "AddPoint[%d]: ADDED center=(%.2f,%.2f) halfW=%.3f -> pointCount=%d",
-              m_FingerId, center->x, center->y, halfWidth, m_PointCount);
+              m_FingerId, center.x, center.y, halfWidth, m_PointCount);
 #endif
 
     m_PrevHeadPos = m_HeadPos;
-    m_HeadPos     = *center;
+    m_HeadPos     = center;
 }
 
 // Global slash-active frame counter (binary BSS; incremented each frame
@@ -1958,11 +1958,10 @@ void SlashEntity::Update(float dt) {
                             _Vector3<float> coinPos = m_SliceFruitPos;
                             if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
                             Coin::MakeCoins(bonusCoins, 1,
-                                            &coinPos, 0, 0xff3a,
-                                            /*target=*/nullptr,
+                                            coinPos, 0, 0xff3a,
+                                            /*target=*/nullptr, 0.02f, 0.15f,
                                             nullptr, nullptr,
-                                            Coin::DefaultArrivedDelegate(), true,
-                                            0.02f, 0.15f);
+                                            Coin::DefaultArrivedDelegate(), true);
                         }
                         // (d) Achievement unlock.
                         AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCounter, m_ComboFruitTypes);

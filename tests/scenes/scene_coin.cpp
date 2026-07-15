@@ -187,10 +187,10 @@ int main(int argc, char* argv[]) {
     int rawSpread = (coinCount + 1) * 8190;
     uint16_t angleSpread = (uint16_t)(rawSpread < 65520 ? rawSpread : 65520);
 
-    Coin::MakeCoins(coinCount, /*coinsPerCoin=*/1, &spawnPos, baseAngle, angleSpread,
-                    /*target=*/NULL, /*flyFXName=*/NULL, /*collectFXName=*/NULL,
-                    Coin::DefaultArrivedDelegate(), /*silent=*/true,
-                    /*delayStep=*/0.02f, /*delayCap=*/0.15f);
+    Coin::MakeCoins(coinCount, /*coinsPerCoin=*/1, spawnPos, baseAngle, angleSpread,
+                    /*target=*/NULL, /*delayStep=*/0.02f, /*delayCap=*/0.15f,
+                    /*flyFXName=*/NULL, /*collectFXName=*/NULL,
+                    Coin::DefaultArrivedDelegate(), /*silent=*/true);
 
     int spawnedCount = am->GetNumEntities(2);
     printf("[scene_coin] SPAWN: requested=%d spawned(pool count)=%d\n", coinCount, spawnedCount);

@@ -539,12 +539,11 @@ void Coin::ClearCoins(bool arrive) {
 // Spawn N coins via Mortar::ActorManager::Add(2).
 // Retry spawn position up to 10x if out of screen bounds.
 // ---------------------------------------------------------------------------
-void Coin::MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float>* spawnPos,
+void Coin::MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float> spawnPos,
                      uint16_t baseAngle, uint16_t angleSpread,
-                     _Vector3<float>* target,
+                     _Vector3<float>* target, float delayStep, float delayCap,
                      const char* flyFXName, const char* collectFXName,
-                     Mortar::Delegate1<void, Coin*> onArrived, bool silent,
-                     float delayStep, float delayCap)
+                     Mortar::Delegate1<void, Coin*> onArrived, bool silent)
 {
     if (totalCoins <= 0) return;
 
@@ -583,11 +582,11 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float>* spawnPos
         }
 
         // Compute spawn position with scatter — retry up to 10x if out of bounds
-        float spawnX = spawnPos->x;
-        float spawnY = spawnPos->y;
+        float spawnX = spawnPos.x;
+        float spawnY = spawnPos.y;
         for (int attempt = 0; attempt < 10; attempt++) {
-            float tryX = spawnPos->x + SinIdx(randAngle) * 100.0f;
-            float tryY = spawnPos->y + CosIdx(randAngle) * 100.0f;
+            float tryX = spawnPos.x + SinIdx(randAngle) * 100.0f;
+            float tryY = spawnPos.y + CosIdx(randAngle) * 100.0f;
             if (tryX >= COIN_BOUND_X_MIN && tryX <= COIN_BOUND_X_MAX &&
                 tryY >= COIN_BOUND_Y_MIN && tryY <= COIN_BOUND_Y_MAX) {
                 spawnX = tryX;
@@ -601,7 +600,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float>* spawnPos
             }
         }
 
-        _Vector3<float> coinPos(spawnX, spawnY, spawnPos->z);
+        _Vector3<float> coinPos(spawnX, spawnY, spawnPos.z);
         // TODO: v1.6.1 Coin::MakeCoins @0x001d7ec8 -- per-coin delay stagger differs from
         // binary; needs RE.
         // Stagger delay: perStep * (idx+1), but never more negative than maxDelay.

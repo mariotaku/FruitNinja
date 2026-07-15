@@ -376,13 +376,13 @@ private:
     // Marks blade for deactivation; the trail fades via alpha decay in UpdatePoints.
     void OnTouchReleased();
 
-    // Binary @ 0x1e9918 (v1.6.1) -- appends one vertex pair into the heap buffers.
-    // Signature: pressure FIRST (s0 register), then center, then dir.
-    // Guards: IsNearZero(*dir) || IsNearZero(m_BladeDir) -> return.
+    // ASM-spec v1.6.1 SlashEntity::AddPoint @0x001e9918 -- appends one vertex pair
+    // into the heap buffers. Binary demangled order/types: (center, dir, pressure), all
+    // BY VALUE. Guards: IsNearZero(dir) || IsNearZero(m_BladeDir) -> return.
     // Updates ghost ring, m_BladeDir, m_AngleIndex, m_Angle.
-    // Binary AddPoint @0x001e9918 mutates dir in the zero-dir case (*dir = m_BladeDir), so
-    // dir is non-const to match; callers pass a mutable local Vec3.
-    void AddPoint(float pressure, const _Vector3<float>* center, _Vector3<float>* dir);
+    // dir zero-case mutates the LOCAL by-value copy (dir = m_BladeDir) -- since the
+    // binary passes dir by value, this mutation is never caller-visible.
+    void AddPoint(_Vector3<float> center, _Vector3<float> dir, float pressure);
 
     // Binary @ 0x1e6914 -- per-frame full geometry re-derivation (miter, UV, alpha,
     // m_Col, head cap). Replaces previous linear-fade approximation.

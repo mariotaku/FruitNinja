@@ -1412,9 +1412,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                 if (coinCount > 0) {
                     const uint16_t coinAngleSpread =
                         (uint16_t)Math::Min((coinCount + 1) * 8190, 65520);
-                    Coin::MakeCoins(coinCount, 1, &pos, m_SliceArcAngle, coinAngleSpread,
-                                    /*target=*/nullptr, /*flyFXName=*/nullptr, /*collectFXName=*/nullptr,
-                                    Coin::DefaultArrivedDelegate(), /*silent=*/true, 0.02f, 0.15f);
+                    Coin::MakeCoins(coinCount, 1, pos, m_SliceArcAngle, coinAngleSpread,
+                                    /*target=*/nullptr, 0.02f, 0.15f,
+                                    /*flyFXName=*/nullptr, /*collectFXName=*/nullptr,
+                                    Coin::DefaultArrivedDelegate(), /*silent=*/true);
                 }
             }
 
