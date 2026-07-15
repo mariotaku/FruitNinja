@@ -65,6 +65,25 @@ public:
     void Release() override;
     void Reset() override;
     void Update(float dt) override;
+
+#ifndef __bada__
+    // Port specific: no binary counterpart -- see HUDControl::UpdateRealtime.
+    // Eases m_TransitionAlpha (states 0/2/3/4/6) dt-scaled, once per PRESENTED
+    // frame (Game::tickRealtimeUi via HUD::UpdateRealtime), so the dojo
+    // fade-in/out tracks the display's actual present rate (60/90/120fps)
+    // instead of the fixed 60Hz sim tick. Also repositions the defunct
+    // BSButtons (UpdateBSButtons/UpdateBSButton -- pure-visual, reads
+    // m_TransitionAlpha only, no state change) here for the same reason.
+    // The STATE MACHINE itself (which state, when to transition, the
+    // entity-clear + m_TransitionDelay gate, AddControl of the child
+    // screen, state-6 pending-removal + MainScreen::SetState) stays in
+    // Update() at 60Hz -- it reads the alpha this function advances and
+    // fires threshold-crossing transitions there. See DojoScreen.cpp for
+    // the DS_APPROACH_F/DS_DECAY_F macros (mirrors ShopScreen's
+    // SS_APPROACH_F/SS_DECAY_F and ScrollingMenu's SM_DECAY_F/SM_SPRING_F).
+    void UpdateRealtime(float dtSeconds) override;
+#endif
+
     void Draw(float* hudScaleRaw) override;
     int  GetType() override { return 1; }
 

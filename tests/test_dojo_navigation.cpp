@@ -121,6 +121,10 @@ int main(int argc, char* argv[]) {
             int nBomb  = am ? am->GetNumEntities(1) : 0;
             if (nFruit == 0 && nBomb == 0) break;
             h.game.runFrames(1);
+            // Port specific: no DojoScreen exists yet here, but MainScreen's own
+            // transition alpha (same UpdateRealtime split) needs the paired pump
+            // to keep behaving like the real per-presented-frame game loop.
+            h.game.tickRealtimeUi(1.0f / 60.0f);
             ++capFrames;
         }
         int entFruit = am ? am->GetNumEntities(0) : -1;
@@ -160,8 +164,14 @@ int main(int argc, char* argv[]) {
 
     // Step 4: settle 60 frames so DojoScreen reaches idle state 1 (alpha 0->1,
     // ring buttons grow in, bomb/fruit entities allocated by CreateFruit).
+    // Port specific: m_TransitionAlpha now eases in DojoScreen::UpdateRealtime
+    // (per-presented-frame, dt-scaled), not the 60Hz Update() that runFrames
+    // drives. The real game loop pumps both per presented frame (GameSDL.cpp);
+    // without the paired call here alpha never advances and the state-0 ->
+    // state-1 transition never fires.
     for (int i = 0; i < 60; ++i) {
         h.game.runFrames(1);
+        h.game.tickRealtimeUi(1.0f / 60.0f);
     }
 
     int stateAfterSettle = dojo->TestGetState();
@@ -226,6 +236,9 @@ int main(int argc, char* argv[]) {
     int  childControlCount = 0;
     for (int frame = 0; frame < 240; ++frame) {
         h.game.runFrames(1);
+        // Port specific: pumps DojoScreen's (and the child screen's, once created)
+        // UpdateRealtime-eased m_TransitionAlpha -- see Step 4 comment above.
+        h.game.tickRealtimeUi(1.0f / 60.0f);
 
         // Poll for transition once per frame. transition fired = m_pBackButton nulled
         // inside the state-2/3 block AFTER all conditions cleared.

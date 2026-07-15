@@ -184,6 +184,13 @@ int main(int argc, char* argv[]) {
 
     for (int frame = 0; frame < SETTLE_FRAMES; ++frame) {
         h.game.runFrames(1);
+        // Port specific: m_TransitionAlpha (state 0 fade-in that gates the
+        // back-bomb button creation) now eases in DojoScreen::UpdateRealtime
+        // (per-presented-frame, dt-scaled), not the 60Hz Update() that
+        // runFrames drives. The real game loop pumps both per presented frame
+        // (GameSDL.cpp); without the paired call here alpha never crosses
+        // ALPHA_IN_DONE and the back-bomb button is never created.
+        h.game.tickRealtimeUi(1.0f / 60.0f);
 
         if (dojoBtn == NULL) {
             dojoBtn = FindDojoBackBomb(existingControls);
