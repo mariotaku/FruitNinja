@@ -81,6 +81,14 @@ struct Game : public Mortar::MortarGame {
     // Port control
     bool running;
 
+    // Port specific: OS-timer-cancel equivalent. Binary FruitNinja::OnBackground
+    // @0x001ef660 cancels m_pTimer (halts the whole tick); OnForeground @0x001ef6cc
+    // restarts it. Desktop has no cancelable timer, so we gate stepUpdate() on this
+    // instead. Separate from bM_Mode/PauseScreen overlay (Paused()/UnPaused() above
+    // are the faithfully-ported unconditional-call semantics; this flag is the
+    // additional freeze that binary gets for free via the cancelled OS timer).
+    bool m_bBackgrounded;
+
     // === Singleton ===
     static Game* GetInstance() { return static_cast<Game*>(s_instance); }
 
