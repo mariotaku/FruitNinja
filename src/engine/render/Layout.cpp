@@ -43,10 +43,19 @@ const KeyOverride kOverrides[] = {
     { "modeselect.sensei" },   // mode_sensei.tex on GameModeScreen (bottom-left-anchored)
     { "modeselect.title"  },   // DrawBorders anchor on GameModeScreen -- feeds m_pDescBox "MODE SELECT" (left-anchored)
     // Dojo / mode-select buttons -- user asked these edge-anchor too (spread to
-    // the widened edges rather than proportionally). Centered buttons (Dojo
-    // Back/Play at x=0) are left unmapped so they stay centered.
+    // the widened edges rather than proportionally).
     { "dojo.btn.shop"        },
     { "dojo.btn.about"       },
+    // Dojo's red bomb Back/Play button -- pos=(0,0,0) but m_HudScale.x=0.375
+    // puts it at true x=180 (right edge), NOT centered; see
+    // DojoScreen::CreateButtons note. Back/quit buttons edge-anchor universally.
+    { "dojo.btn.back"        },
+    // AboutScreen's red bomb back button -- same m_HudScale=0.375 idiom, same
+    // rule; see AboutScreen::CreateButtons note.
+    { "about.btn.back"       },
+    // ShopScreen's m_pBuyButton is actually a BACK button (QuitShopCallback);
+    // same m_HudScale=0.375 idiom, same rule.
+    { "shop.btn.back"        },
     { "modeselect.btn.back"  },
     { "modeselect.btn.classic" },
     { "modeselect.btn.zen"   },
@@ -59,16 +68,24 @@ const KeyOverride kOverrides[] = {
     // corner (kCloseBtnX=215, outside the centred modal plate), right-edge-
     // anchored so it hugs the widened corner rather than drifting proportionally.
     { "settings.back"        },
-    // MainScreen entity menu buttons. Corner toggles (sound/music top-right,
-    // settings bottom-left) edge-anchor so they hug the widened corners instead
-    // of floating inward. The play/dojo ring pair also edge-anchors: it keeps its
-    // original -60 centre (proportional would drift it left as the screen widens)
-    // and spreads the two rings symmetrically toward the wider frame.
+    // MainScreen corner toggles (sound/music top-right, settings bottom-left)
+    // edge-anchor so they hug the widened corners instead of floating inward.
+    // NOTE: the ring buttons (menu.play/dojo/moregames) are deliberately NOT
+    // here -- they use PROPORTIONAL spread so the 3 rings stay evenly distributed
+    // across the wider field (edge-anchoring spread them unevenly: dojo isolated
+    // left, play+bomb crowded right).
     { "menu.sound"    },
     { "menu.music"    },
     { "menu.settings" },
-    { "menu.play"     },
-    { "menu.dojo"     },
+    // Red bomb QUIT/back button (m_pQuitButton, m_RingTex[16]) -- back/quit
+    // buttons edge-anchor universally (same rule as modeselect.btn.back /
+    // settings.back / pause.quit); positioned via m_HudScale not pos, see
+    // MainScreen::CreateQuitButton.
+    { "menu.quit"     },
+    // PauseScreen's quit button (m_QuitButton, kCloseBtnX=215) -- was MapX'd
+    // proportional despite being a back/quit button; edge-anchor per the
+    // universal back/quit rule (same corner treatment as settings.back).
+    { "pause.quit"    },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 

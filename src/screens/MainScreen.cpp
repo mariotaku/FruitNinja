@@ -1286,7 +1286,14 @@ void MainScreen::CreateQuitButton() {
     // ASM-spec v1.6.1 MainScreen::CreateButtons @0x00196a5c-0x00196b3c:
     // Quit button is placed + scaled via m_HudScale (not pos). GetAdjustedPos =
     // pos + Vec3(480,320,0)*m_HudScale = (180,-96,0).
-    m_pQuitButton->m_HudScale.x = 0.375f;    // 0.5 * 0.75f  @0x00196a74
+    // DIFFERS: opt-in widescreen -- this is the right-edge back/quit bomb button
+    // (red ring, m_RingTex[16], LSTR_QUIT text, back-key responder). Back/quit
+    // buttons edge-anchor universally; GetAdjustedPos() feeds BOTH Draw and the
+    // hit-test rect (MenuButton.cpp ~line 809) from pos+480*m_HudScale.x, so MapX
+    // the pre-scale x (180) and re-derive the HudScale fraction from the mapped
+    // value (identity divide-by-480 at __bada__/non-wide, matching the literal
+    // 0.375f exactly).
+    m_pQuitButton->m_HudScale.x = MapX(180.0f, "menu.quit") / 480.0f;    // 0.5 * 0.75f  @0x00196a74
     m_pQuitButton->m_HudScale.y = -0.3f;     // -0.5 * 0.6f  @0x00196a9c
     m_pQuitButton->m_bBackdropActive = 1;    // @0x00196a5c
     m_pQuitButton->m_GrowInTimer = 0.25f;    // @0x00196b3c

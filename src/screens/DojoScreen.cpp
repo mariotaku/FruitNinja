@@ -314,7 +314,14 @@ void DojoScreen::CreateButtons() {
         const int bombFruitType = FruitInfo_GetCount();
         m_pBackButton = new MenuButton();
         m_pBackButton->m_Texture = game_work.m_RingTex[16];
-        // Screen-centered (x=0) -- not edge-pinned, left unmapped.
+        // DIFFERS: opt-in widescreen -- this is the SAME red bomb back/quit
+        // button pattern as MainScreen::CreateQuitButton (m_RingTex[16],
+        // back-key responder, LSTR_DJ_BACK_BUTTON label). pos=(0,0,0) here is
+        // a red herring: GetAdjustedPos() = pos + 480*m_HudScale.x, and
+        // m_HudScale.x=0.375 below puts the true on-screen x at 180 (right
+        // edge), NOT screen-centered. Back/quit buttons edge-anchor
+        // universally -- MapX the pre-scale x and re-derive the HudScale
+        // fraction (see MainScreen::CreateQuitButton for the same recipe).
         m_pBackButton->Init(POS_BACK_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                             bombFruitType, _Vector3<float>(0, 0, 0), nullptr);
@@ -322,7 +329,7 @@ void DojoScreen::CreateButtons() {
         m_pBackButton->m_bBackdropActive = 1; // v1.6.1 DojoScreen::CreateButtons @0x0016afe8
         m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_HudScale.x=0.375, m_HudScale.y=-0.3
-        m_pBackButton->m_HudScale.x = 0.375f;
+        m_pBackButton->m_HudScale.x = MapX(180.0f, "dojo.btn.back") / 480.0f;
         m_pBackButton->m_HudScale.y = -0.3f;
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: field_0x13c(m_RestScale)*=0.825
         m_pBackButton->m_RestScale = m_pBackButton->m_RestScale * BACK_SCALE;

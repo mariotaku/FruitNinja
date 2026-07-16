@@ -406,7 +406,11 @@ void AboutScreen::CreateBackButton()
     // str [+0x18] @0x0015c860-0x15c86c). Same idiom as DojoScreen/MainScreen/ShopScreen
     // back buttons -- GetAdjustedPos() moves from pos=Zero to (480*0.375, 320*-0.3, 0)
     // = (180, -96, 0).
-    m_pBackButton->m_HudScale.x = 0.375f;
+    // DIFFERS: opt-in widescreen -- same red bomb back/quit button pattern as
+    // MainScreen::CreateQuitButton / DojoScreen::CreateButtons (m_RingTex[16],
+    // back-key responder, QuitGameCallback). Back/quit buttons edge-anchor
+    // universally -- MapX the pre-scale x and re-derive the HudScale fraction.
+    m_pBackButton->m_HudScale.x = MapX(180.0f, "about.btn.back") / 480.0f;
     m_pBackButton->m_HudScale.y = -0.3f;
 
     // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350 (state==0 branch, @0x0015c894):
