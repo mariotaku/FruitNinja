@@ -35,16 +35,16 @@ int g_ViewportWinW = 0, g_ViewportWinH = 0;
 //    overshoot off-screen regardless of aspect ratio.
 //
 // Tunable aesthetic constants -- eyeball against HLE/screenshots and adjust.
-static const float MENU_SENSEI_EDGE_FRACTION  = 0.90f; // ninja_text (sensei) on MainScreen
 static const float ABOUT_SENSEI_EDGE_FRACTION = 0.88f; // sensei.tex on AboutScreen
+static const float DECO_SMLTITLE_EDGE_FRACTION = 0.90f; // sml_title.tex on Dojo/GameMode/About (BaseScreen::DrawBorders)
 
 struct KeyOverride {
     const char* key;
     float edgeFraction;
 };
 const KeyOverride kOverrides[] = {
-    { "menu.sensei",  MENU_SENSEI_EDGE_FRACTION },
-    { "about.sensei", ABOUT_SENSEI_EDGE_FRACTION },
+    { "about.sensei",   ABOUT_SENSEI_EDGE_FRACTION },
+    { "deco.smltitle",  DECO_SMLTITLE_EDGE_FRACTION },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 
