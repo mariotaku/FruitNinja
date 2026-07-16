@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
     // --window WxH still wins. On mobile/web the drawable is the device screen, so
     // this desktop-window default is moot there.
     if (!winExplicit && Layout::IsWideLayout()) {
-        winW = 1138;   // 16:9 at 640 tall (1138/640 = 1.778)
+        winW = 1136;   // ~16:9 at 640 tall (1136/640 = 1.775; even width)
         winH = 640;
     }
 #endif
