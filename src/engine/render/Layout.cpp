@@ -78,6 +78,11 @@ const KeyOverride kOverrides[] = {
     { "menu.sound"    },
     { "menu.music"    },
     { "menu.settings" },
+    // In-game Classic-mode 3-strikes miss indicator (the 3 X marks, top-right
+    // corner) -- edge-anchor so it hugs the widened corner instead of
+    // floating inward; per-icon spacing (kMC[] table) is untouched, only the
+    // shared per-icon base X shifts (GameInit.cpp's MissControl setup block).
+    { "hud.misscontrol" },
     // Red bomb QUIT/back button (m_pQuitButton, m_RingTex[16]) -- back/quit
     // buttons edge-anchor universally (same rule as modeselect.btn.back /
     // settings.back / pause.quit); positioned via m_HudScale not pos, see
