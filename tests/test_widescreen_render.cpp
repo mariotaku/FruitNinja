@@ -2,14 +2,17 @@
 // layout (Layout::SetWideLayout, see src/engine/render/Layout.h).
 //
 // Usage: test_widescreen_render [--screenshot] [--widescreen] [--combo=<name>]
-//   --widescreen   activate Layout::SetWideLayout(true) and resize the hidden
-//                  SDL window to a 16:9 drawable (1138x640) BEFORE burn-in, so
-//                  Layout::EffectiveAspect()/HalfWidth() actually widen and
-//                  Game::renderFrame's real Layout::ComputeViewport pillarbox
-//                  logic (GameSDL.cpp) engages exactly as it does in the real
-//                  app. Without the flag: window stays at the harness default
-//                  960x640 (3:2), SetWideLayout(false) -- byte-identical to
-//                  pre-widescreen output (baseline).
+//   --widescreen   activate Layout::SetWideLayout(true) and create the hidden
+//                  SDL window at a 16:9 drawable (1138x640) up front (before
+//                  Init()/InitComponent() -- mirrors mainSDL.cpp, which sizes
+//                  the window at SDL_CreateWindow time rather than resizing an
+//                  existing one), so Layout::EffectiveAspect()/HalfWidth()
+//                  actually widen and Game::renderFrame's real
+//                  Layout::ComputeViewport pillarbox logic (GameSDL.cpp)
+//                  engages exactly as it does in the real app. Without the
+//                  flag: window stays at the harness default 960x640 (3:2),
+//                  SetWideLayout(false) -- byte-identical to pre-widescreen
+//                  output (baseline).
 //   --combo=<name> selects the powerup-effect segment (see below); default
 //                  runs the menu-screen segment only.
 //
@@ -172,19 +175,17 @@ int main(int argc, char* argv[]) {
         int count = ComboNames(combo, names);
 
         h.SetInitFrames(120);
+        // Create the window at the target drawable size up front (mirrors
+        // mainSDL.cpp: winW/winH computed before SDL_CreateWindow, never a
+        // post-creation SDL_SetWindowSize -- which can hang the hidden test
+        // window under some GL drivers). Must be set before InitComponent().
+        if (wide) h.SetWindowSize(1138, 640);
+        Layout::SetWideLayout(wide);
         if (!h.InitComponent()) return 1;
         if (!game_work.mHud) {
             std::fprintf(stderr, "FAIL: mHud null after boot\n");
             return 1;
         }
-
-        // --widescreen must be applied before the first widescreen-aware
-        // frame; InitComponent() already ran its own (non-widescreen-aware)
-        // burn-in via Init(), so this only affects the frames driven below.
-        if (wide) {
-            SDL_SetWindowSize(h.window, 1138, 640);
-        }
-        Layout::SetWideLayout(wide);
 
         game_work.gameMode = Mortar::GAME_MODE_ARCADE;
         PowerUpManager* pum = PowerUpManager::GetInstance();
@@ -234,17 +235,15 @@ int main(int argc, char* argv[]) {
     // --widescreen must be applied BEFORE Init()'s burn-in frames so every
     // subsequent game.runFrames() -> Game::renderFrame() call (real widescreen
     // code path, GameSDL.cpp) sees the wide viewport from the first frame.
-    // SDL_SetWindowSize before SDL_Init is not possible (no window yet), so
-    // resize immediately after Init() creates it, then re-run burn-in.
-    if (!h.Init()) return 1;
-    if (wide) {
-        SDL_SetWindowSize(h.window, 1138, 640);
-    }
+    // Create the window at the target drawable size up front (mirrors
+    // mainSDL.cpp: winW/winH computed before SDL_CreateWindow) instead of a
+    // post-creation SDL_SetWindowSize, which can hang the hidden test window
+    // under some GL drivers.
+    if (wide) h.SetWindowSize(1138, 640);
     Layout::SetWideLayout(wide);
-    // Re-settle: the initial 5 burn-in frames (splash transition) ran at the
-    // old aspect/layout state; a few more frames let MainScreen's camera-zoom
-    // state and any Layout::MapX-positioned controls settle under the final
-    // viewport before capture.
+    if (!h.Init()) return 1;
+    // Settle: let MainScreen's camera-zoom state and any Layout::MapX-positioned
+    // controls settle under the final viewport before capture.
     h.RunHeadless(60);
 
     if (!game_work.mHud) {
