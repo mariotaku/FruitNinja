@@ -18,7 +18,7 @@
 # fonttools when missing inside the container), so this script no longer does.
 #
 # Usage (inside the container, repo mounted at /src, cwd /src):
-#   bash /src/tools/web/build.sh [--debug|--release] [--reconfigure]
+#   bash /src/tools/web/build.sh [--debug|--release] [--reconfigure] [--profiling]
 #     (no flags)     reuse the existing build/web configure when present -- this
 #                    preserves a locally-configured FN_WEB_DEBUG=ON tree for the
 #                    auto-rebuild hook; configures Release when the cache is absent
@@ -26,6 +26,13 @@
 #                    overflow-check debug variant; outputs stay unhashed)
 #     --release      (re)configure Release + FN_WEB_DEBUG=OFF (hashed outputs)
 #     --reconfigure  force a re-configure with the default (Release) settings
+#     --profiling    keep C++ function names in the wasm (-DFN_WEB_PROFILING=ON)
+#                    for a browser flame-graph (Chrome/Firefox DevTools
+#                    Performance); forces a reconfigure. Sticky in the build/web
+#                    cache until the next --release/--debug/--reconfigure run
+#                    (every configure branch below sets FN_WEB_PROFILING
+#                    explicitly ON or OFF, so a later plain rebuild can't
+#                    inherit a stale ON).
 #
 # Known-flaky link failures this pipeline mitigates:
 #   - parallel -j race: fruit-ninja.html links before libfruit-ninja-game.a's
@@ -53,12 +60,14 @@ NPROC="$(nproc 2>/dev/null || echo 4)"
 
 MODE=""          # "" = auto (respect existing configure), or debug/release
 RECONFIGURE=0
+PROFILING=0
 for arg in "$@"; do
     case "$arg" in
         --debug)       MODE=debug ;;
         --release)     MODE=release ;;
         --reconfigure) RECONFIGURE=1 ;;
-        *) echo "[build.sh] unknown flag: $arg (expected --debug|--release|--reconfigure)" >&2; exit 2 ;;
+        --profiling)   PROFILING=1; RECONFIGURE=1 ;;
+        *) echo "[build.sh] unknown flag: $arg (expected --debug|--release|--reconfigure|--profiling)" >&2; exit 2 ;;
     esac
 done
 
@@ -69,6 +78,14 @@ if [ ! -f "$BUILD_DIR/CMakeCache.txt" ] || [ -n "$MODE" ] || [ "$RECONFIGURE" -e
         debug)   CFG_ARGS+=(-DFN_WEB_DEBUG=ON) ;;
         release) CFG_ARGS+=(-DFN_WEB_DEBUG=OFF) ;;
     esac
+    # Always pass FN_WEB_PROFILING explicitly (both ON and OFF): otherwise a
+    # previous --profiling run's cached ON would survive an unrelated
+    # --release/--debug/--reconfigure that doesn't re-specify it.
+    if [ "$PROFILING" -eq 1 ]; then
+        CFG_ARGS+=(-DFN_WEB_PROFILING=ON)
+    else
+        CFG_ARGS+=(-DFN_WEB_PROFILING=OFF)
+    fi
     echo "[build.sh] configuring: emcmake cmake ${CFG_ARGS[*]}"
     emcmake cmake "${CFG_ARGS[@]}"
 else
