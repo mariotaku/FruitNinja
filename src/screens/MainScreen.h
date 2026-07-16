@@ -104,6 +104,12 @@ public:
     float GetCameraTransition() const;
     void  SetCameraTransition(float v);
 
+    // Port specific: true only while MainScreen is parked in the gameplay-resident
+    // camera-fade state (0x11) -- a mode is being PLAYED (not menu/shop/dojo/game-over).
+    // Entered by GameModeScreen play cases 3-6, retry (BombHit @0x0016a276), Hide();
+    // left only by QuitToMenu / GameOver -> STATE_CAMERA_ZOOM. v1.6.1 MainScreen::Update @0x00197828.
+    bool IsInGameplay() const { return m_State == STATE_CAMERA_FADE; }
+
     // Drop the four menu buttons (Play/Dojo/MoreGames/Quit).
     void DeleteMenuButtons();
 
