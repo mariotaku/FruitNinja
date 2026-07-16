@@ -960,7 +960,11 @@ void ShopScreen::Update(float dt) {
                 //   m_HudScale is a POSITION anchor (not render scale): display pos =
                 //   pos + m_HudScale*(480,320,0). With pos=Zero -> (180,-112) lower-right.
                 //   HLE-confirmed: m_RestScale stays full-size while m_HudScale=(0.375,-0.35).
-                m_pBuyButton->m_HudScale.x = 0.5f * 0.75f;  // +0x14 = 0.375f
+                // DIFFERS: opt-in widescreen -- despite the field name, this is a BACK
+                // button (QuitShopCallback, same GETSTRING(0x352) back-label as
+                // DojoScreen/AboutScreen's back ring); same red bomb back/quit idiom.
+                // Back/quit buttons edge-anchor universally.
+                m_pBuyButton->m_HudScale.x = MapX(180.0f, "shop.btn.back") / 480.0f;  // 0.5*0.75 = 0.375f
                 m_pBuyButton->m_HudScale.y = -0.5f * 0.7f;  // +0x18 = -0.35f
             }
         }
