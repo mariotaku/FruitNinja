@@ -390,7 +390,17 @@
      the viewport div's background -- that same black shows through as the
      "loading" background (no splash image). */
   (function () {
-    var GAME_W = 960, GAME_H = 640;
+    /* Fallback backing size used before SDL_CreateWindow has run (canvas.width/
+       height are still the HTML defaults, 300x150, or unset).  Once the WASM
+       module creates the GL window it resizes the canvas element's backing
+       store to whatever size main()/mainEmscripten.cpp picked -- 960x640
+       faithful 3:2, or 1138x640 (16:9) when the widescreen setting is on (see
+       LoadSettings()->Layout::IsWideLayout() gate in mainEmscripten.cpp). This
+       IIFE has no visibility into that C++-side decision, so instead of
+       hardcoding one aspect it reads the LIVE canvas.width/canvas.height each
+       call and letterboxes to whatever backing is actually there -- self-
+       adjusting to either aspect with no JS/C++ handshake needed. */
+    var DEFAULT_GAME_W = 960, DEFAULT_GAME_H = 640;
     var viewportEl   = document.getElementById('viewport');
     var canvas       = document.getElementById('canvas');
     var progressWrap = document.getElementById('progress-bar-wrap');
@@ -401,17 +411,21 @@
          so the same code path works whether #viewport is native-fullscreened
          or not.  Picks the binding dimension automatically: min(width-ratio,
          height-ratio) shrinks whichever axis would overflow, preserving the
-         3:2 aspect ratio.  All overlay coords below are relative to
-         the viewport element (position:relative-equivalent ancestor of the
+         canvas backing's aspect ratio.  All overlay coords below are relative
+         to the viewport element (position:relative-equivalent ancestor of the
          absolute-positioned progress bar; #viewport itself is
          position:fixed, which still establishes the containing block for
          absolutely-positioned descendants). */
+      var gameW = canvas.width  || DEFAULT_GAME_W;
+      var gameH = canvas.height || DEFAULT_GAME_H;
       var ww = viewportEl.clientWidth, wh = viewportEl.clientHeight;
-      var scale = Math.min(ww / GAME_W, wh / GAME_H);
-      var cw = Math.floor(GAME_W * scale);
-      var ch = Math.floor(GAME_H * scale);
+      var scale = Math.min(ww / gameW, wh / gameH);
+      var cw = Math.floor(gameW * scale);
+      var ch = Math.floor(gameH * scale);
 
-      /* Canvas: letterboxed CSS size (backing stays 960x640). */
+      /* Canvas: letterboxed CSS size (backing stays whatever gameW x gameH
+         SDL_CreateWindow picked -- 960x640, or 1138x640 in the widescreen
+         setting's 16:9 case). */
       canvas.style.width  = cw + 'px';
       canvas.style.height = ch + 'px';
 

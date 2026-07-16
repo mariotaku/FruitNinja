@@ -4,6 +4,7 @@
 // Platform divergences are marked // Port specific: throughout.
 
 #include <emscripten.h>
+#include <emscripten/html5.h>
 
 #include <SDL.h>
 #include "render/gl_funcs.h"
@@ -13,6 +14,7 @@
 #include "debug/Logger.h"
 #include "game/SettingsSave.h"
 #include "audio/SoundManager.h"
+#include "render/Layout.h"
 #include <cstdio>
 #include <cstring>
 
@@ -395,6 +397,45 @@ static void BootWait(void* arg) {
     // before g_game.init() so GameInitialise's Localisation::Load step
     // sees the right languageFlag.
     LoadSettings();
+
+    // Port specific: mirrors mainSDL.cpp's desktop widescreen-window default
+    // (see mainSDL.cpp "the widescreen setting... drives the DEFAULT window
+    // aspect"). On web the canvas backing -- not a native window -- decides
+    // what SDL_GL_GetDrawableSize() reports, and Layout::EffectiveAspect()
+    // clamps to whatever aspect that drawable actually has (Game::renderFrame
+    // already calls SetWindowAspect/ComputeViewport/glViewport off the real
+    // drawable size every frame). The gap is that the canvas was created
+    // 960x640 (3:2) in main() below, before LoadSettings() -- so the pref
+    // wasn't known yet at SDL_CreateWindow time (game.init() below, which the
+    // whole boot sequence gates on IDBFS, happens after LoadSettings, but the
+    // window itself is created eagerly in main() so GL context creation isn't
+    // blocked on the async IDBFS wait). Resize BOTH the SDL window and the
+    // emscripten canvas element's backing store here -- right after
+    // LoadSettings(), before g_game.init() ever calls renderFrame() -- so the
+    // very first frame already reports a 16:9 drawable when the pref is on.
+    // emscripten_set_canvas_element_size is required in addition to
+    // SDL_SetWindowSize: on Emscripten, SDL's "window" is a thin wrapper
+    // around the canvas element and does not itself resize the backing store
+    // pixel buffer -- only the real canvas.width/height attributes do that,
+    // which is what SDL_GL_GetDrawableSize ultimately reads back via
+    // emscripten_get_canvas_element_size. Guarded like the desktop's
+    // `#ifndef __bada__` (this whole file is web-only, but Layout::* itself
+    // additionally no-ops under __bada__ per Layout.h).
+#ifndef __bada__
+    if (Layout::IsWideLayout()) {
+        const int kWideW = 1138, kWideH = 640; // 16:9 at 640 tall (1138/640 = 1.778), matches mainSDL.cpp
+        SDL_SetWindowSize(ba->window, kWideW, kWideH);
+        emscripten_set_canvas_element_size("#canvas", kWideW, kWideH);
+        // Port specific: shell.html's resize() (src/platform/emscripten/shell.html)
+        // reads the LIVE canvas.width/canvas.height each call to letterbox to
+        // whatever backing aspect is actually present -- nudge it once here so
+        // the CSS letterbox reflects the new 16:9 backing immediately, instead
+        // of waiting for the next window `resize`/fullscreen event.
+        EM_ASM({
+            if (typeof window._fnResize === 'function') { window._fnResize(); }
+        });
+    }
+#endif
 
     // Port specific: parse URL query parameters to set debug flags on web.
     // Enables the hitbox overlay without a physical keyboard (no F1 on mobile).
