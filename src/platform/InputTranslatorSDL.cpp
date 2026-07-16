@@ -22,6 +22,7 @@
 #include "debug/DebugFlags.h"
 #include "game/GameWork.h"
 #include "hud/HUD.h"
+#include "render/Layout.h"
 #include <cstring>
 
 #ifdef FN_DEBUG_TOUCH
@@ -78,8 +79,9 @@ void InputTranslatorSDL::Init() {
 }
 
 // Transform normalized SDL touch coords -> binary-centred ortho coords.
-// Ortho: X in [-240, +240] (horizontal), Y in [-160, +160] (vertical, +up).
-// SDL touch Y is top-down (0 at top), so we flip.
+// Ortho: X in [-HalfWidth, +HalfWidth] (horizontal, 240 when not widescreen),
+// Y in [-160, +160] (vertical, +up). SDL touch Y is top-down (0 at top), so
+// we flip.
 // Port convention: TOP = +160, BOTTOM = -160 (Y-up). Bada binary uses
 // Y-down (TOP=-160); the discrepancy is handled locally by ScrollingMenu
 // (its drag formula negates currY before applying the binary-faithful
@@ -92,10 +94,17 @@ void InputTranslatorSDL::Init() {
 //   NO rotation, NO centring, top-left Y-down. Port takes normalized SDL [0,1]
 //   coords -> centred Y-up ortho because the SDL pipeline works in centred
 //   Y-up throughout.
+//
+// Pass 3: delegates to Layout::TouchToGame, which maps through the same
+// pillarbox/letterbox viewport rect Game::renderFrame applies via
+// Layout::ComputeViewport/SetActiveViewport (GameSDL.cpp) -- single source
+// of truth so a widened (opt-in widescreen) field's edges, and the
+// centred viewport window/GL apply, both track together. When widescreen
+// is off, Layout::TouchToGame reduces exactly to the original
+// nx*480-240 / 160-ny*320 mapping (see Layout.cpp).
 void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
                                                    float& gx, float& gy) {
-    gx = nx * (float)FN_SCREEN_W - (float)(FN_SCREEN_W / 2);
-    gy = (float)(FN_SCREEN_H / 2) - ny * (float)FN_SCREEN_H;
+    Layout::TouchToGame(nx, ny, &gx, &gy);
     TLOG("TransformTouchNormalized raw=(%g,%g) -> game=(%g,%g)\n", nx, ny, gx, gy);
 }
 
