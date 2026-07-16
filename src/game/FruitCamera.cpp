@@ -6,6 +6,7 @@
 #include "platform/InputEvent.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
+#include "render/Layout.h"
 #include "math/MathUtil.h"
 #include <cmath>
 #include <cstdlib>
@@ -249,7 +250,14 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
     // ASM-verified: 2026-05-16 v1.6.1 binary @ 0x001810ac..0x001813f4 (re-analyst).
+    // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
+    // horizontal bounds widen with Layout::HalfWidth() when Layout::g_WideLayout is
+    // on (== 240.0f, i.e. the original bounds, otherwise). Vertical stays +-160.
+#ifdef __bada__
     mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+#else
+    mm.SetupOrtho(160.0f, -160.0f, -Layout::HalfWidth(), Layout::HalfWidth(), 2000.0f, -6000.0f);
+#endif
 
     m_projection = mm.GetProjectionStack().m_Current;
     m_bDirty = false;

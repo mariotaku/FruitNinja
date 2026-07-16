@@ -23,6 +23,7 @@
 #include "PowerUpManager.h"
 #include "ScreenEffect.h"
 #include "hud/TimeControl.h"
+#include "render/Layout.h"
 #include "hud/SpeedControl.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/network/P2PMessageHandling.h"
@@ -1957,17 +1958,27 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
     float minAngle = info ? info->m_HorizMin : -1.0f;
     float maxAngle = info ? info->m_HorizMax :  1.0f;
 
+    // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
+    // fruit throw-arc + side-spawn edge constants below scale by k so the field fills
+    // the wider ortho instead of leaving dead edges. k==1.0f (identity) when the
+    // layout is not wide, so the math below is unchanged from the original in that case.
+#ifdef __bada__
+    const float k = 1.0f;
+#else
+    const float k = Layout::HalfWidth() / 240.0f;
+#endif
+
     // Stage 1: degree baseline (-150.0 / +150.0).
-    float baseRange = -150.0f * minAngle + 150.0f * maxAngle;
+    float baseRange = (-150.0f * k) * minAngle + (150.0f * k) * maxAngle;
     uint32_t roll1 = (baseRange > 0.0f) ? m_Random.Rand32((uint32_t)baseRange) : 0;
-    int iBase = (int)((float)roll1 + minAngle * 150.0f);
+    int iBase = (int)((float)roll1 + minAngle * (150.0f * k));
 
     // Stage 2: parabolic spread. spread = 20 for BOTTOM/TOP (spawner==0 or type<2), 12 for LEFT/RIGHT.
     float spread = (info && (uint8_t)info->m_SpawnType >= 2) ? 12.0f : 20.0f;
     float r      = m_Random.RandF(1.0f);
     float halfR  = (r < 0.5f) ? r : (1.0f - r);
     float sign   = (r < 0.5f) ? -1.0f : 1.0f;
-    int center   = (int)(((float)iBase / -150.0f) * spread * 0.5f);
+    int center   = (int)(((float)iBase / (-150.0f * k)) * spread * 0.5f);
     int off      = (int)(spread * (halfR * halfR * -2.0f + 0.5f) * sign);
     uint16_t angle = (uint16_t)(((short)(center + off)) * 0xb6);   // 0xb6 = 182
 
@@ -2013,7 +2024,8 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
         //   sign  = -1 for LEFT (throwDir -UnitX), +1 for RIGHT (throwDir +UnitX)
         float gravY = info ? info->m_Gravity_y : 0.0f;
         float signX = (spawnType == PLACEMENT_LEFT) ? -1.0f : 1.0f;
-        posX = (float)((long)(240.0f * signX));
+        // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__.
+        posX = (float)((long)((240.0f * k) * signX));
         posY = (float)((long)(((float)iBase * 320.0f) / 480.0f));
         float newVelX = velY * (-0.75f) * signX;
         float newVelY = velX + speed * gravY * (-0.65f);
@@ -2083,12 +2095,20 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
         if (spawner == nullptr) { minAngle = -1.0f; maxAngle = 1.0f; }
         else                    { minAngle = spawner->m_HorizMin; maxAngle = spawner->m_HorizMax; }
 
-        float range = minAngle * (-150.0f) + maxAngle * 150.0f;
+        // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
+        // k==1.0f (identity) when the layout is not wide.
+#ifdef __bada__
+        const float k = 1.0f;
+#else
+        const float k = Layout::HalfWidth() / 240.0f;
+#endif
+
+        float range = minAngle * (-150.0f * k) + maxAngle * (150.0f * k);
         uint32_t r1 = (range > 0.0f) ? m_Random.Rand32((uint32_t)range) : 0;
-        int baseDeg = (int)((float)r1 + minAngle * 150.0f);
+        int baseDeg = (int)((float)r1 + minAngle * (150.0f * k));
 
         float spread = (spawner == nullptr || spawner->m_SpawnType < 2) ? 20.0f : 12.0f;
-        long center  = (long)(((float)baseDeg / -300.0f) * spread * 0.5f);
+        long center  = (long)(((float)baseDeg / (-300.0f * k)) * spread * 0.5f);
         long lo      = (long)((float)center + spread * -0.5f);
         long hi      = (long)((float)center + spread *  0.5f);
         long rng2    = (hi > lo) ? (long)m_Random.Rand32((uint32_t)(hi - lo)) : 0;
@@ -2137,7 +2157,8 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
                 //   vel.x = velY_pre * -0.75 * sign;    vel.y = velX_pre + speed*gravY*-0.65
                 //   sign  = -1 for LEFT, +1 for RIGHT
                 float signX = (st == PLACEMENT_LEFT) ? -1.0f : 1.0f;
-                spawnX = (float)((long)(240.0f * signX));
+                // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__.
+                spawnX = (float)((long)((240.0f * k) * signX));
                 spawnY = (float)((long)(((float)baseDeg * 320.0f) / 480.0f));
                 float newVelX = velY * (-0.75f) * signX;
                 float newVelY = velX + speed * spawner->m_Gravity_y * (-0.65f);

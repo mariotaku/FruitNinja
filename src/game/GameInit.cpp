@@ -36,6 +36,7 @@
 #include "particle/PSPParticleManager.h"
 #include "render/DisplayManager.h"
 #include "render/gl_funcs.h"
+#include "render/Layout.h"
 #include "input/InputManager.h"
 #include "input/Touch.h"
 #include "input/InputSink.h"
@@ -710,7 +711,14 @@ void DrawBackground() {
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
+    // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
+    // scale the existing dojo art wider to fill the widened field instead of
+    // re-authoring the background asset. Height/UV window unchanged.
+#ifdef __bada__
     Matrix44 mat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
+#else
+    Matrix44 mat = Matrix44::MakeScale(481.0f * (Layout::HalfWidth() / 240.0f), 321.0f, 1.0f);
+#endif
     mat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, -5599.0f));
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
@@ -899,7 +907,13 @@ void GameDraw(float dt, bool active) {
                 MatrixManager& mm = MatrixManager::GetInstance();
                 mm.GetWorldStack().Reset();
                 // Scale(481,321,1) matches DrawBackground's full-ortho-coverage quad above.
+                // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
+                // widen alongside DrawBackground so the pause dim has no side gap.
+#ifdef __bada__
                 Matrix44 dimMat = Matrix44::MakeScale(481.0f, 321.0f, 1.0f);
+#else
+                Matrix44 dimMat = Matrix44::MakeScale(481.0f * (Layout::HalfWidth() / 240.0f), 321.0f, 1.0f);
+#endif
                 dimMat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
                 mm.GetWorldStack().SetCurrentMatrix(dimMat);
                 mm.UploadModelViewOnly();
