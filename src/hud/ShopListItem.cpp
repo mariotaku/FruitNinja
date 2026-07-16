@@ -671,20 +671,38 @@ void ShopListItem::DrawDarkness() {
 
     if (!ShopScreen::s_TexLoading.IsValid()) return;
 
+    // DIFFERS: opt-in widescreen (Layout::HalfWidth) -- these are the only dark
+    // (0,0,0,128) shade quads in the shop list; at 16:9 the native 290px width
+    // (240/480 baseline) doesn't reach the widened list edges. Widen by k to
+    // match the already-k-scaled A1/A2 wood-BG panels in ShopScreen::DrawOrder.
+    // Identity when not wide / under __bada__. Vertical size (120) and the
+    // +105/-105 offsets are unchanged -- only horizontal coverage changes.
+#ifdef __bada__
+    const float k = 1.0f;
+#else
+    const float k = Layout::HalfWidth() / 240.0f;
+#endif
+    // Mesh::DrawQuadUnCached draws a unit quad in [-0.5,0.5] local space, so
+    // MakeScale+GlobalTranslate44(anchorX, ...) centers the quad AT anchorX --
+    // widening the width keeps it centered on the same list column (no x-shift
+    // needed), matching how A2's static BG panel widens in ShopScreen::DrawOrder.
+    const float shadeW = 290.0f * k;
+    const float anchorX = parentX - 2.0f;
+
     MatrixManager& mm = MatrixManager::GetInstance();
     ShopScreen::s_TexLoading->Set();
 
     {
-        Matrix44 matTop = Matrix44::MakeScale(290.0f, 120.0f, 0.0f);
-        matTop.GlobalTranslate44(parentX - 2.0f, 105.0f, 0.0f);
+        Matrix44 matTop = Matrix44::MakeScale(shadeW, 120.0f, 0.0f);
+        matTop.GlobalTranslate44(anchorX, 105.0f, 0.0f);
         mm.GetWorldStack().Reset();
         mm.GetWorldStack().SetCurrentMatrix(matTop);
         mm.UploadModelViewOnly();
         Mortar::Mesh::DrawQuadUnCached(Colour(0, 0, 0, 128), NULL);
     }
     {
-        Matrix44 matBot = Matrix44::MakeScale(290.0f, 120.0f, 0.0f);
-        matBot.GlobalTranslate44(parentX - 2.0f, -105.0f, 0.0f);
+        Matrix44 matBot = Matrix44::MakeScale(shadeW, 120.0f, 0.0f);
+        matBot.GlobalTranslate44(anchorX, -105.0f, 0.0f);
         mm.GetWorldStack().Reset();
         mm.GetWorldStack().SetCurrentMatrix(matBot);
         mm.UploadModelViewOnly();
