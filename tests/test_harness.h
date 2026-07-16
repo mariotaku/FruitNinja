@@ -104,7 +104,8 @@ struct TestHarness {
           m_langOverride(-1),
           m_interactiveDefault(false),
           m_componentMode(false),
-          m_glReadPixels(NULL)
+          m_glReadPixels(NULL),
+          m_winW(960), m_winH(640)
     {
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
@@ -125,6 +126,17 @@ struct TestHarness {
     // Default 5 covers the splash transition. test_screen needs ~180 for
     // the in-transition; test_bonus_phase needs ~120 for HUD live.
     void SetInitFrames(int n) { initFrames = n; }
+
+    // Set the window/drawable size the harness creates in Init()/InitComponent().
+    // Must be called BEFORE Init()/InitComponent() -- SDL_CreateWindow reads it
+    // at creation time. Default 960x640 (3:2), matching the game's default
+    // desktop window (mainSDL.cpp). There is no post-creation resize path here
+    // on purpose: mirrors mainSDL.cpp, which computes winW/winH before
+    // SDL_CreateWindow rather than calling SDL_SetWindowSize afterwards.
+    // A live SDL_SetWindowSize() on a window that already has a GL context can
+    // hang under some drivers/WMs (observed on the hidden test window); create-
+    // at-size sidesteps that entirely.
+    void SetWindowSize(int w, int h) { m_winW = w; m_winH = h; }
 
     // -------- arg parsing --------
     // Parses --interactive / --screenshot / --headless / --frames N / --duration S.
@@ -262,7 +274,7 @@ struct TestHarness {
             title,
             interactive ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED,
             interactive ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED,
-            960, 640, winFlags);
+            m_winW, m_winH, winFlags);
         if (!window) {
             std::fprintf(stderr, "Window failed: %s\n", SDL_GetError());
             SDL_Quit();
@@ -577,7 +589,7 @@ struct TestHarness {
         SDL_Surface* surf = SDL_CreateRGBSurfaceFrom(
             pixels, ww, wh,
             24,            // bits per pixel
-            ww * 3,        // pitch (bytes per row)
+            (int)((((size_t)ww * 3u) + 3u) & ~(size_t)3u),  // pitch, 4-byte aligned (matches _ReadPixelsFlipped)
             0x000000FFu,   // Rmask
             0x0000FF00u,   // Gmask
             0x00FF0000u,   // Bmask
@@ -679,6 +691,9 @@ private:
     // Per-instance glReadPixels pointer. Loaded lazily via
     // SDL_GL_GetProcAddress on first use; cached for subsequent calls.
     PFN_glReadPixels m_glReadPixels;
+    // Window/drawable size Init()/InitComponent() creates the SDL window at.
+    // Set via SetWindowSize() before Init(); default 960x640 (3:2).
+    int m_winW, m_winH;
 
     // Read the framebuffer and flip bottom-up -> top-down.
     // Returns a malloc'd (ww*wh*3)-byte RGB buffer; caller free()s.
@@ -697,7 +712,12 @@ private:
         }
         const unsigned int GL_RGB_           = 0x1907;
         const unsigned int GL_UNSIGNED_BYTE_ = 0x1401;
-        size_t rowBytes = (size_t)ww * 3;
+        // 4-byte-align the row stride: glReadPixels' default GL_PACK_ALIGNMENT=4
+        // pads each row up to a 4-byte boundary, so for odd widths where ww*3 is
+        // not a multiple of 4 (e.g. 1138*3=3414) a tight ww*3 buffer would be
+        // overrun by the padded write -> heap corruption / hang. 960*3=2880 is
+        // already aligned, so 3:2 captures are byte-identical.
+        size_t rowBytes = (((size_t)ww * 3u) + 3u) & ~(size_t)3u;
         size_t totalBytes = rowBytes * (size_t)wh;
         // Read bottom-up into a temp buffer, then flip into the final buffer.
         unsigned char* tmp  = (unsigned char*)std::malloc(totalBytes);
