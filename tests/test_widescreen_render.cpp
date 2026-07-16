@@ -33,8 +33,8 @@
 //      gamemode_3x2.png / gamemode_16x9.png
 //      shop_3x2.png     / shop_16x9.png
 //
-// 2. POWERUP FRENZY/FREEZE (--combo=frenzy|freeze|freeze+frenzy) -- component
-//    isolation mode (InitComponent(), same pattern as test_powerup_hud.cpp):
+// 2. POWERUP FRENZY/FREEZE/X2 (--combo=frenzy|freeze|x2|freeze+frenzy|all) --
+//    component isolation mode (InitComponent(), same pattern as test_powerup_hud.cpp):
 //    GameTaskUpdate/WaveManager never tick in this mode (PowerUpManager::Update
 //    is only ever called from WaveManager::Update, gated on an active wave --
 //    see WaveManager.cpp:1193), so PowerUpManager is driven manually exactly
@@ -47,7 +47,8 @@
 //    locally per frame here -- not a new harness feature, just inlining the
 //    real widescreen call sequence around the existing hook API.
 //    Captures (tmp/test/screenshots/widescreen/):
-//      freeze_16x9.png / frenzy_16x9.png / freeze+frenzy_16x9.png
+//      freeze_16x9.png / frenzy_16x9.png / x2_16x9.png /
+//      freeze+frenzy_16x9.png / all_16x9.png
 //      (widescreen only -- the 3:2 case is already covered by
 //      screenshot_powerup_freeze / screenshot_powerup_frenzy in
 //      test_powerup_hud.cpp; this segment exists to prove the powerup HUD
@@ -102,8 +103,12 @@ static void PowerUpPostFrame(void* ud, float /*dt*/) {
 static int ComboNames(const char* combo, const char* names[3]) {
     if (std::strcmp(combo, "freeze") == 0) { names[0] = "freeze"; return 1; }
     if (std::strcmp(combo, "frenzy") == 0) { names[0] = "speed";  return 1; }
+    if (std::strcmp(combo, "x2") == 0) { names[0] = "score_mult"; return 1; }
     if (std::strcmp(combo, "freeze+frenzy") == 0) {
         names[0] = "freeze"; names[1] = "speed"; return 2;
+    }
+    if (std::strcmp(combo, "all") == 0) {
+        names[0] = "freeze"; names[1] = "speed"; names[2] = "score_mult"; return 3;
     }
     names[0] = "freeze"; names[1] = "speed";
     return 2;
