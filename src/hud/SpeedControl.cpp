@@ -13,6 +13,7 @@
 #include "game/GameWork.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
+#include "render/Layout.h"
 
 // ctor @ 0x001b892c
 SpeedControl::SpeedControl()
@@ -241,7 +242,16 @@ void SpeedControl::Draw(float* /*hudScale*/) {
     // u=v=0.5 (constant -- texture is a solid-fill / dithered atlas frame,
     // not sampled by shape). (x,y) per binary: x = vertical (320-unit) axis,
     // y = horizontal (480-unit) axis -- see docs/engine/coordinate-system.md.
-    static const float kX[6] = { -240.0f, -240.0f,    0.0f,    0.0f,  240.0f,  240.0f };
+    // DIFFERS: opt-in widescreen -- the +-240 entries are the full-width overlay
+    // edges (not anchored positions), so scale by HalfWidth()/240 to keep the
+    // chevron stripe spanning the whole (possibly widened) field. Identity
+    // (240.0f) when disabled/__bada__.
+#ifdef __bada__
+    const float edgeX = 240.0f;
+#else
+    const float edgeX = Layout::HalfWidth();
+#endif
+    const float kX[6] = { -edgeX, -edgeX,    0.0f,    0.0f,  edgeX,  edgeX };
     static const float kY[6] = { -240.0f, -320.0f,    0.0f,  -80.0f, -240.0f, -320.0f };
 
     const uint32_t packed = m_DrawColour.PlatformColour();

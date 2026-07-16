@@ -30,6 +30,7 @@
 #include "math/_Vector2.h"
 #include "audio/GameSound.h"
 #include "util/StringTable.h"
+#include "render/Layout.h"
 #include <cstdio>
 #include <cmath>
 #include "game/GameWork.h"
@@ -776,7 +777,16 @@ void AboutScreen::AddLine(const char* text, Colour colour, int fontSize)
     Mortar::BakedStringBox* box = new Mortar::BakedStringBox(font, (float)fontSize, 350, 20, (Mortar::ALIGNMENT_TYPE)0xf, 1, 0);
     box->SetText(text);
     box->SetColour(colour, 1);
-    box->SetWorldspaceClipping(-240, -46, 400, 108);
+    // DIFFERS: opt-in widescreen -- the -240 X0 is the left-field clip edge;
+    // use the real (possibly widened) edge so the credits marquee isn't
+    // clipped early against the stale original boundary. Y/width/height are
+    // not field-edge references and stay fixed. Identity under disabled/__bada__.
+#ifdef __bada__
+    const int clipX0 = -240;
+#else
+    const int clipX0 = -(int)Layout::HalfWidth();
+#endif
+    box->SetWorldspaceClipping(clipX0, -46, 400, 108);
     box->Update();
 
     MarqueeText* mt = new MarqueeText();
