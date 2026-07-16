@@ -23,6 +23,7 @@ add_library(mortar_engine ${FN_LIB_TYPE}
     render/MatrixManager.cpp
     render/MatrixStack.cpp
     render/DisplayManager.cpp
+    render/Layout.cpp        # Port specific: opt-in widescreen layout seam (DIFFERS enhancement)
 )
 if(NOT FN_ASM_VERIFY)
     target_sources(mortar_engine PRIVATE

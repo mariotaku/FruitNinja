@@ -7,6 +7,7 @@
 #include "debug/Logger.h"
 #include "debug/DebugFlags.h"
 #include "game/SettingsSave.h"
+#include "render/Layout.h"
 #include <cstdio>
 #include <cstring>
 
@@ -55,9 +56,15 @@ int main(int argc, char* argv[]) {
 
     // Port specific: parse launch parameters for debug flags.
     //   --osd-sfx           : enable the per-SFX OSD readout (same as F4 at runtime)
+    //   --widescreen        : DIFFERS: opt-in widescreen layout enhancement (Layout::HalfWidth);
+    //                         faithful 3:2 (240 half-width) stays the default when omitted.
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--osd-sfx") == 0) {
             FN::g_bOsdSfx = true;
+        } else if (strcmp(argv[i], "--widescreen") == 0) {
+#ifndef __bada__
+            Layout::SetWideLayout(true);
+#endif
         }
     }
 
