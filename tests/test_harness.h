@@ -20,7 +20,7 @@
 //           h.RunHeadless(210);                     // 180 transition + 30 idle frames
 //           // ...assertions...
 //       }
-//       if (h.IsScreenshot()) h.ScreenshotPng();    // writes tmp/test/screenshots/<suite>/<case>.png
+//       if (h.IsScreenshot()) h.ScreenshotPng();    // writes <FN_TEST_SCREENSHOT_DIR>/<suite>/<case>.png
 //
 //       return h.Shutdown();                        // SDL/GL teardown + final PASS line
 //   }
@@ -34,7 +34,13 @@
 // Screenshot paths use a <suite>/<case> scheme: the name (or nameOverride)
 // passed to ScreenshotPng/SavePng may contain a single '/' separating suite
 // from case. The intermediate subdirectory is created automatically
-// (e.g. "gameover/classic" -> tmp/test/screenshots/gameover/classic.png).
+// (e.g. "gameover/classic" -> <FN_TEST_SCREENSHOT_DIR>/gameover/classic.png).
+//
+// FN_TEST_SCREENSHOT_DIR is a compile definition (see tests/CMakeLists.txt's
+// fn_add_game_test macro) carrying the absolute path
+// "${CMAKE_SOURCE_DIR}/tmp/test/screenshots" -- the project's gitignored
+// tmp/ tree, NOT the CMake binary/build dir. Falls back to the relative
+// "tmp/test/screenshots" (resolved against the process CWD) if undefined.
 //
 // The harness is header-only / inline; no separate .cpp. Header-only keeps
 // link-line surgery off the test CMake list. Cross-build (asm-verify
@@ -64,6 +70,15 @@
 #  include <direct.h>
 #endif
 #include <SDL_image.h>
+
+// Base directory screenshots are written under. FN_TEST_SCREENSHOT_DIR is
+// an absolute path supplied by tests/CMakeLists.txt's fn_add_game_test macro
+// (${CMAKE_SOURCE_DIR}/tmp/test/screenshots), keeping captures in the
+// project's gitignored tmp/ tree instead of the CMake binary dir. The
+// relative fallback covers a non-CMake / unknown build of this header.
+#ifndef FN_TEST_SCREENSHOT_DIR
+#define FN_TEST_SCREENSHOT_DIR "tmp/test/screenshots"
+#endif
 
 // glReadPixels isn't in the thin gl_funcs.h wrapper -- pull via
 // SDL_GL_GetProcAddress so we don't need to link opengl32 statically.
@@ -572,7 +587,7 @@ struct TestHarness {
     }
 
     // -------- screenshot --------
-    // Writes tmp/test/screenshots/<suite>/<case>.png (compressed PNG, RGB, top-down)
+    // Writes <FN_TEST_SCREENSHOT_DIR>/<suite>/<case>.png (compressed PNG, RGB, top-down)
     // by capturing the live framebuffer. PNG is the ONE framebuffer-capture format.
     // The name (nameOverride or label) may contain a '/' for suite/case nesting.
     // Uses SDL2_image IMG_SavePNG. Returns true on success.
@@ -738,37 +753,62 @@ private:
     }
 
     // Create the output directory tree for 'name' and build the full
-    // "tmp/test/screenshots/<name>.<ext>" path into outBuf. Shared by
+    // "<FN_TEST_SCREENSHOT_DIR>/<name>.<ext>" path into outBuf. Shared by
     // ScreenshotPng and SavePng so both honour the <suite>/<case> convention
     // and identical directory auto-creation.
     void BuildScreenshotPath_(const char* name, const char* ext,
                               char* outBuf, size_t bufSize) {
         MakeScreenshotDir_(name);
-        std::snprintf(outBuf, bufSize, "tmp/test/screenshots/%s.%s", name, ext);
+        std::snprintf(outBuf, bufSize, "%s/%s.%s", FN_TEST_SCREENSHOT_DIR, name, ext);
     }
 
-    // Create tmp/test/screenshots/ and any subdirectory implied by 'name'.
+    // Portable recursive mkdir: creates 'path' and every missing parent
+    // component (mirrors `mkdir -p`). Works for both relative and absolute
+    // paths (FN_TEST_SCREENSHOT_DIR is typically absolute). Silently no-ops
+    // on components that already exist; EEXIST/ENOENT-from-existing-parent
+    // are expected, not errors.
+    static void MkdirRecursive_(const char* path) {
+        char buf[512];
+        std::snprintf(buf, sizeof(buf), "%s", path);
+        size_t len = std::strlen(buf);
+        // Normalize backslashes (Windows absolute paths may carry them) so
+        // the single '/'-splitting loop below handles both separators.
+        for (size_t i = 0; i < len; ++i) {
+            if (buf[i] == '\\') buf[i] = '/';
+        }
+        for (size_t i = 1; i < len; ++i) {
+            if (buf[i] != '/') continue;
+            buf[i] = '\0';
+#ifdef _WIN32
+            // Skip a bare drive letter component ("C:") -- not a creatable dir.
+            if (!(i == 2 && buf[1] == ':')) _mkdir(buf);
+#else
+            mkdir(buf, 0755);
+#endif
+            buf[i] = '/';
+        }
+#ifdef _WIN32
+        _mkdir(buf);
+#else
+        mkdir(buf, 0755);
+#endif
+    }
+
+    // Create FN_TEST_SCREENSHOT_DIR and any subdirectory implied by 'name'.
     // If 'name' contains a '/' (e.g. "gameover/classic"), the part before
     // the slash is treated as a suite subdirectory and is created under
-    // tmp/test/screenshots/. Names without '/' only create the base dir.
+    // FN_TEST_SCREENSHOT_DIR. Names without '/' only create the base dir.
     static void MakeScreenshotDir_(const char* name = NULL) {
-#ifdef _WIN32
-        _mkdir("tmp"); _mkdir("tmp/test"); _mkdir("tmp/test/screenshots");
-#else
-        mkdir("tmp", 0755); mkdir("tmp/test", 0755); mkdir("tmp/test/screenshots", 0755);
-#endif
+        MkdirRecursive_(FN_TEST_SCREENSHOT_DIR);
         if (!name) return;
         const char* slash = std::strchr(name, '/');
         if (!slash) return;
-        // Build "tmp/test/screenshots/<suite>" and mkdir it.
-        char suiteDir[256];
+        // Build "<FN_TEST_SCREENSHOT_DIR>/<suite>" and mkdir it.
+        char suiteDir[512];
         int suiteLen = (int)(slash - name);
-        std::snprintf(suiteDir, sizeof(suiteDir), "tmp/test/screenshots/%.*s", suiteLen, name);
-#ifdef _WIN32
-        _mkdir(suiteDir);
-#else
-        mkdir(suiteDir, 0755);
-#endif
+        std::snprintf(suiteDir, sizeof(suiteDir), "%s/%.*s",
+                      FN_TEST_SCREENSHOT_DIR, suiteLen, name);
+        MkdirRecursive_(suiteDir);
     }
 };
 
