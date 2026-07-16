@@ -14,6 +14,7 @@
 #include "debug/Logger.h"
 #include <cstdint>
 #include "game/GameWork.h"
+#include "render/Layout.h"
 
 namespace FN {
 // @ 0x0016bbf0
@@ -55,15 +56,8 @@ void DrawStartFade() {
     }
 
     if (!game->pSplashTex.IsValid()) return;
-    game->pSplashTex->Set();
 
     MatrixManager& mm = MatrixManager::GetInstance();
-    mm.GetWorldStack().Reset();
-    // ASM-spec v1.6.1 DrawStartFade @0x001cd4fc: logo scale = Vec3(480,320,0)*scale_mul (grows 1x->2x = the "explode")
-    Matrix44 mat = Matrix44::MakeScale((float)FN_SCREEN_W * alpha_factor, (float)FN_SCREEN_H * alpha_factor, 0.0f);
-    mat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
-    mm.GetWorldStack().SetCurrentMatrix(mat);
-    mm.UploadModelViewOnly();
 
     // v1.6.1 DrawStartFade @0x001cd4fc: alpha = bright only; growth goes to scale
     float a_f = bright * 255.0f;
@@ -76,6 +70,43 @@ void DrawStartFade() {
     const uint8_t a = (uint8_t)a_f;
     const uint8_t r = (uint8_t)r_f;
     const Colour col(r, r, r, a);
+
+    // DIFFERS: opt-in widescreen -- backdrop behind the splash logo is a solid
+    // black quad spanning the full drawable (Layout::HalfWidth()*2 wide) so the
+    // widened side bars fade in/out together with the logo instead of showing
+    // through. Faithful 3:2 / __bada__: HalfWidth()==240 so this is exactly the
+    // original 480x320 quad. The backdrop tracks the SAME bright/rgb_factor
+    // alpha as the logo (col, computed above) but never scales down with the
+    // logo's alpha_factor growth -- it must stay full-coverage throughout the
+    // whole fade, unlike the logo quad below which grows from 1x to 2x.
+#ifdef __bada__
+    const float bgHalfWidth = 240.0f;
+#else
+    const float bgHalfWidth = Layout::HalfWidth();
+#endif
+    const Colour bgCol(0, 0, 0, col.a);
+
+    // Port specific: the renderer's DrawQuad skips the draw entirely when no
+    // texture is bound (see Renderer::DrawQuad's s_LastBoundTexId guard), so
+    // the black backdrop binds the splash texture too (degenerate UV -> the
+    // sample is irrelevant, tint carries full colour) and stays bound for the
+    // logo draw that follows -- one Set/UnSet bracket for both quads.
+    game->pSplashTex->Set();
+
+    mm.GetWorldStack().Reset();
+    Matrix44 matBg = Matrix44::MakeScale(bgHalfWidth * 2.0f, (float)FN_SCREEN_H, 0.0f);
+    matBg.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
+    mm.GetWorldStack().SetCurrentMatrix(matBg);
+    mm.UploadModelViewOnly();
+    // Degenerate UV (flat sample) -- tint carries full colour, no texture needed.
+    Mortar::Mesh::DrawQuadUnCached(bgCol, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+
+    mm.GetWorldStack().Reset();
+    // ASM-spec v1.6.1 DrawStartFade @0x001cd4fc: logo scale = Vec3(480,320,0)*scale_mul (grows 1x->2x = the "explode")
+    Matrix44 mat = Matrix44::MakeScale((float)FN_SCREEN_W * alpha_factor, (float)FN_SCREEN_H * alpha_factor, 0.0f);
+    mat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
 
     // UV crop: binary draws logo rect (uMin=0.03125, uMax=0.96875, vMin=0.1875, vMax=0.8125)
     Mortar::Mesh::DrawQuadUnCached(col, 0.03125f, 0.96875f, 0.1875f, 0.8125f, NULL);
