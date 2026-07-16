@@ -134,8 +134,17 @@ struct EffectImage : public Mortar::ReloadableTexture {
     //         bit1(2)="fade" (alpha scales with visibility). XML "transition" attr parsed
     //         via ParseMaskWords; v1.6.1 ParseMaskWords @0x0014f404.
     uint32_t     m_FlagBits;         // +0x74
-    // +0x78  bool  low-end-only gate (XML "lowEndOnly"); padding +0x79..+0x7b to 0x7c.
-    bool         m_bLowEndOnly;      // +0x78
+    // +0x78  bool  XML "scaleToScreen" -- marks this image as a full-screen overlay
+    //         quad (only "ice_cover" in v1.6.1 poweruplist.xml sets it). Binary reads
+    //         this byte at EffectImage+0x78; no confirmed consumer has been found in
+    //         Activate/Update (a latent/dead gate in v1.6.1, or consumed by a code
+    //         path not yet RE'd). DIFFERS: opt-in widescreen (Layout::HalfWidth) --
+    //         this port reads it as the "is this image full-screen" detector to widen
+    //         such overlays' quad width to +-HalfWidth() in widescreen (see
+    //         ScreenEffect::Activate/Update); identity (no-op read) under __bada__/3:2.
+    //         Renamed from m_bLowEndOnly (placeholder name) now that XML usage confirms
+    //         the "scaleToScreen" semantic; padding +0x79..+0x7b to 0x7c.
+    bool         m_bScaleToScreen;   // +0x78
 
     // EffectImage ctor defaults -- v1.6.1 EffectImage::EffectImage @0x0014a508
     EffectImage()
@@ -152,7 +161,7 @@ struct EffectImage : public Mortar::ReloadableTexture {
         , m_StartT(1.0f), m_EndT(0.0f)      // binary default m_StartT=1.0f (v1.6.1 @0x0014a508)
         , m_ColourScale(0,0,0)              // binary default = (0,0,0); texture dims written by Parse (v1.6.1 @0x0014a508)
         , m_Tint(255,255,255,255)
-        , m_FlagBits(0), m_bLowEndOnly(false)
+        , m_FlagBits(0), m_bScaleToScreen(false)
     {
     }
 
@@ -176,7 +185,7 @@ static_assert(offsetof(EffectImage, m_SizeOut)           == 0x50, "EffectImage::
 static_assert(offsetof(EffectImage, m_ColourScale)       == 0x64, "EffectImage::m_ColourScale @ +0x64");
 static_assert(offsetof(EffectImage, m_Tint)              == 0x70, "EffectImage::m_Tint @ +0x70");
 static_assert(offsetof(EffectImage, m_FlagBits)          == 0x74, "EffectImage::m_FlagBits @ +0x74");
-static_assert(offsetof(EffectImage, m_bLowEndOnly)       == 0x78, "EffectImage::m_bLowEndOnly @ +0x78");
+static_assert(offsetof(EffectImage, m_bScaleToScreen)    == 0x78, "EffectImage::m_bScaleToScreen @ +0x78");
 #endif
 
 // 0x28 (40) bytes. v1.6.1 ScreenTint::ScreenTint ctor @0x00149f30, Parse @0x00148324.
