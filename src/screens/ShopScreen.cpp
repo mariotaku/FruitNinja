@@ -77,11 +77,19 @@ static const int   ANIM_FRAME_MAX  = 0x3ffc;       // from decompile literal
 // DAT_0015e558 = 0.0f (z)
 static const _Vector3<float> POS_BACK_BUTTON(185.0f, -105.0f, 0.0f);  // DAT_0015e55c/560/558
 
-// Equip button position (field_0x8c, created in state 1):
+// Equip button position (field_0x8c, created in state 1) -- this is the
+// "SELECT"/"EQUIP" ring: the previewed-item ring in the RIGHT PANE, distinct
+// from the red BACK bomb (m_pBuyButton, "shop.btn.back") and the scrollable
+// list items.
 // DAT_0015e564 = 00 00 11 43 = 145.0f
 // DAT_0015e568 = 00 00 d0 42 = 104.0f
 // z = DAT_0015e558 = 0.0f
-static const _Vector3<float> POS_EQUIP_BUTTON(145.0f, 104.0f, 0.0f);  // DAT_0015e564/568/558
+// X is a compile-time literal here (not MapX'd directly -- MapX reads
+// Layout's g_WideLayout, which isn't set yet at static-init time for a
+// file-scope const). The widescreen remap is applied at the ctor call site
+// below (see ShopScreen::Update state 1) via POS_EQUIP_BUTTON_X.
+static const float POS_EQUIP_BUTTON_X = 145.0f;  // DAT_0015e564
+static const _Vector3<float> POS_EQUIP_BUTTON(POS_EQUIP_BUTTON_X, 104.0f, 0.0f);  // DAT_0015e564/568/558
 
 // State-3 replacement back button position:
 // DAT_0015e918 = 00 00 39 43 = 185.0f (same x)
@@ -1025,7 +1033,19 @@ void ShopScreen::Update(float dt) {
                         // Creation default: locked_ring.tex (immediately overridden by SetSelected below).
                         // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: binary writes m_RingTex[10] at creation.
                         m_pEquipButton->m_Texture = game_work.m_RingTex[10];
-                        m_pEquipButton->Init(POS_EQUIP_BUTTON,
+                        // DIFFERS: opt-in widescreen -- the BG_store wood-panel quads (Block
+                        // A1/A2 in DrawOrder) scale their width by k = HalfWidth()/240, and
+                        // the panel's centre divider is baked into the texture art at a fixed
+                        // UV fraction of that quad, so the right pane's centre moves out by k
+                        // too when the field widens. X=145 is exactly the rest-state
+                        // right-pane anchor (matches DrawOrder's slide_X steady-state and
+                        // GetDescriptionTextXPos's rest value), so scale it PROPORTIONALLY
+                        // (no edge-anchor table entry -- see Layout.h) to track the stretched
+                        // pane centre. Identity when not wide / under __bada__.
+                        const _Vector3<float> equipButtonPos(
+                            MapX(POS_EQUIP_BUTTON_X, "shop.select"),
+                            POS_EQUIP_BUTTON.y, POS_EQUIP_BUTTON.z);
+                        m_pEquipButton->Init(equipButtonPos,
                             Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
                             equipFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
                         // Binary (0x0015e5f6): disables touch on equip button at creation
@@ -1554,7 +1574,13 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
     float ratio = (sinDenom != 0.0f) ? (SinIdx((uint16_t)m_AnimFrame) / sinDenom)
                                       : SinIdx((uint16_t)m_AnimFrame);
     IngamePopup* popup = GetIngamePopup(0x11);
-    if (popup) popup->Draw(_Vector3<float>(slide_X, 104.0f, 0.0f), ratio);
+    // DIFFERS: opt-in widescreen -- this "SELECTED" stamp draws at the same
+    // rest position as the select/equip ring (X=145==POS_EQUIP_BUTTON_X,
+    // Y=104), so it needs the same proportional "shop.select" remap (see
+    // POS_EQUIP_BUTTON_X above) to stay centred over the ring in the
+    // stretched right pane. Identity when not wide / under __bada__.
+    float mappedSlideX = MapX(slide_X, "shop.select");
+    if (popup) popup->Draw(_Vector3<float>(mappedSlideX, 104.0f, 0.0f), ratio);
 }
 
 // Binary @ 0x0015c568 (re-analyst 2026-05-18). 3-way branch on selected
