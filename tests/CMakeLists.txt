@@ -790,10 +790,11 @@ endforeach()
 
 # Per-mode FruitFact board screenshot driver.
 # Drives a per-mode GameOverScreen to STATE_MAIN_DISPLAY so the corresponding
-# FruitFactPage is created and rendered. Outputs:
-#   tmp/test/screenshots/fruitfact/classic.png
-#   tmp/test/screenshots/fruitfact/arcade.png
-#   tmp/test/screenshots/fruitfact/zen.png
+# FruitFactPage is created and rendered. Outputs (every filename always carries
+# a _3x2/_16x9 aspect suffix -- see test_fruitfact.cpp's --widescreen comment):
+#   tmp/test/screenshots/fruitfact/classic_3x2.png (+ classic_16x9.png)
+#   tmp/test/screenshots/fruitfact/arcade_3x2.png  (+ arcade_16x9.png)
+#   tmp/test/screenshots/fruitfact/zen_3x2.png     (+ zen_16x9.png)
 fn_add_game_test(test_fruitfact test_fruitfact.cpp)
 # FN_TEST exposes BaseScreen::GetHUDControlsForTest() for the --isolated render
 # (keep-set of FruitFact page child controls). Layout-neutral (method-only guard).
@@ -812,6 +813,19 @@ set_tests_properties(screenshot_fruitfact_arcade  PROPERTIES TIMEOUT 60
     LABELS "category_rendering;screen_fruitfact;mode_arcade;fact_default;lang_english_us")
 set_tests_properties(screenshot_fruitfact_zen     PROPERTIES TIMEOUT 60
     LABELS "category_rendering;screen_fruitfact;mode_zen;fact_default;lang_english_us")
+
+# --- Widescreen (3:2 vs 16:9) game-over/fact-board layout comparison ---
+# See test_fruitfact.cpp's --widescreen comment (mirrors test_widescreen_render.cpp
+# segment 2's widescreen-aware component loop). Every base test above already
+# writes a "_3x2" file (WideSuffix() defaults false); these add the "_16x9"
+# counterpart so the highscore-number/board layout can be diffed side by side:
+#   tmp/test/screenshots/fruitfact/classic_3x2.png / classic_16x9.png (etc.)
+foreach(_ff_mode classic arcade zen)
+    add_test(NAME screenshot_fruitfact_${_ff_mode}_widescreen
+             COMMAND test_fruitfact ${_ff_mode} --screenshot --widescreen)
+    set_tests_properties(screenshot_fruitfact_${_ff_mode}_widescreen PROPERTIES TIMEOUT 60
+        LABELS "category_rendering;screen_fruitfact;mode_${_ff_mode};fact_default;lang_english_us;widescreen")
+endforeach()
 
 # --- Mode x language x fact matrix (i18n + per-fruit fact-colour render checks) ---
 # Reproduce all of them with:   ctest -R fruitfact   (or slice via -L, see above)

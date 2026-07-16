@@ -2,21 +2,28 @@
 //
 // Usage: test_fruitfact <mode> [--interactive|--screenshot|--headless]
 //                              [--lang=<name|flag>] [--fact=<fruitIdx>]
+//                              [--widescreen]
 //
 // Drives the named game-over mode to STATE_MAIN_DISPLAY so the
 // corresponding FruitFactPage is created and rendered, then captures a PNG.
 //
 // Supported modes:
-//   classic  -> FruitFactClassicFactPage  -> tmp/test/screenshots/fruitfact/classic.png
-//   arcade   -> FruitFactBonusFactPage    -> tmp/test/screenshots/fruitfact/arcade.png
-//   zen      -> FruitFactZenPage          -> tmp/test/screenshots/fruitfact/zen.png
+//   classic  -> FruitFactClassicFactPage  -> tmp/test/screenshots/fruitfact/classic_3x2.png
+//   arcade   -> FruitFactBonusFactPage    -> tmp/test/screenshots/fruitfact/arcade_3x2.png
+//   zen      -> FruitFactZenPage          -> tmp/test/screenshots/fruitfact/zen_3x2.png
 //
-// --lang=<name>  Language name (english_us, japanese, chinese, korean, etc.)
-//                or numeric flag (0=english_us, 11=japanese, 13=chinese).
-//                Suffix appended to output filename: e.g. classic_zh.png
-// --fact=<N>     Force a specific fruit fact (0=apple 1=banana 2=orange
-//                3=watermelon 4=strawberry 5=kiwifruit 7=plum).
-//                Suffix appended: e.g. classic_zh_strawberry.png
+// --lang=<name>     Language name (english_us, japanese, chinese, korean, etc.)
+//                   or numeric flag (0=english_us, 11=japanese, 13=chinese).
+//                   Suffix appended to output filename: e.g. classic_zh_3x2.png
+// --fact=<N>        Force a specific fruit fact (0=apple 1=banana 2=orange
+//                   3=watermelon 4=strawberry 5=kiwifruit 7=plum).
+//                   Suffix appended: e.g. classic_zh_strawberry_3x2.png
+// --widescreen      Opt-in widescreen layout (Layout::SetWideLayout + 16:9
+//                   drawable), so the game-over board layout -- notably the
+//                   highscore number (MapX'd to "gameover.retry")  -- can be
+//                   compared at 3:2 vs 16:9. Every output filename always
+//                   carries a "_3x2"/"_16x9" suffix (see WideSuffix() below);
+//                   without this flag every file keeps its ordinary "_3x2" name.
 
 #include "test_harness.h"
 #include "screens/GameOverScreen.h"
@@ -33,6 +40,8 @@
 #include "game/FruitSaveData.h"
 #include "engine/util/StringTable.h"
 #include "engine/asset/TextureManager.h"
+#include "render/Layout.h"
+#include "render/MatrixManager.h"
 #include <cstring>
 #include <cstdio>
 #include <iterator>
@@ -40,6 +49,73 @@
 #include <list>
 #include "hud/MenuButton.h"
 #include "entities/Fruit.h"
+
+// --widescreen: opt-in widescreen layout capture (Layout::SetWideLayout), so
+// the game-over fact-board layout (highscore number MapX'd to "gameover.retry")
+// can be visually compared at 3:2 vs 16:9. Mirrors test_widescreen_render.cpp's
+// segment-2 (component-isolation) widescreen setup: RunComponentHeadlessMultiPass
+// (test_harness.h) hardcodes glViewport(0,0,ww,wh) and a fixed +-240 ortho with
+// no Layout awareness, so this file drives its own widescreen-aware multi-pass
+// loop instead when --widescreen is passed, reusing the harness's unmodified
+// path otherwise (byte-identical 3:2 output when the flag is absent).
+static bool g_Wide = false;
+
+// Suffix appended to every mode's screenshot label so 3:2 and 16:9 captures
+// coexist: fruitfact/classic_3x2.png / fruitfact/classic_16x9.png etc.
+static const char* WideSuffix() { return g_Wide ? "16x9" : "3x2"; }
+
+// Widescreen-aware counterpart to TestHarness::RunComponentHeadlessMultiPass
+// (test_harness.h) -- identical per-frame layer-pass structure and scale-reset
+// (mirrors GameDraw @0x001cd720 FIX 1), but applies the real widescreen render
+// path (Layout::SetWindowAspect -> ComputeViewport -> glViewport ->
+// SetActiveViewport -> ortho at Layout::HalfWidth()) instead of the harness's
+// fixed glViewport(0,0,ww,wh) + hardcoded +-240 ortho. Only used when g_Wide;
+// callers fall back to h.RunComponentHeadlessMultiPass(n) for the 3:2 capture
+// so that path stays byte-identical to every other test_fruitfact run.
+static void RunComponentFrameWidescreenAware(fn::TestHarness& h, int n) {
+    static const float kDt = 1.0f / 60.0f;
+    static const int kLayersPre[]  = { 0x40, 0x80, 0x01 };
+    static const int kLayersPost[] = { 0x08, 0x100, 0x200, 0x400 };
+    for (int i = 0; i < n; ++i) {
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev)) { if (ev.type == SDL_QUIT) return; }
+
+        int ww = 0, wh = 0;
+        SDL_GL_GetDrawableSize(h.window, &ww, &wh);
+        Layout::SetWindowAspect((float)ww, (float)wh);
+        int vpX, vpY, vpW, vpH;
+        Layout::ComputeViewport(ww, wh, &vpX, &vpY, &vpW, &vpH);
+        glViewport(vpX, vpY, vpW, vpH);
+        Layout::SetActiveViewport(vpX, vpY, vpW, vpH, ww, wh);
+
+        Mortar::DisplayManager::GetInstance().BeginFrame();
+        MatrixManager::GetInstance().SetupOrtho(
+            160.0f, -160.0f, -Layout::HalfWidth(), Layout::HalfWidth(), 2000.0f, -6000.0f);
+
+        if (game_work.mHud) {
+            game_work.mHud->Update(kDt);
+            game_work.mHud->BeginDraw(kDt);
+            for (int L = 0; L < (int)(sizeof(kLayersPre) / sizeof(kLayersPre[0])); ++L) {
+                game_work.mHud->Draw(kLayersPre[L]);
+            }
+            game_work.mHud->scales[0] = 1.0f;
+            game_work.mHud->scales[1] = 1.0f;
+            game_work.mHud->scales[2] = 1.0f;
+            for (int L = 0; L < (int)(sizeof(kLayersPost) / sizeof(kLayersPost[0])); ++L) {
+                game_work.mHud->Draw(kLayersPost[L]);
+            }
+        }
+
+        SDL_GL_SwapWindow(h.window);
+    }
+}
+
+// Dispatches to the widescreen-aware loop when --widescreen is active, else
+// the harness's unmodified RunComponentHeadlessMultiPass (byte-identical 3:2).
+static void SettleComponent(fn::TestHarness& h, int n) {
+    if (g_Wide) RunComponentFrameWidescreenAware(h, n);
+    else        h.RunComponentHeadlessMultiPass(n);
+}
 
 // When true (--isolated flag), each mode generates an additional PNG that
 // suppresses the game-over chrome (GameOverScreen board, RETRY/QUIT buttons,
@@ -196,11 +272,12 @@ static const ModeCase kModes[] = {
 static int FailUsage() {
     std::fprintf(stderr,
         "usage: test_fruitfact <mode> [--interactive|--screenshot|--headless]\n"
-        "                      [--lang=<name|flag>] [--fact=<fruitIdx>]\n"
+        "                      [--lang=<name|flag>] [--fact=<fruitIdx>] [--widescreen]\n"
         "  modes: classic arcade zen\n"
         "  lang examples: english_us japanese chinese korean (or numeric 0..13)\n"
         "  fact: 0=apple 1=banana 2=orange 3=watermelon 4=strawberry"
-        " 5=kiwifruit 7=plum\n");
+        " 5=kiwifruit 7=plum\n"
+        "  widescreen: opt-in 16:9 layout comparison (see file header)\n");
     return 1;
 }
 
@@ -231,7 +308,15 @@ int main(int argc, char* argv[]) {
     // Parse --lang= for label composition; TestHarness::ParseFlags() also parses
     // it to apply the actual locale.
     if (const char* langv = h.Opt("lang", NULL)) g_LangFlag = ParseLanguageArg(langv);
+    g_Wide = h.OptFlag("widescreen");
     if (!h.ParseFlags()) return 1;
+
+    // --widescreen must be applied BEFORE InitComponent()'s SDL_CreateWindow
+    // (mirrors mainSDL.cpp / test_widescreen_render.cpp: winW/winH sized at
+    // creation time, never a post-creation SDL_SetWindowSize).
+    if (g_Wide) h.SetWindowSize(1138, 640);
+    Layout::SetWideLayout(g_Wide);
+
     if (!h.InitComponent()) return 1;
 
     return mc->run(h);
@@ -347,7 +432,7 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
     {
         game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 321;
-        h.RunComponentHeadlessMultiPass(1);
+        SettleComponent(h, 1);
     }
 
     FruitFactControl* ctrl = gos->m_pFruitFact;
@@ -372,14 +457,16 @@ static int RunFruitFactClassic(fn::TestHarness& h) {
     for (int i = 0; i < 60; ++i) {
         game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 321;
-        h.RunComponentHeadlessMultiPass(1);
+        SettleComponent(h, 1);
     }
 
     game_work.m_SaveData = prevSaveData;
 
+    char modeLabel[64];
+    snprintf(modeLabel, sizeof(modeLabel), "classic_%s", WideSuffix());
     char shotLabel[256];
     char isoLabel[256];
-    BuildShotLabel(shotLabel, sizeof(shotLabel), "classic",
+    BuildShotLabel(shotLabel, sizeof(shotLabel), modeLabel,
                    g_LangFlag, g_FactOverride);
     snprintf(isoLabel, sizeof(isoLabel), "%s_isolated", shotLabel);
 
@@ -482,7 +569,7 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
     for (int i = 0; i < 60; ++i) {
         game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 789;
-        h.RunComponentHeadlessMultiPass(1);
+        SettleComponent(h, 1);
     }
 
     game_work.m_SaveData = prevSaveData;
@@ -496,13 +583,15 @@ static int RunFruitFactArcade(fn::TestHarness& h) {
         for (int i = 0; i < 5; ++i) {
             game_work.m_PauseAmount     = 1.0f;
             game_work.currentScore = 789;
-            h.RunComponentHeadlessMultiPass(1);
+            SettleComponent(h, 1);
         }
     }
 
+    char modeLabel[64];
+    snprintf(modeLabel, sizeof(modeLabel), "arcade_%s", WideSuffix());
     char shotLabel[256];
     char isoLabel[256];
-    BuildShotLabel(shotLabel, sizeof(shotLabel), "arcade",
+    BuildShotLabel(shotLabel, sizeof(shotLabel), modeLabel,
                    g_LangFlag, g_FactOverride);
     snprintf(isoLabel, sizeof(isoLabel), "%s_isolated", shotLabel);
 
@@ -593,7 +682,7 @@ static int RunFruitFactZen(fn::TestHarness& h) {
     for (int i = 0; i < settle; ++i) {
         game_work.m_PauseAmount     = 1.0f;
         game_work.currentScore = 456;
-        h.RunComponentHeadlessMultiPass(1);
+        SettleComponent(h, 1);
     }
 
     game_work.m_SaveData = prevSaveData;
@@ -607,13 +696,15 @@ static int RunFruitFactZen(fn::TestHarness& h) {
         for (int i = 0; i < 5; ++i) {
             game_work.m_PauseAmount     = 1.0f;
             game_work.currentScore = 456;
-            h.RunComponentHeadlessMultiPass(1);
+            SettleComponent(h, 1);
         }
     }
 
+    char modeLabel[64];
+    snprintf(modeLabel, sizeof(modeLabel), "zen_%s", WideSuffix());
     char shotLabel[256];
     char isoLabel[256];
-    BuildShotLabel(shotLabel, sizeof(shotLabel), "zen",
+    BuildShotLabel(shotLabel, sizeof(shotLabel), modeLabel,
                    g_LangFlag, g_FactOverride);
     snprintf(isoLabel, sizeof(isoLabel), "%s_isolated", shotLabel);
 
