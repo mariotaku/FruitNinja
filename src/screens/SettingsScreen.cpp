@@ -285,18 +285,23 @@ static const float kDividerY1b = (kSensY - kSensTrackH * 0.5f) - kDividerPad - k
 
 // WIDESCREEN: its own single-row group, right after MOTION MODE (moved down
 // from its old spot below FPS COUNTER -- see Layout::WideLayoutRestartPending,
-// SettingsScreen.h). kDividerPad below Divider 1b's own bottom edge, same
-// "measure to the divider box edge" convention every row after a divider
-// uses (mirrors kMotionLabelY off kDividerY1). Single-line row, no
-// sub-description, structurally identical to the FPS COUNTER row.
-static const float kWideScreenLabelY = (kDividerY1b - kDividerHeight * 0.5f) - kDividerPad;
+// SettingsScreen.h). Structurally identical to the FPS COUNTER / NATIVE FRAME
+// RATE rows (single-line, no sub-description) -- so it uses the SAME full
+// kRowLineGap clearance off Divider 1b's own bottom edge that those two rows
+// use, not the tighter kDividerPad (kDividerPad is only for a divider's gap
+// to a MULTI-line block's first label, e.g. kMotionLabelY off kDividerY1 --
+// see the kNativeFpsLabelY comment on why an isolated single-line row needs
+// the wider gap instead).
+static const float kWideScreenLabelY = (kDividerY1b - kDividerHeight * 0.5f) - kRowLineGap;
 static const float kWideScreenCbX    = kRightEdge - kCheckboxSide * 0.5f, kWideScreenCbY = kWideScreenLabelY;
 
-// Divider 2: kDividerPad below the WIDESCREEN checkbox's own BOTTOM edge (a
-// real widget-box edge, not the label baseline) -- same convention as every
-// other inter-group divider. Previously measured off SENSITIVITY directly;
-// now off WIDESCREEN since it sits between them.
-static const float kDividerY2 = (kWideScreenCbY - kCheckboxSide * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
+// Divider 2: a full kRowLineGap below the WIDESCREEN checkbox's own BOTTOM
+// edge (a real widget-box edge, not the label baseline) -- same wider
+// clearance WIDESCREEN's own top gap uses (see kWideScreenLabelY), so the
+// row is evenly padded on both sides rather than cramped against Divider 2
+// while airy against Divider 1b. Previously measured off SENSITIVITY
+// directly; now off WIDESCREEN since it sits between them.
+static const float kDividerY2 = (kWideScreenCbY - kCheckboxSide * 0.5f) - kRowLineGap - kDividerHeight * 0.5f;
 
 // NATIVE FRAME RATE: a FULL kRowLineGap below Divider 2's own bottom edge
 // (real widget-box edge, not a label baseline) -- wider than the usual
