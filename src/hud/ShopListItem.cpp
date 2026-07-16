@@ -672,22 +672,38 @@ void ShopListItem::DrawDarkness() {
     if (!ShopScreen::s_TexLoading.IsValid()) return;
 
     // DIFFERS: opt-in widescreen (Layout::HalfWidth) -- these are the only dark
-    // (0,0,0,128) shade quads in the shop list; at 16:9 the native 290px width
-    // (240/480 baseline) doesn't reach the widened list edges. Widen by k to
-    // match the already-k-scaled A1/A2 wood-BG panels in ShopScreen::DrawOrder.
-    // Identity when not wide / under __bada__. Vertical size (120) and the
-    // +105/-105 offsets are unchanged -- only horizontal coverage changes.
+    // (0,0,0,128) shade quads in the shop list. At rest (m_TransitionAlpha==1)
+    // parentX == LIST_SLIDE_OFF's resting value (-95.0f; see ShopScreen::Update),
+    // so the 3:2 quad spans center=-97 +-145 = [-242, +48] -- already reaching
+    // 2px past the 3:2 field edge (-240) by original binary design (the -2.0f
+    // anchor fudge). At 16:9 the field's left edge moves out to -HalfWidth()
+    // (e.g. -256 at 16:9), but a symmetric width scale only grows each edge by
+    // the same amount, under-reaching the true left edge while overshooting
+    // unnecessarily on the right (which must stay clear of the description
+    // plate/equip button resting at X=145, POS_EQUIP_BUTTON_X). So the two
+    // edges are computed independently instead of a single width*k scale:
+    //   rightEdge: unchanged from 3:2 (parentX-2+145) -- same right boundary
+    //              as the original binary, well clear of the plate at X=145.
+    //   leftEdge:  extended by the exact field-edge shift so it reaches
+    //              -HalfWidth() the same way A2's field-centred BG panel does,
+    //              instead of scaling proportionally to the quad's own (off-
+    //              center) width.
+    // Identity when not wide / under __bada__ (HalfWidth()==240 -> leftEdge
+    // reduces to the original parentX-2-145, byte-identical to pre-fix).
+    // Vertical size (120) and the +105/-105 y offsets are unchanged.
 #ifdef __bada__
-    const float k = 1.0f;
+    const float rightEdge = (parentX - 2.0f) + 145.0f;
+    const float leftEdge  = (parentX - 2.0f) - 145.0f;
 #else
-    const float k = Layout::HalfWidth() / 240.0f;
+    const float fieldLeftShift = Layout::HalfWidth() - 240.0f;  // 0 at 3:2
+    const float rightEdge = (parentX - 2.0f) + 145.0f;
+    const float leftEdge  = (parentX - 2.0f) - 145.0f - fieldLeftShift;
 #endif
     // Mesh::DrawQuadUnCached draws a unit quad in [-0.5,0.5] local space, so
-    // MakeScale+GlobalTranslate44(anchorX, ...) centers the quad AT anchorX --
-    // widening the width keeps it centered on the same list column (no x-shift
-    // needed), matching how A2's static BG panel widens in ShopScreen::DrawOrder.
-    const float shadeW = 290.0f * k;
-    const float anchorX = parentX - 2.0f;
+    // MakeScale+GlobalTranslate44(center, ...) centers the quad AT `center` --
+    // recover width/center from the two independently-computed edges.
+    const float shadeW  = rightEdge - leftEdge;
+    const float anchorX = (leftEdge + rightEdge) * 0.5f;
 
     MatrixManager& mm = MatrixManager::GetInstance();
     ShopScreen::s_TexLoading->Set();
