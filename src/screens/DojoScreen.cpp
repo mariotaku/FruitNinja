@@ -755,7 +755,12 @@ void DojoScreen::UpdateBSButton(BSButton* btn, float /*dt*/, unsigned long idx) 
     // ASM-spec v1.6.1 T_1162 @0x0016a274 + UpdateBSButton @0x0016a2f4:
     //   anchor = (152, 100 - 46*idx, 0); slide = normalize(8,-1,0);
     //   pos = anchor + slide * (1 - m_TransitionAlpha) * 248.
-    _Vector3<float> anchor(152.0f, 100.0f - 46.0f * (float)idx, 0.0f);
+    // DIFFERS: opt-in widescreen -- MapX the right-edge anchor so FB/TW hug the
+    // widened right edge (same pattern as dojo.btn.shop/about). idx 0=FB, 1=TW
+    // (2/3 are defunct/always-null slots and never reach here); identity when
+    // disabled/__bada__.
+    const char* key = (idx == 0) ? "social.facebook" : "social.twitter";
+    _Vector3<float> anchor(MapX(152.0f, key), 100.0f - 46.0f * (float)idx, 0.0f);
     _Vector3<float> slide(8.0f, -1.0f, 0.0f);
     slide.Normalise();
     float offset = (1.0f - m_TransitionAlpha) * 248.0f;

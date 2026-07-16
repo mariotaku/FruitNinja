@@ -50,6 +50,14 @@ const KeyOverride kOverrides[] = {
     { "modeselect.btn.classic" },
     { "modeselect.btn.zen"   },
     { "modeselect.btn.arcade" },
+    // Social share buttons (Facebook/Twitter, defunct-but-drawn on DojoScreen) --
+    // right-edge-anchored so they hug the widened edge like the ring buttons above.
+    { "social.facebook"      },
+    { "social.twitter"       },
+    // SettingsScreen's close/back button -- sits at the screen's bottom-right
+    // corner (kCloseBtnX=215, outside the centred modal plate), right-edge-
+    // anchored so it hugs the widened corner rather than drifting proportionally.
+    { "settings.back"        },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 

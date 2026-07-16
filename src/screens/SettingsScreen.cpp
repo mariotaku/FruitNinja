@@ -697,7 +697,7 @@ void SettingsScreen::Init() {
     // ---- m_QuitButton (bomb-with-X icon + separate text label) ----
     m_CloseTex = Mortar::TextureManager::LoadLocalisedTexture("quit_title.tex");
     m_pCloseButton = new BSButton(
-        _Vector3<float>(kCloseBtnX, kCloseBtnY, 0.0f),
+        _Vector3<float>(MapX(kCloseBtnX, "settings.back"), kCloseBtnY, 0.0f),
         // Port specific: no dedicated "CLOSE" string table entry exists (this
         // screen has no binary counterpart). LSTR_DJ_BACK_BUTTON ("BACK") is
         // reused instead of LSTR_QUIT ("QUIT") -- other screens (AboutScreen,
@@ -825,7 +825,7 @@ void SettingsScreen::Update(float dt) {
     // ---- slide-in offset, m_CloseBtnOffX/Y, see header note + UpdateAnim()),
     // ---- so it can be positioned any time before the widgets are ticked. ----
     if (m_pCloseButton) {
-        m_pCloseButton->pos.x = kCloseBtnX + m_CloseBtnOffX;
+        m_pCloseButton->pos.x = MapX(kCloseBtnX, "settings.back") + m_CloseBtnOffX;
         m_pCloseButton->pos.y = kCloseBtnY + m_CloseBtnOffY;
     }
 
@@ -1399,7 +1399,17 @@ void SettingsScreen::Draw(float* hudScale) {
     if (m_Backdrop.IsValid()) {
         mm.GetWorldStack().Reset();
         m_Backdrop->Set();
-        Matrix44 bgMat = Matrix44::MakeScale(480.0f, 320.0f, 1.0f);
+        // DIFFERS: widescreen widens the full-screen dim quad to
+        // Layout::HalfWidth()*2 so the game/menu behind doesn't show through
+        // at the sides on a widened field. Identity (480.0f) when
+        // !Layout::IsWideLayout() / under __bada__.
+        float backdropW = 480.0f;
+#ifndef __bada__
+        if (Layout::IsWideLayout()) {
+            backdropW = Layout::HalfWidth() * 2.0f;
+        }
+#endif
+        Matrix44 bgMat = Matrix44::MakeScale(backdropW, 320.0f, 1.0f);
         bgMat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(bgMat);
         mm.UploadModelViewOnly();
