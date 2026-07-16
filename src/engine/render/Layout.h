@@ -8,8 +8,9 @@
 // width) ortho, always. This header adds an OPT-IN wider layout for the
 // desktop/web port: when Layout::g_WideLayout is on, the horizontal half-
 // width expands proportionally with the real window's aspect ratio (up to
-// 16:9), and MapX() lets individual element X-positions be remapped (empty
-// override table for now -- Pass 2 fills it in for HUD/screen elements).
+// 16:9), and MapX() lets individual element X-positions be remapped via a
+// per-key override table (Layout.cpp's kOverrides) for HUD/screen elements
+// that should lean toward an edge rather than just scale proportionally.
 //
 // Under __bada__ (the asm-verify cross-build, matching the real Bada ABI)
 // every symbol here collapses to the exact original constant: HalfWidth()
@@ -27,9 +28,19 @@
 //     Layout::HalfWidth() instead of the literal 240.0f, at any call site
 //     that needs to widen along with the opt-in layout (camera ortho,
 //     fruit spawn edges, background quad scale).
-//   - Wrap an element's X position with MapX(x, "some.unique.key") when a
-//     Pass-2 per-element override is expected; the key is inert until an
-//     override table entry exists for it.
+//   - Wrap an element's X position with MapX(x, "some.unique.key") at its
+//     position/draw site. With no matching entry in Layout.cpp's override
+//     table, the key is inert and the element just scales proportionally
+//     by HalfWidth()/240 (correct for a single centered piece that can't
+//     meaningfully "lean", e.g. the main-menu FN logo). Registering the key
+//     in the override table (see Layout.cpp's kOverrides / EDGE_FRACTION
+//     constants) instead pulls the element toward a fixed fraction of
+//     HalfWidth() on its own side -- for a side-anchored element (e.g. the
+//     sensei character) that's what makes it lean toward the screen edge
+//     as the window widens, rather than just drifting proportionally to
+//     its small original offset. The blend is bounded to +-HalfWidth() by
+//     construction (can't overshoot off-screen) and collapses to identity
+//     at HalfWidth()==240 (non-wide / __bada__ parity).
 //   - Call Layout::SetWindowAspect(drawableW, drawableH) once per frame (or
 //     on resize) from the render/viewport code so EffectiveAspect() has a
 //     fresh raw aspect to clamp.
