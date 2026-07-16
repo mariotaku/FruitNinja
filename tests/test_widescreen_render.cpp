@@ -68,6 +68,8 @@
 #include "game/GameModifier.h"
 #include "game/GameMode.h"
 #include "hud/HUD.h"
+#include "entities/ActorManager.h"   // DeactivateAllEntities (drain menu fruit)
+#include "particle/PSPParticleManager.h"
 #include "engine/util/StringHash.h"
 #include "math/_Vector3.h"
 #include <cstdio>
@@ -115,7 +117,22 @@ static int ComboNames(const char* combo, const char* names[3]) {
 // Game::renderFrame's exact call sequence:
 //   Layout::SetWindowAspect -> Layout::ComputeViewport -> glViewport ->
 //   Layout::SetActiveViewport -> DisplayManager::BeginFrame -> ortho(HalfWidth) ->
-//   HUD update/draw -> PowerUpManager::Draw
+//   HUD update/draw -> PSPParticleManager::Draw(-1/0/1) -> PowerUpManager::Draw
+//
+// PSPParticleManager wiring (GameUpdate/GameDraw's real per-frame calls, not
+// reached by this component-isolation loop otherwise): PowerUpManager::Update
+// (inside PowerUpPreFrame) drives ScreenEffect::Activate, which calls
+// PSPParticleManager::AddEmitter -- the frenzy "speed" screen effect's two
+// "star" emitters anchored at +-HalfWidth() (screen edges). Emitters only
+// SPAWN particles on PSPParticleManager::Update(dt) (v1.6.1 @0x00105ed8,
+// walks m_pActiveEmitters -> UpdateEmitter); the per-particle age/velocity/
+// position integration is fused into PSPParticleManager::Draw(dt, paused,
+// layer) itself (v1.6.1 @0x0013eccc, "fused integrate+render" -- see
+// src/engine/particle/PSPParticleManager.h). So both calls are required every
+// frame for particles to move and render; Draw must be called once per used
+// depth layer, mirroring GameDraw's pm.Draw(-1)/pm.Draw(0)/pm.Draw(1) triple
+// (src/game/GameInit.cpp GameDraw, passes 7/9/12) since we don't know a priori
+// which m_UseDepth the "speed" emitter's star template uses.
 static void RunPowerUpFrameWidescreenAware(fn::TestHarness& h, PowerUpManager* pum, int n) {
     static const float kDt = 1.0f / 60.0f;
     for (int i = 0; i < n; ++i) {
@@ -135,12 +152,18 @@ static void RunPowerUpFrameWidescreenAware(fn::TestHarness& h, PowerUpManager* p
             160.0f, -160.0f, -Layout::HalfWidth(), Layout::HalfWidth(), 2000.0f, -6000.0f);
 
         PowerUpPreFrame(pum, kDt);
+        PSPParticleManager::GetInstance().Update(kDt, false);
 
         if (game_work.mHud) {
             game_work.mHud->Update(kDt);
             game_work.mHud->BeginDraw(kDt);
             game_work.mHud->Draw(0x7FFFFFFF);
         }
+
+        // Same three depth-layer draws as GameDraw (background/mid/foreground).
+        PSPParticleManager::GetInstance().Draw(kDt, false, -1);
+        PSPParticleManager::GetInstance().Draw(kDt, false, 0);
+        PSPParticleManager::GetInstance().Draw(kDt, false, 1);
 
         PowerUpPostFrame(pum, kDt);
 
@@ -156,6 +179,24 @@ static void HideAllExisting() {
     std::list<HUDControl*>::iterator it;
     for (it = game_work.mHud->controls.begin(); it != game_work.mHud->controls.end(); ++it) {
         (*it)->m_Active = 0;
+    }
+}
+
+// Drains ambient fruit/bomb entities so menu screenshots capture clean UI
+// (the menu screens keep their own ambient ActorManager spawner running,
+// which otherwise clutters every capture with thrown fruit). Only targets
+// ActorManager entities (fruit/bombs), not HUDControls -- menu buttons and
+// other HUD widgets are untouched. Re-drains every settle frame because the
+// ambient spawner can fire again mid-settle (mirrors test_bonus_crash.cpp's
+// TickFrame(..., drainEntities=true) pattern, looped instead of one-shot so
+// respawns during the settle window don't slip back into frame).
+static void DrainAndSettle(fn::TestHarness& h, int settleFrames) {
+    for (int i = 0; i < settleFrames; ++i) {
+        if (h.game.actorManager) {
+            h.game.actorManager->DeactivateAllEntities(0);
+            h.game.actorManager->DeactivateAllEntities(1);
+        }
+        h.RunHeadless(1);
     }
 }
 
@@ -252,6 +293,7 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- MainScreen: already live and active; just capture. ----
+    DrainAndSettle(h, 10);
     if (h.IsScreenshot()) {
         char label[64];
         std::snprintf(label, sizeof(label), "widescreen/mainmenu_%s", suffix);
@@ -268,6 +310,7 @@ int main(int argc, char* argv[]) {
     GameModeScreen* gms = new GameModeScreen(h.game, false);
     game_work.mHud->AddControl(gms);
     h.RunHeadless(60);
+    DrainAndSettle(h, 10);
 
     if (h.IsScreenshot()) {
         char label[64];
@@ -289,6 +332,7 @@ int main(int argc, char* argv[]) {
     game_work.mHud->AddControl(shop, false);
     shop->Init();
     h.RunHeadless(60);
+    DrainAndSettle(h, 10);
 
     if (h.IsScreenshot()) {
         char label[64];
