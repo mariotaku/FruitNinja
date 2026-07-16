@@ -745,7 +745,7 @@ void AboutScreen::Draw(float* /*hudScaleRaw*/)
 
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(texW + 1.0f, texH + 1.0f, 1.0f);
-        mat.GlobalTranslate44(_Vector3<float>(xDrawn, SENSEI2_Y, 0.0f));
+        mat.GlobalTranslate44(_Vector3<float>(MapX(xDrawn, "about.sensei"), SENSEI2_Y, 0.0f));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 

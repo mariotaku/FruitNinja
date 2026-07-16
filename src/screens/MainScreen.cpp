@@ -945,7 +945,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
         // (port +0xE0..+0xE8 = m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ).
         static const float FRUIT_TEXT_SCALE = 0.85f;  // DAT_0014d838
         m_TexFruitText->Set();
-        _Vector3<float> fruitTextDrawPos(m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ);
+        _Vector3<float> fruitTextDrawPos(MapX(m_NinjaTextX, "menu.logo"), m_NinjaTextY, m_NinjaTextZ);
         SetupQuadMatrix(mm, hudScale,
             (float)m_TexFruitText->GetWidth() * FRUIT_TEXT_SCALE,
             (float)m_TexFruitText->GetHeight() * FRUIT_TEXT_SCALE,
@@ -958,7 +958,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
     // Binary: TranslateMatrix(&this+0x104) reads 3 consecutive floats.
     // m_BounceY is the bounce POSITION (the Y of ninja_text in Draw).
     if (m_ninjaTex.IsValid()) {
-        _Vector3<float> ninjaDrawPos(m_BounceVel, m_BounceY, m_BounceZ);
+        _Vector3<float> ninjaDrawPos(MapX(m_BounceVel, "menu.sensei"), m_BounceY, m_BounceZ);
         m_ninjaTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTex->GetWidth(), (float)m_ninjaTex->GetHeight(),
