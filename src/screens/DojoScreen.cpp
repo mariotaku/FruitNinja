@@ -37,6 +37,7 @@
 #include "math/_Vector2.h"
 #include "math/Colour.h"
 #include "engine/util/StringTable.h"
+#include "render/Layout.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -313,6 +314,7 @@ void DojoScreen::CreateButtons() {
         const int bombFruitType = FruitInfo_GetCount();
         m_pBackButton = new MenuButton();
         m_pBackButton->m_Texture = game_work.m_RingTex[16];
+        // Screen-centered (x=0) -- not edge-pinned, left unmapped.
         m_pBackButton->Init(POS_BACK_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                             bombFruitType, _Vector3<float>(0, 0, 0), nullptr);
@@ -347,7 +349,9 @@ void DojoScreen::CreateButtons() {
         const int shopFruitType = Fruit::FruitType("pineapple", false);
         m_pShopButton = new MenuButton();
         m_pShopButton->m_Texture = game_work.m_RingTex[7];
-        m_pShopButton->Init(POS_SHOP_BUTTON,
+        // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
+        // matching MainScreen's menu.play/menu.dojo convention).
+        m_pShopButton->Init(_Vector3<float>(MapX(POS_SHOP_BUTTON.x, "dojo.btn.shop"), POS_SHOP_BUTTON.y, POS_SHOP_BUTTON.z),
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::ShopCallback),
                             shopFruitType, _Vector3<float>(0, 0, 0), nullptr);
         // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: m_RestScale=(texW+1,texH+1,1)
@@ -388,7 +392,9 @@ void DojoScreen::CreateButtons() {
         const int aboutFruitType = Fruit::FruitType("plum", false);
         m_pAboutButton = new MenuButton();
         m_pAboutButton->m_Texture = game_work.m_RingTex[12];
-        m_pAboutButton->Init(POS_ABOUT_BUTTON,
+        // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
+        // matching MainScreen's menu.play/menu.dojo convention).
+        m_pAboutButton->Init(_Vector3<float>(MapX(POS_ABOUT_BUTTON.x, "dojo.btn.about"), POS_ABOUT_BUTTON.y, POS_ABOUT_BUTTON.z),
                              Mortar::Delegate0<void>::Make(this, &DojoScreen::AboutCallback),
                              aboutFruitType, _Vector3<float>(0, 0, 0), nullptr);
         m_pAboutButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;
@@ -614,7 +620,9 @@ void DojoScreen::Draw(float* hudScaleRaw) {
             (float)s_TexSensei->GetHeight() + 1.0f,
             1.0f);
         const float slideX = -(float)s_TexSensei->GetWidth() * (1.0f - m_TransitionAlpha);
-        mat.GlobalTranslate44(_Vector3<float>(POS_DOJO_BG.x + slideX, POS_DOJO_BG.y, POS_DOJO_BG.z));
+        // DIFFERS: opt-in widescreen -- MapX the bottom-left corner anchor (edge-anchored,
+        // same pattern as AboutScreen's about.sensei). Identity when disabled/__bada__.
+        mat.GlobalTranslate44(_Vector3<float>(MapX(POS_DOJO_BG.x, "dojo.sensei") + slideX, POS_DOJO_BG.y, POS_DOJO_BG.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
@@ -630,7 +638,9 @@ void DojoScreen::Draw(float* hudScaleRaw) {
     // Port: use BakedStringBox* overload (no secondary texture). Pass nullptr
     //   to get the anchor back; draw m_pVersionText separately at anchor+(0,5,0).
     {
-        static const _Vector3<float> BORDER_POS(-184.0f, -141.0f, 0.0f);
+        // DIFFERS: opt-in widescreen -- MapX the bottom-left corner anchor (edge-anchored,
+        // same corner as dojo.sensei above). Identity when disabled/__bada__.
+        const _Vector3<float> BORDER_POS(MapX(-184.0f, "dojo.border"), -141.0f, 0.0f);
         _Vector3<float> titlePos = DrawBorders(
             static_cast<Mortar::BakedStringBox*>(nullptr),
             m_TransitionAlpha,

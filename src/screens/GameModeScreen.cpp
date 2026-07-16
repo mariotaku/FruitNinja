@@ -25,6 +25,7 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "math/_Vector2.h"
+#include "render/Layout.h"
 #include "debug/DebugFlags.h"
 #include "util/StringHash.h"
 #include "util/StringTable.h"
@@ -352,7 +353,10 @@ void GameModeScreen::CreateControls() {
     m_pBackButton->m_Texture = game_work.m_RingTex[0x10];
     {
         MenuButton* btn = m_pBackButton;
-        m_pBackButton->Init(POS_BACK,
+        // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
+        // matching MainScreen's menu.play/menu.dojo and PauseScreen's pause.retry
+        // convention for edge-pinned ring/menu buttons).
+        m_pBackButton->Init(_Vector3<float>(MapX(POS_BACK.x, "modeselect.btn.back"), POS_BACK.y, POS_BACK.z),
                             Mortar::Delegate0<void>::Make(this, &GameModeScreen::QuitCallback),
                             FruitInfo_GetCount(), _Vector3<float>(0, 0, 0),
                             Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
@@ -379,7 +383,9 @@ void GameModeScreen::CreateControls() {
     m_pClassicButton->m_Texture = game_work.m_RingTex[2];
     {
         MenuButton* btn = m_pClassicButton;
-        m_pClassicButton->Init(POS_CLASSIC,
+        // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
+        // matching MainScreen's menu.play/menu.dojo convention).
+        m_pClassicButton->Init(_Vector3<float>(MapX(POS_CLASSIC.x, "modeselect.btn.classic"), POS_CLASSIC.y, POS_CLASSIC.z),
                                Mortar::Delegate0<void>::Make(this, &GameModeScreen::ClassicModeCallback),
                                Fruit::FruitType(FRUIT_CLASSIC, false), _Vector3<float>(0, 0, 0),
                                Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
@@ -409,7 +415,9 @@ void GameModeScreen::CreateControls() {
     m_pZenButton->m_Texture = game_work.m_RingTex[6];
     {
         MenuButton* btn = m_pZenButton;
-        m_pZenButton->Init(POS_ZEN,
+        // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
+        // matching MainScreen's menu.play/menu.dojo convention).
+        m_pZenButton->Init(_Vector3<float>(MapX(POS_ZEN.x, "modeselect.btn.zen"), POS_ZEN.y, POS_ZEN.z),
                            Mortar::Delegate0<void>::Make(this, &GameModeScreen::ZenModeCallback),
                            Fruit::FruitType(FRUIT_ZEN, false), _Vector3<float>(0, 0, 0),
                            Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
@@ -434,7 +442,9 @@ void GameModeScreen::CreateControls() {
     m_pArcadeButton->m_Texture = game_work.m_RingTex[0xd];
     {
         MenuButton* btn = m_pArcadeButton;
-        m_pArcadeButton->Init(POS_ARCADE,
+        // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
+        // matching MainScreen's menu.play/menu.dojo convention).
+        m_pArcadeButton->Init(_Vector3<float>(MapX(POS_ARCADE.x, "modeselect.btn.arcade"), POS_ARCADE.y, POS_ARCADE.z),
                               Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
                               Fruit::FruitType(FRUIT_ARCADE, false),
                               _Vector3<float>(0, 0, 0),
@@ -760,7 +770,10 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
             (float)s_TexModeSensei->GetHeight() + 1.0f,
             1.0f);
         const float slideX = -(float)s_TexModeSensei->GetWidth() * (1.0f - m_SecondaryAlpha);
-        mat.GlobalTranslate44(_Vector3<float>(POS_BG.x + slideX, POS_BG.y, POS_BG.z));
+        // DIFFERS: opt-in widescreen -- MapX the bottom-left corner anchor (edge-anchored,
+        // same pattern as AboutScreen's about.sensei / DojoScreen's dojo.sensei).
+        // Identity when disabled/__bada__.
+        mat.GlobalTranslate44(_Vector3<float>(MapX(POS_BG.x, "modeselect.sensei") + slideX, POS_BG.y, POS_BG.z));
         mm.GetWorldStack().SetCurrentMatrix(mat);
         mm.UploadModelViewOnly();
 
