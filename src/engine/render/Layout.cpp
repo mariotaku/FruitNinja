@@ -101,11 +101,11 @@ const KeyOverride kOverrides[] = {
     // number move together and keep their relative offset. Shared with
     // in-game HUD (ScoreControl persists from GameInit into game-over) --
     // both contexts should hug the widened corner, so one key is correct.
-    // Negative rightPad = extra LEFT lean beyond pure edge-anchor (widescreen
-    // only; 3:2/__bada__ stays identity since MapX returns x when !wide). The
-    // pure edge-anchor preserved the 3:2 gap (~22u), which read as "not leaning
-    // left enough" at 16:9 -- pull it a further 10u toward the widened left edge.
-    { "hud.score", -10.0f },
+    // rightPad here pulls the score group toward CENTRE by that many units in
+    // widescreen (positive = toward centre / away from the left edge; 3:2/__bada__
+    // stays identity since MapX returns x when !wide). Tuned so the SCORE/321/NEW
+    // BEST group sits a bit in from the widened left edge rather than hugging it.
+    { "hud.score", 15.0f },
     // GameOverScreen's Classic-mode fact panel (sensei body+head + "SENSEI'S
     // FRUIT FACT" board -- one rigid group anchored on FruitFactControl::pos,
     // see GameOverScreen::Update common tail). Right-side panel -> edge-anchor
