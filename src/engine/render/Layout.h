@@ -42,6 +42,15 @@
 
 #define MapX(x, key) (x)
 
+namespace Layout {
+
+// Faithful-build no-ops: SettingsSave / SettingsScreen call these unguarded
+// (real widescreen state lives only in the non-__bada__ branch below).
+inline bool IsWideLayout() { return false; }
+inline void SetWideLayout(bool /*wide*/) {}
+
+} // namespace Layout
+
 #else
 
 namespace Layout {
