@@ -905,6 +905,21 @@ void PauseScreen::Update(float dt) {
         }
     }
 
+    // Port specific: m_ResumeButton is the single pause/resume toggle icon --
+    // idle (m_Alpha<=0.5) it's the in-gameplay pause icon (tap -> PauseGameCallback
+    // state 0->2); once the overlay is active its texture swaps to Play and the
+    // SAME control resumes (state 3->4). In the binary this icon sits off the
+    // narrow 3:2 field edge whenever IsEnabled()==false (see MapX notes below) so
+    // it never leaks on menu/shop/dojo; the opt-in widescreen field reveals it
+    // there instead. Gate m_Active (visible+updates+touch) on MainScreen's
+    // gameplay-resident state so the leak is suppressed without touching the
+    // in-gameplay pause/resume behaviour: STATE_CAMERA_FADE holds throughout an
+    // active PauseScreen overlay (pausing is PauseScreen-local, not a MainScreen
+    // state change), so this never disables the button while gameplay is paused.
+    if (m_ResumeButton) {
+        m_ResumeButton->m_Active = (game_work.mMainScreen && game_work.mMainScreen->IsInGameplay()) ? 1 : 0;
+    }
+
     // 4. Title slide-in: pos.x = 0, pos.y = 240 + sizeY + (-2 * m_Alpha)
     {
         const float sizeY = m_TitleSize.y;
