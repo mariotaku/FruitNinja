@@ -140,6 +140,16 @@ int main(int argc, char* argv[]) {
     // ---- Scrolled: drive to m_MaxScroll (SetScrollForTest clamps), re-settle,
     // capture, then reset back to 0 ----
     screen->SetScrollForTest(1000.0f);
+    // SetScrollForTest only sets m_ScrollY -- the four in-plate widgets'
+    // pos.y (LANGUAGE bar / checkboxes / slider) is only rewritten to
+    // baseY + m_ScrollY inside SettingsScreen::Update() (see .cpp), while
+    // the labels/dividers read m_ScrollY live at Draw() time. In the real
+    // game Update() runs every frame after a scroll drag, so both stay in
+    // sync; here SetScrollForTest jumps m_ScrollY directly, so one explicit
+    // Update() call is needed before the settle/capture below or the
+    // widgets draw one frame stale (desynced from the labels).
+    static const float kTestDt = 1.0f / 60.0f;
+    screen->Update(kTestDt);
 
     h.RunComponentHeadless(4, kLayerMask);
 
@@ -158,6 +168,9 @@ int main(int argc, char* argv[]) {
     if (drop) {
         drop->SetOpenForTest(true);
         screen->SetScrollForTest(1000.0f);
+        // See the scrolled-capture comment above -- one explicit Update()
+        // so the widgets' pos.y reflects m_ScrollY before the settle/capture.
+        screen->Update(kTestDt);
 
         h.RunComponentHeadless(4, kLayerMask);
 
