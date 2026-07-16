@@ -922,6 +922,26 @@ void MainScreen::Draw(float* hudScaleRaw) {
     Game* game = Game::GetInstance();
     MatrixManager& mm = MatrixManager::GetInstance();
 
+    // DIFFERS: opt-in widescreen enhancement (main-menu logo cluster).
+    // Pins the FN logo + "SLICE FRUIT TO BEGIN" parchment toward the LEFT
+    // edge as the field widens, instead of leaving them centred with dead
+    // space on their left. dxLogo is a fixed gap to the new left edge
+    // (-HalfWidth()); dyLogo follows the SAME diagonal the logo cluster
+    // already sits on at rest, derived from the two m_Lean-driven rest
+    // positions (both static, non-physics): m_LogoPos base (-175, 26) and
+    // fruit_text's rest pos (-120, 18) [m_NinjaTextX/Y, UpdateScreenElements
+    // @0x00195a58]. Slope = Δy/Δx = (18-26)/(-120-(-175)) = -8/55 ≈ -0.1455.
+    // ninja_text's Y (m_BounceY) is independent bounce PHYSICS, not part of
+    // this lean diagonal, so only its X gets the group shift (see site 3).
+    static const float LOGO_SLOPE = -8.0f / 55.0f;  // dy per unit dx, from parchment->fruit_text rest offset
+    float dxLogo = 0.0f, dyLogo = 0.0f;
+#ifndef __bada__
+    if (Layout::IsWideLayout()) {
+        dxLogo = -(Layout::HalfWidth() - 240.0f);  // fixed gap to the left edge
+        dyLogo = LOGO_SLOPE * dxLogo;
+    }
+#endif // !defined(__bada__)
+
     // 1+2. fruit_text guard (GOT+0x6FCC, binary: gate on m_TexFruitText/global s_fruitTex)
     if (m_TexFruitText.IsValid()) {
         // 1a. Background shade (blurry_backing.tex) — angled triangle
@@ -945,7 +965,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
         // (port +0xE0..+0xE8 = m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ).
         static const float FRUIT_TEXT_SCALE = 0.85f;  // DAT_0014d838
         m_TexFruitText->Set();
-        _Vector3<float> fruitTextDrawPos(m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ);
+        _Vector3<float> fruitTextDrawPos(m_NinjaTextX + dxLogo, m_NinjaTextY + dyLogo, m_NinjaTextZ);
         SetupQuadMatrix(mm, hudScale,
             (float)m_TexFruitText->GetWidth() * FRUIT_TEXT_SCALE,
             (float)m_TexFruitText->GetHeight() * FRUIT_TEXT_SCALE,
@@ -958,7 +978,10 @@ void MainScreen::Draw(float* hudScaleRaw) {
     // Binary: TranslateMatrix(&this+0x104) reads 3 consecutive floats.
     // m_BounceY is the bounce POSITION (the Y of ninja_text in Draw).
     if (m_ninjaTex.IsValid()) {
-        _Vector3<float> ninjaDrawPos(m_BounceVel, m_BounceY, m_BounceZ);
+        // dx-only: m_BounceY is independent bounce PHYSICS (not the m_Lean
+        // diagonal), so only the group's X-shift applies here -- adding
+        // dyLogo would desync ninja_text from its own bounce baseline.
+        _Vector3<float> ninjaDrawPos(m_BounceVel + dxLogo, m_BounceY, m_BounceZ);
         m_ninjaTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTex->GetWidth(), (float)m_ninjaTex->GetHeight(),
@@ -968,16 +991,21 @@ void MainScreen::Draw(float* hudScaleRaw) {
     }
 
     // 4. Parchment frame (slice_fruit.tex) at m_LogoPos, then BakedStringBox on top.
+    // logoPos composes the widescreen left-anchor (dxLogo/dyLogo) additively
+    // with the existing m_Lean intro-animation offset already baked into
+    // m_LogoPos -- same anchor point, just shifted, so both keep tracking
+    // together during the lean-in.
+    _Vector3<float> logoPos = m_LogoPos + _Vector3<float>(dxLogo, dyLogo, 0.0f);
     if (m_TexSliceFruit.IsValid()) {
         m_TexSliceFruit->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_TexSliceFruit->GetWidth(), (float)m_TexSliceFruit->GetHeight(),
-            m_LogoPos);
+            logoPos);
         if (game) game->renderer.DrawQuad(m_DrawColour);
         m_TexSliceFruit->UnSet();
     }
     if (m_pSliceInstrBox) {
-        _Vector3<float> instrPos = m_LogoPos + _Vector3<float>(-4.0f, -4.0f, 0.0f);
+        _Vector3<float> instrPos = logoPos + _Vector3<float>(-4.0f, -4.0f, 0.0f);
         m_pSliceInstrBox->SetTranslation(instrPos, 1);
         m_pSliceInstrBox->Draw(_Vector2<float>(1.0f, 1.0f), 8.0f, 1);
     }
