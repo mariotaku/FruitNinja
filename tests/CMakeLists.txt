@@ -59,13 +59,13 @@ macro(fn_add_game_test _target _source)
         ${CMAKE_SOURCE_DIR}/tests
     )
 
-    # Screenshot PNGs land in the project's gitignored tmp/ tree (not under
-    # CMAKE_BINARY_DIR/tests/tmp/), per the project convention that all
-    # temp/scratch output is namespaced under <project_root>/tmp/<tool>/.
-    # test_harness.h's ScreenshotPng/SavePng use this absolute path when
-    # defined (see FN_TEST_SCREENSHOT_DIR fallback there).
+    # Screenshot PNGs land directly under the test binary dir at
+    # <CMAKE_CURRENT_BINARY_DIR>/screenshots/ (flat, not the old nested
+    # tmp/test/screenshots). Ephemeral build artifacts, colocated with the
+    # test exes. test_harness.h's ScreenshotPng/SavePng use this absolute
+    # path when defined (see FN_TEST_SCREENSHOT_DIR fallback there).
     target_compile_definitions(${_target} PRIVATE
-        FN_TEST_SCREENSHOT_DIR="${CMAKE_SOURCE_DIR}/tmp/test/screenshots")
+        FN_TEST_SCREENSHOT_DIR="${CMAKE_CURRENT_BINARY_DIR}/screenshots")
 
     target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
 
