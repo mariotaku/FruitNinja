@@ -43,6 +43,7 @@
 #include "entities/BombBlast.h"
 #include "entities/SuperFruitControl.h"
 #include "Game.h"
+#include "render/Layout.h"
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
@@ -920,7 +921,10 @@ void PauseScreen::Update(float dt) {
             int active = (m_PressIndex >= 2) ? 0 : (1 - m_PressIndex);
             m_QuitButton->SetActive(active != 0);
             m_QuitButton->m_DrawRotation.x = 0.0f;
-            m_QuitButton->SetPosition(_Vector3<float>(215.0f, (1.0f - m_Alpha) * -40.0f - 135.0f, 0.0f));
+            // DIFFERS: opt-in widescreen -- MapX re-anchors the corner X so the
+            // Quit button tracks the widened left/right edge instead of leaking
+            // into the newly-revealed field. Identity (215.0f) when disabled/__bada__.
+            m_QuitButton->SetPosition(_Vector3<float>(MapX(215.0f, "pause.quit"), (1.0f - m_Alpha) * -40.0f - 135.0f, 0.0f));
         }
         m_QuitButton->SetTextOffset(_Vector3<float>(-29.0f, 3.0f, 0.0f));
     }
@@ -967,17 +971,25 @@ void PauseScreen::Update(float dt) {
     //   pos.x = -((244 - 0.5*OX) + |fade|*(10 + 0.75*OX))
     //   pos.y = 0.375*OX - 165   (y unchanged by phase-2 lerp)
     // (Previous port had 0.375*OX in term1 -- WRONG; binary has 0.5*OX.)
+    // DIFFERS: opt-in widescreen -- MapX re-anchors the off-screen-left base X.
+    // When IsEnabled()==false (menu / not the active pause overlay), absFade
+    // eases to 1.0 and this formula pushes the button to x=-270 -- just past
+    // the original +-240 field edge (see IsEnabled() note above). Under the
+    // widened field that -270 base sits INSIDE the new +-HalfWidth() extent,
+    // re-revealing the resume/pause icon on the menu. MapX proportionally
+    // rescales it back past the widened edge. Identity when disabled/__bada__.
     if (m_ResumeButton) {
         const float absFade = std::fabs(m_ButtonFadeAlpha);
         const float term1 = 244.0f - 0.5f * OX;
         const float term2 = absFade * (10.0f + 0.75f * OX);
-        m_ResumeButton->pos.x = -(term1 + term2);
+        m_ResumeButton->pos.x = MapX(-(term1 + term2), "pause.resume");
         m_ResumeButton->pos.y = 0.375f * OX - 165.0f;
     }
     // Retry base (binary @ 0x00155076..0x00155096):
     //   pos = (240 + 0.5*OX, -20, 0)
+    // DIFFERS: opt-in widescreen -- MapX re-anchors the right-edge base X.
     if (m_RetryButton) {
-        m_RetryButton->pos = _Vector3<float>(240.0f + 0.5f * OX, -20.0f, 0.0f);
+        m_RetryButton->pos = _Vector3<float>(MapX(240.0f + 0.5f * OX, "pause.retry"), -20.0f, 0.0f);
     }
 
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00154468 tail (re-analyst)

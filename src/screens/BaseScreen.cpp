@@ -1,5 +1,5 @@
 //
-// BaseScreen — intermediate base for menu/overlay screens.
+// BaseScreen -- intermediate base for menu/overlay screens.
 // Only DojoScreen and GameModeScreen inherit from this.
 // See BaseScreen.h for binary refs.
 //
@@ -23,13 +23,14 @@
 #include "math/Colour.h"
 #include <cmath>
 #include "game/GameWork.h"
+#include "render/Layout.h"
 
 // Static texture storage (binary: GOT-relative module-level singletons)
 Mortar::SmartPtr<Mortar::Texture> BaseScreen::s_TexSmlTitle;
 Mortar::SmartPtr<Mortar::Texture> BaseScreen::s_TexBlurryBacking;
 
 // DrawBorders constants (literal pool @ 0x0013056c, resolved via read_memory)
-// g_slideVec = Vec3(0, 1, 0) — vertical slide direction
+// g_slideVec = Vec3(0, 1, 0) -- vertical slide direction
 // (initialized in _GLOBAL__I_BaseScreen.cpp @ 0x00130694)
 static const _Vector3<float> SLIDE_VEC(0.0f, 1.0f, 0.0f);
 
@@ -37,15 +38,33 @@ static const float TRI_HALF_H     =   82.0f;     // 0x00130578
 static const float TRI_WIDTH      =  656.0f;     // 0x00130584
 static const float TRI_BASE_Y     =  160.0f;     // 0x00130588
 static const float TRI1_Y_SLOPE   =  -48.0f;     // 0x0013058c
-static const float TRI1_X         =  240.0f;     // 0x00130590
 static const float TRI2_Y_SLOPE   =   55.0f;     // 0x00130594
-static const float TRI2_X         = -240.0f;     // 0x00130598
 static const float DECO_X         =  182.0f;     // 0x0013059c
 static const float DECO_Y         =  137.0f;     // 0x001305a0
 static const float DECO_SLIDE_Y   =   48.0f;     // 0x001305a4
 static const float SEC_SLIDE_Y    =   55.0f;     // 0x00130594 (reused)
 static const float UV_NEAR        = 0.0078125f;  // 0x00130570 (= 1/128)
 static const float UV_FAR         = 0.0153961f;  // DAT_00130574 = 0x3c7c0fc0
+
+// DIFFERS: opt-in widescreen -- TRI1_X/TRI2_X (0x00130590/0x00130598) anchor
+// the top/bottom transition-triangle corner decorations at the field's
+// left/right edge. Scale by HalfWidth()/240 so they stay corner-anchored
+// under the widened field instead of hanging mid-screen. Identity (+-240.0f)
+// when disabled/__bada__.
+static inline float Tri1X() {
+#ifdef __bada__
+    return 240.0f;
+#else
+    return Layout::HalfWidth();
+#endif
+}
+static inline float Tri2X() {
+#ifdef __bada__
+    return -240.0f;
+#else
+    return -Layout::HalfWidth();
+#endif
+}
 
 // ===================================================================
 // Matches BaseScreen::BaseScreen @ 0x00138dc0
@@ -102,7 +121,7 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
     // --- 1. Shade triangles (blurry_backing.tex at stateObj+4) ---
     if (s_TexBlurryBacking.IsValid()) {
         // Binary lazy-init: builds static vertex buffers once (stateObj+0x08 flag).
-        // Two triangles × 3 verts, Colour(0,0,0,0x80) baked in.
+        // Two triangles x3 verts, Colour(0,0,0,0x80) baked in.
         static bool s_trisInitialized = false;
         static QUADCUSTOMVERTEX s_tri1[3];  // top/right (stateObj+0x78)
         static QUADCUSTOMVERTEX s_tri2[3];  // bottom/left (stateObj+0x0C)
@@ -140,7 +159,7 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(_Vector3<float>(TRI1_X,
+            mat.GlobalTranslate44(_Vector3<float>(Tri1X(),
                                                   TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
@@ -152,7 +171,7 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(_Vector3<float>(TRI2_X,
+            mat.GlobalTranslate44(_Vector3<float>(Tri2X(),
                                                   alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
@@ -259,7 +278,7 @@ _Vector3<float> BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(_Vector3<float>(TRI1_X,
+            mat.GlobalTranslate44(_Vector3<float>(Tri1X(),
                                                   TRI_BASE_Y + alpha * TRI1_Y_SLOPE, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
@@ -269,7 +288,7 @@ _Vector3<float> BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
         {
             mm.GetWorldStack().Reset();
             Matrix44 mat;
-            mat.GlobalTranslate44(_Vector3<float>(TRI2_X,
+            mat.GlobalTranslate44(_Vector3<float>(Tri2X(),
                                                   alpha * TRI2_Y_SLOPE - TRI_BASE_Y, 0.0f));
             mm.GetWorldStack().SetCurrentMatrix(mat);
             mm.UploadModelViewOnly();
@@ -321,7 +340,7 @@ void BaseScreen::UpdateButtons(float dt) {
     for (std::list<ScreenButton>::iterator it = m_ScreenButtons.begin(); it != m_ScreenButtons.end(); ++it) {
         ScreenButton& sb = *it;
         if (sb.m_pButton == nullptr) {
-            // Not yet created — check visibility predicate
+            // Not yet created -- check visibility predicate
             if (!sb.m_visCheck || !sb.m_visCheck(dt)) continue;
 
             // Lazy-create MenuButton from descriptor
@@ -367,7 +386,7 @@ void BaseScreen::UpdateButtons(float dt) {
             // First-frame update call with -1.0f
             if (sb.m_updateCb) sb.m_updateCb(btn, -1.0f, sb);
         } else {
-            // Button exists — per-frame update
+            // Button exists -- per-frame update
             if (!sb.m_updateCb) continue;
             bool remove = sb.m_updateCb(sb.m_pButton, dt, sb);
             if (remove) {
@@ -421,8 +440,8 @@ void BaseScreen::SetExtraControlsDefaultPos() {
 // ===================================================================
 // Matches BaseScreen::Release @ 0x00130dd8
 // TODO: re-verify v1.6.1 BaseScreen::Release address (cited addr 0x00130dd8 may be stale v1.5.x; header cites 0x00160d90)
-// Binary: iterates m_HUDControls → set m_bPendingRemoval, clear list.
-// Then if game loaded: iterates m_ScreenButtons → set *(mbtn+0x32)=0,
+// Binary: iterates m_HUDControls -> set m_bPendingRemoval, clear list.
+// Then if game loaded: iterates m_ScreenButtons -> set *(mbtn+0x32)=0,
 // clear draw delegates on MenuButton+0x38 and ScreenButton+0x80.
 // ===================================================================
 void BaseScreen::Release() {
@@ -441,7 +460,7 @@ void BaseScreen::Release() {
         for (std::list<ScreenButton>::iterator it = m_ScreenButtons.begin(); it != m_ScreenButtons.end(); ++it) {
             ScreenButton& sb = *it;
             if (sb.m_pButton) {
-                // Binary @ 0x00130e5e: *(byte*)(btn + 0x32) = 0 — clears
+                // Binary @ 0x00130e5e: *(byte*)(btn + 0x32) = 0 -- clears
                 // HUDControl::m_bNoDestructor (NOT m_bEnabled, which is +0x123).
                 sb.m_pButton->m_bNoDestructor = 0;
                 sb.m_pButton->m_RemoveCallback = nullptr;
@@ -453,7 +472,7 @@ void BaseScreen::Release() {
 
 // ===================================================================
 // BaseScreen::RemoveButtons v1.6.1 @0x00160ee8
-// Unconditional — marks each ScreenButton's MenuButton pending-removal
+// Unconditional -- marks each ScreenButton's MenuButton pending-removal
 // and clears delegates. No game-active guard (unlike Release).
 // ===================================================================
 void BaseScreen::RemoveButtons() {

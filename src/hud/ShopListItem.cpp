@@ -27,6 +27,7 @@
 #include "asset/TextureManager.h"
 #include "engine/util/StringTable.h"
 #include "engine/util/Localisation.h"
+#include "engine/render/Layout.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -505,7 +506,16 @@ void ShopListItem::DrawFloatingText() {
         // was sign-inverted -> +224, pinning every NEW badge off-screen since m_State==1 is
         // the shop's normal Active state.)
         if (m_pShopScreen != 0 && m_pShopScreen->m_State == 1) {
-            float clampX = 0.25f * (65.0f * m_NewItemAlpha * m_NewItemAlpha) - 240.0f;
+            // DIFFERS: opt-in widescreen -- the -240.0f floor is the left-field
+            // edge reference; use the real (possibly widened) edge so the NEW
+            // badge clamps to the actual visible boundary. Identity under
+            // disabled/__bada__.
+#ifdef __bada__
+            const float clampEdge = 240.0f;
+#else
+            const float clampEdge = Layout::HalfWidth();
+#endif
+            float clampX = 0.25f * (65.0f * m_NewItemAlpha * m_NewItemAlpha) - clampEdge;
             if (clampX > anchor.x) anchor.x = clampX;
         }
         IngamePopup* popup = GetIngamePopup(0x10);
