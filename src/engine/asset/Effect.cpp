@@ -218,7 +218,7 @@ void Read(DataStreamReader& reader, SmartPtr<Effect>& sp) {
         unsigned long dataSize = 0;
         reader.ReadBasicType<unsigned long>(dataSize);
         DataStreamReader subReader;
-        subReader.MakeSubReader(reinterpret_cast<unsigned long>(&reader));
+        subReader.MakeSubReader(reader);
         effect->LoadPlatformData(platformID, subReader);
         reader.m_pCursor = (uint8_t*)reader.m_pCursor + dataSize;
     }

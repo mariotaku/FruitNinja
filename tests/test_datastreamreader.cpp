@@ -242,9 +242,11 @@ static void test_makeSubReader() {
     CHECK(parent.m_pCursor == (void*)(kData + 4));
 
     // Create sub-reader at parent's current cursor. Binary signature takes the
-    // source reader by pointer encoded as unsigned long (MakeSubReaderEm).
+    // source reader's address encoded as unsigned long (MakeSubReaderEm, ARM32
+    // pointer==4 bytes); port takes DataStreamReader& since host x64 unsigned
+    // long can't hold a pointer (see DataStreamReader.h DIFFERS marker).
     Mortar::DataStreamReader sub;
-    sub.MakeSubReader(reinterpret_cast<unsigned long>(&parent));
+    sub.MakeSubReader(parent);
 
     // Sub-reader starts at kData+4, covers 4 bytes, same endianness.
     CHECK(sub.m_pStart  == (void*)(kData + 4));
