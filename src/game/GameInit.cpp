@@ -403,10 +403,19 @@ void GameUpdate(float dt, bool active) {
         if (!game->pSplashTex) {
             game->pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
         }
-        splashTs->splashFadeTimer -= dt * 2.0f;
-        if (splashTs->splashFadeTimer <= 0.0f) {
-            splashTs->splashFadeTimer = 0.0f;
-            game->pSplashTex.SetNull();
+        // Port specific: web audio-consent overlay -- freeze the splash timer
+        // (and therefore DrawStartFade's visible frame) while the overlay is
+        // up, so the splash holds steady behind it instead of fading out from
+        // under an unaddressed browser-gesture requirement. See
+        // FN::g_AudioConsentPending's header comment (StartupEffects.h) for
+        // the full set/clear sequence. Always false on desktop/bada, so this
+        // is a no-op everywhere except the Emscripten build.
+        if (!FN::g_AudioConsentPending) {
+            splashTs->splashFadeTimer -= dt * 2.0f;
+            if (splashTs->splashFadeTimer <= 0.0f) {
+                splashTs->splashFadeTimer = 0.0f;
+                game->pSplashTex.SetNull();
+            }
         }
     } else {
         // Port specific: the port's single per-tick Mortar::Touch ring drain now

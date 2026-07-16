@@ -335,7 +335,23 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
     // teardown/resume EM_ASM blocks in src/mainEmscripten.cpp reference
     // window.FNAudio from a SEPARATE EM_ASM invocation (a different JS
     // closure), so a bare `var FN` here would be invisible to them.
+    //
+    // Port specific: audio-consent overlay ordering -- the overlay's tap
+    // handler (shell.html #audio-consent-overlay) is the actual browser
+    // gesture that must unlock this AudioContext. In the current boot design
+    // (mainEmscripten.cpp BootWait), the overlay is only ever shown AFTER
+    // g_game.init() -> SoundManager::Init -> fnaudio_init has already run, so
+    // window.FNAudio.ctx normally already exists by tap time and the tap
+    // handler resumes it directly -- this resumePending path exists only as a
+    // defensive fallback for an ordering this codebase does not currently
+    // produce (e.g. a future boot-flow change that shows the overlay before
+    // init). window.FNAudio.resumePending, if a caller ever sets it before
+    // this ctx exists, is honoured here immediately after creation.
+    var pendingResume = (window.FNAudio && window.FNAudio.resumePending) === true;
     window.FNAudio = FN;
+    if (pendingResume) {
+        try { ctx.resume(); } catch (e) {}
+    }
 
     // Load the build-time loop metadata (name -> loopStart seconds).
     try {

@@ -13,6 +13,8 @@
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "game/SettingsSave.h"
+#include "game/GameWork.h"
+#include "game/StartupEffects.h"
 #include "audio/SoundManager.h"
 #include "render/Layout.h"
 #include <cstdio>
@@ -78,12 +80,66 @@ static volatile int g_idbfs_ready = 0;
 // IDBFS syncfs(true) runs in parallel so it is typically done by then.
 static volatile int g_tap_started = 0;
 
+// Port specific: audio-consent overlay (splash-time cushion) -- see
+// shell.html's #audio-consent-overlay. The overlay is shown AFTER
+// g_game.init() succeeds (BootWait), overlaid on the game's own splash
+// (FN::g_AudioConsentPending freezes StartupEffects' splashFadeTimer so the
+// splash holds steady behind it -- see StartupEffects.h), and ONLY on a
+// first-run boot (FN::g_AudioChoiceMade == false, loaded from
+// SettingsSave.xml by LoadSettings() before g_game.init()). A returning
+// visit skips the overlay entirely and boots straight through with the
+// persisted choice already applied (GameInitialise.cpp's __EMSCRIPTEN__
+// guard).
+//
+// The overlay's button tap IS the discrete browser gesture; it both unlocks
+// the AudioContext (JS side, see fnaudio_init in SoundManagerWebAudio.cpp)
+// and picks the sound on/off choice (this side, fn_set_audio_enabled).
+// Unlike the old boot-gate design, game.init() has ALREADY run by the time
+// this overlay can appear (BootWait triggers it right after init succeeds),
+// so game_work always exists when the tap lands -- no before/after-init
+// race to handle here.
+static volatile int g_gameInited = 0;
+
+// Port specific: applies the audio on/off choice to game_work + the SFX
+// mixer, marks the choice made + persists it, and un-freezes the splash.
+// Mirrors v1.6.1 MainScreen::SoundCallback @0x00195d14 (the same
+// game_work.m_bSoundOn flip + SetSFXVolume(0.5f : 0.0f) pattern) plus the
+// m_bMusicOn flag UpdateMusic (v1.6.1 @0x001cc18c) reads every frame -- no
+// direct SetMusicVolume call needed, UpdateMusic's volume ramp handles that.
+static void ApplyAudioChoice(int on) {
+    game_work.m_bSoundOn = (on != 0);
+    game_work.m_bMusicOn = (on != 0);
+    Mortar::SoundManager::GetInstance().SetSFXVolume(on != 0 ? 0.5f : 0.0f);
+
+    // Persist so a returning visit never shows the overlay again.
+    FN::g_AudioChoiceMade = true;
+    FN::g_SavedSoundOn    = (on != 0);
+    FN::g_SavedMusicOn    = (on != 0);
+    SaveSettings();
+
+    // Un-freeze the splash -- StartupEffects' splashFadeTimer resumes
+    // draining on the next GameUpdate tick.
+    FN::g_AudioConsentPending = false;
+}
+
 // Port specific: called from JS once the initial syncfs(true) callback fires.
 // EMSCRIPTEN_KEEPALIVE prevents dead-code elimination so the symbol is visible
 // as Module._fn_idbfs_ready() in the generated JS.
 extern "C" {
 EMSCRIPTEN_KEEPALIVE void fn_idbfs_ready(void) {
     g_idbfs_ready = 1;
+}
+
+// Port specific: called from JS on the audio-consent overlay button tap
+// (shell.html #audio-consent-overlay). on=1 for "PLAY WITH SOUND", on=0 for
+// "PLAY MUTED". By construction the overlay only ever appears after
+// g_game.init() has already run (see BootWait below), so game_work always
+// exists; apply directly. g_gameInited is still checked defensively in case
+// a stray/duplicate call somehow lands before init (should not happen).
+EMSCRIPTEN_KEEPALIVE void fn_set_audio_enabled(int on) {
+    if (g_gameInited) {
+        ApplyAudioChoice(on);
+    }
 }
 
 // Port specific: called from JS when the user taps the "TAP TO START"
@@ -528,6 +584,30 @@ static void BootWait(void* arg) {
     if (!g_game.init(ba->window, ba->gl)) {
         LOG_ERROR("mainEmscripten", "Failed to init game");
         return;
+    }
+
+    // Port specific: audio-consent overlay -- game_work now exists (post
+    // GameInitialise), so fn_set_audio_enabled can apply directly from here on.
+    g_gameInited = 1;
+
+    // First-run only: FN::g_AudioChoiceMade was loaded by LoadSettings() above
+    // (before g_game.init()), so a returning visit already has it set true
+    // and GameInitialise.cpp's __EMSCRIPTEN__ guard already applied the
+    // saved sound/music state -- skip the overlay + splash freeze entirely,
+    // straight through to the game exactly like any other boot.
+    //
+    // First run: freeze the splash (StartupEffects' splashFadeTimer, gated
+    // in GameInit.cpp's GameUpdate) BEFORE the game loop's first tick, so the
+    // very first rendered frame is already the frozen one, then show the
+    // native consent overlay on top (mirrors the EM_ASM _fnShowRestart
+    // pattern in EmscriptenFrame above). The overlay's tap
+    // (fn_set_audio_enabled -> ApplyAudioChoice) clears g_AudioConsentPending,
+    // resuming the normal fade.
+    if (!FN::g_AudioChoiceMade) {
+        FN::g_AudioConsentPending = true;
+        EM_ASM({
+            if (typeof window._fnShowAudioConsent === 'function') { window._fnShowAudioConsent(); }
+        });
     }
 
     // Port specific: web audio (#73) -- resume the suspended AudioContext on the

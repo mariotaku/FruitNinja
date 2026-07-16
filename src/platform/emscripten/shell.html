@@ -1,8 +1,17 @@
 <!DOCTYPE html>
 <!-- Custom Emscripten shell for Fruit Ninja web build.
-     Boot-direct: game starts immediately on load-complete (no tap-to-play cushion).
-     Audio starts muted; SFX is enabled on the first in-game gesture (see
-     mainEmscripten.cpp one-shot hook); music remains opt-in via in-game toggle.
+     Boot-direct: the game starts immediately on load-complete (no boot-time
+     tap gate), same as before. A SEPARATE, later gate exists on FIRST RUN
+     only: right after g_game.init() succeeds, BootWait (mainEmscripten.cpp)
+     freezes the game's own splash (FN::g_AudioConsentPending) and shows a
+     native-styled audio-consent overlay (#audio-consent-overlay) on top --
+     "PLAY WITH SOUND" or "PLAY MUTED". That tap is the discrete browser
+     gesture that unlocks the Web Audio AudioContext (created suspended) AND
+     picks the sound/music on-off choice, persists it (SettingsSave.xml), and
+     un-freezes the splash so the game continues underneath. A returning
+     visit (persisted choice) skips the overlay + freeze entirely. This
+     replaces relying on a LATER in-game gesture for the audio unlock, which
+     a pure slice (touchmove) never satisfies.
      Letterboxed 3:2 canvas on a solid black background, centred loading
      progress bar (no splash image, no shade).
      Required Emscripten placeholder: {{{ SCRIPT }}} -->
@@ -243,6 +252,147 @@
       outline: none;
     }
 
+    /* --- AUDIO-CONSENT overlay: FIRST RUN ONLY. Triggered from C++
+       (mainEmscripten.cpp BootWait -> window._fnShowAudioConsent) right after
+       g_game.init() succeeds, overlaid on the game's own already-rendering
+       splash (which C++ freezes via FN::g_AudioConsentPending while this is
+       up -- see StartupEffects.h). display:none by default (NOT shown at
+       page load like the old boot-gate design) -- JS only flips it to flex
+       when the trigger fires, and a returning visit (persisted
+       audioChoiceMade) never triggers it at all.
+       Styled as an in-game wooden dialog plate rather than a flat web modal:
+       a warm dark-wood gradient panel (matching the in-game settings/pause
+       panel palette -- dark umber/espresso tones, glossy top highlight,
+       bevelled border) with chunky beveled buttons in the game's ON/OFF
+       colour language (green = sound on, muted red-brown = no sound).
+       No @font-face for the in-game display face is wired here (the game's
+       TTF is baked into the WASM data bundle for on-canvas rendering only,
+       not exposed as a fetchable web font asset) -- a bold system stack
+       substitutes; wiring the real face as a web font is a follow-up needing
+       asset-pipeline changes (stage-assets.py / CMake), out of scope here. */
+    #audio-consent-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.78);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      padding: 2em;
+      text-align: center;
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    }
+
+    #audio-consent-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: min(88vw, 26em);
+      padding: clamp(1.4em, 4vmin, 2.2em) clamp(1.2em, 4vmin, 2em);
+      border-radius: 18px;
+      /* Wood plate: layered gradients -- a subtle vertical grain streak
+         pattern under a broad top-to-bottom light/dark sheen, in dark
+         umber/espresso tones (matching the in-game pause/settings panel
+         wood palette). Two repeating linear-gradients (thin near-vertical
+         streaks at a slight angle, like wood grain) composited under the
+         main brown sheen gradient. */
+      background:
+        repeating-linear-gradient(88deg,
+          rgba(0,0,0,0.10) 0px, rgba(0,0,0,0.10) 2px,
+          rgba(255,255,255,0.035) 2px, rgba(255,255,255,0.035) 4px),
+        linear-gradient(180deg,
+          #6b4530 0%, #4a2f20 12%, #3a2417 55%, #2b1a10 100%);
+      border: 3px solid #1c1008;
+      box-shadow:
+        inset 0 2px 0 rgba(255,255,255,0.18),
+        inset 0 -6px 14px rgba(0,0,0,0.55),
+        0 10px 30px rgba(0,0,0,0.55);
+    }
+
+    #audio-consent-title {
+      margin: 0 0 clamp(1rem, 3.5vmin, 1.6rem);
+      font-size: clamp(1.5rem, 6vmin, 2.8rem);
+      font-weight: 800;
+      font-style: italic;
+      letter-spacing: 0.03em;
+      color: #ffe9b3;
+      text-shadow:
+        0 1px 0 #8a5a1f,
+        0 2px 3px rgba(0,0,0,0.7),
+        0 0 14px rgba(255, 200, 90, 0.25);
+    }
+
+    #audio-consent-sub {
+      margin: -0.6em 0 clamp(1em, 3.5vmin, 1.6rem);
+      font-size: clamp(0.72rem, 2.4vmin, 0.95rem);
+      font-weight: 600;
+      color: rgba(255, 235, 205, 0.78);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+
+    /* Chunky beveled buttons -- game UI language: glossy top highlight,
+       thick dark bottom edge (drawn as a border, simulating a pressed-in
+       3D button face), rounded-pill shape. Green = sound on, warm
+       muted-red/umber = no sound (never a flat gray "cancel" button). */
+    #audio-consent-overlay .consent-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5em;
+      width: 100%;
+      max-width: 20em;
+      margin: 0 0 clamp(0.7em, 2.2vmin, 1em);
+      padding: clamp(0.6em, 2vmin, 0.85em) clamp(1.4em, 5vmin, 2.4em);
+      border-radius: 999px;
+      color: #fff;
+      font-size: clamp(0.95rem, 3.2vmin, 1.3rem);
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s ease, filter 0.15s ease;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+    }
+
+    #audio-consent-overlay .consent-btn:active {
+      transform: scale(0.97) translateY(1px);
+      filter: brightness(0.92);
+    }
+
+    #audio-consent-sound {
+      background: linear-gradient(180deg, #8fe25a 0%, #5fae2c 45%, #3f8a1a 100%);
+      border: 3px solid #2c6b10;
+      border-bottom-width: 5px;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,0.45), inset 0 -3px 6px rgba(0,0,0,0.25);
+    }
+    #audio-consent-sound:hover, #audio-consent-sound:focus {
+      filter: brightness(1.06);
+      outline: none;
+    }
+
+    #audio-consent-muted {
+      background: linear-gradient(180deg, #b06a4e 0%, #8a4630 45%, #6b3220 100%);
+      border: 3px solid #4a2314;
+      border-bottom-width: 5px;
+      box-shadow: inset 0 2px 0 rgba(255,255,255,0.28), inset 0 -3px 6px rgba(0,0,0,0.3);
+    }
+    #audio-consent-muted:hover, #audio-consent-muted:focus {
+      filter: brightness(1.08);
+      outline: none;
+    }
+
+    #audio-consent-overlay .consent-icon {
+      width: 1.15em;
+      height: 1.15em;
+      flex: none;
+      fill: none;
+      stroke: #fff;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
     /* full-screen toggle button.  A corner overlay in the
        top-right of the window, sitting ABOVE the canvas (z-index 25).  Fixed
        positioning keeps it pinned regardless of letterbox bars; pointer-events
@@ -335,6 +485,39 @@
          the canvas rect by resize(). -->
     <div id="progress-bar-wrap">
       <div id="progress-bar"></div>
+    </div>
+
+    <!-- Audio-consent overlay: FIRST RUN ONLY. Hidden (display:none) until
+         C++ triggers window._fnShowAudioConsent() right after g_game.init()
+         succeeds (see BootWait, mainEmscripten.cpp) -- overlaid on the
+         game's own splash, which C++ freezes for the duration (see
+         FN::g_AudioConsentPending, StartupEffects.h). The tap on either
+         button is the discrete browser gesture that (a) unlocks the Web
+         Audio AudioContext, (b) picks + persists the sound on/off choice,
+         and (c) un-freezes the splash so the game continues -- see
+         _onAudioConsentTap in the script block below. A returning visit
+         (persisted choice) never shows this at all. -->
+    <div id="audio-consent-overlay" role="alertdialog" aria-modal="true" aria-label="Enable sound?">
+      <div id="audio-consent-panel">
+        <h1 id="audio-consent-title">Fruit Ninja</h1>
+        <div id="audio-consent-sub">Slice with sound?</div>
+        <button id="audio-consent-sound" class="consent-btn" tabindex="0">
+          <svg class="consent-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9H4z"></path>
+            <path d="M16.5 8.5a5 5 0 0 1 0 7"></path>
+            <path d="M18.8 6.2a8.5 8.5 0 0 1 0 11.6"></path>
+          </svg>
+          PLAY WITH SOUND
+        </button>
+        <button id="audio-consent-muted" class="consent-btn" tabindex="0">
+          <svg class="consent-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 9v6h4l5 4V5L8 9H4z"></path>
+            <path d="M16 9l6 6"></path>
+            <path d="M22 9l-6 6"></path>
+          </svg>
+          PLAY MUTED
+        </button>
+      </div>
     </div>
 
     <!-- Error overlay: shown by _showError() when the load fails or stalls.
@@ -494,9 +677,11 @@
   /* web autoplay -- boot-direct start.
      Called when Module.calledRun is true (runtime loaded, BEFORE game init).
      Hides the loading UI (progress bar), then immediately signals
-     fn_user_started() so BootWait proceeds without any tap overlay.
-     Audio starts muted (both flags OFF via GameInitialise.cpp web guard);
-     the first in-game gesture enables SFX via the one-shot in mainEmscripten.cpp. */
+     fn_user_started() so BootWait proceeds to g_game.init() without any
+     boot-time tap gate. The audio-consent overlay is a SEPARATE, later gate:
+     once game.init() finishes, BootWait itself (mainEmscripten.cpp) decides
+     whether to show it (first run only) via window._fnShowAudioConsent(),
+     overlaid on the game's own already-rendering splash. */
   function _startDirectly() {
     if (_runtimeReady) return;
     _runtimeReady = true;
@@ -513,7 +698,7 @@
        frame avoids it.) */
     /* Reveal the fullscreen toggle now that the game is starting. */
     if (_fullscreenBtn) _fullscreenBtn.style.display = 'flex';
-    /* Signal BootWait to proceed -- no tap required. */
+    /* Signal BootWait to proceed -- no tap required for the boot gate itself. */
     _notifyUserStarted();
     /* Safety net: if the first-frame hook never fires (e.g. init stalls), fade the
        bar anyway after 3s so it cannot linger forever over a running game. */
@@ -680,6 +865,101 @@
       console.warn('[boot] fn_user_started exception (non-fatal):', ex);
     }
   }
+
+  /* Show the audio-consent overlay: called from C++ (BootWait,
+     mainEmscripten.cpp) right after g_game.init() succeeds, ONLY on a
+     first-run boot (FN::g_AudioChoiceMade == false). Idempotent: guarded by
+     _audioConsentShown so a stray duplicate EM_ASM call cannot re-show it
+     after the tap already hid it. The game's own splash is already rendering
+     underneath (C++ freezes it via FN::g_AudioConsentPending for the
+     duration) -- this just adds the overlay on top, no progress-bar/canvas
+     manipulation needed here. */
+  var _audioConsentShown = false;
+  function _showAudioConsent() {
+    if (_audioConsentShown) return;
+    _audioConsentShown = true;
+    var overlay = document.getElementById('audio-consent-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    var btn = document.getElementById('audio-consent-sound');
+    if (btn) btn.focus();
+  }
+
+  /* Expose for C++ (EM_ASM) in mainEmscripten.cpp. */
+  window._fnShowAudioConsent = _showAudioConsent;
+
+  /* Audio-consent overlay: tap handler shared by both buttons.
+     soundOn: true for "PLAY WITH SOUND", false for "PLAY MUTED".
+     This function runs SYNCHRONOUSLY inside the click/touchstart handler --
+     it is the discrete browser gesture (not a slice) required to unlock the
+     Web Audio AudioContext on mobile browsers (notably mobile Firefox, which
+     only honours resume()/context creation within the gesture's transient-
+     activation window). By the time this overlay can even be shown, C++ has
+     already called g_game.init() (see BootWait in mainEmscripten.cpp -- the
+     overlay is triggered by window._fnShowAudioConsent AFTER init succeeds,
+     never before), so SoundManager::Init -> fnaudio_init has already run and
+     window.FNAudio.ctx already exists in the overwhelming common case. The
+     resumePending fallback below still covers the (currently believed
+     unreachable, but harmless to guard) case where fnaudio_init has somehow
+     not run yet at tap time. */
+  var _audioConsentHandled = false;
+  function _onAudioConsentTap(soundOn) {
+    if (_audioConsentHandled) return;
+    _audioConsentHandled = true;
+
+    try {
+      if (!window.FNAudio) window.FNAudio = {};
+      var ctx = window.FNAudio.ctx;
+      if (ctx) {
+        if (typeof ctx.resume === 'function') ctx.resume();
+      } else {
+        window.FNAudio.resumePending = true;
+      }
+    } catch (e) {
+      console.warn('[audio-consent] AudioContext unlock threw (non-fatal):', e);
+    }
+
+    /* Sound/music choice + persistence + splash un-freeze: all handled by the
+       exported C++ setter (fn_set_audio_enabled -> ApplyAudioChoice,
+       mainEmscripten.cpp). game_work is guaranteed to exist by this point. */
+    try {
+      if (typeof Module !== 'undefined' && Module._fn_set_audio_enabled) {
+        Module._fn_set_audio_enabled(soundOn ? 1 : 0);
+      }
+    } catch (e) {
+      console.warn('[audio-consent] fn_set_audio_enabled threw (non-fatal):', e);
+    }
+
+    /* Hide the overlay -- the (now un-frozen) splash + game continue
+       underneath exactly as they were already rendering. */
+    var overlay = document.getElementById('audio-consent-overlay');
+    if (overlay) overlay.style.display = 'none';
+  }
+
+  (function () {
+    var soundBtn = document.getElementById('audio-consent-sound');
+    var mutedBtn = document.getElementById('audio-consent-muted');
+    if (!soundBtn || !mutedBtn) return;
+
+    function _mk(soundOn) {
+      return function (e) {
+        e.preventDefault();
+        _onAudioConsentTap(soundOn);
+      };
+    }
+
+    soundBtn.addEventListener('click',      _mk(true));
+    soundBtn.addEventListener('touchstart', _mk(true), {passive: false});
+    soundBtn.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _mk(true)(e);
+    });
+
+    mutedBtn.addEventListener('click',      _mk(false));
+    mutedBtn.addEventListener('touchstart', _mk(false), {passive: false});
+    mutedBtn.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') _mk(false)(e);
+    });
+  })();
 
   /* full-screen toggle + landscape-orientation request.
      -----------------------------------------------------------------------
@@ -1124,7 +1404,9 @@
     /* web autoplay -- boot-direct poll.
        Poll every 100ms: success path -- calledRun means the runtime started.
        _startDirectly() hides the loading UI and immediately calls fn_user_started()
-       so BootWait proceeds without waiting for a tap. */
+       so BootWait proceeds without waiting for a tap. The audio-consent overlay
+       (if shown at all -- first run only) is a separate, LATER gate triggered
+       from C++ after g_game.init() completes; see _fnShowAudioConsent below. */
     var _pollInterval = setInterval(function () {
       if (typeof Module !== 'undefined' && Module.calledRun) {
         clearInterval(_pollInterval);

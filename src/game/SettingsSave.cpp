@@ -50,6 +50,12 @@ void SaveSettings() {
     // active value only re-syncs to the pref at the next LoadSettings/boot.
     root.SetAttribute("widescreen", Layout::IsWideLayoutPref() ? "true" : "false");
     root.SetAttribute("motionSpeedThreshold", FN::g_MotionSpeedThreshold);
+    // Port specific: web audio-consent choice (see DebugFlags.h). Only ever
+    // set true by the consent-overlay tap (mainEmscripten.cpp); persisted so
+    // a returning visit skips the overlay + splash freeze entirely.
+    root.SetAttribute("audioChoiceMade", FN::g_AudioChoiceMade ? "true" : "false");
+    root.SetAttribute("savedSoundOn", FN::g_SavedSoundOn ? "true" : "false");
+    root.SetAttribute("savedMusicOn", FN::g_SavedMusicOn ? "true" : "false");
 
     doc.InsertEndChild(root);
     if (!doc.SaveFile(GetSettingsSavePath().c_str())) {
@@ -104,5 +110,21 @@ void LoadSettings() {
     float motionSpeedThreshold = 0.0f;
     if (root.QueryFloatAttribute("motionSpeedThreshold", &motionSpeedThreshold) == TIXML_SUCCESS) {
         FN::g_MotionSpeedThreshold = motionSpeedThreshold;
+    }
+
+    // Port specific: web audio-consent choice (see DebugFlags.h). Absent
+    // attribute (pre-existing save file, or non-web platform) leaves
+    // g_AudioChoiceMade at its default false -- treated as first-run.
+    const char* audioChoiceMade = root.Attribute("audioChoiceMade");
+    if (audioChoiceMade) {
+        FN::g_AudioChoiceMade = (strcmp(audioChoiceMade, "true") == 0);
+    }
+    const char* savedSoundOn = root.Attribute("savedSoundOn");
+    if (savedSoundOn) {
+        FN::g_SavedSoundOn = (strcmp(savedSoundOn, "true") == 0);
+    }
+    const char* savedMusicOn = root.Attribute("savedMusicOn");
+    if (savedMusicOn) {
+        FN::g_SavedMusicOn = (strcmp(savedMusicOn, "true") == 0);
     }
 }
