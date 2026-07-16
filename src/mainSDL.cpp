@@ -58,6 +58,9 @@ int main(int argc, char* argv[]) {
     //   --osd-sfx           : enable the per-SFX OSD readout (same as F4 at runtime)
     //   --widescreen        : DIFFERS: opt-in widescreen layout enhancement (Layout::HalfWidth);
     //                         faithful 3:2 (240 half-width) stays the default when omitted.
+    //   --window WxH         : Port specific: initial window size (default 960x640, 3:2).
+    //                         Use a wider ratio (e.g. 1138x640 ~ 16:9) to see --widescreen.
+    int winW = 960, winH = 640;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--osd-sfx") == 0) {
             FN::g_bOsdSfx = true;
@@ -65,6 +68,13 @@ int main(int argc, char* argv[]) {
 #ifndef __bada__
             Layout::SetWideLayout(true);
 #endif
+        } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
+            int w = 0, h = 0;
+            if (sscanf(argv[i + 1], "%dx%d", &w, &h) == 2 && w > 0 && h > 0) {
+                winW = w;
+                winH = h;
+            }
+            ++i;
         }
     }
 
@@ -132,8 +142,8 @@ int main(int argc, char* argv[]) {
     SDL_Window* window = SDL_CreateWindow(
         "Fruit Ninja",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        960, 640,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
+        winW, winH,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
     );
     if (!window) {
         LOG_ERROR("mainSDL", "Window failed: %s", SDL_GetError());
