@@ -1423,8 +1423,23 @@ void GameOverScreen::Update(float dt) {
         m_OffsetPos.x = m_FruitFactAlpha * -386.0f + 368.0f;
         m_OffsetPos.y = 55.0f;
         m_OffsetPos.z = 0.0f;
+        // DIFFERS: opt-in widescreen -- the sensei figure (body+head, drawn by
+        // FruitFactClassicFactPage's own GenericHUDControls at fixed offsets
+        // from this pos) and the "SENSEI'S FRUIT FACT" board + title/body text
+        // (drawn at other fixed offsets from the SAME pos, see
+        // FruitFactClassicFactPage::DrawOrder) are one rigid group anchored on
+        // FruitFactControl::pos -- there is no independent position to move
+        // the sensei separately from the board without breaking their binary-
+        // fixed relative layout. MapX the steady-state base (183.0f) as a
+        // right-edge anchor: the group is a right-side panel, so this keeps
+        // its gap from the right edge constant as the field widens (pulling
+        // it into the widened space) instead of drifting proportionally
+        // in from its small original offset. The alpha-driven slide-in
+        // term (m_OffsetPos.x) is left as-is -- a transient entry animation
+        // offset from this anchor, not the resting position. Identity at
+        // 3:2/__bada__.
         if (m_pFruitFact)
-            m_pFruitFact->SetPos(_Vector3<float>(183.0f + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f));
+            m_pFruitFact->SetPos(_Vector3<float>(MapX(183.0f, "gameover.factboard") + m_OffsetPos.x, 12.0f + m_OffsetPos.y, 0.0f));
         if (m_pNoticeCtrl)
             m_pNoticeCtrl->pos = _Vector3<float>(0.0f, (1.0f - m_FruitFactAlpha) * 300.0f + 65.0f, -5000.0f);
     }

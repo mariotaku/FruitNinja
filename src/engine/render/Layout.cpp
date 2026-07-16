@@ -106,6 +106,13 @@ const KeyOverride kOverrides[] = {
     // pure edge-anchor preserved the 3:2 gap (~22u), which read as "not leaning
     // left enough" at 16:9 -- pull it a further 10u toward the widened left edge.
     { "hud.score", -10.0f },
+    // GameOverScreen's Classic-mode fact panel (sensei body+head + "SENSEI'S
+    // FRUIT FACT" board -- one rigid group anchored on FruitFactControl::pos,
+    // see GameOverScreen::Update common tail). Right-side panel -> edge-anchor
+    // right so it hugs the widened right edge instead of leaving that space
+    // empty. rightPad pulls it back toward centre a little so it doesn't sit
+    // flush against the edge -- tunable.
+    { "gameover.factboard", 15.0f },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 

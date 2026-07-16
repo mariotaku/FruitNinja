@@ -644,7 +644,16 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
 
         IngamePopup* popup = GetIngamePopup(0x0F);
         if (popup) {
-            _Vector3<float> bannerPos(-100.0f, 70.0f, 0.0f);
+            // DIFFERS: opt-in widescreen -- the binary's -100.0f literal is an
+            // independent constant, NOT derived from the score number's pos.x.
+            // It happens to sit top-right-of-the-digits at 3:2 only because both
+            // this literal and SCORE_ICON_X_SP/SCORE_BASE_POS_X were hand-tuned to
+            // the same 3:2 layout. Route it through the SAME "hud.score" MapX key
+            // as the SCORE wordmark/number (see Update's pos.x and PreDraw Section
+            // D's xPos) so the banner leans left together with them instead of
+            // staying pinned while they move -- preserves the relative top-right
+            // offset from the digits at any aspect. Identity at 3:2/__bada__.
+            _Vector3<float> bannerPos(MapX(-100.0f, "hud.score"), 70.0f, 0.0f);
             popup->Draw(bannerPos, animScale);
         }
     }
