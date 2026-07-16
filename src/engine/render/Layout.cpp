@@ -41,6 +41,7 @@ const KeyOverride kOverrides[] = {
     { "dojo.sensei"       },   // dojo_sensei.tex on DojoScreen (bottom-left-anchored)
     { "dojo.border"       },   // DrawBorders title anchor on DojoScreen (same corner as dojo.sensei)
     { "modeselect.sensei" },   // mode_sensei.tex on GameModeScreen (bottom-left-anchored)
+    { "modeselect.title"  },   // DrawBorders anchor on GameModeScreen -- feeds m_pDescBox "MODE SELECT" (left-anchored)
     // Dojo / mode-select buttons -- user asked these edge-anchor too (spread to
     // the widened edges rather than proportionally). Centered buttons (Dojo
     // Back/Play at x=0) are left unmapped so they stay centered.

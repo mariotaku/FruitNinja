@@ -788,7 +788,13 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     // DIFFERS: port previously called DrawBorders(s_TexModeSelect,...) which drew mode_select.tex
     // as secondary texture. The binary does NOT draw mode_select.tex in this call path; removing
     // it is binary-faithful. The DrawBorders anchor is used to position m_pDescBox below.
-    _Vector3<float> anchor = DrawBorders(nullptr, m_TransitionAlpha, POS_BORDER);
+    // DIFFERS: opt-in widescreen -- MapX the left-side border/title anchor (edge-anchored,
+    // same convention as DojoScreen's dojo.border). This anchor feeds both the border deco
+    // AND m_pDescBox ("MODE SELECT" title) below, so wrapping it here keeps both aligned.
+    // Identity when disabled/__bada__.
+    _Vector3<float> anchor = DrawBorders(
+        nullptr, m_TransitionAlpha,
+        _Vector3<float>(MapX(POS_BORDER.x, "modeselect.title"), POS_BORDER.y, POS_BORDER.z));
 
     // --- 3. DescBox positioned from DrawBorders anchor ---
     // Binary @0x00183c34: anchor += (-24, 11, 0); m_pDescBox->SetTranslation(anchor, 1); rot=-7
