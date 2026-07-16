@@ -181,6 +181,13 @@ if (FN_WEB_DEBUG)
     endif()
 endif()
 
+# --- Emscripten profiling build (Chrome/Firefox flame-graph profiling) ---
+# Keeps C++ function names in the wasm name section (--profiling-funcs) so the
+# DevTools Performance flame chart shows real symbols instead of wasm-function[N].
+# Opt-in only: OFF for lean shipped/CI builds. See the FN_DEBUG_TOUCH guard below
+# where this actually gets applied to the link line.
+option(FN_WEB_PROFILING "Emscripten: keep C++ function names in the wasm (--profiling-funcs) for Chrome/Firefox flame-graph profiling; OFF for lean shipped builds" OFF)
+
 # --- GL backend selection ---
 #
 # The port targets the same fixed-function pipeline the binary uses
@@ -584,10 +591,14 @@ if (EMSCRIPTEN)
     )
     # Debug build (FN_DEBUG_TOUCH): keep C++ function names in the wasm name
     # section so browser crash stack traces name the actual C++ frames.
+    # FN_WEB_PROFILING: same flag, opted into independently for Chrome/Firefox
+    # DevTools flame-graph profiling (see the option() above).
     # --profiling-funcs is pure metadata (no codegen/timing change), so it does
-    # not perturb timing-sensitive intermittent crashes. (Deliberately NOT adding
-    # -sASSERTIONS, which would change memory init/timing and could mask the repro.)
-    if (FN_DEBUG_TOUCH)
+    # not perturb timing-sensitive intermittent crashes and profiles stay
+    # representative of the real (non-instrumented) build. (Deliberately NOT
+    # adding -sASSERTIONS, which would change memory init/timing and could mask
+    # the repro / skew a profile.)
+    if (FN_DEBUG_TOUCH OR FN_WEB_PROFILING)
         target_link_options(fruit-ninja PRIVATE "SHELL:--profiling-funcs")
     endif()
     # Port specific: stage the PWA files (manifest.webmanifest, sw.js,

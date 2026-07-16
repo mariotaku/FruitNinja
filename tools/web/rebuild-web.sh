@@ -10,6 +10,12 @@
 #   local and CI share one pipeline (pre-clean, race-safe two-step build,
 #   verify + link retry).
 #
+# --profiling: forward to build.sh -> -DFN_WEB_PROFILING=ON (keeps C++ function
+#   names in the wasm for a Chrome/Firefox DevTools flame graph; forces a
+#   reconfigure; sticky until the next plain/--release/--debug rebuild). Only
+#   meaningful with --worker (manual invocation) -- the Stop-hook auto-dispatch
+#   never passes it, so unattended rebuilds stay lean by default.
+#
 # EXCLUSIVITY: the worker holds an atomic directory lock (mkdir) around the whole
 #   build, so two builds can never write build/web/ concurrently (that race caused
 #   mismatched js/wasm -> LinkError). The lock is acquired by the WORKER (not just
@@ -91,14 +97,17 @@ if [ "${1:-}" = "--worker" ]; then
     # Windows/MSYS: keep /src and -w literal; hand Docker a native host path.
     export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
     if command -v cygpath >/dev/null 2>&1; then HOST="$(cygpath -m "$PROJ")"; else HOST="$PROJ"; fi
+    # --profiling (second CLI arg to --worker): forwarded to build.sh verbatim.
+    BUILD_SH_ARGS=()
+    [ "${2:-}" = "--profiling" ] && BUILD_SH_ARGS+=(--profiling)
     {
-        echo "[$(date -Is 2>/dev/null || date)] rebuild start ($HOST -> /src)"
+        echo "[$(date -Is 2>/dev/null || date)] rebuild start ($HOST -> /src)${BUILD_SH_ARGS:+ (${BUILD_SH_ARGS[*]})}"
         # Single in-container pipeline shared with CI: build.sh owns the
         # pre-clean of link outputs, the lib-first race workaround, and the
         # verify + link-retry. No flags = respect the existing build/web
         # configure (preserves a locally-configured FN_WEB_DEBUG build).
         docker run --rm -v "${HOST}:/src" -w /src "$IMAGE" \
-            bash /src/tools/web/build.sh
+            bash /src/tools/web/build.sh "${BUILD_SH_ARGS[@]}"
         code=$?
         if [ "$code" -eq 0 ]; then echo "[$(date -Is 2>/dev/null || date)] rebuild OK"
         else echo "[$(date -Is 2>/dev/null || date)] rebuild FAILED (exit $code)"; fi
