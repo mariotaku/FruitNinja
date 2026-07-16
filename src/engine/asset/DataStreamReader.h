@@ -66,10 +66,11 @@ public:
     // ASM-spec v1.6.1 DataStreamReader::MakeSubReader @0x00250c08:
     //   Initialises *this from source.m_pCursor, remaining bytes, source.m_Endian.
     //   Source cursor is NOT modified.
-    // Binary mangled: _ZN6Mortar16DataStreamReader13MakeSubReaderEm -- takes the source
-    // reader's address encoded as unsigned long (not a reference). Callers pass
-    // (unsigned long)&source.
-    void MakeSubReader(unsigned long sourcePtr);
+    // DIFFERS: binary MakeSubReader @0x00250c08 takes unsigned long (a 32-bit source
+    // POINTER, ARM32). On host x64 an unsigned long (4 bytes) can't hold an 8-byte
+    // pointer, so this takes DataStreamReader& instead -- the symbol won't pair on
+    // x64, which is unavoidable (the ABI encodes a pointer in a 32-bit int).
+    void MakeSubReader(DataStreamReader& source);
 
     // ASM-spec v1.6.1 DataStreamReader::Read(std::string&) @0x00250c28:
     //   ReadBasicType<unsigned long>(len); out.assign((char*)m_pCursor, len); m_pCursor += len.
