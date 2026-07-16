@@ -101,7 +101,11 @@ const KeyOverride kOverrides[] = {
     // number move together and keep their relative offset. Shared with
     // in-game HUD (ScoreControl persists from GameInit into game-over) --
     // both contexts should hug the widened corner, so one key is correct.
-    { "hud.score"     },
+    // Negative rightPad = extra LEFT lean beyond pure edge-anchor (widescreen
+    // only; 3:2/__bada__ stays identity since MapX returns x when !wide). The
+    // pure edge-anchor preserved the 3:2 gap (~22u), which read as "not leaning
+    // left enough" at 16:9 -- pull it a further 10u toward the widened left edge.
+    { "hud.score", -10.0f },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 
