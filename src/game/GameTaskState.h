@@ -260,6 +260,12 @@ void GameUpdate(float dt, bool active);
 void GameDraw(float dt, bool active);
 void GameExit(); // v1.6.1 GameExit @0x001cfed4
 
+// DrawBackground (v1.6.1 @ 0x001ccaf4) — draws the current background texture
+// quad (see src/game/GameInit.cpp). Factored out of GameDraw so isolated
+// render tests (e.g. component-mode powerup screenshots) can draw the real
+// wooden dojo panel behind an effect without running the full GameDraw path.
+void DrawBackground();
+
 // v1.6.1 CleanupAndReturnToMainMenu @ 0x00157620 -- bx lr (empty body in v1.6.1).
 // Called from GameUpdate quit-transition timer path.
 void CleanupAndReturnToMainMenu();
