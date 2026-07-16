@@ -27,7 +27,6 @@
 #include "game/FruitCamera.h"
 #include "hud/ScoreControl.h"
 #include <cstring>
-#include <cstdio>
 #include <cmath>
 #include <algorithm>
 

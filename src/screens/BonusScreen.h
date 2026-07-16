@@ -83,8 +83,7 @@ public:
     // vtable slot: Draw — v1.6.1 @0x0016492c
     void Draw(float* hudScaleRaw) override;
 
-    // GetType -- returns 8 (TODO: confirm from binary)
-    int GetType() override { return 8; }
+    // GetType: inherits HUDControl3d::GetType (v1.6.1 @0x00136088 -> returns 1); BonusScreen has no override in the binary.
 
     // TODO: re-verify v1.6.1 addr (prior 0x00133664 stale v1.5.x)
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
