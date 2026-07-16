@@ -1007,6 +1007,29 @@ add_test(NAME screenshot_arcade_intro
 set_tests_properties(screenshot_arcade_intro PROPERTIES TIMEOUT 60
     LABELS "category_rendering;component_screeneffect")
 
+# Opt-in widescreen layout (Layout::SetWideLayout, src/engine/render/Layout.h)
+# visual screenshot test. Segment 1 (no --combo): full h.Init() boot, captures
+# MainScreen / GameModeScreen / ShopScreen via the REAL Game::renderFrame
+# widescreen viewport path (GameSDL.cpp), at both 3:2 (baseline) and 16:9
+# (--widescreen, resizes the hidden window to 1138x640 + SetWideLayout(true)).
+# Segment 2 (--combo=freeze|frenzy|freeze+frenzy): component-isolation
+# powerup-effect capture at 16:9 only (3:2 baseline already covered by
+# screenshot_powerup_freeze/frenzy in test_powerup_hud.cpp above).
+# See test_widescreen_render.cpp header comment for the full design.
+# Output: tmp/test/screenshots/widescreen/*.png
+fn_add_game_test(test_widescreen_render test_widescreen_render.cpp)
+add_test(NAME widescreen_render_3x2 COMMAND test_widescreen_render --screenshot)
+add_test(NAME widescreen_render_16x9 COMMAND test_widescreen_render --screenshot --widescreen)
+set_tests_properties(widescreen_render_3x2 widescreen_render_16x9 PROPERTIES TIMEOUT 90
+    LABELS "category_rendering;component_widescreen")
+
+foreach(_ws_combo freeze frenzy freeze+frenzy)
+    add_test(NAME widescreen_powerup_${_ws_combo}
+             COMMAND test_widescreen_render --screenshot --widescreen --combo=${_ws_combo})
+    set_tests_properties(widescreen_powerup_${_ws_combo} PROPERTIES TIMEOUT 60
+        LABELS "category_rendering;component_widescreen")
+endforeach()
+
 # TimeSinkControl ("Berry Blast" time-award board) render test. Drives the
 # real PowerUpManager::ActivatePower("time_sink") activation path (poweruplist.xml),
 # settles the ACTIVE alpha ratchet, forces a natural expiry into the RELEASE
