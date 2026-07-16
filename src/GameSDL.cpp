@@ -244,6 +244,9 @@ void Game::pollInput() {
             Paused();
             LOG_INFO("GameSDL", "focus-loss pause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
+            // Port specific: OS-timer-cancel gate (see Game.h m_bBackgrounded) -- freezes
+            // stepUpdate() in run() so intro/gameplay don't advance while backgrounded.
+            m_bBackgrounded = true;
         } else if (ev.type == SDL_APP_WILLENTERBACKGROUND) {
             // Port specific: mobile background event -> binary FruitNinja::OnBackground @0x001ef660
             // -> Game::Paused (vtable +0x48), unconditional (see focus-loss note above).
@@ -251,6 +254,8 @@ void Game::pollInput() {
             Paused();
             LOG_INFO("GameSDL", "app-background pause (SDL_APP_WILLENTERBACKGROUND)");
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
+            // Port specific: OS-timer-cancel gate (see Game.h m_bBackgrounded).
+            m_bBackgrounded = true;
         } else if (ev.type == SDL_WINDOWEVENT &&
                    (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ||
                     ev.window.event == SDL_WINDOWEVENT_RESTORED)) {
@@ -260,11 +265,19 @@ void Game::pollInput() {
             // and SkipToPause has set m_PauseAmount=0.
             UnPaused();
             LOG_INFO("GameSDL", "focus-gained unpause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
+            // Port specific: OS-timer-cancel gate (see Game.h m_bBackgrounded) -- restarts
+            // stepUpdate() next iteration. No explicit dt-reference reset needed: run()'s
+            // `last` timestamp is refreshed every loop iteration (including while
+            // backgrounded), so the resume frame's `ms` is just since the previous
+            // iteration, not the whole backgrounded span -- no catch-up burst.
+            m_bBackgrounded = false;
         } else if (ev.type == SDL_APP_DIDENTERFOREGROUND) {
             // Port specific: mobile foreground event -> binary FruitNinja::OnForeground @0x001ef6cc
             // -> Game::UnPaused (vtable +0x4c). Restores audio; gameplay stays paused per above.
             UnPaused();
             LOG_INFO("GameSDL", "app-foreground unpause (SDL_APP_DIDENTERFOREGROUND)");
+            // Port specific: OS-timer-cancel gate (see Game.h m_bBackgrounded).
+            m_bBackgrounded = false;
         } else {
             // Port specific: accumulate touch events into pending state; dispatch
             // happens in stepUpdate()->DispatchForSimTick() (#173 fix).
@@ -420,7 +433,19 @@ void Game::run() {
         pollInput();
         if (!running) break;
 
-        int steps = driver.advance(ms);
+        // Port specific: OS-timer-cancel gate (see Game.h m_bBackgrounded). While
+        // backgrounded, skip driver.advance()/stepUpdate() entirely so `ms` for the
+        // backgrounded span never reaches the fixed-step accumulator -- mirrors the
+        // binary's cancelled OS timer (FruitNinja::OnBackground @0x001ef660), which
+        // means literally no ticks are generated while away, not just a capped catch-up.
+        // `last` is still refreshed every iteration above (loop keeps polling for the
+        // resume event), so `ms` measured on the very frame focus returns is just since
+        // the previous iteration -- not the whole backgrounded duration -- so no reset
+        // of `last`/accumulator is needed on the resume edge; stepUpdate() simply starts
+        // being called again with normal per-frame `ms` values, restarting the fixed
+        // 1/60s cadence with zero backlog (matching OnForeground @0x001ef6cc restarting
+        // the timer at its normal rate).
+        int steps = m_bBackgrounded ? 0 : driver.advance(ms);
         for (int i = 0; i < steps && running; ++i) {
             stepUpdate();
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP

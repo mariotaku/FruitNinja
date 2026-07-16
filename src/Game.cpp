@@ -30,7 +30,7 @@ Game::Game()
       window(nullptr), gl_context(nullptr),
       inputManager(nullptr), inputTranslator(nullptr), actorManager(nullptr),
       soundEnabled(true), musicEnabled(true),
-      running(false)
+      running(false), m_bBackgrounded(false)
 {
     // s_instance already set by MortarGame ctor
     // game_work fields are zero-initialised at BSS load time (C-linkage global)
