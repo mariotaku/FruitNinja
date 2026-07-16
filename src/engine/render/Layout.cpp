@@ -33,8 +33,15 @@ int g_ViewportWinW = 0, g_ViewportWinH = 0;
 //    Right for edge-pinned deco/logos. Identity at HalfWidth==240 (non-wide
 //    / __bada__), so listing a key here is safe when widescreen is off.
 struct KeyOverride {
-    const char* key;   // presence in this table == edge-anchored
+    const char* key;    // presence in this table == edge-anchored
+    float rightPad;     // widescreen-only extra gap from the anchored edge, in
+                        // design units: pulls the element toward centre by this
+                        // much (0 = pure edge-anchor). Used to give the back/quit
+                        // bombs a little breathing room off the widened edge.
 };
+// Slight padding so the back/quit bombs don't sit flush against the widened
+// edge -- tunable.
+static const float BACK_BOMB_RIGHT_PAD = 20.0f;
 const KeyOverride kOverrides[] = {
     { "about.sensei"      },   // sensei.tex on AboutScreen (right-anchored)
     { "deco.smltitle"     },   // sml_title.tex on Dojo/GameMode/About (BaseScreen::DrawBorders)
@@ -45,10 +52,10 @@ const KeyOverride kOverrides[] = {
     { "modeselect.plate"  },   // zen_sign.tex lerp endpoints on GameModeScreen -- wooden mode-description plate (right-anchored)
     // Dojo/mode-select BACK buttons (the red bomb; pos=(0,0,0) + m_HudScale.x=0.375
     // = true x=180, right edge). Back/quit buttons edge-anchor universally.
-    { "dojo.btn.back"        },
-    { "about.btn.back"       },   // AboutScreen back (same m_HudScale idiom)
-    { "shop.btn.back"        },   // ShopScreen m_pBuyButton is actually the back button
-    { "modeselect.btn.back"  },
+    { "dojo.btn.back",       BACK_BOMB_RIGHT_PAD },
+    { "about.btn.back",      BACK_BOMB_RIGHT_PAD },   // AboutScreen back (same m_HudScale idiom)
+    { "shop.btn.back",       BACK_BOMB_RIGHT_PAD },   // ShopScreen m_pBuyButton is actually the back button
+    { "modeselect.btn.back", BACK_BOMB_RIGHT_PAD },
     // NOTE: the dojo/mode-select CONTENT ring buttons (dojo.btn.shop/about,
     // modeselect.btn.classic/zen/arcade) are deliberately NOT here -- they use
     // PROPORTIONAL spread so the rings stay evenly distributed across the wider
@@ -75,7 +82,7 @@ const KeyOverride kOverrides[] = {
     // buttons edge-anchor universally (same rule as modeselect.btn.back /
     // settings.back / pause.quit); positioned via m_HudScale not pos, see
     // MainScreen::CreateQuitButton.
-    { "menu.quit"     },
+    { "menu.quit",    BACK_BOMB_RIGHT_PAD },
     // PauseScreen's quit button (m_QuitButton, kCloseBtnX=215) -- was MapX'd
     // proportional despite being a back/quit button; edge-anchor per the
     // universal back/quit rule (same corner treatment as settings.back).
@@ -144,7 +151,9 @@ float MapX_impl(float x, const char* key) {
         // Identity at halfWidth==240. Example: an element whose right edge was
         // 30px from +240 keeps its right edge 30px from +halfWidth.
         float sign = (x < 0.0f) ? -1.0f : 1.0f;
-        return x + sign * (halfWidth - 240.0f);
+        // rightPad pulls the element back toward centre by ov->rightPad units
+        // (0 for most keys); gives the back/quit bombs a little edge padding.
+        return x + sign * (halfWidth - 240.0f - ov->rightPad);
     }
     return x * (halfWidth / 240.0f);   // proportional default (near-center / spread)
 }
