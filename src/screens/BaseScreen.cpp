@@ -191,7 +191,7 @@ void BaseScreen::DrawBorders(Mortar::SmartPtr<Mortar::Texture> secondaryTex,
             (float)s_TexSmlTitle->GetWidth() + 1.0f,
             (float)s_TexSmlTitle->GetHeight() + 1.0f,
             1.0f);
-        _Vector3<float> decoPos = _Vector3<float>(DECO_X, DECO_Y, 0.0f) +
+        _Vector3<float> decoPos = _Vector3<float>(MapX(DECO_X, "deco.smltitle"), DECO_Y, 0.0f) +
             SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(decoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
@@ -307,7 +307,7 @@ _Vector3<float> BaseScreen::DrawBorders(Mortar::BakedStringBox* box,
             (float)s_TexSmlTitle->GetWidth() + 1.0f,
             (float)s_TexSmlTitle->GetHeight() + 1.0f,
             1.0f);
-        _Vector3<float> decoPos = _Vector3<float>(DECO_X, DECO_Y, 0.0f) +
+        _Vector3<float> decoPos = _Vector3<float>(MapX(DECO_X, "deco.smltitle"), DECO_Y, 0.0f) +
             SLIDE_VEC * (DECO_SLIDE_Y * (1.0f - alpha));
         mat.GlobalTranslate44(decoPos);
         mm.GetWorldStack().SetCurrentMatrix(mat);
