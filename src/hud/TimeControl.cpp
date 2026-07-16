@@ -18,6 +18,7 @@
 #include <cmath>
 #include "game/GameWork.h"
 #include "entities/SuperFruitControl.h"
+#include "render/Layout.h"
 
 // DAT_001621ec / DAT_0016215c = 60.9 (Arcade/MP starting time)
 static const float ARCADE_START_TIME = 60.9f;
@@ -36,8 +37,18 @@ TimeControl::TimeControl() {
     m_CountdownStart = -1.0f;
     // pos = ((480 - size.x)*0.5 - 5, (320 + size.y)*0.5 - 5, 0)
     // size = (0, 18, 0)
+    // DIFFERS: opt-in widescreen -- timer is top-CENTER anchored, so the
+    // horizontal centering uses Layout::HalfWidth()*2 in place of the literal
+    // 480 (identical to 480 when !IsWideLayout()/__bada__). No MapX() here:
+    // MapX proportionally spreads a fixed X value away from centre, which
+    // would be wrong for an element whose whole point is to stay centered.
     size = _Vector3<float>(0.0f, 18.0f, 0.0f);
-    pos  = _Vector3<float>((480.0f - size.x) * 0.5f - 5.0f,
+#ifdef __bada__
+    const float fieldWidth = 480.0f;
+#else
+    const float fieldWidth = Layout::HalfWidth() * 2.0f;
+#endif
+    pos  = _Vector3<float>((fieldWidth - size.x) * 0.5f - 5.0f,
                            (320.0f + size.y) * 0.5f - 5.0f,
                            0.0f);
     m_TextBuffer[0]      = '\0';
@@ -147,7 +158,13 @@ void TimeControl::Update(float dt) {
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
 
     // Binary re-anchors pos.x every frame (no IsTimedGame() gate at this level).
-    pos.x = (480.0f - entrySizeX) * 0.5f - 5.0f;
+    // DIFFERS: opt-in widescreen -- see ctor note; centered, not MapX'd.
+#ifdef __bada__
+    const float fieldWidthU = 480.0f;
+#else
+    const float fieldWidthU = Layout::HalfWidth() * 2.0f;
+#endif
+    pos.x = (fieldWidthU - entrySizeX) * 0.5f - 5.0f;
 
     // Pause / suppress gate — three conditions suppress the timer tick
     // (but NOT the LAB_00162818 mirror write / pos.y re-anchor).

@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <cmath>
 #include "game/GameWork.h"
+#include "render/Layout.h"
 
 // Pool size: binary CreatePool(0xC, hud) = 12 slots. DIFFERS: was 9.
 static constexpr int MISS_POOL_SIZE = 12;
@@ -45,10 +46,22 @@ static bool s_TexturesLoaded = false;
 static constexpr float MISS_FADE_INIT = 1.81f;
 
 // Screen clamp rectangle (centred ortho). binary @ 0x001518c0..0x001518cc
-static constexpr float CLAMP_X_HI =  240.0f;
-static constexpr float CLAMP_X_LO = -240.0f;
+// X bounds are Layout::HalfWidth()-derived at each call site (opt-in
+// widescreen); only the Y bounds stay fixed constants here.
 static constexpr float CLAMP_Y_HI =  160.0f;
 static constexpr float CLAMP_Y_LO = -160.0f;
+
+// DIFFERS: opt-in widescreen -- screen-edge X clamp half-width used by
+// MakeCritical/MakeRare/MakeCombo/MakeDisappear. Faithful 240.0f under
+// __bada__ (mirrors Layout::HalfWidth()'s own identity there); real build
+// reads the live (possibly widened) Layout::HalfWidth().
+static inline float MissClampHalfX() {
+#ifdef __bada__
+    return 240.0f;
+#else
+    return Layout::HalfWidth();
+#endif
+}
 
 // Combo separation base radius (scaled by zoom^2 in Update). Binary DAT = 70.0f.
 static constexpr float SEP_BASE = 70.0f;
@@ -57,7 +70,7 @@ static constexpr float SEP_BASE = 70.0f;
 static constexpr float SOUND_THRESH = 1.66f;
 
 // Screen-clamp half-extents (centred ortho). DAT_00151f50, DAT_00151f54
-static constexpr float MISS_CLAMP_HALF_X = 240.0f;
+// X bound is Layout::HalfWidth()-derived at the MakeDisappear call site.
 static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 
 // MakeDisappear path-2 quad size scalar. DAT_00151f4c = 0x42780000 = 62.0f.
@@ -385,9 +398,13 @@ void MissControl::MakeCritical(_Vector3<float> pos, int playerIdx) {
         size.x *= 0.5f;
         size.y *= 0.5f;
         // Screen clamps use HALF size (binary @ 0x001518c0..0x001518cc)
-        if (size.x + this->pos.x >  CLAMP_X_HI) this->pos.x =  CLAMP_X_HI - size.x;
+        // DIFFERS: opt-in widescreen -- clamp against the (possibly widened)
+        // screen-edge half-width so critical popups stay on-screen.
+        const float clampXHi =  MissClampHalfX();
+        const float clampXLo = -MissClampHalfX();
+        if (size.x + this->pos.x >  clampXHi) this->pos.x =  clampXHi - size.x;
         if (size.y + this->pos.y >  CLAMP_Y_HI) this->pos.y =  CLAMP_Y_HI - size.y;
-        if (this->pos.x - size.x <  CLAMP_X_LO) this->pos.x =  CLAMP_X_LO + size.x;
+        if (this->pos.x - size.x <  clampXLo) this->pos.x =  clampXLo + size.x;
         if (this->pos.y - size.y <  CLAMP_Y_LO) this->pos.y =  CLAMP_Y_LO + size.y;
         // Restore full size
         size.x += size.x;
@@ -419,9 +436,12 @@ void MissControl::MakeRare(_Vector3<float> pos) {
         size.x *= 0.5f;
         size.y *= 0.5f;
         // Screen clamps use HALF size (binary @ 0x00151a2c..0x00151a40)
-        if (size.x + this->pos.x >  CLAMP_X_HI) this->pos.x =  CLAMP_X_HI - size.x;
+        // DIFFERS: opt-in widescreen -- see MakeCritical's clamp note.
+        const float clampXHi =  MissClampHalfX();
+        const float clampXLo = -MissClampHalfX();
+        if (size.x + this->pos.x >  clampXHi) this->pos.x =  clampXHi - size.x;
         if (size.y + this->pos.y >  CLAMP_Y_HI) this->pos.y =  CLAMP_Y_HI - size.y;
-        if (this->pos.x - size.x <  CLAMP_X_LO) this->pos.x =  CLAMP_X_LO + size.x;
+        if (this->pos.x - size.x <  clampXLo) this->pos.x =  clampXLo + size.x;
         if (this->pos.y - size.y <  CLAMP_Y_LO) this->pos.y =  CLAMP_Y_LO + size.y;
         // Restore full size
         size.x += size.x;
@@ -474,9 +494,12 @@ void MissControl::MakeCombo(_Vector3<float> pos, int comboCount, int entityType)
         size.x *= 0.5f;
         size.y *= 0.5f;
         // Screen clamps use HALF size (binary @ 0x00151748..0x00151754)
-        if (size.x + this->pos.x >  CLAMP_X_HI) this->pos.x =  CLAMP_X_HI - size.x;
+        // DIFFERS: opt-in widescreen -- see MakeCritical's clamp note.
+        const float clampXHi =  MissClampHalfX();
+        const float clampXLo = -MissClampHalfX();
+        if (size.x + this->pos.x >  clampXHi) this->pos.x =  clampXHi - size.x;
         if (size.y + this->pos.y >  CLAMP_Y_HI) this->pos.y =  CLAMP_Y_HI - size.y;
-        if (this->pos.x - size.x <  CLAMP_X_LO) this->pos.x =  CLAMP_X_LO + size.x;
+        if (this->pos.x - size.x <  clampXLo) this->pos.x =  clampXLo + size.x;
         if (this->pos.y - size.y <  CLAMP_Y_LO) this->pos.y =  CLAMP_Y_LO + size.y;
         // Restore full size
         size.x += size.x;
@@ -542,9 +565,11 @@ void MissControl::MakeDisappear(_Vector3<float> inPos, int sizeMult,
             size = pHudScale * MISS_DISAPPEAR_SIZE;
         }
         // Pos clamp using HALF size (binary @ 0x00151f50..0x00151f54 clamps)
+        // DIFFERS: opt-in widescreen -- see MakeCritical's clamp note.
         float halfX = size.x * 0.5f;
-        if (pos.x >  MISS_CLAMP_HALF_X - halfX) pos.x =  MISS_CLAMP_HALF_X - halfX;
-        if (pos.x < -MISS_CLAMP_HALF_X + halfX) pos.x = -MISS_CLAMP_HALF_X + halfX;
+        const float clampHalfX = MissClampHalfX();
+        if (pos.x >  clampHalfX - halfX) pos.x =  clampHalfX - halfX;
+        if (pos.x < -clampHalfX + halfX) pos.x = -clampHalfX + halfX;
         float halfY = size.y * 0.5f;
         if (pos.y >  MISS_CLAMP_HALF_Y - halfY) pos.y =  MISS_CLAMP_HALF_Y - halfY;
         if (pos.y < -MISS_CLAMP_HALF_Y + halfY) pos.y = -MISS_CLAMP_HALF_Y + halfY;

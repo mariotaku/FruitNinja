@@ -40,6 +40,7 @@
 #include "engine/util/StringTable.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/network/P2PMessageHandling.h"
+#include "render/Layout.h"
 #include <cmath>
 #include "game/GameWork.h"
 #include "game/ItemManager.h"
@@ -297,7 +298,10 @@ void MainScreen::Update(float dt) {
     // Delegate0, HUD::AddControl, layer=8 (HUD_LAYER_BUTTONS), SetSingular.
     if (pSoundToggle == nullptr && game_work.mHud) {
         pSoundToggle = new MenuButton();
-        pSoundToggle->Init(POS_SOUND_TOGGLE,
+        // DIFFERS: opt-in widescreen -- MapX the initial-creation X; Update()'s
+        // per-frame positioning block below (top-right corner branch) re-applies
+        // the same MapX key every frame regardless.
+        pSoundToggle->Init(_Vector3<float>(MapX(POS_SOUND_TOGGLE.x, "menu.sound"), POS_SOUND_TOGGLE.y, POS_SOUND_TOGGLE.z),
             Mortar::Delegate0<void>::Make(this, &MainScreen::SoundCallback), -1,
             _Vector3<float>(32.0f, 32.0f, 1.0f), nullptr);
         game_work.mHud->AddControl(pSoundToggle);
@@ -306,7 +310,8 @@ void MainScreen::Update(float dt) {
     }
     if (pMusicToggle == nullptr && game_work.mHud) {
         pMusicToggle = new MenuButton();
-        pMusicToggle->Init(POS_MUSIC_TOGGLE,
+        // DIFFERS: opt-in widescreen -- see pSoundToggle note above.
+        pMusicToggle->Init(_Vector3<float>(MapX(POS_MUSIC_TOGGLE.x, "menu.music"), POS_MUSIC_TOGGLE.y, POS_MUSIC_TOGGLE.z),
             Mortar::Delegate0<void>::Make(this, &MainScreen::MusicCallback), -1,
             _Vector3<float>(32.0f, 32.0f, 1.0f), nullptr);
         game_work.mHud->AddControl(pMusicToggle);
@@ -334,7 +339,9 @@ void MainScreen::Update(float dt) {
     if (m_pSettingsButton == nullptr && game_work.mHud) {
         m_pSettingsButton = new MenuButton();
         m_pSettingsButton->m_Texture = Mortar::TextureManager::LoadLocalisedTexture("settings_button.tex");
-        m_pSettingsButton->Init(POS_SETTINGS_TOGGLE,
+        // DIFFERS: opt-in widescreen -- MapX the initial-creation X; the per-frame
+        // slide block below (Update tail) re-applies the same MapX key every frame.
+        m_pSettingsButton->Init(_Vector3<float>(MapX(POS_SETTINGS_TOGGLE.x, "menu.settings"), POS_SETTINGS_TOGGLE.y, POS_SETTINGS_TOGGLE.z),
             Mortar::Delegate0<void>::Make(this, &MainScreen::SettingsCallback), -1,
             _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
         m_pSettingsButton->m_RestScale = kSettingsRestScale;
@@ -735,11 +742,15 @@ void MainScreen::Update(float dt) {
         pMusicToggle->pos.y = 135.5f;
 
         if (elapsedTime <= 0.0f) {
+            // Paused (top-center, on the pause overlay): centered, not MapX'd
+            // -- PauseScreen's own reveal is explicitly out of widescreen scope.
             pSoundToggle->pos.x = 20.0f;
             pMusicToggle->pos.x = -20.0f;
         } else {
-            pSoundToggle->pos.x = 216.0f;
-            pMusicToggle->pos.x = 176.0f;
+            // Idle main menu (top-right corner): edge-anchored -> MapX.
+            // DIFFERS: opt-in widescreen.
+            pSoundToggle->pos.x = MapX(216.0f, "menu.sound");
+            pMusicToggle->pos.x = MapX(176.0f, "menu.music");
         }
 
         // ASM-spec v1.6.1 MainScreen::Update @0x00196e1c (tail): t = clamp01(elapsedTime
@@ -868,8 +879,10 @@ void MainScreen::Update(float dt) {
         // it grows (0->1), frame-synced with the rings. m_RestScale is held at
         // full size -- the button stays 48px the whole time and simply slides
         // off/onto the corner.
+        // DIFFERS: opt-in widescreen -- MapX the bottom-left corner anchor; the
+        // slide distance itself is a fixed-unit offset, not spread.
         float slide = (1.0f - growFactor) * kSettingsSlideOut;
-        m_pSettingsButton->pos.x = POS_SETTINGS_TOGGLE.x - slide;
+        m_pSettingsButton->pos.x = MapX(POS_SETTINGS_TOGGLE.x, "menu.settings") - slide;
         m_pSettingsButton->pos.y = POS_SETTINGS_TOGGLE.y - slide;
 
         m_pSettingsButton->m_RestScale = kSettingsRestScale;
@@ -1150,7 +1163,8 @@ void MainScreen::CreateButtons() {
         Mortar::SmartPtr<Mortar::Texture> texNewGame = game_work.m_RingTex[3];
         m_pGameModeButton = new MenuButton();
         m_pGameModeButton->m_Texture = texNewGame;
-        m_pGameModeButton->Init(POS_PLAY_BUTTON,
+        // DIFFERS: opt-in widescreen -- MapX the right-of-center ring anchor.
+        m_pGameModeButton->Init(_Vector3<float>(MapX(POS_PLAY_BUTTON.x, "menu.play"), POS_PLAY_BUTTON.y, POS_PLAY_BUTTON.z),
             Mortar::Delegate0<void>::Make(this, &MainScreen::GameModeCallback), 3, _Vector3<float>(0,0,0), nullptr);
         if (texNewGame.IsValid()) {
             m_pGameModeButton->m_RestScale.x = (float)(texNewGame->GetWidth()  + 1);
@@ -1180,7 +1194,8 @@ void MainScreen::CreateButtons() {
         // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: ring = m_RingTex[8] + SetText(GETSTRING(0x397))
         m_pStoreButton = new MenuButton();
         m_pStoreButton->m_Texture = game_work.m_RingTex[8];
-        m_pStoreButton->Init(POS_DOJO_BUTTON,
+        // DIFFERS: opt-in widescreen -- MapX the left-of-center ring anchor.
+        m_pStoreButton->Init(_Vector3<float>(MapX(POS_DOJO_BUTTON.x, "menu.dojo"), POS_DOJO_BUTTON.y, POS_DOJO_BUTTON.z),
             Mortar::Delegate0<void>::Make(this, &MainScreen::AboutCallback),
             Fruit::FruitType("mango", false), _Vector3<float>(0,0,0), nullptr);
         m_pStoreButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;

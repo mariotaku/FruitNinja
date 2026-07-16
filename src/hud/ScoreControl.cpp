@@ -25,6 +25,7 @@
 #include <algorithm>
 #include "game/GameWork.h"
 #include "hud/IngamePopup.h"
+#include "render/Layout.h"
 
 // Shared TTF face for BakedStringBox labels in ScoreControl.
 // v1.6.1 ScoreControl::ScoreControl @0x001ad5fc reads game_work.m_pTTFFontMain
@@ -344,8 +345,12 @@ void ScoreControl::Update(float dt) {
     // SCORE_MP_X_STRIDE (200.0 from DAT_00158c50) is the wave-transition slide
     // distance, NOT a per-player MP offset. Steady-state gameplay
     // (m_TransitionTimer == 0) leaves pos at (-218, 138, 0), on-screen.
+    // DIFFERS: opt-in widescreen -- MapX the steady-state corner anchor (top-left).
+    // The wave-transition slide (SCORE_MP_X_STRIDE * waveScale) and the later
+    // anchorX=-160 transition-centering target below are left as-is: they're
+    // transient animation offsets from this anchor, not the resting position.
     float waveScale = fabsf(waveTimer);
-    pos.x = SCORE_BASE_POS_X - SCORE_MP_X_STRIDE * waveScale;
+    pos.x = MapX(SCORE_BASE_POS_X, "hud.score") - SCORE_MP_X_STRIDE * waveScale;
     pos.y = SCORE_BASE_POS_Y;
     pos.z = 0.0f;
 
@@ -604,9 +609,12 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80: localized TTF score wordmark via
     //   m_pScoreBox (not score.tex); SetTranslation 2nd arg=1 (preShift).
     if (m_pScoreBox && transTimer > 0.0f) {
+        // DIFFERS: opt-in widescreen -- SP wordmark anchor MapX'd (same key/corner
+        // as the score readout above). MP centering branch left as-is (transient
+        // wave-transition target, not the resting corner).
         float xPos = IsMultiplayer()
             ? (SCORE_BANNER_X_CENTRE * transTimer - SCORE_ICON_X_MP_STRIDE)
-            : SCORE_ICON_X_SP;
+            : MapX(SCORE_ICON_X_SP, "hud.score");
         m_pScoreBox->SetTranslation(_Vector3<float>(xPos, m_DrawPosY + 53.0f, 0.0f), 1);
         m_pScoreBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
