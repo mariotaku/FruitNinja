@@ -183,10 +183,15 @@ public:
     // Extracted from v1.6.1 ShopListItem::Draw @0x001b5da4:
     //   Two 290x120 black(0,0,0,128) quads at parent->pos.x-2, ±105.
     //   Gated internally on m_bIsNew.
-    // DIFFERS: opt-in widescreen -- width scales by k=Layout::HalfWidth()/240
-    // (identity under __bada__/3:2) so the two shade quads reach the widened
-    // list edges at 16:9; both stay centered on the same list column (anchorX
-    // unchanged), and the 120-tall / ±105-offset vertical placement is untouched.
+    // DIFFERS: opt-in widescreen -- the quad is off-center on the list column
+    // (rest center = -97, not the field center), so a symmetric width*k scale
+    // under-reaches the widened LEFT field edge while overshooting the right
+    // needlessly. Left/right edges are computed independently instead: right
+    // edge stays at its 3:2 value (clear of the description plate at X=145),
+    // left edge extends by the exact field-edge shift (Layout::HalfWidth()-240)
+    // so it reaches -HalfWidth() same as A2's field-centred BG panel. Identity
+    // under __bada__/3:2 (byte-identical to the pre-widescreen quad). Vertical
+    // size (120) / ±105 y offsets untouched.
     void DrawDarkness();
 
     // Process-wide shimmer oscillator (static_block +0x68 phase, +0x6c Y).
