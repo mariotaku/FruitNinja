@@ -58,9 +58,10 @@ int main(int argc, char* argv[]) {
     //   --osd-sfx           : enable the per-SFX OSD readout (same as F4 at runtime)
     //   --widescreen        : DIFFERS: opt-in widescreen layout enhancement (Layout::HalfWidth);
     //                         faithful 3:2 (240 half-width) stays the default when omitted.
-    //   --window WxH         : Port specific: initial window size (default 960x640, 3:2).
-    //                         Use a wider ratio (e.g. 1138x640 ~ 16:9) to see --widescreen.
+    //   --window WxH         : Port specific: explicit initial window size, overrides
+    //                         the aspect-from-setting default below (e.g. 1024x600).
     int winW = 960, winH = 640;
+    bool winExplicit = false;
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--osd-sfx") == 0) {
             FN::g_bOsdSfx = true;
@@ -73,10 +74,24 @@ int main(int argc, char* argv[]) {
             if (sscanf(argv[i + 1], "%dx%d", &w, &h) == 2 && w > 0 && h > 0) {
                 winW = w;
                 winH = h;
+                winExplicit = true;
             }
             ++i;
         }
     }
+
+#ifndef __bada__
+    // Port specific: the widescreen setting (persisted via LoadSettings above, or
+    // set by --widescreen) drives the DEFAULT desktop window aspect -- otherwise
+    // enabling the setting has no visible effect on the fixed 3:2 window and reads
+    // as "the setting is ignored". 16:9 when on, 3:2 (960x640) when off. An explicit
+    // --window WxH still wins. On mobile/web the drawable is the device screen, so
+    // this desktop-window default is moot there.
+    if (!winExplicit && Layout::IsWideLayout()) {
+        winW = 1138;   // 16:9 at 640 tall (1138/640 = 1.778)
+        winH = 640;
+    }
+#endif
 
     // Disable stdout buffering so log lines flush immediately. Without
     // this, line-buffered stdout silently drops the last few logs when
