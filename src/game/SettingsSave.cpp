@@ -45,7 +45,10 @@ void SaveSettings() {
     root.SetAttribute("motionMode", FN::g_MotionMode ? "true" : "false");
     root.SetAttribute("showFps", FN::g_ShowFps ? "true" : "false");
     root.SetAttribute("fpsCap60", FN::g_FpsCap60 ? "true" : "false");
-    root.SetAttribute("widescreen", Layout::IsWideLayout() ? "true" : "false");
+    // Saves the PREF (user's saved choice), not the live active value -- a
+    // widescreen toggle needs an app restart to apply (see Layout.h); the
+    // active value only re-syncs to the pref at the next LoadSettings/boot.
+    root.SetAttribute("widescreen", Layout::IsWideLayoutPref() ? "true" : "false");
     root.SetAttribute("motionSpeedThreshold", FN::g_MotionSpeedThreshold);
 
     doc.InsertEndChild(root);
