@@ -18,6 +18,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include "game/GameWork.h"
+#include "engine/render/Layout.h"
 
 using namespace Mortar;
 
@@ -250,10 +251,10 @@ void EffectImage::Parse(TiXmlElement* xml) {
         }
     }
 
-    // "scaleToScreen" -> m_bLowEndOnly
+    // "scaleToScreen" -> m_bScaleToScreen
     // v1.6.1 EffectImage::Parse @0x001491e4
     const char* scaleToScreen = xml->Attribute("scaleToScreen");
-    if (scaleToScreen) m_bLowEndOnly = (strcmp(scaleToScreen, "true") == 0);
+    if (scaleToScreen) m_bScaleToScreen = (strcmp(scaleToScreen, "true") == 0);
 }
 
 // ASM-spec v1.6.1 EffectImage::LoadTextures @0x001481d0: single-instruction tail-call thunk
@@ -418,7 +419,20 @@ void ScreenEffect::Activate() {
 
     // Spawn particle emitters
     // v1.6.1 ScreenEffect::Activate @0x00148f08
-    static const _Vector3<float> kScreenAnchor(480.0f, 320.0f, 0.0f);
+    // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
+    // kScreenAnchor.x is the binary's 480.0f (= 2*240, screen full-width) used to
+    // scale an emitter's "anchor" (m_VelocityScale) attribute into a spawn position.
+    // frenzy's two "speed" emitters use anchor=+-0.5 to sit at the LEFT/RIGHT screen
+    // edges (480*0.5=240=+HalfWidth, 480*-0.5=-240=-HalfWidth); widen that edge term
+    // by k so they track +-HalfWidth() in widescreen instead of leaving the widened
+    // sides empty. A centre emitter (anchor.x==0) is unaffected (k-scale of 0 is 0).
+    // k==1.0f under __bada__, so this is identity there.
+#ifdef __bada__
+    const float k = 1.0f;
+#else
+    const float k = Layout::HalfWidth() / 240.0f;
+#endif
+    const _Vector3<float> kScreenAnchor(480.0f * k, 320.0f, 0.0f);
     for (size_t i = 0; i < m_Emmiters.size(); ++i) {
         Emmiter& em = m_Emmiters[i];
         // Only spawn if not already active (m_pHandle == nullptr = not running)
@@ -477,6 +491,15 @@ void ScreenEffect::Activate() {
         // ("scale") is set, since Update's first tick computes size from
         // m_ColourScale*(1-e) anyway; otherwise start at the full texture size.
         ctrl->size = (img.m_FlagBits & 1u) ? _Vector3<float>(0.0f, 0.0f, 0.0f) : img.m_ColourScale;
+        // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful (no-op) under
+        // __bada__ -- widen full-screen overlay quads (XML "scaleToScreen") on the
+        // activation frame too, matching Update's per-frame widen below. No-op when
+        // m_FlagBits&1 zeroed the size above (0 * k == 0).
+#ifndef __bada__
+        if (img.m_bScaleToScreen) {
+            ctrl->size.x *= (Layout::HalfWidth() / 240.0f);
+        }
+#endif
         ctrl->m_DrawColour = img.m_Tint;
         // v1.6.1 ScreenEffect::Activate @0x00148f08: for alpha-driven images
         // (m_FlagBits & 2) the binary zeroes the control's alpha byte
@@ -584,6 +607,18 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         sz.x = img.m_ColourScale.x * scaleFactor;
         sz.y = img.m_ColourScale.y * scaleFactor;
         sz.z = img.m_ColourScale.z * scaleFactor;
+
+        // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful (no-op) under
+        // __bada__ -- widen full-screen overlay quads (XML "scaleToScreen", e.g.
+        // freeze's "ice_cover") to span +-HalfWidth() instead of leaving the
+        // widened field sides uncovered. Only images explicitly marked
+        // scaleToScreen="true" are widened; small positioned effect images
+        // (clock_freeze, blitz_*, hud_x2_sign, etc.) are untouched.
+#ifndef __bada__
+        if (img.m_bScaleToScreen) {
+            sz.x *= (Layout::HalfWidth() / 240.0f);
+        }
+#endif
 
         // Pulse oscillation on size
         // ASM-verified: 2026-06-24T00:00Z v1.6.1 ScreenEffect::Update @ 0x00148adc (asm-inspector)
