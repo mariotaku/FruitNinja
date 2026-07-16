@@ -63,6 +63,7 @@
 #include "screens/GameModeScreen.h"
 #include "screens/MainScreen.h"
 #include "game/GameWork.h"
+#include "game/GameTaskState.h"      // DrawBackground (factored out of GameDraw)
 #include "game/PowerUpManager.h"
 #include "game/PowerUp.h"
 #include "game/GameModifier.h"
@@ -150,6 +151,17 @@ static void RunPowerUpFrameWidescreenAware(fn::TestHarness& h, PowerUpManager* p
         Mortar::DisplayManager::GetInstance().BeginFrame();
         MatrixManager::GetInstance().SetupOrtho(
             160.0f, -160.0f, -Layout::HalfWidth(), Layout::HalfWidth(), 2000.0f, -6000.0f);
+
+        // Real game background (wooden dojo panel), matching GameDraw's draw
+        // order (background drawn first, before HUD/actors/particles). The
+        // background texture is already loaded -- InitComponent() calls
+        // Init() -> game.init() -> GameInit(), whose Step 6 runs
+        // ChangeBackground(nullptr) unconditionally; InitComponent() only
+        // clears mHud's control list afterwards, it never touches the
+        // g_BackgroundTexture global. DrawBackground() already scales by
+        // Layout::HalfWidth() internally (see src/game/GameInit.cpp), so it
+        // widens correctly under the widescreen ortho set up above.
+        DrawBackground();
 
         PowerUpPreFrame(pum, kDt);
         PSPParticleManager::GetInstance().Update(kDt, false);
