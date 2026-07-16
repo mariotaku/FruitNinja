@@ -49,6 +49,7 @@
 #include "engine/util/StringHash.h"
 #include "engine/util/StringTable.h"
 #include "screens/FruitFactPage.h"
+#include "render/Layout.h"
 
 using Mortar::TextureManager;
 
@@ -806,7 +807,10 @@ void GameOverScreen::CreateRetryButton() {
     if (!game || !game_work.mHud) return;
 
     // ASM-spec v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98
-    _Vector3<float> btnPos(-80.0f, -96.0f, 0.0f);
+    // DIFFERS: opt-in widescreen -- MapX proportionally spreads Retry away from
+    // centre (same "near-centre pair" treatment as PauseScreen's Resume/Retry
+    // buttons). Identity (-80.0f) when disabled/__bada__.
+    _Vector3<float> btnPos(MapX(-80.0f, "gameover.retry"), -96.0f, 0.0f);
     _Vector3<float> globalCenter(0.0f, 0.0f, 0.0f);
     // ASM-spec v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98: ring background is
     // game_work.m_RingTex[1] (blue_ring.tex -- plain ring, NO baked text). The label is the
@@ -867,7 +871,10 @@ void GameOverScreen::CreateQuitButton() {
     if (!game || !game_work.mHud) return;
 
     // ASM-spec v1.6.1 GameOverScreen::CreateQuitButton @0x00186220
-    _Vector3<float> btnPos(80.0f, -96.0f, 0.0f);
+    // DIFFERS: opt-in widescreen -- MapX proportionally spreads Quit away from
+    // centre (same "near-centre pair" treatment as PauseScreen's Resume/Retry
+    // buttons). Identity (80.0f) when disabled/__bada__.
+    _Vector3<float> btnPos(MapX(80.0f, "gameover.quit"), -96.0f, 0.0f);
     _Vector3<float> globalCenter(0.0f, 0.0f, 0.0f);
     // ASM-spec v1.6.1 GameOverScreen::CreateQuitButton @0x00186220: ring background is
     // game_work.m_RingTex[16] (red_ring.tex -- plain ring, NO baked text). The label is the
@@ -1500,7 +1507,12 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
             char buf[16];
             snprintf(buf, sizeof(buf), "%d", game_work.m_SaveData->m_highscore);
 
-            const _Vector3<float> daysPos(-163.0f, -96.0f, 0.0f);
+            // DIFFERS: opt-in widescreen -- MapX with the SAME proportional
+            // spread as the Retry button (m_pRetryBtn, "gameover.retry") this
+            // number sits beside, so it tracks the button instead of drifting
+            // to a stale 3:2 anchor next to a widened-position button.
+            // Identity (-163.0f) when disabled/__bada__.
+            const _Vector3<float> daysPos(MapX(-163.0f, "gameover.retry"), -96.0f, 0.0f);
             // font = game_work numbers font (binary pM_Fonts[2])
             const float scaleArg = m_pRetryBtn->size.x * 0.5f;
             if (game_work.pFontNumbers.IsValid()) {
