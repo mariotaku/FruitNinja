@@ -76,6 +76,28 @@ float HalfWidth();
 // HalfWidth()/240.0f (or returns x unchanged when layout is not wide).
 float MapX_impl(float x, const char* key);
 
+// Pass 3: single source of truth for the centred pillarbox/letterbox
+// viewport rect, shared by render (Game::renderFrame's glViewport) and
+// input (InputTranslatorSDL::TransformTouchNormalized). Computes the
+// largest EffectiveAspect()-shaped rect that fits inside winW x winH,
+// centred. When !IsWideLayout(), returns the full window unchanged
+// (0, 0, winW, winH) -- this is what keeps the non-widescreen path
+// byte-identical to pre-widescreen behaviour.
+void ComputeViewport(int winW, int winH, int* outX, int* outY, int* outW, int* outH);
+
+// Stores the most recently applied viewport rect + the window size it was
+// computed from. Call once per frame right after ComputeViewport/glViewport
+// so TouchToGame can invert the same rect input used to produce it.
+void SetActiveViewport(int x, int y, int w, int h, int winW, int winH);
+
+// Maps window-normalized touch coords (nx, ny in [0,1], SDL convention:
+// origin top-left, y down) through the last-stored viewport (see
+// SetActiveViewport) into centred game-ortho coords (gx in
+// [-HalfWidth(), +HalfWidth()], gy in [-160, +160], y up).
+// When !IsWideLayout() (viewport == full window), this reduces exactly to
+// the original nx*480-240 / 160-ny*320 mapping -- see Layout.cpp.
+void TouchToGame(float nx, float ny, float* gx, float* gy);
+
 } // namespace Layout
 
 #define MapX(x, key) (::Layout::MapX_impl((x), (key)))

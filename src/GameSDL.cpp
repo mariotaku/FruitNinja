@@ -336,25 +336,14 @@ void Game::renderFrame(float alpha, int steps) {
     // wide, letterbox/pillarbox the drawable to Layout::EffectiveAspect() (clamped to
     // [3:2, 16:9]) instead of stretching the raw window aspect, so an ultra-wide or
     // ultra-tall window doesn't distort the game beyond the 16:9 cap.
+    // Pass 3: viewport rect computed by Layout::ComputeViewport (single source of
+    // truth shared with InputTranslatorSDL::TransformTouchNormalized via
+    // Layout::TouchToGame) instead of inline pillarbox/letterbox math here.
     Layout::SetWindowAspect((float)ww, (float)wh);
-    if (Layout::IsWideLayout() && ww > 0 && wh > 0) {
-        float targetAspect = Layout::EffectiveAspect();
-        int vpW = ww, vpH = wh;
-        int vpX = 0, vpY = 0;
-        float windowAspect = (float)ww / (float)wh;
-        if (windowAspect > targetAspect) {
-            // Window wider than target -- pillarbox (side bars).
-            vpW = (int)(wh * targetAspect + 0.5f);
-            vpX = (ww - vpW) / 2;
-        } else if (windowAspect < targetAspect) {
-            // Window narrower than target -- letterbox (top/bottom bars).
-            vpH = (int)(ww / targetAspect + 0.5f);
-            vpY = (wh - vpH) / 2;
-        }
-        glViewport(vpX, vpY, vpW, vpH);
-    } else {
-        glViewport(0, 0, ww, wh);
-    }
+    int vpX, vpY, vpW, vpH;
+    Layout::ComputeViewport(ww, wh, &vpX, &vpY, &vpW, &vpH);
+    glViewport(vpX, vpY, vpW, vpH);
+    Layout::SetActiveViewport(vpX, vpY, vpW, vpH, ww, wh);
     Mortar::DisplayManager::GetInstance().BeginFrame();
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
     fn::RenderInterp::Get().ApplyForDraw(alpha);
