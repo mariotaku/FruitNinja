@@ -42,24 +42,17 @@ const KeyOverride kOverrides[] = {
     { "dojo.border"       },   // DrawBorders title anchor on DojoScreen (same corner as dojo.sensei)
     { "modeselect.sensei" },   // mode_sensei.tex on GameModeScreen (bottom-left-anchored)
     { "modeselect.title"  },   // DrawBorders anchor on GameModeScreen -- feeds m_pDescBox "MODE SELECT" (left-anchored)
-    // Dojo / mode-select buttons -- user asked these edge-anchor too (spread to
-    // the widened edges rather than proportionally).
-    { "dojo.btn.shop"        },
-    { "dojo.btn.about"       },
-    // Dojo's red bomb Back/Play button -- pos=(0,0,0) but m_HudScale.x=0.375
-    // puts it at true x=180 (right edge), NOT centered; see
-    // DojoScreen::CreateButtons note. Back/quit buttons edge-anchor universally.
+    // Dojo/mode-select BACK buttons (the red bomb; pos=(0,0,0) + m_HudScale.x=0.375
+    // = true x=180, right edge). Back/quit buttons edge-anchor universally.
     { "dojo.btn.back"        },
-    // AboutScreen's red bomb back button -- same m_HudScale=0.375 idiom, same
-    // rule; see AboutScreen::CreateButtons note.
-    { "about.btn.back"       },
-    // ShopScreen's m_pBuyButton is actually a BACK button (QuitShopCallback);
-    // same m_HudScale=0.375 idiom, same rule.
-    { "shop.btn.back"        },
+    { "about.btn.back"       },   // AboutScreen back (same m_HudScale idiom)
+    { "shop.btn.back"        },   // ShopScreen m_pBuyButton is actually the back button
     { "modeselect.btn.back"  },
-    { "modeselect.btn.classic" },
-    { "modeselect.btn.zen"   },
-    { "modeselect.btn.arcade" },
+    // NOTE: the dojo/mode-select CONTENT ring buttons (dojo.btn.shop/about,
+    // modeselect.btn.classic/zen/arcade) are deliberately NOT here -- they use
+    // PROPORTIONAL spread so the rings stay evenly distributed across the wider
+    // field, same as the MainScreen play/dojo rings (edge-anchor spread them
+    // unevenly).
     // Social share buttons (Facebook/Twitter, defunct-but-drawn on DojoScreen) --
     // right-edge-anchored so they hug the widened edge like the ring buttons above.
     { "social.facebook"      },
