@@ -1012,9 +1012,11 @@ set_tests_properties(screenshot_arcade_intro PROPERTIES TIMEOUT 60
 # MainScreen / GameModeScreen / ShopScreen via the REAL Game::renderFrame
 # widescreen viewport path (GameSDL.cpp), at both 3:2 (baseline) and 16:9
 # (--widescreen, resizes the hidden window to 1138x640 + SetWideLayout(true)).
-# Segment 2 (--combo=freeze|frenzy|freeze+frenzy): component-isolation
+# Segment 2 (--combo=freeze|frenzy|x2|freeze+frenzy|all): component-isolation
 # powerup-effect capture at 16:9 only (3:2 baseline already covered by
-# screenshot_powerup_freeze/frenzy in test_powerup_hud.cpp above).
+# screenshot_powerup_freeze/frenzy in test_powerup_hud.cpp above). "x2" is the
+# score_mult powerup (poweruplist.xml power name="score_mult"); "all" activates
+# all 3 (freeze+speed+score_mult) at once.
 # See test_widescreen_render.cpp header comment for the full design.
 # Output: tmp/test/screenshots/widescreen/*.png
 fn_add_game_test(test_widescreen_render test_widescreen_render.cpp)
@@ -1023,7 +1025,7 @@ add_test(NAME widescreen_render_16x9 COMMAND test_widescreen_render --screenshot
 set_tests_properties(widescreen_render_3x2 widescreen_render_16x9 PROPERTIES TIMEOUT 90
     LABELS "category_rendering;component_widescreen")
 
-foreach(_ws_combo freeze frenzy freeze+frenzy)
+foreach(_ws_combo freeze frenzy x2 freeze+frenzy all)
     add_test(NAME widescreen_powerup_${_ws_combo}
              COMMAND test_widescreen_render --screenshot --widescreen --combo=${_ws_combo})
     set_tests_properties(widescreen_powerup_${_ws_combo} PROPERTIES TIMEOUT 60
