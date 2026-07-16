@@ -100,6 +100,16 @@ static const char* FRUIT_ARCADE  = "banana";
 // SinIdx scale for DrawConnectTexture pulsation
 static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
 
+// Port specific: widescreen-only extra spread for the 3 mode-select rings
+// (Classic/Zen/Arcade). Their MapX keys are NOT in Layout.cpp's edge-anchor
+// table, so they normally just scale proportionally with HalfWidth()/240 --
+// correct but leaves Zen (rightmost, +x) with a gap to the right-side
+// description plate (modeselect.plate, which IS edge-anchored and tracks the
+// screen edge more aggressively). This nudges the rings' own proportional
+// spread a bit wider in widescreen so Zen sits closer to the plate.
+// 1.0 = pure proportional (no extra spread).
+static const float MODESELECT_RING_SPREAD = 1.20f;
+
 // ---------------------------------------------------------------------------
 // Rate-independence macros for the per-present (UpdateRealtime) split of
 // m_TransitionAlpha/m_SecondaryAlpha easing (states 2 and 0xf only -- states
@@ -345,6 +355,15 @@ void GameModeScreen::Release() {
 //                -> AddControl
 // ===================================================================
 void GameModeScreen::CreateControls() {
+    // Port specific: widescreen-only extra spread factor for the 3 mode rings
+    // (see MODESELECT_RING_SPREAD comment above). Identity (1.0) at 3:2 and
+    // under __bada__, so MapX(x*spread) == MapX(x) there -- byte-identical
+    // to the pre-existing faithful path.
+    float spread = 1.0f;
+#ifndef __bada__
+    if (Layout::IsWideLayout()) spread = MODESELECT_RING_SPREAD;
+#endif
+
     // --- Button 1: BACK (plain ring m_RingTex[0x10], bomb fruit, QuitCallback) ---
     // ASM-spec v1.6.1 GameModeScreen::CreateControls @0x001819bc: ring label =
     //   MenuButton::SetText(GETSTRING(...)) over plain m_RingTex[...].
@@ -384,8 +403,10 @@ void GameModeScreen::CreateControls() {
     {
         MenuButton* btn = m_pClassicButton;
         // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
-        // matching MainScreen's menu.play/menu.dojo convention).
-        m_pClassicButton->Init(_Vector3<float>(MapX(POS_CLASSIC.x, "modeselect.btn.classic"), POS_CLASSIC.y, POS_CLASSIC.z),
+        // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
+        // MODESELECT_RING_SPREAD in widescreen (see const comment above). Identity
+        // (spread=1) at 3:2/__bada__.
+        m_pClassicButton->Init(_Vector3<float>(MapX(POS_CLASSIC.x * spread, "modeselect.btn.classic"), POS_CLASSIC.y, POS_CLASSIC.z),
                                Mortar::Delegate0<void>::Make(this, &GameModeScreen::ClassicModeCallback),
                                Fruit::FruitType(FRUIT_CLASSIC, false), _Vector3<float>(0, 0, 0),
                                Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
@@ -416,8 +437,10 @@ void GameModeScreen::CreateControls() {
     {
         MenuButton* btn = m_pZenButton;
         // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
-        // matching MainScreen's menu.play/menu.dojo convention).
-        m_pZenButton->Init(_Vector3<float>(MapX(POS_ZEN.x, "modeselect.btn.zen"), POS_ZEN.y, POS_ZEN.z),
+        // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
+        // MODESELECT_RING_SPREAD in widescreen so Zen sits closer to the right-side
+        // description plate. Identity (spread=1) at 3:2/__bada__.
+        m_pZenButton->Init(_Vector3<float>(MapX(POS_ZEN.x * spread, "modeselect.btn.zen"), POS_ZEN.y, POS_ZEN.z),
                            Mortar::Delegate0<void>::Make(this, &GameModeScreen::ZenModeCallback),
                            Fruit::FruitType(FRUIT_ZEN, false), _Vector3<float>(0, 0, 0),
                            Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
@@ -443,8 +466,9 @@ void GameModeScreen::CreateControls() {
     {
         MenuButton* btn = m_pArcadeButton;
         // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
-        // matching MainScreen's menu.play/menu.dojo convention).
-        m_pArcadeButton->Init(_Vector3<float>(MapX(POS_ARCADE.x, "modeselect.btn.arcade"), POS_ARCADE.y, POS_ARCADE.z),
+        // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
+        // MODESELECT_RING_SPREAD in widescreen. Identity (spread=1) at 3:2/__bada__.
+        m_pArcadeButton->Init(_Vector3<float>(MapX(POS_ARCADE.x * spread, "modeselect.btn.arcade"), POS_ARCADE.y, POS_ARCADE.z),
                               Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
                               Fruit::FruitType(FRUIT_ARCADE, false),
                               _Vector3<float>(0, 0, 0),
