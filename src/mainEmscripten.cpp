@@ -103,10 +103,14 @@ EMSCRIPTEN_KEEPALIVE void fn_user_started(void) {
 // JS as Module._fn_web_synth_touch(phase, fingerId, nx, ny) once such a
 // finger enters the canvas rect.
 //
-// phase: 0=down, 1=move, 2=up. nx/ny: normalized canvas-local coords in
-// [0,1], already clamped by the JS caller -- matches the SDL touch coord
-// space DrainSDLEvent::TransformTouchNormalized expects (same convention a
-// native SDL_FINGER* event arrives in).
+// phase: 0=down, 1=move, 2=up. nx/ny: normalized canvas-local coords,
+// matching the SDL touch coord space DrainSDLEvent expects (same convention
+// a native SDL_FINGER* event arrives in). Intentionally UNCLAMPED -- can be
+// <0 or >1 once the forwarded finger is dragged past the canvas edge again,
+// so InputTranslatorSDL::DrainSDLEvent's SDL_FINGERMOTION out-of-window
+// crossing detector (IsOutOfWindow) sees the same shape a native out-of-
+// window touch/mouse drag reports, and applies the same release/re-press
+// logic (see InputTranslatorSDL.h's out-of-window header comment block).
 //
 // Pushed via SDL_PushEvent so it flows through the SAME path pollInput
 // drains every RAF (DrainSDLEvent -> Mortar::Touch ring buffer ->
