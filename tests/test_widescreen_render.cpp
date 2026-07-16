@@ -199,24 +199,6 @@ static void HideAllExisting() {
     }
 }
 
-// Drains ambient fruit/bomb entities so menu screenshots capture clean UI
-// (the menu screens keep their own ambient ActorManager spawner running,
-// which otherwise clutters every capture with thrown fruit). Only targets
-// ActorManager entities (fruit/bombs), not HUDControls -- menu buttons and
-// other HUD widgets are untouched. Re-drains every settle frame because the
-// ambient spawner can fire again mid-settle (mirrors test_bonus_crash.cpp's
-// TickFrame(..., drainEntities=true) pattern, looped instead of one-shot so
-// respawns during the settle window don't slip back into frame).
-static void DrainAndSettle(fn::TestHarness& h, int settleFrames) {
-    for (int i = 0; i < settleFrames; ++i) {
-        if (h.game.actorManager) {
-            h.game.actorManager->DeactivateAllEntities(0);
-            h.game.actorManager->DeactivateAllEntities(1);
-        }
-        h.RunHeadless(1);
-    }
-}
-
 int main(int argc, char* argv[]) {
     fn::TestHarness h(argc, argv, "widescreen");
     if (!h.ParseFlags()) return 1;
@@ -278,6 +260,24 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Port specific: test teardown. PowerUpManager is a Meyer's singleton;
+        // its function-local-static destructor runs at process-exit time, AFTER
+        // main() returns and TestHarness::Shutdown() -> GameDestroy has already
+        // deleted game_work.mHud and every HUDControl it owned. If any PowerUp
+        // clone is still in m_ActivePowerUps at that point, ~PowerUp() ->
+        // ScreenEffect::Deactivate() would deref a dangling EffectImage::m_pHudCtrl
+        // into freed HUD memory. Drain here, while the HUD is still alive, so
+        // Deactivate() detaches cleanly and m_ActivePowerUps is empty by the time
+        // the static-dtor pass runs. Uses the same drain the game calls on
+        // game-over/quit (PowerUpManager::Reset), not a hand-rolled loop.
+        // fullReset=false: this combo's powers (freeze/speed/score_mult) are all
+        // non-purchaseable (cost 0), so they hit the unconditional-erase branch
+        // regardless; false additionally skips Reset's fullReset-only zen-mode
+        // re-activation of m_bIsSpecial templates (which would repopulate
+        // m_ActivePowerUps right back under GAME_MODE_ARCADE, set above) and the
+        // game_work.mCountDown->Reset() call, neither needed for this drain.
+        pum->Reset(false);
+
         if (failures > 0) {
             std::fprintf(stderr, "FAIL: %d check(s) failed\n", failures);
             h.Shutdown();
@@ -310,7 +310,11 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- MainScreen: already live and active; just capture. ----
-    DrainAndSettle(h, 10);
+    // Port specific: test capture ordering. No entity drain here -- MainScreen's
+    // ring fruit/bomb (MenuButton::CreateFruit, pinned m_bBallisticEnable=0) are
+    // created ONCE at boot and never respawn once killed. A blanket
+    // DeactivateAllEntities before this capture would empty every ring
+    // permanently. RunHeadless(60) above already settled the ambient wave.
     if (h.IsScreenshot()) {
         char label[64];
         std::snprintf(label, sizeof(label), "widescreen/mainmenu_%s", suffix);
@@ -323,11 +327,22 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- GameModeScreen: push on top, hide MainScreen, settle, capture. ----
+    // Port specific: test capture ordering. Clear MainScreen's leftover ring
+    // fruit BEFORE GameModeScreen is constructed -- HideAllExisting() only
+    // hides MainScreen's HUDControl (m_Active=0), it does not release its
+    // pinned ActorManager fruit/bomb, so without this clear they'd render
+    // underneath GameModeScreen's own ring icons. GameModeScreen's ctor (via
+    // its MenuButton::CreateFruit calls) creates fresh ring fruit for
+    // classic/zen/arcade/back immediately after, so no drain may run after
+    // this point or those fresh entities would be killed with no respawn.
     HideAllExisting();
+    if (h.game.actorManager) {
+        h.game.actorManager->DeactivateAllEntities(0);
+        h.game.actorManager->DeactivateAllEntities(1);
+    }
     GameModeScreen* gms = new GameModeScreen(h.game, false);
     game_work.mHud->AddControl(gms);
     h.RunHeadless(60);
-    DrainAndSettle(h, 10);
 
     if (h.IsScreenshot()) {
         char label[64];
@@ -342,6 +357,14 @@ int main(int argc, char* argv[]) {
     gms->m_Active = 0;
 
     // ---- ShopScreen: needs a DojoScreen parent (test_screen.cpp pattern). ----
+    // Port specific: same principle as GameModeScreen above -- clear
+    // GameModeScreen's leftover ring fruit BEFORE ShopScreen is constructed,
+    // then no drain runs after setup. ShopScreen has no ring fruit of its own,
+    // so this clear only needs to happen once before Init(), not repeated.
+    if (h.game.actorManager) {
+        h.game.actorManager->DeactivateAllEntities(0);
+        h.game.actorManager->DeactivateAllEntities(1);
+    }
     DojoScreen* dojo = new DojoScreen(h.game);
     dojo->m_Active = 0;
     game_work.mHud->AddControl(dojo);
@@ -349,7 +372,6 @@ int main(int argc, char* argv[]) {
     game_work.mHud->AddControl(shop, false);
     shop->Init();
     h.RunHeadless(60);
-    DrainAndSettle(h, 10);
 
     if (h.IsScreenshot()) {
         char label[64];
