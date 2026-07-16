@@ -390,16 +390,25 @@
      the viewport div's background -- that same black shows through as the
      "loading" background (no splash image). */
   (function () {
-    /* Fallback backing size used before SDL_CreateWindow has run (canvas.width/
-       height are still the HTML defaults, 300x150, or unset).  Once the WASM
-       module creates the GL window it resizes the canvas element's backing
-       store to whatever size main()/mainEmscripten.cpp picked -- 960x640
-       faithful 3:2, or 1138x640 (16:9) when the widescreen setting is on (see
-       LoadSettings()->Layout::IsWideLayout() gate in mainEmscripten.cpp). This
-       IIFE has no visibility into that C++-side decision, so instead of
-       hardcoding one aspect it reads the LIVE canvas.width/canvas.height each
-       call and letterboxes to whatever backing is actually there -- self-
-       adjusting to either aspect with no JS/C++ handshake needed. */
+    /* This IIFE has no visibility into the C++-side widescreen decision, so
+       instead of hardcoding one aspect it reads the LIVE canvas.width/
+       canvas.height each call and letterboxes to whatever backing is
+       actually there -- self-adjusting to either aspect with no JS/C++
+       handshake needed. Once the WASM module creates the GL window it
+       resizes the canvas element's backing store to whatever size
+       main()/mainEmscripten.cpp picked -- 960x640 faithful 3:2, or 1138x640
+       (16:9) when the widescreen setting is on (see
+       LoadSettings()->Layout::IsWideLayout() gate in mainEmscripten.cpp).
+       mainEmscripten.cpp's BootWait calls window._fnResize() (exposed below)
+       once, unconditionally, right after that backing size is finalised for
+       this boot -- emscripten_set_canvas_element_size() does NOT dispatch a
+       DOM `resize` event on its own, so without that explicit nudge the
+       letterbox below would stay pinned to whatever it was computed from at
+       <script>-parse time (the canvas element's default 300x150 attributes,
+       since `canvas.width || DEFAULT_GAME_W` only falls back on a genuinely
+       falsy/zero width, which the HTML-spec default of 300 never is).
+       DEFAULT_GAME_W/H below is therefore just defence-in-depth, not the
+       thing that makes first-load sizing correct. */
     var DEFAULT_GAME_W = 960, DEFAULT_GAME_H = 640;
     var viewportEl   = document.getElementById('viewport');
     var canvas       = document.getElementById('canvas');
