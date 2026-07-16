@@ -236,21 +236,20 @@ void Game::pollInput() {
                     ev.window.event == SDL_WINDOWEVENT_MINIMIZED  ||
                     ev.window.event == SDL_WINDOWEVENT_HIDDEN)) {
             // Port specific: SDL focus-loss -> binary FruitNinja::OnBackground @0x001ef660
-            // -> Game::Paused (vtable +0x48). Clears touch so no blade stays held (#154, #162).
-            // Guard on bM_Mode prevents double-pause; SkipToPause's IsEnabled() gate is the
-            // second layer.
-            if (!game_work.bM_Mode) {
-                Paused();
-                LOG_INFO("GameSDL", "focus-loss pause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
-            }
+            // -> Game::Paused (vtable +0x48), called UNCONDITIONALLY (no state/mode gate).
+            // Whether the pause overlay actually snaps in is decided downstream in
+            // Game::Paused -> SkipToPause(false) -> PauseScreen::IsEnabled() (|m_PauseAmount|
+            // < 0.001), so the menu->play intro (m_PauseAmount ramping, e.g. "60 SECONDS"/GO)
+            // is exempt on its own. Clears touch so no blade stays held (#154, #162).
+            Paused();
+            LOG_INFO("GameSDL", "focus-loss pause (SDL_WINDOWEVENT %d)", (int)ev.window.event);
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
         } else if (ev.type == SDL_APP_WILLENTERBACKGROUND) {
             // Port specific: mobile background event -> binary FruitNinja::OnBackground @0x001ef660
-            // -> Game::Paused (vtable +0x48). Equivalent to Bada OnBackground on iOS/Android.
-            if (!game_work.bM_Mode) {
-                Paused();
-                LOG_INFO("GameSDL", "app-background pause (SDL_APP_WILLENTERBACKGROUND)");
-            }
+            // -> Game::Paused (vtable +0x48), unconditional (see focus-loss note above).
+            // Equivalent to Bada OnBackground on iOS/Android.
+            Paused();
+            LOG_INFO("GameSDL", "app-background pause (SDL_APP_WILLENTERBACKGROUND)");
             if (inputTranslator) inputTranslator->ReleaseAllFingers();
         } else if (ev.type == SDL_WINDOWEVENT &&
                    (ev.window.event == SDL_WINDOWEVENT_FOCUS_GAINED ||
