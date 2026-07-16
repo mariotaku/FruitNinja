@@ -1307,58 +1307,6 @@ void ShopScreen::UpdateRealtime(float dtSeconds) {
 }
 #endif
 
-#ifndef __bada__
-// Port specific: opt-in widescreen. BG_store.tex (the doors/wood-shelf art
-// drawn by Block A below) is an art-locked 3:2 painted still and can't be
-// stretched past its native +-240.5 extent without visible distortion, so
-// the shop's own art stays centered at native size. When the field is
-// widened (Layout::IsWideLayout()), the DojoScreen garden behind the shop
-// would otherwise peek through the newly exposed side margins. This draws
-// ONE opaque black bar spanning from `panelEdgeX` (the current outer edge of
-// whichever BG panel/door quad Block A just drew -- static +-240.5 once
-// settled, or the animated slide edge during the open/close transition) out
-// to the screen edge (+-Layout::HalfWidth()). Called once per side, directly
-// after each side's panel quad, so the bar's inner edge is always exactly
-// the panel's current outer edge (same local, same frame -- no seam/gap is
-// possible) and the bar slides in lockstep with the door. No corresponding
-// binary draw call. `isRightBar` picks which side of `panelEdgeX` faces the
-// screen edge. No-op (clamp) when the panel edge has already reached/passed
-// the screen edge (bar width <= 0).
-static void ShopScreen_DrawWideBlackBar(MatrixManager& mm, float panelEdgeX, bool isRightBar) {
-    const float half = Layout::HalfWidth();
-    float barLeft, barRight;
-    if (isRightBar) {
-        barLeft = panelEdgeX;
-        barRight = half;
-    } else {
-        barLeft = -half;
-        barRight = panelEdgeX;
-    }
-    const float width = barRight - barLeft;
-    if (width <= 0.0f) return;  // panel edge already at/beyond the screen edge
-
-    static const Colour kBlack(0, 0, 0, 255);
-    const float centerX = (barLeft + barRight) * 0.5f;
-
-    Matrix44 matBar = Matrix44::MakeScale(width, 321.0f, 0.0f);
-    matBar.GlobalTranslate44(centerX, 0.0f, 0.0f);
-    mm.GetWorldStack().Reset();
-    mm.GetWorldStack().SetCurrentMatrix(matBar);
-    mm.UploadModelViewOnly();
-
-    if (ShopScreen::s_TexBGStore.IsValid()) {
-        ShopScreen::s_TexBGStore->Set();
-    }
-    Mortar::Mesh::DrawQuadUnCached(kBlack,
-        0.0f, 0.0f,  // uMin, uMax (degenerate -> flat sample, tint is fully opaque black anyway)
-        0.0f, 0.0f,  // vMin, vMax
-        NULL);
-    if (ShopScreen::s_TexBGStore.IsValid()) {
-        ShopScreen::s_TexBGStore->UnSet();
-    }
-}
-#endif
-
 // ---------------------------------------------------------------------------
 // ShopScreen::DrawOrder(float*, int) @ 0x001b4e48
 //
@@ -1402,6 +1350,17 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
         // slide_X persists from A1 into A3 (or is set to 145.0f by A2).
         float slide_X;
 
+        // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
+        // the BG wood-panel quads below (Block A1/A2 only -- NOT the A3 dialog plate,
+        // which stays native) scale their WIDTH by k so the shop background fills the
+        // widened field instead of leaving side letterbox gaps. k==1.0f (identity) when
+        // the layout is not wide, so the math below is unchanged from the original then.
+#ifdef __bada__
+        const float k = 1.0f;
+#else
+        const float k = Layout::HalfWidth() / 240.0f;
+#endif
+
         if (alpha < 1.0f) {
             // ---------------------------------------------------------------
             // Sub-Block A1 — Sliding BG, two quads  (0x0015def6..0x0015dff9)
@@ -1416,14 +1375,17 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             }
 
             // Scale Vec3 = (291, 321, 0)  DAT_0015e064, DAT_0015e068, DAT_0015e05c
-            Matrix44 matA1L = Matrix44::MakeScale(291.0f, 321.0f, 0.0f);
+            // Width scaled by k to stretch across the widened field (see k comment above).
+            Matrix44 matA1L = Matrix44::MakeScale(291.0f * k, 321.0f, 0.0f);
 
             // Translate by (scroll_x, 0, 0) where scroll_x = m_pShopList->pos.x
             // m_pShopList + 0x8 = pos.x (ScrollingMenu inherits HUDControl3d whose
             // pos is the Vec3 starting at +0x04; +0x04 = x, +0x08 = y, +0x0c = z —
             // ambiguity resolved by spec note: field_0x8 = pos.x)
+            // Translate-X scaled by k too, so the left/right halves still meet
+            // seamlessly (no gap/overlap) while sliding across the wider field.
             float scroll_x = m_pShopList ? m_pShopList->pos.x : 0.0f;
-            matA1L.GlobalTranslate44(scroll_x, 0.0f, 0.0f);
+            matA1L.GlobalTranslate44(scroll_x * k, 0.0f, 0.0f);
 
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(matA1L);
@@ -1440,23 +1402,15 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                     NULL);
             }
 
-#ifndef __bada__
-            // Left panel's outer (left) edge in the -0.5..0.5 unit-quad convention:
-            // scale 291 wide, translated by scroll_x -> local span
-            // [scroll_x - 145.5, scroll_x + 145.5]. Outer edge = scroll_x - 145.5.
-            if (Layout::IsWideLayout()) {
-                ShopScreen_DrawWideBlackBar(mm, scroll_x - 145.5f, false /*left bar*/);
-            }
-#endif
-
             // --- Right quad: slides from right  ---
             // slide_X = 145.0 + (1 - alpha) * 190.0 * 1.5
             // DAT_0015e054=145.0f, DAT_0015e058=190.0f, literal 1.5f
             slide_X = 145.0f + (1.0f - alpha) * 190.0f * 1.5f;  // DAT_0015e054 / DAT_0015e058
 
             // Scale Vec3 = (191, 321, 0)  DAT_0015e074, DAT_0015e068, DAT_0015e05c
-            Matrix44 matA1R = Matrix44::MakeScale(191.0f, 321.0f, 0.0f);
-            matA1R.GlobalTranslate44(slide_X, 0.0f, 0.0f);
+            // Width and translate-X scaled by k -- same reasoning as the left quad above.
+            Matrix44 matA1R = Matrix44::MakeScale(191.0f * k, 321.0f, 0.0f);
+            matA1R.GlobalTranslate44(slide_X * k, 0.0f, 0.0f);
 
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(matA1R);
@@ -1476,17 +1430,6 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 s_TexBGStore->UnSet();
             }
 
-#ifndef __bada__
-            // Right panel's outer (right) edge: scale 191 wide, translated by
-            // slide_X -> local span [slide_X - 95.5, slide_X + 95.5]. Outer
-            // edge = slide_X + 95.5. Drawn after UnSet() above (matches the
-            // panels' own Set/UnSet bracketing) -- the helper re-Sets/UnSets
-            // s_TexBGStore itself for its degenerate sample.
-            if (Layout::IsWideLayout()) {
-                ShopScreen_DrawWideBlackBar(mm, slide_X + 95.5f, true /*right bar*/);
-            }
-#endif
-
         } else {
             // ---------------------------------------------------------------
             // Sub-Block A2 — Static full BG, one quad  (0x0015dffe..0x0015e08f)
@@ -1494,7 +1437,9 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             // ---------------------------------------------------------------
 
             // Scale Vec3 = (481, 321, 0)  DAT_0015e078, DAT_0015e068, DAT_0015e05c
-            Matrix44 matA2 = Matrix44::MakeScale(481.0f, 321.0f, 0.0f);
+            // Width scaled by k to fill the widened field (see k comment above);
+            // height untouched, no translate needed (quad stays centered at origin).
+            Matrix44 matA2 = Matrix44::MakeScale(481.0f * k, 321.0f, 0.0f);
             // no GlobalTranslate44 — disasm confirms SetMatrix gets pure scale
             mm.GetWorldStack().Reset();
             mm.GetWorldStack().SetCurrentMatrix(matA2);
@@ -1518,18 +1463,9 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 s_TexBGStore->UnSet();
             }
 
-#ifndef __bada__
-            // Settled state: single full-width quad, scale 481, no translate ->
-            // local span [-240.5, +240.5]. Both outer edges are static here
-            // (no slide once settled) -- bars sit fixed at the door frame.
-            if (Layout::IsWideLayout()) {
-                ShopScreen_DrawWideBlackBar(mm, -240.5f, false /*left bar*/);
-                ShopScreen_DrawWideBlackBar(mm, 240.5f, true /*right bar*/);
-            }
-#endif
-
             // Binary stores DAT_0015e1dc = 145.0f as slide_X for use in A3.
             // DAT_0015e1dc = 00 00 11 43 = 145.0f (separate read from DAT_0015e054)
+            // NOT scaled by k -- A3 (the dialog/description plate) stays native.
             slide_X = 145.0f;  // DAT_0015e1dc
         }
 
