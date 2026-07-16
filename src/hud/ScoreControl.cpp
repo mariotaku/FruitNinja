@@ -348,9 +348,12 @@ void ScoreControl::Update(float dt) {
     // DIFFERS: opt-in widescreen -- MapX the steady-state corner anchor (top-left,
     // edge-anchored via Layout.cpp's "hud.score" kOverrides entry so the SCORE
     // group hugs the widened left edge instead of drifting inward proportionally).
-    // The wave-transition slide (SCORE_MP_X_STRIDE * waveScale) and the later
-    // anchorX=-160 transition-centering target below are left as-is: they're
-    // transient animation offsets from this anchor, not the resting position.
+    // The wave-transition slide (SCORE_MP_X_STRIDE * waveScale) is left as-is: a
+    // transient animation offset from this anchor, not the resting position. The
+    // anchorX=-160 transition-centering target below is ALSO MapX'd (same key) --
+    // it's the number's rest position once the wave lerp completes (waveTimer==1,
+    // the steady in-HUD/game-over state), so it must track the wordmark's mapped
+    // centre or the two drift apart at non-3:2 aspects (see anchorX comment below).
     float waveScale = fabsf(waveTimer);
     pos.x = MapX(SCORE_BASE_POS_X, "hud.score") - SCORE_MP_X_STRIDE * waveScale;
     pos.y = SCORE_BASE_POS_Y;
@@ -375,8 +378,14 @@ void ScoreControl::Update(float dt) {
             // FIX: the old MeasureWidth(scale,...) ignored its scale arg on the .fnt path, so
             // measW stayed ~1.4 (normalized) -> -measW*0.5 ~= -0.71 -> the number left-anchored
             // at ~-160 and spilled right. Multiply by m_ScalePulse*48 explicitly.
+            // DIFFERS: opt-in widescreen -- the -160 centre base must go through the SAME
+            // MapX("hud.score") edge-anchor shift as the SP wordmark's xPos (PreDraw Section D)
+            // and the steady-state pos.x above, or the number's rest position stays pinned at
+            // literal -160 while the wordmark leans toward the widened left edge, breaking
+            // their (deliberate, per the comment above) shared centre alignment at 16:9. At
+            // 3:2/__bada__ MapX is identity so this is a no-op (byte-identical to before).
             float measNorm = game_work.pFontNumbers->MeasureString(scoreBuf);
-            float anchorX = -160.0f - measNorm * m_ScalePulse * 48.0f * 0.5f;
+            float anchorX = MapX(SCORE_ICON_X_SP, "hud.score") - measNorm * m_ScalePulse * 48.0f * 0.5f;
             float anchorY = 80.0f;
             float drawStartX = pos.x + 24.0f;
             m_DrawPosX = drawStartX + (anchorX - drawStartX) * waveTimer;
