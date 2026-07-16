@@ -92,6 +92,16 @@ const KeyOverride kOverrides[] = {
     // proportional despite being a back/quit button; edge-anchor per the
     // universal back/quit rule (same corner treatment as settings.back).
     { "pause.quit"    },
+    // ScoreControl's top-left SCORE readout (the "SCORE" wordmark +
+    // large score number, incl. the NEW BEST banner group it anchors) --
+    // was MapX'd proportional despite being a corner-hugging HUD group
+    // (same treatment as menu.sound/menu.music/hud.misscontrol). Both the
+    // steady-state pos.x (ScoreControl::Update) and the SP wordmark xPos
+    // (ScoreControl::PreDraw Section D) share this key, so the label and
+    // number move together and keep their relative offset. Shared with
+    // in-game HUD (ScoreControl persists from GameInit into game-over) --
+    // both contexts should hug the widened corner, so one key is correct.
+    { "hud.score"     },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 
