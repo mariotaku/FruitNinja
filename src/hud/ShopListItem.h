@@ -183,6 +183,10 @@ public:
     // Extracted from v1.6.1 ShopListItem::Draw @0x001b5da4:
     //   Two 290x120 black(0,0,0,128) quads at parent->pos.x-2, ±105.
     //   Gated internally on m_bIsNew.
+    // DIFFERS: opt-in widescreen -- width scales by k=Layout::HalfWidth()/240
+    // (identity under __bada__/3:2) so the two shade quads reach the widened
+    // list edges at 16:9; both stay centered on the same list column (anchorX
+    // unchanged), and the 120-tall / ±105-offset vertical placement is untouched.
     void DrawDarkness();
 
     // Process-wide shimmer oscillator (static_block +0x68 phase, +0x6c Y).
