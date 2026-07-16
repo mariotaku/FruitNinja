@@ -31,6 +31,7 @@
 #include "render/QUADCUSTOMVERTEX.h"
 #include "engine/input/Touch.h"
 #include "render/Renderer.h"
+#include "render/Layout.h"
 #include "Game.h"
 
 #include <cmath>
@@ -296,15 +297,22 @@ static const float kNativeFpsDescY1 = kNativeFpsDescY0 - kMotionDescLineGap;
 static const float kNativeFpsCbX = kRightEdge - kCheckboxSide * 0.5f;
 static const float kNativeFpsCbY = (kNativeFpsLabelY + kNativeFpsDescY1) * 0.5f;
 
-// FPS COUNTER: now the BOTTOM-MOST row -- a FULL kRowLineGap below the native
-// row's own checkbox box bottom edge (real widget-box edge, not a label
-// baseline -- same "measure to the box edge" convention kFpsLabelY always
-// used, just re-anchored off the native row's box instead of Divider 2
-// directly now that the native row sits between them).
+// FPS COUNTER: a FULL kRowLineGap below the native row's own checkbox box
+// bottom edge (real widget-box edge, not a label baseline -- same "measure
+// to the box edge" convention kFpsLabelY always used, just re-anchored off
+// the native row's box instead of Divider 2 directly now that the native row
+// sits between them). No longer the bottom-most row -- WIDESCREEN follows.
 static const float kFpsLabelY = (kNativeFpsCbY - kCheckboxSide * 0.5f) - kRowLineGap - kCheckboxSide * 0.5f;
 static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = kFpsLabelY;
 
-// Content height (dropdown box top .. FPS COUNTER checkbox box bottom, plus
+// WIDESCREEN: now the BOTTOM-MOST row -- a FULL kRowLineGap below the FPS
+// COUNTER row's own checkbox box bottom edge (same "measure to the box edge"
+// convention every other row uses). Single-line row, no sub-description,
+// structurally identical to the FPS COUNTER row itself.
+static const float kWideScreenLabelY = (kFpsCbY - kCheckboxSide * 0.5f) - kRowLineGap - kCheckboxSide * 0.5f;
+static const float kWideScreenCbX    = kRightEdge - kCheckboxSide * 0.5f, kWideScreenCbY = kWideScreenLabelY;
+
+// Content height (dropdown box top .. WIDESCREEN checkbox box bottom, plus
 // the top/bottom pads -- bottom padded extra by kContentBottomFadeClearance,
 // see kContentBottomPad above) and the derived viewport/scroll extents. The
 // viewport is the plate's usable content window (kViewportHalfH*2); content
@@ -319,7 +327,7 @@ static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY    
 // m_MaxScroll by the same amount and leaving the bottom row permanently
 // unreachable at the bottom of the scroll range.
 static const float kContentTop    = kViewportHalfH - kContentTopPad;
-static const float kContentBottom = (kFpsCbY - kCheckboxSide * 0.5f) - kContentBottomPad;
+static const float kContentBottom = (kWideScreenCbY - kCheckboxSide * 0.5f) - kContentBottomPad;
 static const float kContentH      = kContentTop - kContentBottom;
 static const float kViewportH     = kViewportHalfH * 2.0f;
 
@@ -521,12 +529,14 @@ SettingsScreen::SettingsScreen()
     , m_SensSlider(0)
     , m_FpsCb(0)
     , m_NativeFpsCb(0)
+    , m_WideScreenCb(0)
     , m_pCloseButton(0)
     , m_LangBaseY(0.0f)
     , m_MotionCbBaseY(0.0f)
     , m_SensBaseY(0.0f)
     , m_FpsCbBaseY(0.0f)
     , m_NativeFpsCbBaseY(0.0f)
+    , m_WideScreenBaseY(0.0f)
     , m_ScrollY(0.0f)
     , m_ScrollVel(0.0f)
     , m_MaxScroll(0.0f)
@@ -647,6 +657,12 @@ void SettingsScreen::Init() {
     m_FpsCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsToggle));
     m_FpsCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
+    m_WideScreenCb = new UiCheckbox(_Vector3<float>(kWideScreenCbX, kWideScreenCbY, 0.0f), kCheckboxSide, Layout::IsWideLayout());
+    m_WideScreenCb->SetBoxTexture(m_TexBox);
+    m_WideScreenCb->SetCheckGlyph(m_TexCheck);
+    m_WideScreenCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnWideScreenToggle));
+    m_WideScreenCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
+
     int sens0 = ThresholdToSlider(FN::g_MotionSpeedThreshold);
     m_SensSlider = new UiSlider(_Vector3<float>(kSensX, kSensY, 0.0f), kSensMin, kSensMax, sens0);
     m_SensSlider->SetBoxTexture(m_TexBox);
@@ -721,6 +737,7 @@ void SettingsScreen::Init() {
     m_SensBaseY        = kSensY;
     m_FpsCbBaseY       = kFpsCbY;
     m_NativeFpsCbBaseY = kNativeFpsCbY;
+    m_WideScreenBaseY  = kWideScreenCbY;
 
     // ---- scroll extents ----
     m_MaxScroll = kContentH - kViewportH;
@@ -754,6 +771,7 @@ void SettingsScreen::Release() {
     delete m_SensSlider;  m_SensSlider  = 0;
     delete m_FpsCb;       m_FpsCb       = 0;
     delete m_NativeFpsCb; m_NativeFpsCb = 0;
+    delete m_WideScreenCb; m_WideScreenCb = 0;
     if (m_pCloseButton) { m_pCloseButton->SetPendingRemoval(); m_pCloseButton = 0; }
 
     m_TexBox.SetNull();
@@ -806,6 +824,7 @@ void SettingsScreen::Update(float dt) {
         if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
         if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
         if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
+        if (m_WideScreenCb) m_WideScreenCb->pos.y = m_WideScreenBaseY + off;
     }
 
     // ---- kinetic scroll (owns/tracks the touch that drives it) + widget
@@ -830,6 +849,7 @@ void SettingsScreen::Update(float dt) {
         if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
         if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
         if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
+        if (m_WideScreenCb) m_WideScreenCb->pos.y = m_WideScreenBaseY + off;
     }
 
     // Port specific: while the dropdown panel is open, gate out the other
@@ -851,6 +871,7 @@ void SettingsScreen::Update(float dt) {
             if (m_SensSlider) m_SensSlider->Update(dt);
             if (m_FpsCb)      m_FpsCb->Update(dt);
             if (m_NativeFpsCb) m_NativeFpsCb->Update(dt);
+            if (m_WideScreenCb) m_WideScreenCb->Update(dt);
         }
     }
     if (m_LangDrop) m_LangDrop->Update(dt);
@@ -1127,6 +1148,7 @@ void SettingsScreen::UpdateRealtime(float dtSeconds) {
         if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
         if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
         if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
+        if (m_WideScreenCb) m_WideScreenCb->pos.y = m_WideScreenBaseY + off;
         return;
     }
     if (m_LangDrop && m_LangDrop->IsOpen()) {
@@ -1179,6 +1201,7 @@ void SettingsScreen::UpdateRealtime(float dtSeconds) {
     if (m_SensSlider)  m_SensSlider->pos.y  = m_SensBaseY        + off;
     if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
     if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
+    if (m_WideScreenCb) m_WideScreenCb->pos.y = m_WideScreenBaseY + off;
 }
 #endif
 
@@ -1412,6 +1435,7 @@ void SettingsScreen::Draw(float* hudScale) {
     DrawSettingsDesc(labelFont, "with higher frame rate",
                       kLabelX, kNativeFpsDescY1 + 7.0f + off);
     DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f + off);
+    DrawSettingsLabel(labelFont, "WIDESCREEN", kLabelX, kWideScreenLabelY + 7.0f + off);
 
     // ---- the four plain widgets, still inside the content scissor.
     // ---- pos.y was already rewritten (baseY + off) in Update(), so no
@@ -1419,6 +1443,7 @@ void SettingsScreen::Draw(float* hudScale) {
     if (m_MotionCb)   m_MotionCb->Draw(hudScale);
     if (m_NativeFpsCb) m_NativeFpsCb->Draw(hudScale);
     if (m_FpsCb)      m_FpsCb->Draw(hudScale);
+    if (m_WideScreenCb) m_WideScreenCb->Draw(hudScale);
     if (m_SensSlider) m_SensSlider->Draw(hudScale);
     // Bar draws inside the content scissor -- whether open or closed -- so
     // it clips/fades with the rest of the scrolling content, same as any
@@ -1518,6 +1543,10 @@ void SettingsScreen::OnFpsCapToggle() {
     // checked == native/display refresh -> g_FpsCap60 (true == cap to 60) is
     // the checkbox's INVERSE. See m_NativeFpsCb's header comment.
     FN::g_FpsCap60 = !m_NativeFpsCb->IsChecked();
+}
+
+void SettingsScreen::OnWideScreenToggle() {
+    Layout::SetWideLayout(m_WideScreenCb->IsChecked());
 }
 
 void SettingsScreen::OnSensChanged() {

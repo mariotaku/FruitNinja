@@ -9,6 +9,7 @@
 #include "engine/xml/TiXml.h"
 #include "Game.h"
 #include "debug/Logger.h"
+#include "render/Layout.h"
 
 #if defined(__EMSCRIPTEN__)
 #include <emscripten.h>
@@ -44,6 +45,7 @@ void SaveSettings() {
     root.SetAttribute("motionMode", FN::g_MotionMode ? "true" : "false");
     root.SetAttribute("showFps", FN::g_ShowFps ? "true" : "false");
     root.SetAttribute("fpsCap60", FN::g_FpsCap60 ? "true" : "false");
+    root.SetAttribute("widescreen", Layout::IsWideLayout() ? "true" : "false");
     root.SetAttribute("motionSpeedThreshold", FN::g_MotionSpeedThreshold);
 
     doc.InsertEndChild(root);
@@ -89,6 +91,11 @@ void LoadSettings() {
     const char* fpsCap60 = root.Attribute("fpsCap60");
     if (fpsCap60) {
         FN::g_FpsCap60 = (strcmp(fpsCap60, "true") == 0);
+    }
+
+    const char* ws = root.Attribute("widescreen");
+    if (ws) {
+        Layout::SetWideLayout(strcmp(ws, "true") == 0);
     }
 
     float motionSpeedThreshold = 0.0f;

@@ -17,8 +17,8 @@
 // Usage: `SettingsScreen* s = new SettingsScreen(); game_work.mHud->AddControl(s,
 // false); s->Init();` -- AddControl the SCREEN ITSELF before calling Init().
 // The screen itself is the only thing AddControl'd to game_work.mHud (plus
-// m_pCloseButton, see below) -- the five in-plate widgets (LANGUAGE
-// UiDropdown, MOTION MODE / NATIVE FRAME RATE / FPS COUNTER
+// m_pCloseButton, see below) -- the six in-plate widgets (LANGUAGE
+// UiDropdown, MOTION MODE / NATIVE FRAME RATE / FPS COUNTER / WIDESCREEN
 // UiCheckbox, SENSITIVITY UiSlider) are owned directly and are NOT
 // AddControl'd: UiWidget.h documents that the
 // owning screen must call each widget's Update()/Draw() itself, and doing so
@@ -212,6 +212,13 @@ private:
     // underlying global: FN::g_FpsCap60 stays "true == cap to 60"; only the
     // UI checkbox polarity flips (see OnFpsCapToggle()/Init()'s seed line).
     UiCheckbox* m_NativeFpsCb;
+    // Port specific: "WIDESCREEN" -- bottom-most row, below FPS COUNTER.
+    // Mirrors FN::g_ShowFps end-to-end: seeded from/writes back to
+    // Layout::IsWideLayout()/SetWideLayout() (src/engine/render/Layout.h),
+    // no inversion. Persisted the same way (SettingsSave.cpp "widescreen"
+    // attribute) via the existing SaveSettings() call on modal close --
+    // OnWideScreenToggle() itself does not save.
+    UiCheckbox* m_WideScreenCb;
 
     // Port specific: modal close button, bottom-right of the plate. Built the
     // same way PauseScreen builds m_QuitButton (see PauseScreen::Update
@@ -264,6 +271,7 @@ private:
     float m_SensBaseY;
     float m_FpsCbBaseY;
     float m_NativeFpsCbBaseY;
+    float m_WideScreenBaseY;
 
     // Port specific: kinetic scroll state for the plate's content viewport --
     // same drag/fling/spring-back model as UiDropdown's open-panel scroll
@@ -361,6 +369,7 @@ public:
     void OnFpsCapToggle();
     void OnSensChanged();
     void OnLangChanged();
+    void OnWideScreenToggle();
 
     // Port specific: m_pCloseButton's click callback. Calls Toggle() so
     // tapping Close runs the exact same close path (including the
@@ -373,7 +382,7 @@ public:
 
     // Test-only: force the scroll pane to an arbitrary offset (clamped to
     // [0, m_MaxScroll], same range UpdateScroll()'s spring-back enforces) so
-    // a render test can capture the scrolled-to-bottom state (FPS COUNTER
+    // a render test can capture the scrolled-to-bottom state (WIDESCREEN
     // row) without a synthetic drag/fling touch sequence.
     void SetScrollForTest(float scrollY) {
         m_ScrollY = scrollY < 0.0f ? 0.0f : (scrollY > m_MaxScroll ? m_MaxScroll : scrollY);
