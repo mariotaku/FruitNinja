@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
         "Fruit Ninja",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         winW, winH,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE
+        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
     );
     if (!window) {
         LOG_ERROR("mainSDL", "Window failed: %s", SDL_GetError());
