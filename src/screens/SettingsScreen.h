@@ -212,12 +212,21 @@ private:
     // underlying global: FN::g_FpsCap60 stays "true == cap to 60"; only the
     // UI checkbox polarity flips (see OnFpsCapToggle()/Init()'s seed line).
     UiCheckbox* m_NativeFpsCb;
-    // Port specific: "WIDESCREEN" -- bottom-most row, below FPS COUNTER.
-    // Mirrors FN::g_ShowFps end-to-end: seeded from/writes back to
-    // Layout::IsWideLayout()/SetWideLayout() (src/engine/render/Layout.h),
-    // no inversion. Persisted the same way (SettingsSave.cpp "widescreen"
-    // attribute) via the existing SaveSettings() call on modal close --
-    // OnWideScreenToggle() itself does not save.
+    // Port specific: "WIDESCREEN" -- its own row-group right after MOTION
+    // MODE (divider before it; see kDividerY1b / kWideScreenLabelY layout
+    // constants in the .cpp). Seeded from/writes back to
+    // Layout::IsWideLayoutPref()/SetWideLayoutPref() (src/engine/render/
+    // Layout.h) -- the PREF, not the ACTIVE value -- since widescreen needs
+    // an app restart to apply (already-built screens don't re-flow their
+    // MapX() positions live); OnWideScreenToggle() never calls
+    // Layout::SetWideLayout() directly. No inversion. Persisted the same way
+    // (SettingsSave.cpp "widescreen" attribute, saving the pref) via the
+    // existing SaveSettings() call on modal close -- OnWideScreenToggle()
+    // itself does not save. See UpdateCloseButtonLabel(): the close button
+    // reads "QUIT" instead of "BACK" once Layout::WideLayoutRestartPending()
+    // is true (pref diverged from active), mirroring the language-change
+    // quit-to-apply path -- quitting is required for the new layout to apply
+    // on relaunch, same as a language change.
     UiCheckbox* m_WideScreenCb;
 
     // Port specific: modal close button, bottom-right of the plate. Built the

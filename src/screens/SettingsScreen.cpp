@@ -274,16 +274,36 @@ static const float kSensLabelY = kMotionDescY1 - kRowLineGap;
 // SENSITIVITY label alone.
 static const float kSensX      =  kRightEdge - kSensTrackW * 0.5f, kSensY      = kSensLabelY;
 
-// Divider 2: kDividerPad below the SENSITIVITY track's own BOTTOM edge (a
-// real widget-box edge, not the label baseline).
-static const float kDividerY2 = (kSensY - kSensTrackH * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
+// Divider 1b: NEW group divider right after the MOTION MODE block (label +
+// 2-line description + SENSITIVITY) -- same kDividerPad clearance off the
+// SENSITIVITY track's own BOTTOM edge that every other inter-group divider
+// uses (see kDividerY1/kDividerY2's own "real widget-box edge" convention).
+// WIDESCREEN gets its own one-row group immediately below this divider,
+// ahead of NATIVE FRAME RATE / FPS COUNTER (which shift down by one row +
+// one divider's worth of space, see kDividerY2 below).
+static const float kDividerY1b = (kSensY - kSensTrackH * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
+
+// WIDESCREEN: its own single-row group, right after MOTION MODE (moved down
+// from its old spot below FPS COUNTER -- see Layout::WideLayoutRestartPending,
+// SettingsScreen.h). kDividerPad below Divider 1b's own bottom edge, same
+// "measure to the divider box edge" convention every row after a divider
+// uses (mirrors kMotionLabelY off kDividerY1). Single-line row, no
+// sub-description, structurally identical to the FPS COUNTER row.
+static const float kWideScreenLabelY = (kDividerY1b - kDividerHeight * 0.5f) - kDividerPad;
+static const float kWideScreenCbX    = kRightEdge - kCheckboxSide * 0.5f, kWideScreenCbY = kWideScreenLabelY;
+
+// Divider 2: kDividerPad below the WIDESCREEN checkbox's own BOTTOM edge (a
+// real widget-box edge, not the label baseline) -- same convention as every
+// other inter-group divider. Previously measured off SENSITIVITY directly;
+// now off WIDESCREEN since it sits between them.
+static const float kDividerY2 = (kWideScreenCbY - kCheckboxSide * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
 
 // NATIVE FRAME RATE: a FULL kRowLineGap below Divider 2's own bottom edge
 // (real widget-box edge, not a label baseline) -- wider than the usual
 // kDividerPad divider clearance, since this row and FPS COUNTER below it were
-// previously cramped; both its own gaps (above, to Divider 2/SENSITIVITY;
-// below, to FPS COUNTER) use the full kRowLineGap instead. Port specific: no
-// binary counterpart (see DebugFlags.h g_FpsCap60) -- caps render/present rate
+// previously cramped; both its own gaps (above, to Divider 2; below, to FPS
+// COUNTER) use the full kRowLineGap instead. Port specific: no binary
+// counterpart (see DebugFlags.h g_FpsCap60) -- caps render/present rate
 // to 60fps; sim stays the fixed 60Hz accumulator regardless (FixedStepDriver,
 // untouched by this checkbox). Structurally identical to the MOTION MODE
 // row: bold kLabelScale label ("NATIVE FRAME RATE") + a 2-line dimmer
@@ -301,18 +321,12 @@ static const float kNativeFpsCbY = (kNativeFpsLabelY + kNativeFpsDescY1) * 0.5f;
 // bottom edge (real widget-box edge, not a label baseline -- same "measure
 // to the box edge" convention kFpsLabelY always used, just re-anchored off
 // the native row's box instead of Divider 2 directly now that the native row
-// sits between them). No longer the bottom-most row -- WIDESCREEN follows.
+// sits between them). Now the BOTTOM-MOST row (WIDESCREEN moved above,
+// after MOTION MODE).
 static const float kFpsLabelY = (kNativeFpsCbY - kCheckboxSide * 0.5f) - kRowLineGap - kCheckboxSide * 0.5f;
 static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = kFpsLabelY;
 
-// WIDESCREEN: now the BOTTOM-MOST row -- a FULL kRowLineGap below the FPS
-// COUNTER row's own checkbox box bottom edge (same "measure to the box edge"
-// convention every other row uses). Single-line row, no sub-description,
-// structurally identical to the FPS COUNTER row itself.
-static const float kWideScreenLabelY = (kFpsCbY - kCheckboxSide * 0.5f) - kRowLineGap - kCheckboxSide * 0.5f;
-static const float kWideScreenCbX    = kRightEdge - kCheckboxSide * 0.5f, kWideScreenCbY = kWideScreenLabelY;
-
-// Content height (dropdown box top .. WIDESCREEN checkbox box bottom, plus
+// Content height (dropdown box top .. FPS COUNTER checkbox box bottom, plus
 // the top/bottom pads -- bottom padded extra by kContentBottomFadeClearance,
 // see kContentBottomPad above) and the derived viewport/scroll extents. The
 // viewport is the plate's usable content window (kViewportHalfH*2); content
@@ -326,8 +340,12 @@ static const float kWideScreenCbX    = kRightEdge - kCheckboxSide * 0.5f, kWideS
 // dropped kContentTopPad's worth of height from kContentH -- undercounting
 // m_MaxScroll by the same amount and leaving the bottom row permanently
 // unreachable at the bottom of the scroll range.
+//
+// kContentBottom is now measured off FPS COUNTER (the new bottom-most row)
+// instead of WIDESCREEN -- WIDESCREEN moved up into its own group after
+// MOTION MODE, so it no longer defines the content's bottom edge.
 static const float kContentTop    = kViewportHalfH - kContentTopPad;
-static const float kContentBottom = (kWideScreenCbY - kCheckboxSide * 0.5f) - kContentBottomPad;
+static const float kContentBottom = (kFpsCbY - kCheckboxSide * 0.5f) - kContentBottomPad;
 static const float kContentH      = kContentTop - kContentBottom;
 static const float kViewportH     = kViewportHalfH * 2.0f;
 
@@ -657,7 +675,9 @@ void SettingsScreen::Init() {
     m_FpsCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsToggle));
     m_FpsCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
-    m_WideScreenCb = new UiCheckbox(_Vector3<float>(kWideScreenCbX, kWideScreenCbY, 0.0f), kCheckboxSide, Layout::IsWideLayout());
+    // Port specific: seeded from the PREF (not the active value) -- see
+    // m_WideScreenCb's header comment / OnWideScreenToggle().
+    m_WideScreenCb = new UiCheckbox(_Vector3<float>(kWideScreenCbX, kWideScreenCbY, 0.0f), kCheckboxSide, Layout::IsWideLayoutPref());
     m_WideScreenCb->SetBoxTexture(m_TexBox);
     m_WideScreenCb->SetCheckGlyph(m_TexCheck);
     m_WideScreenCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnWideScreenToggle));
@@ -975,6 +995,10 @@ void SettingsScreen::UpdateAnim(float dt) {
 
             // ---- deferred teardown -- was Toggle()'s close branch ----
             bool langChanged = (game_work.languageFlag != m_InitialLanguageFlag);
+            // Port specific: mirrors langChanged -- a widescreen pref change
+            // also needs an app restart to apply (see Layout.h ACTIVE vs
+            // PREF split), so it triggers the same quit-to-apply path.
+            bool wideScreenRestartPending = Layout::WideLayoutRestartPending();
 
             if (game_work.mHud) {
                 game_work.mHud->SetInputModal(NULL);
@@ -984,13 +1008,15 @@ void SettingsScreen::UpdateAnim(float dt) {
 
             SaveSettings();
 
-            if (langChanged) {
-                // Port specific: quitting is how the new language takes effect
-                // on restart (no live-reload of already-baked UI strings/
-                // fonts). See the original header note on s_QuitAfterClose for
-                // why this is latched rather than triggered synchronously --
-                // still true here, deferred one step further (end of the
-                // CLOSING animation rather than end of Toggle()).
+            if (langChanged || wideScreenRestartPending) {
+                // Port specific: quitting is how the new language / widescreen
+                // layout takes effect on restart (no live-reload of
+                // already-baked UI strings/fonts, nor of already-built
+                // screens' MapX()'d positions). See the original header note
+                // on s_QuitAfterClose for why this is latched rather than
+                // triggered synchronously -- still true here, deferred one
+                // step further (end of the CLOSING animation rather than end
+                // of Toggle()).
                 s_QuitAfterClose = true;
             }
         }
@@ -1410,9 +1436,11 @@ void SettingsScreen::Draw(float* hudScale) {
 
     float off = m_ScrollY + m_PopupOffsetY;
 
-    // ---- row-group dividers: between Language/Motion Mode, and between
-    // ---- Sensitivity/FPS Counter (see kDividerY1/kDividerY2), scrolled ----
+    // ---- row-group dividers: Language/Motion Mode, Motion Mode/Widescreen,
+    // ---- and Widescreen/Native Frame Rate (see kDividerY1/kDividerY1b/
+    // ---- kDividerY2), scrolled ----
     DrawDivider(kDividerY1 + off);
+    DrawDivider(kDividerY1b + off);
     DrawDivider(kDividerY2 + off);
 
     // ---- left-column labels, scrolled ----
@@ -1429,22 +1457,22 @@ void SettingsScreen::Draw(float* hudScale) {
     DrawSettingsDesc(labelFont, "(pointer only)",
                       kLabelX, kMotionDescY1 + 7.0f + off);
     DrawSettingsLabel(labelFont, "SENSITIVITY", kSensLabelX, kSensLabelY + 7.0f + off);
+    DrawSettingsLabel(labelFont, "WIDESCREEN", kLabelX, kWideScreenLabelY + 7.0f + off);
     DrawSettingsLabel(labelFont, "NATIVE FRAME RATE", kLabelX, kNativeFpsLabelY + 7.0f + off);
     DrawSettingsDesc(labelFont, "Smoother graphics for screens",
                       kLabelX, kNativeFpsDescY0 + 7.0f + off);
     DrawSettingsDesc(labelFont, "with higher frame rate",
                       kLabelX, kNativeFpsDescY1 + 7.0f + off);
     DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f + off);
-    DrawSettingsLabel(labelFont, "WIDESCREEN", kLabelX, kWideScreenLabelY + 7.0f + off);
 
     // ---- the four plain widgets, still inside the content scissor.
     // ---- pos.y was already rewritten (baseY + off) in Update(), so no
     // ---- offset math here. ----
     if (m_MotionCb)   m_MotionCb->Draw(hudScale);
+    if (m_SensSlider) m_SensSlider->Draw(hudScale);
+    if (m_WideScreenCb) m_WideScreenCb->Draw(hudScale);
     if (m_NativeFpsCb) m_NativeFpsCb->Draw(hudScale);
     if (m_FpsCb)      m_FpsCb->Draw(hudScale);
-    if (m_WideScreenCb) m_WideScreenCb->Draw(hudScale);
-    if (m_SensSlider) m_SensSlider->Draw(hudScale);
     // Bar draws inside the content scissor -- whether open or closed -- so
     // it clips/fades with the rest of the scrolling content, same as any
     // other plate row. Only the OPEN panel (drawn below, after the scissor
@@ -1546,7 +1574,12 @@ void SettingsScreen::OnFpsCapToggle() {
 }
 
 void SettingsScreen::OnWideScreenToggle() {
-    Layout::SetWideLayout(m_WideScreenCb->IsChecked());
+    // Port specific: writes the PREF only -- never Layout::SetWideLayout()
+    // (the ACTIVE value) -- so the layout does not change live; it takes
+    // effect on the next boot (LoadSettings' SetWideLayout call). See
+    // Layout.h and this checkbox's header comment.
+    Layout::SetWideLayoutPref(m_WideScreenCb->IsChecked());
+    UpdateCloseButtonLabel();
 }
 
 void SettingsScreen::OnSensChanged() {
@@ -1561,21 +1594,26 @@ void SettingsScreen::OnLangChanged() {
 }
 
 // Port specific: rebakes m_pCloseButton's label to LSTR_QUIT ("QUIT") once
-// game_work.languageFlag has diverged from m_InitialLanguageFlag (mirrors the
-// langChanged check in Toggle()'s close branch), else LSTR_DJ_BACK_BUTTON
-// ("BACK"). BSButton has no SetText of its own -- m_pLabel is only baked into
-// m_pLabelBox once, in BSButton::Init() -- so this reaches into m_pLabelBox
-// directly. SetText() marks the box dirty and triggers RebuildMeshes() on the
-// next Draw(); the gradient/stroke/size/bounds styling applied once in Init()
+// EITHER game_work.languageFlag has diverged from m_InitialLanguageFlag
+// (mirrors the langChanged check in Toggle()'s close branch) OR
+// Layout::WideLayoutRestartPending() is true (the widescreen pref has
+// diverged from the active/boot value) -- both require an app restart to
+// take effect, so closing the modal in either state quits instead of just
+// dismissing. Else LSTR_DJ_BACK_BUTTON ("BACK"). BSButton has no SetText of
+// its own -- m_pLabel is only baked into m_pLabelBox once, in
+// BSButton::Init() -- so this reaches into m_pLabelBox directly. SetText()
+// marks the box dirty and triggers RebuildMeshes() on the next Draw(); the
+// gradient/stroke/size/bounds styling applied once in Init()
 // (SetGradient/ReshapeBounds/SetStroke/SetFontSize/FitIntoVerticalBounds) are
 // persistent box state, not tied to the text, so they don't need reapplying.
 void SettingsScreen::UpdateCloseButtonLabel() {
     if (!m_pCloseButton || !m_pCloseButton->m_pLabelBox) return;
     bool langChanged = (game_work.languageFlag != m_InitialLanguageFlag);
+    bool restartPending = langChanged || Layout::WideLayoutRestartPending();
     // Port specific: Settings is a port-only screen (no binary counterpart), so its
     // close-button label stays ENGLISH regardless of locale (user preference; also
     // sidesteps the localized-font path for these two words).
-    m_pCloseButton->m_pLabelBox->SetText(langChanged ? "QUIT" : "BACK");
+    m_pCloseButton->m_pLabelBox->SetText(restartPending ? "QUIT" : "BACK");
 }
 
 // Port specific: m_pCloseButton's click callback -- runs Toggle()'s close

@@ -49,6 +49,12 @@ namespace Layout {
 inline bool IsWideLayout() { return false; }
 inline void SetWideLayout(bool /*wide*/) {}
 
+// Port specific: PREF vs ACTIVE split (see non-__bada__ branch below) -- both
+// collapse to the same false/no-op under __bada__.
+inline bool IsWideLayoutPref() { return false; }
+inline void SetWideLayoutPref(bool /*wide*/) {}
+inline bool WideLayoutRestartPending() { return false; }
+
 } // namespace Layout
 
 #else
@@ -56,8 +62,24 @@ inline void SetWideLayout(bool /*wide*/) {}
 namespace Layout {
 
 // Real (non-bada) build only. See Layout.cpp.
+//
+// ACTIVE vs PREF split: the widescreen layout requires an app restart to
+// apply, because already-built screens position their elements via MapX()
+// at construction time and don't re-flow live. IsWideLayout()/SetWideLayout()
+// are the ACTIVE (live, boot-time-latched) value every render/input call site
+// above reads -- do NOT call SetWideLayout() from the in-game checkbox.
+// IsWideLayoutPref()/SetWideLayoutPref() are the user's SAVED CHOICE, edited
+// freely by the checkbox at runtime with no immediate visual effect.
+// SetWideLayout() seeds BOTH active and pref (so boot always starts with
+// active == pref); LoadSettings() calls it, which is what makes the saved
+// choice live from the next boot. The checkbox calls SetWideLayoutPref()
+// only. WideLayoutRestartPending() is true once the two have diverged --
+// the Settings screen uses it to warn the user a restart (quit) is needed.
 bool IsWideLayout();
 void SetWideLayout(bool wide);
+bool IsWideLayoutPref();
+void SetWideLayoutPref(bool wide);
+bool WideLayoutRestartPending();
 
 // Raw drawable aspect (w/h) most recently reported by the render/viewport
 // code. Feeds EffectiveAspect()'s clamp; a no-op call site is safe (keeps

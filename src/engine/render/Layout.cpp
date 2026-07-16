@@ -9,7 +9,8 @@
 namespace Layout {
 
 namespace {
-bool g_WideLayout = false;
+bool g_WideLayout = false;      // ACTIVE (live, boot-latched) value
+bool g_WideLayoutPref = false;  // PREF (user's saved choice, editable live)
 float g_RawWindowAspect = 1.5f;
 
 // Last-applied viewport rect + the window size it was computed from.
@@ -38,6 +39,21 @@ bool IsWideLayout() {
 
 void SetWideLayout(bool wide) {
     g_WideLayout = wide;
+    // Seeds the pref too -- called at boot (LoadSettings), so active == pref
+    // right after load. Runtime pref-only edits go through SetWideLayoutPref.
+    g_WideLayoutPref = wide;
+}
+
+bool IsWideLayoutPref() {
+    return g_WideLayoutPref;
+}
+
+void SetWideLayoutPref(bool wide) {
+    g_WideLayoutPref = wide;
+}
+
+bool WideLayoutRestartPending() {
+    return g_WideLayoutPref != g_WideLayout;
 }
 
 void SetWindowAspect(float drawableW, float drawableH) {
