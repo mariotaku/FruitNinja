@@ -110,6 +110,19 @@ static const float SIN_SCALE   = 16380.0f;  // DAT_0013f8b4
 // 1.0 = pure proportional (no extra spread).
 static const float MODESELECT_RING_SPREAD = 1.20f;
 
+// Port specific: widescreen-only re-centring nudge for the ARCADE ring only.
+// Even at 3:2 (POS_CLASSIC.x=-70, POS_ZEN.x=88, POS_ARCADE.x=19), Arcade sits
+// 10 units right of the Classic/Zen midpoint (9.0) -- that imbalance is the
+// binary's own DAT layout, left untouched. MODESELECT_RING_SPREAD scales all
+// 3 rings' offsets from centre uniformly, so it amplifies that pre-existing
+// 10-unit offset to ~14.2 units at 16:9, which reads as a visibly uneven
+// classic<->arcade / arcade<->zen gap. This coefficient pulls Arcade's mapped
+// X back toward the Classic/Zen midpoint by (HalfWidth-240)*ARCADE_RECENTER,
+// which is exactly 0 at 3:2/__bada__ (HalfWidth==240) and grows only with the
+// widescreen spread. Tuned so Arcade lands on the Classic/Zen midpoint at
+// 16:9 (HalfWidth~284.44): needed shift 14.2222 / (284.44-240) = 0.32.
+static const float ARCADE_RECENTER = 0.32f;
+
 // ---------------------------------------------------------------------------
 // Rate-independence macros for the per-present (UpdateRealtime) split of
 // m_TransitionAlpha/m_SecondaryAlpha easing (states 2 and 0xf only -- states
@@ -468,7 +481,14 @@ void GameModeScreen::CreateControls() {
         // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
         // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
         // MODESELECT_RING_SPREAD in widescreen. Identity (spread=1) at 3:2/__bada__.
-        m_pArcadeButton->Init(_Vector3<float>(MapX(POS_ARCADE.x * spread, "modeselect.btn.arcade"), POS_ARCADE.y, POS_ARCADE.z),
+        // Port specific: ARCADE_RECENTER pulls the mapped X back toward the
+        // Classic/Zen midpoint in widescreen only (0 at 3:2/__bada__, see
+        // ARCADE_RECENTER comment above) -- Classic/Zen positions are untouched.
+        float arcadeX = MapX(POS_ARCADE.x * spread, "modeselect.btn.arcade");
+#ifndef __bada__
+        arcadeX -= (Layout::HalfWidth() - 240.0f) * ARCADE_RECENTER;
+#endif
+        m_pArcadeButton->Init(_Vector3<float>(arcadeX, POS_ARCADE.y, POS_ARCADE.z),
                               Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
                               Fruit::FruitType(FRUIT_ARCADE, false),
                               _Vector3<float>(0, 0, 0),
