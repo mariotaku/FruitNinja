@@ -1416,7 +1416,13 @@ void GameOverScreen::Update(float dt) {
     uint8_t gm = game_work.gameMode;
     if ((uint8_t)(gm - 2) < 2 && m_pFruitFact != 0) {
         // Arcade/Zen layout
-        float ffX = (1.0f - m_FruitFactAlpha) * 480.0f + 75.0f;
+        // DIFFERS: opt-in widescreen -- same rigid-group reasoning as the
+        // Classic branch below: sensei + fact board share this one pos, so
+        // MapX the steady-state base (75.0f) with the SAME "gameover.factboard"
+        // edge-anchor-right key, so all three modes nudge right consistently.
+        // The alpha-driven slide-in term is left as-is (transient animation,
+        // not the resting position). Identity at 3:2/__bada__.
+        float ffX = (1.0f - m_FruitFactAlpha) * 480.0f + MapX(75.0f, "gameover.factboard");
         m_pFruitFact->SetPos(_Vector3<float>(ffX, 53.0f, 0.0f));
     } else {
         // Classic/other layout
