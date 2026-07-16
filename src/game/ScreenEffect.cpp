@@ -754,7 +754,25 @@ void ScreenEffect::Deactivate() {
 
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
-        if (img.m_pHudCtrl) {
+        // Port specific: guard against a torn-down HUD. On the real device this
+        // method is only ever reached while game_work.mHud is alive -- a PowerUp
+        // deactivates either from PowerUpManager::Update's expiry path (HUD very
+        // much alive) or from PowerUp::~PowerUp() at GameDestroy/OnAppTerminating,
+        // which itself runs BEFORE the HUD teardown in the binary's app-exit order.
+        // The desktop port, however, additionally runs PowerUpManager::GetInstance()'s
+        // function-local-static destructor at process exit (after main() returns),
+        // which is AFTER GameExit()/GameDestroy() has already `delete`d game_work.mHud
+        // and every HUDControl it owned (see GameInitialise.cpp GameDestroy step 4 /
+        // GameInit.cpp GameExit step 2) -- a static-destruction-order hazard the
+        // bada process model never exercises (the OS just kills the process; no
+        // atexit/static-dtor pass walks C++ globals the way a desktop main() return
+        // does). Without this guard, img.m_pHudCtrl is a dangling pointer into
+        // already-freed HUD memory and the ScoreMultiplyerBoard branch below writes
+        // past the freed HUDControl3d base footprint (m_pOwner @ HUDControl3d+0x88,
+        // beyond HUDControl3d's own 0x7c-byte size) -- reliably faulting under the
+        // debug heap, unlike the in-bounds kind==0 write which can silently corrupt
+        // instead. See test_widescreen_render --combo=x2 teardown segfault.
+        if (img.m_pHudCtrl && game_work.mHud) {
             // v1.6.1 ScreenEffect::Deactivate @0x00148510
             if (img.m_DeferKind == 1) {
                 // Arcade x2 board: bank final payout (doubled points if the window ran
