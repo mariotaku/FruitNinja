@@ -199,6 +199,25 @@ static void HideAllExisting() {
     }
 }
 
+// Root cause: the real game loop (Game::run) calls Game::tickRealtimeUi every
+// PRESENTED frame (Game.cpp:214 -> HUD::UpdateRealtime), which is what advances
+// per-present-only visual state -- GameModeScreen's mode-select sensei slide
+// (m_SecondaryAlpha, GameModeScreen.cpp UpdateRealtime), ShopScreen's panel
+// fade-in (m_TransitionAlpha, ShopScreen.cpp UpdateRealtime), ScrollingMenu
+// scroll/spring, MenuButton sparkle/NEW-badge, etc. h.RunHeadless() only drives
+// game.runFrames() (sim tick + render), never tickRealtimeUi, so those
+// animations never advance under a plain headless settle. Interleave a fixed
+// dt=1/60 tickRealtimeUi call after each runFrames(1) so captures are
+// deterministic (not wall-clock-based) and match what a real present loop
+// would have driven by this point.
+static void SettleRealtime(fn::TestHarness& h, int frames) {
+    static const float kDt = 1.0f / 60.0f;
+    for (int i = 0; i < frames; ++i) {
+        h.game.runFrames(1);
+        h.game.tickRealtimeUi(kDt);
+    }
+}
+
 int main(int argc, char* argv[]) {
     fn::TestHarness h(argc, argv, "widescreen");
     if (!h.ParseFlags()) return 1;
@@ -301,8 +320,10 @@ int main(int argc, char* argv[]) {
     Layout::SetWideLayout(wide);
     if (!h.Init()) return 1;
     // Settle: let MainScreen's camera-zoom state and any Layout::MapX-positioned
-    // controls settle under the final viewport before capture.
-    h.RunHeadless(60);
+    // controls settle under the final viewport before capture. Uses
+    // SettleRealtime (not plain RunHeadless) so per-present-only visual state
+    // (MenuButton sparkle/NEW-badge, etc.) advances too -- see SettleRealtime doc.
+    SettleRealtime(h, 60);
 
     if (!game_work.mHud) {
         std::fprintf(stderr, "FAIL: game_work.mHud is null after boot\n");
@@ -342,7 +363,13 @@ int main(int argc, char* argv[]) {
     }
     GameModeScreen* gms = new GameModeScreen(h.game, false);
     game_work.mHud->AddControl(gms);
-    h.RunHeadless(60);
+    // 90 (not 60) frames: GameModeScreen::UpdateRealtime's case-2 sensei slide
+    // steps m_SecondaryAlpha from -2.5 toward 1.0 via
+    // step = (1-alpha)*(1-(1-0.25)^f), clamped to +/-0.1/frame (f=dt*60=1.0 at
+    // 60fps) -- that clamp makes early steps linear (~0.1/frame), so it takes
+    // ~52 frames to fully converge to ~0.999; 60 leaves ~5% still short, 90
+    // gives margin so the slide is fully landed before capture.
+    SettleRealtime(h, 90);
 
     if (h.IsScreenshot()) {
         char label[64];
@@ -365,13 +392,33 @@ int main(int argc, char* argv[]) {
         h.game.actorManager->DeactivateAllEntities(0);
         h.game.actorManager->DeactivateAllEntities(1);
     }
+    // DojoScreen is needed only as ShopScreen's parent ctor arg (ShopScreen::Update
+    // @0x0015e19c derefs m_pParent->m_bPendingRemoval only when m_State==2 -- never
+    // reached during this settle-in capture, so an un-added dojo is safe). Its ctor
+    // (@0x0016bad8) unconditionally constructs TWO independent BSButton HUD controls
+    // (m_pBSButton0/1, the Facebook/Twitter "FOLLOW US" stubs) and AddControls each
+    // straight into game_work.mHud with their own default m_Active=1 (HUDControl
+    // ctor) -- dojo->m_Active gates only dojo's own Draw, not these sibling
+    // controls, so they bleed through independently of dojo's active flag.
+    // HideAllExisting() below (called AFTER this ctor runs) sweeps every control
+    // accumulated in mHud so far -- gms + its 4 ring MenuButtons (left active since
+    // the gamemode capture only did `gms->m_Active = 0`) and dojo + its 2 BSButtons
+    // -- in one generic pass, so no per-control private-member access is needed.
     DojoScreen* dojo = new DojoScreen(h.game);
-    dojo->m_Active = 0;
     game_work.mHud->AddControl(dojo);
+    HideAllExisting();
     ShopScreen* shop = new ShopScreen(dojo);
     game_work.mHud->AddControl(shop, false);
+    // ShopScreen's own HUDControl3d/HUDControl base ctor already defaults
+    // m_Active=1 (neither ctor touches it), so this is defensive/explicit rather
+    // than a fix for a real gate -- keeps the activation visible at the call site.
+    shop->m_Active = 1;
     shop->Init();
-    h.RunHeadless(60);
+    // SettleRealtime (not plain RunHeadless): ShopScreen::UpdateRealtime case 0
+    // is what lerps m_TransitionAlpha (panel fade-in) toward 1.0 at rate 0.125
+    // -- Update() never touches it -- so a plain RunHeadless settle left the
+    // panel fully transparent/empty. 60 frames is ample for a 0.125-rate lerp.
+    SettleRealtime(h, 60);
 
     if (h.IsScreenshot()) {
         char label[64];
