@@ -90,7 +90,15 @@ void GameInit(unsigned long) {
             MissControl* mc = new MissControl();
             mc->m_Active    = 1;
             mc->pos         = _Vector3<float>(-kMC[i].x_tbl, -kMC[i].y_tbl, 50.0f);
-            mc->m_HudScale  = _Vector3<float>(0.5f, 0.5f, 0.0f);
+            // DIFFERS: opt-in widescreen (Layout::MapX) -- MissControl::Draw
+            // anchors via pos + Vec3(480,320,0)*m_HudScale (same idiom as
+            // MainScreen's quit button, see CreateButtons's m_pQuitButton
+            // MapX comment). The fixed 480*0.5=240 term is the corner anchor;
+            // MapX the pre-scale 240 and re-derive m_HudScale.x so the group
+            // (all 3 X's share this HudScale) hugs the widened right edge
+            // while per-icon spacing (kMC[].x_tbl baked into pos.x) is
+            // untouched. Identity at __bada__/3:2 (MapX(240,key)==240 -> 0.5).
+            mc->m_HudScale  = _Vector3<float>(MapX(240.0f, "hud.misscontrol") / 480.0f, 0.5f, 0.0f);
             mc->m_Timer     = -kMC[i].rot_tbl;
             mc->m_AnimState = i;
             mc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
