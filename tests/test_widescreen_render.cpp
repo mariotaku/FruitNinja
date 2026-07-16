@@ -32,6 +32,8 @@
 //      mainmenu_3x2.png / mainmenu_16x9.png
 //      gamemode_3x2.png / gamemode_16x9.png
 //      shop_3x2.png     / shop_16x9.png
+//      dojo_3x2.png     / dojo_16x9.png
+//      about_3x2.png    / about_16x9.png
 //
 // 2. POWERUP FRENZY/FREEZE/X2 (--combo=frenzy|freeze|x2|freeze+frenzy|all) --
 //    component isolation mode (InitComponent(), same pattern as test_powerup_hud.cpp):
@@ -60,6 +62,7 @@
 #include "render/Layout.h"
 #include "render/MatrixManager.h"
 #include "screens/DojoScreen.h"
+#include "screens/AboutScreen.h"
 #include "screens/ShopScreen.h"
 #include "screens/GameModeScreen.h"
 #include "screens/MainScreen.h"
@@ -423,6 +426,92 @@ int main(int argc, char* argv[]) {
     if (h.IsScreenshot()) {
         char label[64];
         std::snprintf(label, sizeof(label), "widescreen/shop_%s", suffix);
+        if (!h.ScreenshotPng(label)) {
+            std::fprintf(stderr, "FAIL: ScreenshotPng('%s') failed\n", label);
+            ++failures;
+        } else {
+            std::printf("[%s] screenshot written\n", label);
+        }
+    }
+
+    // ---- DojoScreen: this IS the screen whose own FOLLOW US (BSButton) pair
+    // and dojo_sensei slide-in are the real content -- unlike the shop capture
+    // above, do NOT hide dojo's own children here. Only the PRIOR screen
+    // (shop) is hidden before dojo is (re)constructed. ----
+    // Port specific: same drain discipline as GameModeScreen/ShopScreen above --
+    // clear ShopScreen's leftover state before constructing a fresh DojoScreen
+    // (dojo has no ring fruit of its own, but the drain is cheap and keeps the
+    // pattern uniform across every capture in this segment).
+    if (h.game.actorManager) {
+        h.game.actorManager->DeactivateAllEntities(0);
+        h.game.actorManager->DeactivateAllEntities(1);
+    }
+    HideAllExisting();
+    DojoScreen* dojo2 = new DojoScreen(h.game);
+    game_work.mHud->AddControl(dojo2);
+    // DojoScreen's ctor only builds the version text + the two BSButtons
+    // (Facebook/Twitter); the nav rings (m_pBackButton/m_pShopButton/
+    // m_pAboutButton) are built by CreateButtons(), called from Reset(),
+    // called from Init() (see DojoScreen::Init @0x00169e80). Without this
+    // call the three MenuButton rings stay null and never draw.
+    dojo2->Init();
+    // 90 frames: same sensei-slide convergence budget as GameModeScreen above
+    // (DojoScreen::UpdateRealtime eases m_TransitionAlpha with the same
+    // clamped-step approach; UpdateBSButtons repositions the FOLLOW US pair
+    // off the same alpha, so both land together).
+    SettleRealtime(h, 90);
+
+    if (h.IsScreenshot()) {
+        char label[64];
+        std::snprintf(label, sizeof(label), "widescreen/dojo_%s", suffix);
+        if (!h.ScreenshotPng(label)) {
+            std::fprintf(stderr, "FAIL: ScreenshotPng('%s') failed\n", label);
+            ++failures;
+        } else {
+            std::printf("[%s] screenshot written\n", label);
+        }
+    }
+
+    // ---- AboutScreen: needs a DojoScreen parent for back-navigation, same
+    // as ShopScreen (test_screen.cpp pattern: dojo is added but hidden --
+    // AboutScreen is a direct HUDControl3d child, not gated by dojo's
+    // m_Active). ----
+    if (h.game.actorManager) {
+        h.game.actorManager->DeactivateAllEntities(0);
+        h.game.actorManager->DeactivateAllEntities(1);
+    }
+    HideAllExisting();
+    DojoScreen* dojo3 = new DojoScreen(h.game);
+    dojo3->m_Active = 0;  // dojo3 is just AboutScreen's parent for back-nav
+    game_work.mHud->AddControl(dojo3);
+    // DojoScreen's ctor (@0x0016bad8) unconditionally builds TWO independent
+    // BSButton HUD controls (m_pBSButton0/1, the Facebook/Twitter "FOLLOW US"
+    // stubs) and AddControls each straight into game_work.mHud with their own
+    // default m_Active=1 (HUDControl ctor) -- dojo3->m_Active=0 above gates
+    // only dojo3's OWN Draw, not these sibling controls, so they bleed
+    // through independently. Sweep dojo3 + its 2 BSButtons (and anything else
+    // still active) BEFORE constructing AboutScreen, same fix as the shop
+    // capture above. AboutScreen itself creates no social button.
+    HideAllExisting();
+    AboutScreen* about = new AboutScreen(dojo3);
+    about->Init();
+    // Constructed AFTER the HideAllExisting() sweep above, so its own
+    // HUDControl3d/HUDControl base ctor default (m_Active=1) is defensive/
+    // explicit here rather than a fix for a real gate -- same style as the
+    // shop->m_Active=1 line above.
+    about->m_Active = 1;
+    game_work.mHud->AddControl(about);
+    // 90 frames: AboutScreen::UpdateRealtime eases m_TransitionAlpha with the
+    // same AS_APPROACH_F clamped-step convergence as DojoScreen/GameModeScreen,
+    // and the credits marquee's m_EntryDelay (ctor=3.0f -> 180 frames at 60Hz)
+    // is intentionally NOT required to fully elapse for this capture -- the
+    // sensei slide-in and sml_title/back button are what this screenshot
+    // verifies, matching the gamemode/dojo settle budget above.
+    SettleRealtime(h, 90);
+
+    if (h.IsScreenshot()) {
+        char label[64];
+        std::snprintf(label, sizeof(label), "widescreen/about_%s", suffix);
         if (!h.ScreenshotPng(label)) {
             std::fprintf(stderr, "FAIL: ScreenshotPng('%s') failed\n", label);
             ++failures;
