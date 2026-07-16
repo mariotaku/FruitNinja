@@ -14,6 +14,7 @@
 #include "FruitSaveData.h"
 #include "screens/MainScreen.h"
 #include "screens/PauseScreen.h"
+#include "screens/SettingsScreen.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/TutorialControl.h"
@@ -608,7 +609,15 @@ void GameUpdate(float dt, bool active) {
         if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
             particleDtNorm = 1.0f;
         }
-        PSPParticleManager::GetInstance().Update(fVar9 / particleDtNorm, false);
+        // Port specific: pause particles while the (port-only) Settings modal is
+        // open -- SettingsScreen has no binary counterpart (see its header), so
+        // freezing here is a port-only QoL addition, not a fidelity concern.
+        // dt=0 (not the paused=true arg) because PSPParticleManager::Draw's own
+        // `paused` parameter is currently dead (see Draw below) -- zeroing dt is
+        // the only thing that actually halts Update's per-emitter aging/spawn too.
+        float particleDt = fVar9 / particleDtNorm;
+        if (SettingsScreen::IsOpen()) particleDt = 0.0f;
+        PSPParticleManager::GetInstance().Update(particleDt, false);
     }
 
     // --- FruitCamera::Update(fVar10) -- varies by bomb-hit phase ---
@@ -841,6 +850,13 @@ void GameDraw(float dt, bool active) {
             particleDtNorm = 1.0f;
         }
         particleDt = dt / particleDtNorm;
+        // Port specific: freeze particles (no integrate, no advance) while the
+        // (port-only) Settings modal is open. dt=0 rather than paused=true --
+        // PSPParticleManager::Draw's `paused` parameter is currently unused
+        // ((void)paused; -- Draw's fused integrate+render body never gates on
+        // it), so only zeroing dt actually halts the per-particle age/position
+        // integration below. See the matching GameUpdate freeze above.
+        if (SettingsScreen::IsOpen()) particleDt = 0.0f;
     }
 
     // === 3. Background particles ===
