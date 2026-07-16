@@ -39,9 +39,17 @@ enum GAME_MODE {
 namespace Mortar {
 
 // Back-compat alias -- binary's enum is global `::GAME_MODE` (see file header);
-// this typedef lets existing `Mortar::GameMode` / `Mortar::GAME_MODE_*` call
-// sites keep compiling without a 26-file rename sweep.
+// this typedef lets existing `Mortar::GameMode` call sites keep compiling
+// without a 26-file rename sweep.
 typedef ::GAME_MODE GameMode;
+
+// A typedef alone does NOT inject the enum's enumerators into this namespace,
+// so re-export them here so `Mortar::GAME_MODE_*` call sites resolve. The enum
+// itself stays global `::GAME_MODE` for binary-mangling fidelity (see header).
+using ::GAME_MODE_CLASSIC;
+using ::GAME_MODE_COMBO;
+using ::GAME_MODE_ARCADE;
+using ::GAME_MODE_ZEN;
 
 // Binary @ 0x0010a404 -- ((uint8_t)(gameMode - 2u) > 1u) means modes 0/1
 // (Classic, Combo) return true; 2/3 (Arcade, Zen) return false. Gates the
