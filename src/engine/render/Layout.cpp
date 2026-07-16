@@ -87,6 +87,13 @@ const KeyOverride kOverrides[] = {
     // proportional despite being a back/quit button; edge-anchor per the
     // universal back/quit rule (same corner treatment as settings.back).
     { "pause.quit"    },
+    // PowerUp::DrawBar's active-powerup meter row (PowerUpManager::Update /
+    // ActivatePower) -- the row's origin (the "0" the per-slot 110/-55
+    // offsets are measured from) is right-edge-anchored so the whole row of
+    // bars hugs the widened top-right edge instead of drifting toward centre
+    // as HalfWidth() grows. MapX is called with x=0.0f at this key, so with
+    // rightPad=0 the override degenerates to a pure `(halfWidth-240)` shift.
+    { "powerup.bar"   },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 

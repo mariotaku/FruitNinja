@@ -17,6 +17,7 @@
 #include "game/GameWork.h"
 #include "hud/HUD.h"
 #include "game/WaveManager.h"
+#include "engine/render/Layout.h"
 
 // Binary file-static globals at 0x001f3d84..0x001f3da8.
 // Port-side: hoisted out of PowerUpManager so the binary-faithful 0x90
@@ -138,7 +139,13 @@ void PowerUpManager::Update(float dt) {
             }
             int numTimed = GetNumActiveTimedPowers();
             float& xpos  = pwr->m_BarXPos;
-            float target = (specialIdx * 110.0f)       // DAT
+            // DIFFERS: opt-in widescreen -- the row's origin (the "0" the
+            // per-slot 110/-55 offsets are measured from) is edge-anchored via
+            // MapX so the whole bar row hugs the widened right edge, keeping
+            // the 110-unit slot spacing intact. Identity (+0) at 3:2/__bada__.
+            float rowOrigin = MapX(0.0f, "powerup.bar");
+            float target = rowOrigin
+                         + (specialIdx * 110.0f)       // DAT
                          + ((numTimed - 1) * -55.0f);  // DAT_00118b94
             xpos += (target - xpos) * 0.2f;            // DAT_00118b98
 
@@ -352,8 +359,12 @@ PowerUp* PowerUpManager::ActivatePower(uint32_t hash, _Vector3<float> position, 
         // ASM-spec v1.6.1 PowerUpManager::ActivatePower @0x00142934 tail: initial x uses 55,
         // not the 110 spacing used by Update's easing target -- Update eases m_BarXPos toward
         // the 110-spaced slot over subsequent frames (0.2f/frame lerp).
+        // DIFFERS: opt-in widescreen -- same row-origin edge-anchor as Update's
+        // `target` (see "powerup.bar" MapX above); keeps the spawn-in position
+        // consistent with the eased resting position instead of snapping in
+        // from the un-anchored 3:2 spot.
         int n = GetNumActiveTimedPowers();
-        clone->m_BarXPos = (float)n * 55.0f;
+        clone->m_BarXPos = MapX(0.0f, "powerup.bar") + (float)n * 55.0f;
 
         if (clone->m_bIsPurchasable) {
             m_ActiveByHash[hash] = clone;
