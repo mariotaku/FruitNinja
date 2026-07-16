@@ -812,8 +812,17 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     // Standard slide-in lerp: at alpha=0 the sign sits off-right at
     // SRC=(314,14,10) (past +240 X edge), as alpha->1 it slides in to
     // rest at DST=(194,29,10) on-screen.
+    // DIFFERS: opt-in widescreen -- MapX both lerp endpoints (edge-anchored,
+    // right side). This is the wooden mode-description plate; it's a FIXED
+    // right-side position independent of the mode-select rings, so it needs
+    // its own edge anchor (unlike the ring buttons, which spread
+    // proportionally). m_pTitleBox (the rules text) draws relative to
+    // logoPos below, so it tracks the plate automatically. Identity when
+    // disabled/__bada__.
     if (s_TexZenSign.IsValid()) {
-        _Vector3<float> logoPos = POS_LOGO_SRC + (POS_LOGO_DST - POS_LOGO_SRC) * m_TransitionAlpha;
+        _Vector3<float> src(MapX(POS_LOGO_SRC.x, "modeselect.plate"), POS_LOGO_SRC.y, POS_LOGO_SRC.z);
+        _Vector3<float> dst(MapX(POS_LOGO_DST.x, "modeselect.plate"), POS_LOGO_DST.y, POS_LOGO_DST.z);
+        _Vector3<float> logoPos = src + (dst - src) * m_TransitionAlpha;
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexZenSign->GetWidth() + 1.0f,

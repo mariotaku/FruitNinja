@@ -42,6 +42,7 @@ const KeyOverride kOverrides[] = {
     { "dojo.border"       },   // DrawBorders title anchor on DojoScreen (same corner as dojo.sensei)
     { "modeselect.sensei" },   // mode_sensei.tex on GameModeScreen (bottom-left-anchored)
     { "modeselect.title"  },   // DrawBorders anchor on GameModeScreen -- feeds m_pDescBox "MODE SELECT" (left-anchored)
+    { "modeselect.plate"  },   // zen_sign.tex lerp endpoints on GameModeScreen -- wooden mode-description plate (right-anchored)
     // Dojo/mode-select BACK buttons (the red bomb; pos=(0,0,0) + m_HudScale.x=0.375
     // = true x=180, right edge). Back/quit buttons edge-anchor universally.
     { "dojo.btn.back"        },
