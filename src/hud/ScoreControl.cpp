@@ -345,7 +345,9 @@ void ScoreControl::Update(float dt) {
     // SCORE_MP_X_STRIDE (200.0 from DAT_00158c50) is the wave-transition slide
     // distance, NOT a per-player MP offset. Steady-state gameplay
     // (m_TransitionTimer == 0) leaves pos at (-218, 138, 0), on-screen.
-    // DIFFERS: opt-in widescreen -- MapX the steady-state corner anchor (top-left).
+    // DIFFERS: opt-in widescreen -- MapX the steady-state corner anchor (top-left,
+    // edge-anchored via Layout.cpp's "hud.score" kOverrides entry so the SCORE
+    // group hugs the widened left edge instead of drifting inward proportionally).
     // The wave-transition slide (SCORE_MP_X_STRIDE * waveScale) and the later
     // anchorX=-160 transition-centering target below are left as-is: they're
     // transient animation offsets from this anchor, not the resting position.
@@ -609,9 +611,10 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80: localized TTF score wordmark via
     //   m_pScoreBox (not score.tex); SetTranslation 2nd arg=1 (preShift).
     if (m_pScoreBox && transTimer > 0.0f) {
-        // DIFFERS: opt-in widescreen -- SP wordmark anchor MapX'd (same key/corner
-        // as the score readout above). MP centering branch left as-is (transient
-        // wave-transition target, not the resting corner).
+        // DIFFERS: opt-in widescreen -- SP wordmark anchor MapX'd edge-anchored
+        // (same "hud.score" key/corner as the score readout above, so the "SCORE"
+        // label and the number hug the widened left edge together). MP centering
+        // branch left as-is (transient wave-transition target, not the resting corner).
         float xPos = IsMultiplayer()
             ? (SCORE_BANNER_X_CENTRE * transTimer - SCORE_ICON_X_MP_STRIDE)
             : MapX(SCORE_ICON_X_SP, "hud.score");
