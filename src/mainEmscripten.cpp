@@ -426,15 +426,32 @@ static void BootWait(void* arg) {
         const int kWideW = 1138, kWideH = 640; // 16:9 at 640 tall (1138/640 = 1.778), matches mainSDL.cpp
         SDL_SetWindowSize(ba->window, kWideW, kWideH);
         emscripten_set_canvas_element_size("#canvas", kWideW, kWideH);
-        // Port specific: shell.html's resize() (src/platform/emscripten/shell.html)
-        // reads the LIVE canvas.width/canvas.height each call to letterbox to
-        // whatever backing aspect is actually present -- nudge it once here so
-        // the CSS letterbox reflects the new 16:9 backing immediately, instead
-        // of waiting for the next window `resize`/fullscreen event.
-        EM_ASM({
-            if (typeof window._fnResize === 'function') { window._fnResize(); }
-        });
     }
+    // Port specific: shell.html's resize() (src/platform/emscripten/shell.html)
+    // reads the LIVE canvas.width/canvas.height to letterbox the CSS display
+    // size to whatever backing aspect is actually present. It also runs once
+    // at <script> PARSE time (before this point), when the canvas element
+    // still has the browser's default 300x150 attributes -- not this file's
+    // 960x640 fallback constant, since `canvas.width || DEFAULT_GAME_W` only
+    // falls back on a falsy (zero) width, and the HTML spec default (300) is
+    // truthy. That stale 300x150-aspect letterbox is never corrected by
+    // itself: emscripten_set_canvas_element_size() (both the 960x640 default
+    // just above, from main()'s SDL_CreateWindow, and the 1138x640 branch
+    // above) changes the canvas element's width/height attributes directly
+    // and does NOT dispatch a DOM `resize` event -- only actual browser
+    // window/viewport changes do that (shell.html's own `resize` listener).
+    // So without an explicit nudge here, the canvas CSS size (and hence the
+    // visible letterbox) stays wrong for the entire session -- both on a
+    // plain 3:2 boot AND after a widescreen-toggle restart -- until some
+    // unrelated event happens to fire a window `resize` (e.g. a mobile
+    // browser's URL-bar show/hide), which is what let this go unnoticed on
+    // some devices but not on others (e.g. a TV browser, where no such
+    // incidental resize ever fires). Call it unconditionally, once, right
+    // after the backing size is finalised for this boot -- covers both the
+    // wide and non-wide cases in one place.
+    EM_ASM({
+        if (typeof window._fnResize === 'function') { window._fnResize(); }
+    });
 #endif
 
     // Port specific: parse URL query parameters to set debug flags on web.
