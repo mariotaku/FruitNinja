@@ -113,8 +113,8 @@ public:
     // Only active when m_bCollideEnabled != 0.
     ScrollingMenuItem* Collide(int touchSlot);
 
-    // Inline accessors — binary @ 0x0014797c..0x001479dc
-    int   GetType() override { return 8; }            // 0x0014797c
+    // Inline accessors — binary @ 0x00191248..0x001479dc
+    int   GetType() override { return 8; }            // 0x00191248
     float GetHeight() const        { return m_Height; }            // 0x00147988 reads +0xa0
     float GetWidth()  const        { return m_ItemHeight; }        // 0x00147990 reads +0xa4 (port name swap)
     float GetItemHeight() const    { return m_Width; }             // 0x001479dc reads +0x9c (port name swap)
@@ -227,7 +227,7 @@ public:
 #endif
 
 public:
-    // Binary @ 0x0015af3c -- ClearTouch: m_TouchId = -1; m_bDragging = 0.
+    // Binary @ 0x001af6a8 -- ClearTouch: m_TouchId = -1; m_bDragging = 0.
     void ClearTouch();
 
     // Binary @ 0x0015af4c -- Collide(long): walk m_Items, call vtable+0x34 (hit-test)

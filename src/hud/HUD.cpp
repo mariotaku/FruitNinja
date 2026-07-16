@@ -162,7 +162,7 @@ void HUD::ResetControls() {
     }
 }
 
-// TODO: HUD::OnPause -- v1.6.1 address unconfirmed (old marker 0x00144c00 is stale v1.5.x; needs re-RE)
+// ASM-spec v1.6.1 HUD::OnPause @0x0018c208: iterate controls; if GetType()==8 (ScrollingMenu) call ScrollingMenu::ClearTouch @0x001af6a8. BonusScreen GetType==1, not matched.
 void HUD::OnPause() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         if ((*it)->GetType() == 8 /* TYPE_SCROLLING_MENU */) {

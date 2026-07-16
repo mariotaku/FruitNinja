@@ -817,7 +817,7 @@ void ScrollingMenu::DestroyList() {
 
 // ---- Lifecycle methods ported from binary (re-analyst 2026-05-18) ----
 
-// Binary @ 0x0015af3c -- ClearTouch. Drops the tracked touch slot and
+// Binary @ 0x001af6a8 -- ClearTouch. Drops the tracked touch slot and
 // clears the drag flag. Used by callers that need to abort an in-flight
 // drag without waiting for finger lift (e.g. when the menu is hidden).
 void ScrollingMenu::ClearTouch() {
