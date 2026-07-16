@@ -597,7 +597,19 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         // the (480,320,0) screen-anchor scales the XML "anchor" attribute instead. This is
         // a general fix (affects every EffectImage, not just the x2 board).
         const _Vector3<float>& moveOffset = useMoveIn ? img.m_SizeIn : img.m_SizeOut;
-        static const _Vector3<float> kScreenAnchor(480.0f, 320.0f, 0.0f);
+        // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 480 under __bada__ --
+        // same widen as Activate()'s emitter kScreenAnchor.x above. A corner/edge-anchored
+        // image (e.g. freeze's "clock_freeze", anchor="0.5,0.5") uses anchor.x==0.5 to sit
+        // at the right screen edge (480*0.5=240=+HalfWidth); widen that edge term by k so
+        // it tracks +-HalfWidth() in widescreen instead of staying pinned at the old 3:2
+        // corner. A centered image (anchor.x==0, e.g. the FREEZE banner) is unaffected
+        // (k-scale of 0 is 0).
+#ifdef __bada__
+        const float kAnchorX = 1.0f;
+#else
+        const float kAnchorX = Layout::HalfWidth() / 240.0f;
+#endif
+        const _Vector3<float> kScreenAnchor(480.0f * kAnchorX, 320.0f, 0.0f);
         img.m_pHudCtrl->pos = img.m_Pos + kScreenAnchor * img.m_Vel + moveOffset * e;
 
         // Size = m_ColourScale * ((m_FlagBits & 1) ? (1 - e) : 1.0f)
