@@ -28,6 +28,7 @@
 #include "asset/Mesh.h"
 #include "asset/TextureManager.h"
 #include "render/MatrixManager.h"
+#include "render/Layout.h"
 #include "math/Colour.h"
 #include "math/MathUtil.h"
 #include "debug/Logger.h"
@@ -1339,6 +1340,41 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
         // Binary does NOT write m_LayerFlags here; the gate is purely
         // based on the passed layerMask each call.
         // ===================================================================
+
+#ifndef __bada__
+        // Port specific: opt-in widescreen. BG_store.tex is an art-locked 3:2
+        // painted still (doors + wood shelf scene) drawn via fixed UV crops
+        // below (0.03125..0.96875) -- it can't be stretched or tiled past its
+        // native +-240 extent without visible distortion/seams, so the shop's
+        // own art stays centered at native size (untouched below). When the
+        // field is widened (Layout::IsWideLayout()), the DojoScreen garden
+        // behind the shop would otherwise peek through the newly exposed side
+        // margins; cover them with an opaque quad spanning the full widened
+        // field, drawn BEHIND the shop's native BG art. No corresponding
+        // binary draw call. Reuses BG_store.tex itself (rather than a new
+        // asset) sampled at a single near-black corner texel (degenerate
+        // uMin==uMax/vMin==vMax so no stretched art is visible, just a flat
+        // sample) and tinted dark -- keeps the side bars themed to the shop's
+        // own art instead of an unrelated flat colour. Identity (no draw,
+        // no texture bind) when not wide.
+        if (Layout::IsWideLayout() && s_TexBGStore.IsValid()) {
+            // Tunable: darkens the sampled corner texel toward the shop's
+            // timber-shelf tone. Adjust here if the side bars read too flat
+            // or too bright relative to the centered BG_store art.
+            static const Colour kWideBackdropTint(90, 90, 90, 255);
+
+            s_TexBGStore->Set();
+            mm.GetWorldStack().Reset();
+            Matrix44 matBackdrop = Matrix44::MakeScale(Layout::HalfWidth() * 2.0f, 321.0f, 0.0f);
+            mm.GetWorldStack().SetCurrentMatrix(matBackdrop);
+            mm.UploadModelViewOnly();
+            Mortar::Mesh::DrawQuadUnCached(kWideBackdropTint,
+                0.0f, 0.0f,  // uMin, uMax (degenerate -> single-column sample)
+                0.0f, 0.0f,  // vMin, vMax (degenerate -> single-row sample)
+                NULL);
+            s_TexBGStore->UnSet();
+        }
+#endif
 
         const float alpha = m_TransitionAlpha;
 
