@@ -59,6 +59,16 @@ const KeyOverride kOverrides[] = {
     // corner (kCloseBtnX=215, outside the centred modal plate), right-edge-
     // anchored so it hugs the widened corner rather than drifting proportionally.
     { "settings.back"        },
+    // MainScreen entity menu buttons. Corner toggles (sound/music top-right,
+    // settings bottom-left) edge-anchor so they hug the widened corners instead
+    // of floating inward. The play/dojo ring pair also edge-anchors: it keeps its
+    // original -60 centre (proportional would drift it left as the screen widens)
+    // and spreads the two rings symmetrically toward the wider frame.
+    { "menu.sound"    },
+    { "menu.music"    },
+    { "menu.settings" },
+    { "menu.play"     },
+    { "menu.dojo"     },
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 
