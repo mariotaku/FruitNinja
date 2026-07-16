@@ -21,6 +21,11 @@ namespace FN {
 void DrawNews() {
     // TODO: implement -- news ticker / MOTD overlay draw
 }
+
+// Port specific: web audio-consent splash freeze (see StartupEffects.h).
+// Default false everywhere; only ever set true by mainEmscripten.cpp
+// (Emscripten-only), so desktop/bada builds never see it flip.
+bool g_AudioConsentPending = false;
 } // namespace FN
 
 // DrawStartFade @ 0x001cd4fc
