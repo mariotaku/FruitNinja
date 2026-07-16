@@ -14,6 +14,7 @@
 #include "hud/ScrollingMenu.h"
 #include "render/Renderer.h"
 #include "render/MatrixManager.h"
+#include "render/Layout.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/Font.h"
 #include "render/BakedStringTTF.h"
@@ -513,9 +514,19 @@ void DebugFps_Draw(float fps) {
     // At size 12, bearingY ~= 10 units; set anchor Y to +148 so the glyph top
     // lands near +158, a few units below the top edge (+160).
     // Anchor X = -240 + 5 = -235, just inside the left edge.
-    static const float kAnchorX = -235.0f;  // left edge -240 + 5 margin
-    static const float kAnchorY =  138.0f;  // top edge +160 - ~22 margin (~10px extra top spacing)
-    static const float kZ       =   -0.1f;  // in front of game content
+    static const float kAnchorXMargin = 5.0f;   // left-edge margin, 3:2-identical
+    static const float kAnchorY       = 138.0f; // top edge +160 - ~22 margin (~10px extra top spacing)
+    static const float kZ             = -0.1f;  // in front of game content
+
+    // DIFFERS: opt-in widescreen (Layout::HalfWidth) -- this overlay is drawn
+    // through Renderer::SetupGameOrtho() (fixed -240..240 projection), but the
+    // glViewport is pillarboxed to Layout::EffectiveAspect() when widescreen is
+    // on (GameSDL.cpp's renderFrame), so a fixed-ortho x=-235 stretches/shifts
+    // relative to the wider viewport. Anchor to -HalfWidth() instead so the
+    // counter hugs the true (possibly widened) left edge with the same constant
+    // margin, never scaling with the field. Identity at HalfWidth()==240 (3:2 /
+    // __bada__): -240 + 5 == the old -235 exactly.
+    const float kAnchorX = -Layout::HalfWidth() + kAnchorXMargin;
 
     const _Vector3<float> anchor(kAnchorX, kAnchorY, kZ);
     const _Vector2<float> scale(1.0f, 1.0f);
