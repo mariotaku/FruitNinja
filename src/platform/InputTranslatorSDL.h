@@ -76,6 +76,44 @@
 // tick that also runs UpdatePoints (which reconciles the head-cap vertex),
 // so DrawSlice never draws a stale head-cap to origin (#168 / #173 fix).
 //
+// Port specific: out-of-window release/re-press. The Bada touchscreen never
+// reports a touch outside its own bounds, so this is a host/web-only input
+// nicety with no fidelity concern -- it replaces what would otherwise be an
+// unclamped-coordinate blade (desktop: SDL keeps delivering SDL_FINGERMOTION
+// with the OS mouse captured while a button is held, so nx/ny legitimately
+// go outside [0,1]; web native-canvas touch: browsers bind an entire touch
+// stream to its touchstart target, so a finger dragged off the canvas keeps
+// generating touchmove-driven SDL_FINGERMOTION with out-of-[0,1] coords).
+// Previously these unclamped coords fed straight through TouchToGame, so the
+// blade would fly to whatever off-field position they mapped to.
+//
+// DrainSDLEvent's SDL_FINGERMOTION case now detects the IN<->OUT crossing
+// per channel (IsOutOfWindow on the raw normalized nx/ny SDL delivers,
+// BEFORE Layout::TouchToGame's viewport math):
+//   - IN -> OUT: synthesizes a release (Touch::OnReleased / pendingUp) at
+//     the LAST in-bounds position, then marks the channel "suspended": the
+//     SDL finger-id mapping is KEPT (fingerActive stays true so the same
+//     physical finger can't be reassigned to a new channel) but no further
+//     motion for it is fed to Touch/pending state while suspended.
+//   - OUT -> IN: synthesizes a fresh press (Touch::OnPressed / pendingDown +
+//     pendingEdge, motionSinceDown reset) at the new in-bounds position --
+//     a brand-new blade stroke, mirroring a real SDL_FINGERDOWN.
+//   - A real SDL_FINGERUP while suspended just clears the channel mapping
+//     (no double release -- the release already fired on the OUT crossing).
+// Multi-finger safe: tracked per channel (fingerSuspended[16]), independent
+// of every other finger.
+//
+// Web (emscripten): this C++ logic is shared and applies as-is to
+// canvas-native fingers (those whose touchstart hit the #canvas element --
+// SDL's own listeners own their whole stream, same unclamped-coordinate
+// shape as desktop). Fingers that STARTED outside the canvas are instead
+// forwarded via shell.html's document-capture IIFE + fn_web_synth_touch
+// (mainEmscripten.cpp) -- that JS layer used to clamp01() the forwarded
+// coordinate at the canvas edge, which masked the crossing before it ever
+// reached C++. It now forwards the true (unclamped, can exceed [0,1])
+// coordinate instead so this same DrainSDLEvent logic sees the crossing
+// uniformly for both finger populations.
+//
 
 #include <SDL.h>
 #include "input/InputManager.h"
@@ -166,8 +204,27 @@ private:
     // (v1.6.1: only real finger motion moves the blade).
     bool motionSinceDown[16];
 
+    // Port specific: out-of-window release/re-press (desktop mouse-drag only;
+    // the Bada touchscreen never reports a touch outside its own bounds, so
+    // this has no fidelity concern -- see the header comment block above
+    // DrainSDLEvent's SDL_FINGERMOTION case for the full rationale).
+    // true once a MOTION for this channel lands outside the window's [0,1]
+    // normalized rect. While true, the channel keeps its SDL finger-id
+    // mapping (fingerActive stays true so the physical finger isn't
+    // reassigned to a new channel) but is released from the engine's POV
+    // (Touch::OnReleased / pendingUp already fired on the OUT crossing) --
+    // further MOTION events for this channel are NOT fed to Touch/pending
+    // state until it re-enters and gets a fresh synthesized press.
+    bool fingerSuspended[16];
+
     // Convert normalized SDL touch coords to game coords (centred ortho).
     void TransformTouchNormalized(float nx, float ny, float& gx, float& gy);
+
+    // Port specific: true when normalized SDL coords (as delivered by SDL --
+    // window-relative, NOT viewport-relative) fall outside [0,1]. Used to
+    // detect a mouse drag leaving/re-entering the window while a button is
+    // held (SDL keeps delivering motion with the OS mouse capture engaged).
+    static bool IsOutOfWindow(float nx, float ny);
 
     // Map SDL finger ID to channel (0-15)
     int MapFingerId(SDL_FingerID id);
@@ -199,6 +256,7 @@ public:
     float TestGetFingerY(int ch) const { return ch >= 0 && ch < 16 ? fingerY[ch] : 0.0f; }
     bool TestGetPrevActive(int ch) const { return ch >= 0 && ch < 16 ? prevActive[ch] : false; }
     bool TestGetMotionSinceDown(int ch) const { return ch >= 0 && ch < 16 ? motionSinceDown[ch] : false; }
+    bool TestGetFingerSuspended(int ch) const { return ch >= 0 && ch < 16 ? fingerSuspended[ch] : false; }
 #endif
 };
 

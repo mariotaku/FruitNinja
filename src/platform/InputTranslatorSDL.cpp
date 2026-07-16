@@ -47,6 +47,15 @@ InputTranslatorSDL::InputTranslatorSDL() : hashTouchScreen(0) {
     memset(pendingUp, 0, sizeof(pendingUp));
     memset(pendingEdge, 0, sizeof(pendingEdge));
     memset(motionSinceDown, 0, sizeof(motionSinceDown));
+    memset(fingerSuspended, 0, sizeof(fingerSuspended));
+}
+
+// Port specific: see the out-of-window release/re-press header comment block
+// above. nx/ny are the raw normalized SDL touch coords (window/canvas-local,
+// BEFORE Layout::TouchToGame's viewport math) -- exactly what SDL delivers
+// for both a captured desktop mouse-drag and a native web canvas touch.
+bool InputTranslatorSDL::IsOutOfWindow(float nx, float ny) {
+    return nx < 0.0f || nx > 1.0f || ny < 0.0f || ny > 1.0f;
 }
 
 void InputTranslatorSDL::Init() {
@@ -173,6 +182,10 @@ void InputTranslatorSDL::PointerPressMouseChannel(float gx, float gy) {
     fingerX[MOUSE_CHANNEL]      = gx;
     fingerY[MOUSE_CHANNEL]      = gy;
     motionSinceDown[MOUSE_CHANNEL] = false;
+    // MOTION MODE has its own inside-the-window gate (SDL_MOUSEMOTION's
+    // `inside` check + SDL_WINDOWEVENT_LEAVE) -- it never uses the
+    // out-of-window suspend/resume path, so keep it clear here.
+    fingerSuspended[MOUSE_CHANNEL] = false;
 
     pendingDown[MOUSE_CHANNEL] = true;
     pendingEdge[MOUSE_CHANNEL] = true;
@@ -219,23 +232,29 @@ void InputTranslatorSDL::ReleaseAllFingers() {
     for (int ch = 0; ch < 16; ++ch) {
         if (!fingerActive[ch]) continue;
 
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnReleased(ch + 1);
+        // Port specific: a suspended (out-of-window) channel already fired
+        // its release to the engine on the IN->OUT crossing -- don't
+        // double-release it here.
+        if (!fingerSuspended[ch]) {
+            if (ch < Mortar::Touch::MAX_SLOTS) {
+                Mortar::Touch::GetInstance().OnReleased(ch + 1);
+            }
+
+            if (mgr) {
+                InputEvent ie;
+                memset(&ie, 0, sizeof(ie));
+                ie.actionHash  = hashTouchUp[ch];
+                ie.actionFlags = INPUT_ACTION_UP;
+                ie.fingerId    = ch;
+                ie.x = fingerX[ch];
+                ie.y = fingerY[ch];
+                mgr->DispatchEvent(&ie);
+            }
         }
 
-        if (mgr) {
-            InputEvent ie;
-            memset(&ie, 0, sizeof(ie));
-            ie.actionHash  = hashTouchUp[ch];
-            ie.actionFlags = INPUT_ACTION_UP;
-            ie.fingerId    = ch;
-            ie.x = fingerX[ch];
-            ie.y = fingerY[ch];
-            mgr->DispatchEvent(&ie);
-        }
-
-        fingerActive[ch] = false;
-        prevActive[ch]   = false;
+        fingerActive[ch]    = false;
+        fingerSuspended[ch] = false;
+        prevActive[ch]      = false;
     }
 
     // Drain any ring-buffered events that accumulated before the release,
@@ -299,6 +318,9 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         // FINGERMOTION drains for this finger, no TouchMove is dispatched
         // (a tap alone never moves the blade -- v1.6.1 semantics).
         motionSinceDown[ch] = false;
+        // Port specific: a fresh press always starts in-bounds (SDL only
+        // ever raises FINGERDOWN for a coordinate inside the window/canvas).
+        fingerSuspended[ch] = false;
         TLOG("FINGERDOWN (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
              ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
@@ -335,6 +357,68 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         }
         if (ch < 0) { TLOG("  no channel mapped for fingerId, skipping\n"); break; }
 
+        // Port specific: out-of-window release/re-press (see header comment
+        // block). Test the RAW normalized coord (pre-viewport) so this works
+        // identically for a captured desktop mouse-drag and a native web
+        // canvas touch dragged past the canvas edge.
+        bool wasOut = fingerSuspended[ch];
+        bool nowOut = IsOutOfWindow(ev.tfinger.x, ev.tfinger.y);
+
+        if (!wasOut && nowOut) {
+            // IN -> OUT: release at the LAST in-bounds position (fingerX/Y
+            // still holds it -- not yet overwritten with the out-of-bounds
+            // coord below). Keep the SDL finger-id mapping (fingerActive
+            // stays true) so this physical finger can't be stolen by a new
+            // press while suspended; just stop feeding the engine.
+            TLOG("OUT-OF-WINDOW ch=%d raw=(%g,%g) -- synthesizing release at last in-bounds (%g,%g)\n",
+                 ch, ev.tfinger.x, ev.tfinger.y, fingerX[ch], fingerY[ch]);
+
+            if (ch < Mortar::Touch::MAX_SLOTS) {
+                Mortar::Touch::GetInstance().OnReleased(ch + 1);
+                pendingEdge[ch] = false;
+            } else {
+                pendingUp[ch]   = true;
+                pendingDown[ch] = false;
+                pendingEdge[ch] = false;
+            }
+            fingerSuspended[ch] = true;
+            break;  // do not update fingerX/Y to the out-of-bounds coord
+        }
+
+        if (wasOut && !nowOut) {
+            // OUT -> IN: synthesize a fresh press (new blade stroke) at the
+            // new in-bounds position -- mirrors SDL_FINGERDOWN exactly.
+            float gx, gy;
+            TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
+            fingerX[ch] = gx;
+            fingerY[ch] = gy;
+            motionSinceDown[ch] = false;
+            fingerSuspended[ch] = false;
+
+            TLOG("RE-ENTER-WINDOW ch=%d raw=(%g,%g) game=(%g,%g) -- synthesizing fresh press\n",
+                 ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
+
+            if (ch < Mortar::Touch::MAX_SLOTS) {
+                Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
+                pendingEdge[ch] = true;
+            } else {
+                pendingDown[ch] = true;
+                pendingEdge[ch] = true;
+                pendingUp[ch]   = false;
+            }
+            break;
+        }
+
+        if (wasOut) {
+            // Still OUT: keep tracking the physical position (for when it
+            // re-enters) but do NOT feed Touch/pending -- the channel is
+            // suspended from the engine's POV.
+            TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, fingerX[ch], fingerY[ch]);
+            TLOG("MOVE (suspended, still out) ch=%d raw=(%g,%g)\n", ch, ev.tfinger.x, ev.tfinger.y);
+            break;
+        }
+
+        // Still IN: normal move dispatch (unchanged).
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         fingerX[ch] = gx;
@@ -371,15 +455,29 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         }
         if (ch < 0) { TLOG("  no channel mapped for fingerId, skipping\n"); break; }
 
+        // Port specific: if this channel is currently suspended (out of the
+        // window -- see SDL_FINGERMOTION above), the engine already saw a
+        // release on the IN->OUT crossing. Just clear the SDL-side mapping
+        // here; do NOT fire a second Touch::OnReleased/pendingUp (double
+        // release).
+        bool wasSuspended = fingerSuspended[ch];
+
         float gx, gy;
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
-        fingerX[ch] = gx;
-        fingerY[ch] = gy;
-        TLOG("FINGERUP (drain) ch=%d game=(%g,%g)\n", ch, gx, gy);
+        if (!wasSuspended) {
+            fingerX[ch] = gx;
+            fingerY[ch] = gy;
+        }
+        TLOG("FINGERUP (drain) ch=%d game=(%g,%g) suspended=%d\n", ch, gx, gy, (int)wasSuspended);
 
         // Mark SDL-layer inactive immediately so MapFingerId can reuse this slot.
         fingerActive[ch] = false;
+        fingerSuspended[ch] = false;
         ReleaseFingerId(ev.tfinger.fingerId);
+
+        if (wasSuspended) {
+            break;  // already released to the engine on the OUT crossing
+        }
 
         if (ch < Mortar::Touch::MAX_SLOTS) {
             // Push release into Touch ring buffer immediately.

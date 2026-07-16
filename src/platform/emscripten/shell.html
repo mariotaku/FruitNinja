@@ -978,12 +978,17 @@
     //          canvas and we've begun forwarding synthetic events for it.
     var fingers = {};
 
-    function clamp01(v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
-
+    /* Intentionally UNCLAMPED: forward the true normalized coordinate (can
+       be <0 or >1 once the finger is past the canvas edge) so the C++ side
+       (InputTranslatorSDL::DrainSDLEvent's SDL_FINGERMOTION out-of-window
+       crossing detector) sees the same out-of-[0,1] shape a native SDL
+       touch/mouse drag reports, and applies the same release/re-press
+       logic uniformly. A prior version clamped here, which hid the
+       crossing from C++ and made the blade stick to the canvas edge. */
     function normFor(touch, rect) {
       return {
-        nx: clamp01((touch.clientX - rect.left) / rect.width),
-        ny: clamp01((touch.clientY - rect.top)  / rect.height)
+        nx: (touch.clientX - rect.left) / rect.width,
+        ny: (touch.clientY - rect.top)  / rect.height
       };
     }
 
@@ -1034,12 +1039,11 @@
           synth(0 /* down */, t.identifier, p.nx, p.ny);
           if (ev.cancelable) ev.preventDefault();
         } else {
-          // Already forwarding this finger. If it leaves the canvas, forward
-          // a MOVE clamped to the canvas edge (normFor's clamp01 does this)
-          // so the blade keeps tracking the edge rather than jumping to an
-          // UP -- simplest correct behaviour, and symmetrical with how a
-          // native finger dragged past the window edge still reports clamped
-          // SDL touch coords.
+          // Already forwarding this finger. Forward the true (unclamped)
+          // coordinate even once it's back outside the canvas -- the C++
+          // out-of-window crossing detector (InputTranslatorSDL) synthesizes
+          // the release/re-press from this, same as a native SDL touch/mouse
+          // drag leaving the window.
           var p2 = normFor(t, rect);
           synth(1 /* move */, t.identifier, p2.nx, p2.ny);
           if (ev.cancelable) ev.preventDefault();
