@@ -497,15 +497,26 @@ void DebugFps_Draw(float fps) {
 
     if (!s_FpsBaked) return;
 
-    // Restore game ortho so the coordinates match game space.
-    // Coordinate convention (from docs/engine/coordinate-system.md):
-    //   X axis: -240 (left edge) to +240 (right edge)  -- horizontal
-    //   Y axis: -160 (bottom edge) to +160 (top edge)  -- vertical
-    r->SetupGameOrtho();
+    // Project through the SAME widened ortho FruitCamera uses (0x0019e724 +
+    // FruitCamera::SetupPerspective @0x001ee124's PT_GENERIC bounds --
+    // SetupOrtho(160,-160,-Layout::HalfWidth(),Layout::HalfWidth(),2000,-6000)),
+    // NOT Renderer::SetupGameOrtho()'s fixed -240..240. The glViewport is
+    // pillarboxed to Layout::EffectiveAspect() when widescreen is on
+    // (GameSDL.cpp's renderFrame), so a fixed -240..240 projection only spans
+    // the CENTER of that wider viewport; the left-edge anchor at -HalfWidth()+5
+    // would land outside the [-240,240] clip range and get clipped off-screen.
+    // Matching the projection to HalfWidth() keeps -HalfWidth() == the true
+    // viewport left edge, at any aspect. Identity at HalfWidth()==240 (3:2 /
+    // __bada__): reduces to Renderer::SetupGameOrtho()'s exact -240..240.
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.SetupOrtho(160.0f, -160.0f, -Layout::HalfWidth(), Layout::HalfWidth(), 2000.0f, -6000.0f);
+    mm.GetViewStack().Reset();
+    mm.GetWorldStack().Reset();
+    mm.UploadAll();
 
     // BakedStringTTF::Draw sets its own GL state (blend, texture, no cull).
-    // SetupGameOrtho updates m_CachedProjView which GetMVP() reads inside Draw.
-    // No additional GL state setup needed here.
+    // SetupOrtho's UploadAll() updates m_CachedProjView which GetMVP() reads
+    // inside Draw. No additional GL state setup needed here.
 
     // Top-left corner anchor.
     // align=0x4: hAlign=0 (left -- text extends rightward from anchor X),
@@ -513,19 +524,11 @@ void DebugFps_Draw(float fps) {
     //                      upward by their bearingY).
     // At size 12, bearingY ~= 10 units; set anchor Y to +148 so the glyph top
     // lands near +158, a few units below the top edge (+160).
-    // Anchor X = -240 + 5 = -235, just inside the left edge.
+    // Anchor X = -HalfWidth() + 5, just inside the (possibly widened) left edge.
     static const float kAnchorXMargin = 5.0f;   // left-edge margin, 3:2-identical
     static const float kAnchorY       = 138.0f; // top edge +160 - ~22 margin (~10px extra top spacing)
     static const float kZ             = -0.1f;  // in front of game content
 
-    // DIFFERS: opt-in widescreen (Layout::HalfWidth) -- this overlay is drawn
-    // through Renderer::SetupGameOrtho() (fixed -240..240 projection), but the
-    // glViewport is pillarboxed to Layout::EffectiveAspect() when widescreen is
-    // on (GameSDL.cpp's renderFrame), so a fixed-ortho x=-235 stretches/shifts
-    // relative to the wider viewport. Anchor to -HalfWidth() instead so the
-    // counter hugs the true (possibly widened) left edge with the same constant
-    // margin, never scaling with the field. Identity at HalfWidth()==240 (3:2 /
-    // __bada__): -240 + 5 == the old -235 exactly.
     const float kAnchorX = -Layout::HalfWidth() + kAnchorXMargin;
 
     const _Vector3<float> anchor(kAnchorX, kAnchorY, kZ);
