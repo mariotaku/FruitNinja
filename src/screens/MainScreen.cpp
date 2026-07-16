@@ -926,14 +926,24 @@ void MainScreen::Draw(float* hudScaleRaw) {
     // Pins the FN logo + "SLICE FRUIT TO BEGIN" parchment toward the LEFT
     // edge as the field widens, instead of leaving them centred with dead
     // space on their left. dxLogo is a fixed gap to the new left edge
-    // (-HalfWidth()); dyLogo follows the SAME diagonal the logo cluster
-    // already sits on at rest, derived from the two m_Lean-driven rest
-    // positions (both static, non-physics): m_LogoPos base (-175, 26) and
-    // fruit_text's rest pos (-120, 18) [m_NinjaTextX/Y, UpdateScreenElements
-    // @0x00195a58]. Slope = Δy/Δx = (18-26)/(-120-(-175)) = -8/55 ≈ -0.1455.
-    // ninja_text's Y (m_BounceY) is independent bounce PHYSICS, not part of
-    // this lean diagonal, so only its X gets the group shift (see site 3).
-    static const float LOGO_SLOPE = -8.0f / 55.0f;  // dy per unit dx, from parchment->fruit_text rest offset
+    // (-HalfWidth()); dyLogo follows the tilt of the "blurry_backing" shade
+    // triangle drawn immediately below (site 1a) -- the logo cluster visually
+    // sits ON that tilted backdrop, so the correct slope is the backdrop's
+    // own geometric tilt, not the offset between two unrelated rest-position
+    // anchors (an earlier version derived slope from m_LogoPos vs
+    // m_NinjaTextX/Y and got both the sign and magnitude wrong -- those two
+    // anchors don't lie on the backdrop's slant).
+    //
+    // Backdrop tilt, from the shadeVerts local coords below (edge A(-1,-0.6875)
+    // -> B(3.5,1.0)), scaled by the quad's Scale(size.x, size.y) transform:
+    //   dx_local = 3.5-(-1) = 4.5, dy_local = 1.0-(-0.6875) = 1.6875
+    //   dx_world = dx_local*size.x = 4.5*480  = 2160
+    //   dy_world = dy_local*size.y = 1.6875*138 = 232.875
+    //   slope = dy_world/dx_world = 232.875/2160 = 69/640 = 0.1078125
+    // With this slope, dy = SLOPE*dx: shifting LEFT (dx<0) yields dy<0 (Y
+    // decreases) -- moving the elements DOWN, matching the backdrop's downward
+    // slant toward the left edge.
+    static const float LOGO_SLOPE = 69.0f / 640.0f;  // 0.1078125; backdrop tilt (blurry_backing shade triangle), see derivation above
     float dxLogo = 0.0f, dyLogo = 0.0f;
 #ifndef __bada__
     if (Layout::IsWideLayout()) {
@@ -978,10 +988,11 @@ void MainScreen::Draw(float* hudScaleRaw) {
     // Binary: TranslateMatrix(&this+0x104) reads 3 consecutive floats.
     // m_BounceY is the bounce POSITION (the Y of ninja_text in Draw).
     if (m_ninjaTex.IsValid()) {
-        // dx-only: m_BounceY is independent bounce PHYSICS (not the m_Lean
-        // diagonal), so only the group's X-shift applies here -- adding
-        // dyLogo would desync ninja_text from its own bounce baseline.
-        _Vector3<float> ninjaDrawPos(m_BounceVel + dxLogo, m_BounceY, m_BounceZ);
+        // dxLogo/dyLogo shift the whole logo cluster together along the
+        // backdrop's tilt (see dyLogo derivation above); dyLogo composes
+        // additively with the bounce physics baseline (m_BounceY), same as
+        // fruit_text composes dyLogo with its own rest Y.
+        _Vector3<float> ninjaDrawPos(m_BounceVel + dxLogo, m_BounceY + dyLogo, m_BounceZ);
         m_ninjaTex->Set();
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTex->GetWidth(), (float)m_ninjaTex->GetHeight(),
