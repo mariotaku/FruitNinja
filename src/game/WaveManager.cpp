@@ -1989,7 +1989,11 @@ Mortar::Entity* WaveManager::SpawnFruit(long count, long fruitType, SPAWNER_INFO
     float velMultX = info ? info->m_VelXScale : 1.0f;
     float velMultY = info ? info->m_VelYScale : 1.0f;
     // The 1.075f boost is on the VERTICAL (cos -> vel.y) component.
-    float velX = sin_a * speed * velMultX;
+    // DIFFERS: opt-in widescreen -- horizontal launch velocity scales by the same k as
+    // the widened spawn-X field so throw arcs span the wider ortho proportionally
+    // instead of under-arcing into the new dead space. velY (arc height) is untouched.
+    // k==1.0f under __bada__, so this is identity there.
+    float velX = sin_a * speed * velMultX * k;
     float velY = cos_a * speed * 1.075f * velMultY;
 
     SpawnPlacement spawnType = info ? info->m_SpawnType : PLACEMENT_BOTTOM;
@@ -2122,7 +2126,10 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
         float zOffset  = (spawner == nullptr) ? 0.0f : spawner->m_SpawnTimer;
 
         // The 1.075f boost is on the VERTICAL (cos -> vel.y) component.
-        float velX = sin_a * speed * velMultX;
+        // DIFFERS: opt-in widescreen -- horizontal launch velocity scales by the same k
+        // as the widened spawn-X field so bomb arcs match SpawnFruit's wider spread.
+        // k==1.0f under __bada__, so this is identity there.
+        float velX = sin_a * speed * velMultX * k;
         float velY = cos_a * speed * 1.075f * velMultY;
 
         // Spawn position (BOTTOM default). Binary @0x001247c4 default arm: iVar11 = -0xa0
