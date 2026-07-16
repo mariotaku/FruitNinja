@@ -715,8 +715,17 @@ void DrawBackground() {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    Colour white(255, 255, 255, 255);
-    Renderer::GetInstance()->DrawQuad(white, 0.03125f, 0.96875f, 0.1875f, 0.8125f);
+    // v1.6.1 DrawBackground @0x001ccaf4: background quad vertex colour is the HUD
+    // WORLD tint via TintWhite(&HUD::scales[3]) @0x00167d20 -- NOT hardcoded white.
+    // This is the Arcade 2x / freeze / etc. whole-scene darken (ScreenEffect
+    // backTint drives scales[3..5]). Splats read the same tint; fruit models stay white.
+    Colour bgTint(255, 255, 255, 255);
+    if (game_work.mHud) {
+        bgTint = Colour::TintWhite(game_work.mHud->scales[3],
+                                   game_work.mHud->scales[4],
+                                   game_work.mHud->scales[5]);
+    }
+    Renderer::GetInstance()->DrawQuad(bgTint, 0.03125f, 0.96875f, 0.1875f, 0.8125f);
 
     bgTex->UnSet();
 }
