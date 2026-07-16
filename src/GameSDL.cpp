@@ -15,6 +15,7 @@
 #include "core/SystemManager.h"
 #include "game/GameTaskState.h"
 #include "screens/PauseScreen.h"
+#include "screens/MainScreen.h"   // IsInGameplay() for the background-freeze gate
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "debug/OSD.h"    // Port specific: dev toast overlay (binary OSD is a dead stub)
@@ -458,7 +459,14 @@ void Game::run() {
         // being called again with normal per-frame `ms` values, restarting the fixed
         // 1/60s cadence with zero backlog (matching OnForeground @0x001ef6cc restarting
         // the timer at its normal rate).
-        int steps = m_bBackgrounded ? 0 : driver.advance(ms);
+        // Port improvement: only freeze the loop while backgrounded DURING actual
+        // gameplay (so the intro/gameplay can't fast-forward while alt-tabbed). In
+        // the menu/shop/dojo, keep ticking so their animations don't stall when the
+        // window loses focus -- an unfocused desktop window is not the same as the
+        // Bada device being fully backgrounded. Gate on MainScreen's gameplay state.
+        bool freeze = m_bBackgrounded &&
+                      game_work.mMainScreen && game_work.mMainScreen->IsInGameplay();
+        int steps = freeze ? 0 : driver.advance(ms);
         for (int i = 0; i < steps && running; ++i) {
             stepUpdate();
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
