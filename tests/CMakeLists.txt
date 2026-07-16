@@ -1033,7 +1033,7 @@ set_tests_properties(screenshot_arcade_intro PROPERTIES TIMEOUT 60
 # visual screenshot test. Segment 1 (no --combo): full h.Init() boot, captures
 # MainScreen / GameModeScreen / ShopScreen via the REAL Game::renderFrame
 # widescreen viewport path (GameSDL.cpp), at both 3:2 (baseline) and 16:9
-# (--widescreen, resizes the hidden window to 1138x640 + SetWideLayout(true)).
+# (--widescreen, resizes the hidden window to 1136x640 + SetWideLayout(true)).
 # Segment 2 (--combo=freeze|frenzy|x2|freeze+frenzy|all): component-isolation
 # powerup-effect capture at 16:9 only (3:2 baseline already covered by
 # screenshot_powerup_freeze/frenzy in test_powerup_hud.cpp above). "x2" is the

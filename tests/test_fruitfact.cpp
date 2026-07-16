@@ -314,7 +314,7 @@ int main(int argc, char* argv[]) {
     // --widescreen must be applied BEFORE InitComponent()'s SDL_CreateWindow
     // (mirrors mainSDL.cpp / test_widescreen_render.cpp: winW/winH sized at
     // creation time, never a post-creation SDL_SetWindowSize).
-    if (g_Wide) h.SetWindowSize(1138, 640);
+    if (g_Wide) h.SetWindowSize(1136, 640);
     Layout::SetWideLayout(g_Wide);
 
     if (!h.InitComponent()) return 1;

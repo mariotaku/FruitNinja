@@ -427,7 +427,7 @@ static void BootWait(void* arg) {
     // additionally no-ops under __bada__ per Layout.h).
 #ifndef __bada__
     if (Layout::IsWideLayout()) {
-        const int kWideW = 1138, kWideH = 640; // 16:9 at 640 tall (1138/640 = 1.778), matches mainSDL.cpp
+        const int kWideW = 1136, kWideH = 640; // ~16:9 at 640 tall (1136/640 = 1.775; even width), matches mainSDL.cpp
         SDL_SetWindowSize(ba->window, kWideW, kWideH);
         emscripten_set_canvas_element_size("#canvas", kWideW, kWideH);
     }
@@ -440,7 +440,7 @@ static void BootWait(void* arg) {
     // falls back on a falsy (zero) width, and the HTML spec default (300) is
     // truthy. That stale 300x150-aspect letterbox is never corrected by
     // itself: emscripten_set_canvas_element_size() (both the 960x640 default
-    // just above, from main()'s SDL_CreateWindow, and the 1138x640 branch
+    // just above, from main()'s SDL_CreateWindow, and the 1136x640 branch
     // above) changes the canvas element's width/height attributes directly
     // and does NOT dispatch a DOM `resize` event -- only actual browser
     // window/viewport changes do that (shell.html's own `resize` listener).

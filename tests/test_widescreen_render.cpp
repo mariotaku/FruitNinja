@@ -3,7 +3,7 @@
 //
 // Usage: test_widescreen_render [--screenshot] [--widescreen] [--combo=<name>]
 //   --widescreen   activate Layout::SetWideLayout(true) and create the hidden
-//                  SDL window at a 16:9 drawable (1138x640) up front (before
+//                  SDL window at a 16:9 drawable (1136x640) up front (before
 //                  Init()/InitComponent() -- mirrors mainSDL.cpp, which sizes
 //                  the window at SDL_CreateWindow time rather than resizing an
 //                  existing one), so Layout::EffectiveAspect()/HalfWidth()
@@ -241,7 +241,7 @@ int main(int argc, char* argv[]) {
         // mainSDL.cpp: winW/winH computed before SDL_CreateWindow, never a
         // post-creation SDL_SetWindowSize -- which can hang the hidden test
         // window under some GL drivers). Must be set before InitComponent().
-        if (wide) h.SetWindowSize(1138, 640);
+        if (wide) h.SetWindowSize(1136, 640);
         Layout::SetWideLayout(wide);
         if (!h.InitComponent()) return 1;
         if (!game_work.mHud) {
@@ -319,7 +319,7 @@ int main(int argc, char* argv[]) {
     // mainSDL.cpp: winW/winH computed before SDL_CreateWindow) instead of a
     // post-creation SDL_SetWindowSize, which can hang the hidden test window
     // under some GL drivers.
-    if (wide) h.SetWindowSize(1138, 640);
+    if (wide) h.SetWindowSize(1136, 640);
     Layout::SetWideLayout(wide);
     if (!h.Init()) return 1;
     // Settle: let MainScreen's camera-zoom state and any Layout::MapX-positioned
