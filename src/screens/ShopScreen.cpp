@@ -1303,6 +1303,58 @@ void ShopScreen::UpdateRealtime(float dtSeconds) {
 }
 #endif
 
+#ifndef __bada__
+// Port specific: opt-in widescreen. BG_store.tex (the doors/wood-shelf art
+// drawn by Block A below) is an art-locked 3:2 painted still and can't be
+// stretched past its native +-240.5 extent without visible distortion, so
+// the shop's own art stays centered at native size. When the field is
+// widened (Layout::IsWideLayout()), the DojoScreen garden behind the shop
+// would otherwise peek through the newly exposed side margins. This draws
+// ONE opaque black bar spanning from `panelEdgeX` (the current outer edge of
+// whichever BG panel/door quad Block A just drew -- static +-240.5 once
+// settled, or the animated slide edge during the open/close transition) out
+// to the screen edge (+-Layout::HalfWidth()). Called once per side, directly
+// after each side's panel quad, so the bar's inner edge is always exactly
+// the panel's current outer edge (same local, same frame -- no seam/gap is
+// possible) and the bar slides in lockstep with the door. No corresponding
+// binary draw call. `isRightBar` picks which side of `panelEdgeX` faces the
+// screen edge. No-op (clamp) when the panel edge has already reached/passed
+// the screen edge (bar width <= 0).
+static void ShopScreen_DrawWideBlackBar(MatrixManager& mm, float panelEdgeX, bool isRightBar) {
+    const float half = Layout::HalfWidth();
+    float barLeft, barRight;
+    if (isRightBar) {
+        barLeft = panelEdgeX;
+        barRight = half;
+    } else {
+        barLeft = -half;
+        barRight = panelEdgeX;
+    }
+    const float width = barRight - barLeft;
+    if (width <= 0.0f) return;  // panel edge already at/beyond the screen edge
+
+    static const Colour kBlack(0, 0, 0, 255);
+    const float centerX = (barLeft + barRight) * 0.5f;
+
+    Matrix44 matBar = Matrix44::MakeScale(width, 321.0f, 0.0f);
+    matBar.GlobalTranslate44(centerX, 0.0f, 0.0f);
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().SetCurrentMatrix(matBar);
+    mm.UploadModelViewOnly();
+
+    if (ShopScreen::s_TexBGStore.IsValid()) {
+        ShopScreen::s_TexBGStore->Set();
+    }
+    Mortar::Mesh::DrawQuadUnCached(kBlack,
+        0.0f, 0.0f,  // uMin, uMax (degenerate -> flat sample, tint is fully opaque black anyway)
+        0.0f, 0.0f,  // vMin, vMax
+        NULL);
+    if (ShopScreen::s_TexBGStore.IsValid()) {
+        ShopScreen::s_TexBGStore->UnSet();
+    }
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // ShopScreen::DrawOrder(float*, int) @ 0x001b4e48
 //
@@ -1340,41 +1392,6 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
         // Binary does NOT write m_LayerFlags here; the gate is purely
         // based on the passed layerMask each call.
         // ===================================================================
-
-#ifndef __bada__
-        // Port specific: opt-in widescreen. BG_store.tex is an art-locked 3:2
-        // painted still (doors + wood shelf scene) drawn via fixed UV crops
-        // below (0.03125..0.96875) -- it can't be stretched or tiled past its
-        // native +-240 extent without visible distortion/seams, so the shop's
-        // own art stays centered at native size (untouched below). When the
-        // field is widened (Layout::IsWideLayout()), the DojoScreen garden
-        // behind the shop would otherwise peek through the newly exposed side
-        // margins; cover them with an opaque quad spanning the full widened
-        // field, drawn BEHIND the shop's native BG art. No corresponding
-        // binary draw call. Reuses BG_store.tex itself (rather than a new
-        // asset) sampled at a single near-black corner texel (degenerate
-        // uMin==uMax/vMin==vMax so no stretched art is visible, just a flat
-        // sample) and tinted dark -- keeps the side bars themed to the shop's
-        // own art instead of an unrelated flat colour. Identity (no draw,
-        // no texture bind) when not wide.
-        if (Layout::IsWideLayout() && s_TexBGStore.IsValid()) {
-            // Tunable: darkens the sampled corner texel toward the shop's
-            // timber-shelf tone. Adjust here if the side bars read too flat
-            // or too bright relative to the centered BG_store art.
-            static const Colour kWideBackdropTint(90, 90, 90, 255);
-
-            s_TexBGStore->Set();
-            mm.GetWorldStack().Reset();
-            Matrix44 matBackdrop = Matrix44::MakeScale(Layout::HalfWidth() * 2.0f, 321.0f, 0.0f);
-            mm.GetWorldStack().SetCurrentMatrix(matBackdrop);
-            mm.UploadModelViewOnly();
-            Mortar::Mesh::DrawQuadUnCached(kWideBackdropTint,
-                0.0f, 0.0f,  // uMin, uMax (degenerate -> single-column sample)
-                0.0f, 0.0f,  // vMin, vMax (degenerate -> single-row sample)
-                NULL);
-            s_TexBGStore->UnSet();
-        }
-#endif
 
         const float alpha = m_TransitionAlpha;
 
@@ -1419,6 +1436,15 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                     NULL);
             }
 
+#ifndef __bada__
+            // Left panel's outer (left) edge in the -0.5..0.5 unit-quad convention:
+            // scale 291 wide, translated by scroll_x -> local span
+            // [scroll_x - 145.5, scroll_x + 145.5]. Outer edge = scroll_x - 145.5.
+            if (Layout::IsWideLayout()) {
+                ShopScreen_DrawWideBlackBar(mm, scroll_x - 145.5f, false /*left bar*/);
+            }
+#endif
+
             // --- Right quad: slides from right  ---
             // slide_X = 145.0 + (1 - alpha) * 190.0 * 1.5
             // DAT_0015e054=145.0f, DAT_0015e058=190.0f, literal 1.5f
@@ -1445,6 +1471,17 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             if (s_TexBGStore.IsValid()) {
                 s_TexBGStore->UnSet();
             }
+
+#ifndef __bada__
+            // Right panel's outer (right) edge: scale 191 wide, translated by
+            // slide_X -> local span [slide_X - 95.5, slide_X + 95.5]. Outer
+            // edge = slide_X + 95.5. Drawn after UnSet() above (matches the
+            // panels' own Set/UnSet bracketing) -- the helper re-Sets/UnSets
+            // s_TexBGStore itself for its degenerate sample.
+            if (Layout::IsWideLayout()) {
+                ShopScreen_DrawWideBlackBar(mm, slide_X + 95.5f, true /*right bar*/);
+            }
+#endif
 
         } else {
             // ---------------------------------------------------------------
@@ -1476,6 +1513,16 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             if (s_TexBGStore.IsValid()) {
                 s_TexBGStore->UnSet();
             }
+
+#ifndef __bada__
+            // Settled state: single full-width quad, scale 481, no translate ->
+            // local span [-240.5, +240.5]. Both outer edges are static here
+            // (no slide once settled) -- bars sit fixed at the door frame.
+            if (Layout::IsWideLayout()) {
+                ShopScreen_DrawWideBlackBar(mm, -240.5f, false /*left bar*/);
+                ShopScreen_DrawWideBlackBar(mm, 240.5f, true /*right bar*/);
+            }
+#endif
 
             // Binary stores DAT_0015e1dc = 145.0f as slide_X for use in A3.
             // DAT_0015e1dc = 00 00 11 43 = 145.0f (separate read from DAT_0015e054)
