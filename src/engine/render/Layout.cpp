@@ -23,28 +23,21 @@ int g_ViewportW = 0, g_ViewportH = 0;
 int g_ViewportWinW = 0, g_ViewportWinH = 0;
 
 // Pass 2 per-key overrides. Two element classes:
-//  - Proportional (no entry): x * (HalfWidth()/240) -- the Pass-1 default.
-//    Barely moves a near-center element, which is correct for a single
-//    centered piece (e.g. the FN logo) that can't meaningfully "lean".
-//  - Lean (table entry below): a side-anchored element (e.g. the sensei
-//    character) is pulled toward a fixed FRACTION of HalfWidth() on its own
-//    side, growing with the extra width instead of staying proportional to
-//    its small original offset. Expressed as an EDGE_FRACTION in [0,1]
-//    (0 = screen center, 1 = screen edge == HalfWidth()); the result is
-//    always bounded to +-HalfWidth() by construction, so it can never
-//    overshoot off-screen regardless of aspect ratio.
-//
-// Tunable aesthetic constants -- eyeball against HLE/screenshots and adjust.
-static const float ABOUT_SENSEI_EDGE_FRACTION = 0.88f; // sensei.tex on AboutScreen
-static const float DECO_SMLTITLE_EDGE_FRACTION = 0.90f; // sml_title.tex on Dojo/GameMode/About (BaseScreen::DrawBorders)
-
+//  - Proportional (no entry): x * (HalfWidth()/240) -- scales the offset from
+//    screen center. Right for near-center / spread elements.
+//  - Edge-anchored (table entry below): preserve the element's pixel distance
+//    from its NEAREST screen edge. Translate by sign(x)*(HalfWidth()-240),
+//    i.e. shift by exactly how far that edge moved when the field widened.
+//    An element sitting 30px in from the right edge at 3:2 stays 30px in from
+//    the (wider) right edge -- edges don't stretch, they just move out.
+//    Right for edge-pinned deco/logos. Identity at HalfWidth==240 (non-wide
+//    / __bada__), so listing a key here is safe when widescreen is off.
 struct KeyOverride {
-    const char* key;
-    float edgeFraction;
+    const char* key;   // presence in this table == edge-anchored
 };
 const KeyOverride kOverrides[] = {
-    { "about.sensei",   ABOUT_SENSEI_EDGE_FRACTION },
-    { "deco.smltitle",  DECO_SMLTITLE_EDGE_FRACTION },
+    { "about.sensei"  },   // sensei.tex on AboutScreen (right-anchored)
+    { "deco.smltitle" },   // sml_title.tex on Dojo/GameMode/About (BaseScreen::DrawBorders)
 };
 const int kNumOverrides = sizeof(kOverrides) / sizeof(kOverrides[0]);
 
@@ -101,24 +94,17 @@ float HalfWidth() {
 float MapX_impl(float x, const char* key) {
     if (!g_WideLayout) return x;
     float halfWidth = HalfWidth();
-    float k = halfWidth / 240.0f;   // 1.0 .. 16/9/1.5 as the window widens
     const KeyOverride* ov = FindOverride(key);
     if (ov) {
-        // Lean: blend from the proportional position (t=0, at k==1 this is
-        // just x) toward a fixed EDGE_FRACTION of HalfWidth() on the
-        // element's own side (t=1, as k reaches its max). t tracks how far
-        // into the extra width budget we are, so the mapping is continuous
-        // and always identity at k==1 (non-wide / __bada__ parity).
-        static const float kMaxK = (16.0f / 9.0f) / 1.5f;
-        float t = (kMaxK > 1.0f) ? (k - 1.0f) / (kMaxK - 1.0f) : 0.0f;
-        if (t < 0.0f) t = 0.0f;
-        if (t > 1.0f) t = 1.0f;
+        // Edge-anchor: keep the element's pixel gap to its nearest screen edge
+        // constant. The edge moved out by (halfWidth - 240) when the field
+        // widened, so shift the element by that same amount toward its edge.
+        // Identity at halfWidth==240. Example: an element whose right edge was
+        // 30px from +240 keeps its right edge 30px from +halfWidth.
         float sign = (x < 0.0f) ? -1.0f : 1.0f;
-        float edgeTarget = sign * ov->edgeFraction * halfWidth;
-        float proportional = x * k;
-        return proportional + (edgeTarget - proportional) * t;
+        return x + sign * (halfWidth - 240.0f);
     }
-    return x * k;
+    return x * (halfWidth / 240.0f);   // proportional default (near-center / spread)
 }
 
 // Pass 3: centred pillarbox/letterbox viewport rect, shared by render and
