@@ -274,12 +274,19 @@
        full-viewport background, same white title, same bordered-pill button
        look) rather than a distinct in-game panel -- shares the #restart-btn
        rule via a comma-selector so both stay visually identical by
-       construction; only the two-button layout (.consent-btn) differs. */
+       construction; only the two-button layout (.consent-btn) differs.
+       Fade in/out (not restartFadeIn's one-shot keyframe): opacity starts at
+       0 and transitions over 0.25s; _showAudioConsent flips display:flex then
+       opacity:1 on the next frame (see script below), _onAudioConsentTap
+       flips opacity back to 0 and waits for transitionend before setting
+       display:none, so both directions animate through the same property. */
     #audio-consent-overlay {
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.82);
       display: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
       flex-direction: column;
       align-items: center;
       justify-content: center;
@@ -287,7 +294,6 @@
       padding: 2em;
       text-align: center;
       font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
-      animation: restartFadeIn 0.4s ease;
     }
 
     #audio-consent-title {
@@ -791,7 +797,12 @@
 
   /* Show the audio-consent overlay. Idempotent: guarded by
      _audioConsentShown so a stray duplicate call cannot re-show it after the
-     tap already hid it. */
+     tap already hid it.
+     Fade in: display must flip to 'flex' and the browser must commit that
+     layout BEFORE opacity changes to 1, or the display:none->flex change and
+     the opacity change land in the same style recalc and the transition never
+     runs. Forcing a reflow (reading offsetHeight) then deferring the opacity
+     flip to the next rAF is the standard two-step fix. */
   var _audioConsentShown = false;
   function _showAudioConsent() {
     if (_audioConsentShown) return;
@@ -799,6 +810,10 @@
     var overlay = document.getElementById('audio-consent-overlay');
     if (!overlay) return;
     overlay.style.display = 'flex';
+    void overlay.offsetHeight; // force reflow so display:flex is committed first
+    requestAnimationFrame(function () {
+      overlay.style.opacity = '1';
+    });
     var btn = document.getElementById('audio-consent-sound');
     if (btn) btn.focus();
   }
@@ -893,9 +908,25 @@
     }
 
     /* Hide the overlay -- the (now un-frozen) splash + game continue
-       underneath exactly as they were already rendering. */
+       underneath exactly as they were already rendering, fading through the
+       overlay for 0.25s (the CSS transition on #audio-consent-overlay).
+       display:none is deferred to transitionend (with a setTimeout fallback
+       for browsers that suppress transitionend on an already-hidden/removed
+       element) so the fade-out actually plays instead of vanishing instantly.
+       _hideDone is idempotent-guarded so the transitionend listener and the
+       fallback timer can't both act. */
     var overlay = document.getElementById('audio-consent-overlay');
-    if (overlay) overlay.style.display = 'none';
+    if (overlay) {
+      overlay.style.opacity = '0';
+      var _hidden = false;
+      function _hideDone() {
+        if (_hidden) return;
+        _hidden = true;
+        overlay.style.display = 'none';
+      }
+      overlay.addEventListener('transitionend', _hideDone);
+      setTimeout(_hideDone, 300);
+    }
   }
 
   (function () {
