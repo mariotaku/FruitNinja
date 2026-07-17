@@ -43,10 +43,6 @@ bool  g_bOsdSfx              = false; // Port specific: OSD toast per SFX played
 bool  g_MotionMode           = true;  // Port specific: velocity-gated pointer slash (F5, --motion), default ON (pointer-path only; does not affect touch input)
 float g_MotionSpeedThreshold = 10.0f; // Port specific: g_MotionMode cut speed threshold, px/sim-tick (tune F6/F8)
 
-bool  g_AudioChoiceMade      = false; // Port specific: web audio-consent choice persisted (SettingsSave.cpp), see DebugFlags.h
-bool  g_SavedSoundOn         = false; // Port specific: web-only, valid only if g_AudioChoiceMade
-bool  g_SavedMusicOn         = false; // Port specific: web-only, valid only if g_AudioChoiceMade
-
 // Lazy 1x1 white texture for the vertex-colour shader path. The
 // Renderer's program_vc samples a texture and multiplies by the vertex
 // color; without a bound texture we'd see undefined samples. A solid

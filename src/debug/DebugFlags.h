@@ -55,21 +55,6 @@ extern bool  g_bOsdSfx;                // Port specific: OSD toast per SFX playe
 extern bool  g_MotionMode;             // Port specific: velocity-gated pointer slash (toggle F5, --motion), default OFF
 extern float g_MotionSpeedThreshold;   // Port specific: g_MotionMode cut speed threshold, px/sim-tick (tune F6/F8, --motion-threshold=<f>)
 
-// Port specific: persisted web audio-consent choice (SettingsSave.cpp).
-// No binary equivalent -- gates the web-only splash-time consent overlay
-// (see StartupEffects.h's g_AudioConsentPending / mainEmscripten.cpp).
-// g_AudioChoiceMade: false until the user taps either consent-overlay
-//   button once, ever; persisted so the overlay never shows again on a
-//   returning visit. Distinct from g_SavedSoundOn being false, because
-//   "muted" is itself a valid saved choice -- g_SavedSoundOn=false alone
-//   can't distinguish "first run, no choice yet" from "user chose muted".
-// g_SavedSoundOn / g_SavedMusicOn: the persisted on/off choice, applied to
-//   game_work.m_bSoundOn/m_bMusicOn on a returning boot (GameInitialise.cpp's
-//   __EMSCRIPTEN__ guard) instead of the first-run hardcoded true/false.
-extern bool  g_AudioChoiceMade;        // Port specific: web-only, persisted
-extern bool  g_SavedSoundOn;           // Port specific: web-only, persisted (valid only if g_AudioChoiceMade)
-extern bool  g_SavedMusicOn;           // Port specific: web-only, persisted (valid only if g_AudioChoiceMade)
-
 // Port specific: shared pointer/mouse finger channel constant -- single
 // source of truth for InputTranslatorSDL::MOUSE_CHANNEL and SlashEntity's
 // motion-mode gate (channel 15, the pointer's dedicated non-touch channel;
@@ -136,9 +121,6 @@ static const bool  g_FpsCap60            = false;
 static const bool  g_SuppressTextOverlay = false;
 static const bool  g_bOsdSfx             = false;
 static const bool  g_MotionMode          = false;
-static const bool  g_AudioChoiceMade     = false;
-static const bool  g_SavedSoundOn        = false;
-static const bool  g_SavedMusicOn        = false;
 inline void DebugHitbox_Draw()  {}
 inline void DebugHUDBounds_Draw() {}
 inline void DebugFps_Draw(float) {}

@@ -72,6 +72,20 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) { return; }
     var ctx = new AC();
+    // Port specific: audio-consent overlay -- capture the AudioContext's
+    // BORN state right here, once, synchronously. This is the reliable
+    // signal for "does this load already have audio permission" (browsers
+    // create the context 'suspended' when a gesture is required, and
+    // 'running' when one isn't -- PWA/home-screen launch, a prior sticky
+    // activation carried over a navigation, a site-level autoplay grant,
+    // etc.). Deliberately NOT a ctx.resume()-then-poll-state check: calling
+    // resume() here would be an unrequested/non-gesture resume attempt
+    // racing against whatever the caller (mainEmscripten.cpp BootWait's
+    // _fnMaybeShowAudioConsent) does next, and polling ctx.state after an
+    // async resume() settles is exactly the racy approach this replaces.
+    // The born state needs no async wait at all -- read once, right after
+    // construction, and never touched again.
+    var bornSuspended = (ctx.state === 'suspended');
     var masterSfx = ctx.createGain();
     var music = ctx.createGain();
     masterSfx.connect(ctx.destination);
@@ -83,6 +97,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
 
     var FN = {
         ctx: ctx,
+        bornSuspended: bornSuspended,  // audio-consent overlay show/skip signal, see capture point above
         masterSfx: masterSfx,
         music: music,
         MASTER_SFX_GAIN: masterSfxGain,

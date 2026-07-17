@@ -580,14 +580,31 @@ if (EMSCRIPTEN)
         "SHELL:--exclude-file *ItemSave.xml"
         # Port specific: link idbfs.js so FS.mount(IDBFS) is available.
         "SHELL:-lidbfs.js"
-        # Port specific: export fn_idbfs_ready, fn_user_started, and
-        # fn_web_synth_touch so JS can call them as Module._fn_idbfs_ready() /
-        # Module._fn_user_started() / Module._fn_web_synth_touch(). The last
-        # is called by shell.html's document-level outside-canvas touch
-        # capture (see mainEmscripten.cpp fn_web_synth_touch for why).
+        # Port specific: export fn_idbfs_ready, fn_user_started,
+        # fn_web_synth_touch, fn_set_audio_enabled, and fn_audio_consent_skip
+        # so JS can call them as Module._fn_idbfs_ready() /
+        # Module._fn_user_started() / Module._fn_web_synth_touch() /
+        # Module._fn_set_audio_enabled() / Module._fn_audio_consent_skip().
+        # The third is called by shell.html's document-level outside-canvas
+        # touch capture (see mainEmscripten.cpp fn_web_synth_touch for why);
+        # the fourth is called by the audio-consent overlay's button tap
+        # handler (shell.html _onAudioConsentTap) to unlock the AudioContext
+        # (the gesture) and set game_work.m_bSoundOn/m_bMusicOn for THAT
+        # SESSION ONLY (never persisted); the fifth is called by shell.html's
+        # _fnMaybeShowAudioConsent when window.FNAudio.bornSuspended is false
+        # (the AudioContext was already 'running' at creation -- no gesture
+        # ever needed) to apply the plain first-run default and skip the
+        # overlay entirely (see mainEmscripten.cpp fn_set_audio_enabled /
+        # fn_audio_consent_skip). Nothing about the audio choice is stored
+        # anywhere (no SettingsSave.xml fields, no localStorage) -- every load
+        # re-decides from scratch off the AudioContext's born state.
         # EMSCRIPTEN_KEEPALIVE alone is sufficient for most linker configs but
         # an explicit -sEXPORTED_FUNCTIONS ensures they survive aggressive DCE.
-        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_user_started','_fn_web_synth_touch']"
+        # BUG HISTORY: fn_set_audio_enabled was added to mainEmscripten.cpp
+        # without adding it here -- the JS call site's `Module._fn_set_audio_enabled`
+        # guard silently no-op'd (function never existed on Module), so the
+        # audio unlock/session-state setter never ran on ANY tap.
+        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_user_started','_fn_web_synth_touch','_fn_set_audio_enabled','_fn_audio_consent_skip']"
     )
     # Debug build (FN_DEBUG_TOUCH): keep C++ function names in the wasm name
     # section so browser crash stack traces name the actual C++ frames.

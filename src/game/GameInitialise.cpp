@@ -39,7 +39,6 @@
 #include "PreloadRings.h"
 #include "PowerUpManager.h"
 #include "AchievementManager.h"
-#include "debug/DebugFlags.h"
 // Analysed: 2026-04-25T12:00
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
@@ -203,35 +202,24 @@ void GameInitialise(void* window, const char* config) {
             game_work.m_SaveData->AddToTotal("music_off", hMusicOff, -musicOffCount, false, true);
     }
 #ifdef __EMSCRIPTEN__
-    // Port specific: web audio init. The AudioContext is created suspended
-    // (SoundManager::Init -> fnaudio_init, SoundManagerWebAudio.cpp) and is
-    // unlocked by the splash-time audio-consent overlay tap (shell.html
+    // Port specific: web audio init -- SFX shows ON from boot so the sound
+    // button renders in the ON state immediately; no visible flip on first
+    // touch. The AudioContext is created suspended-or-running depending on
+    // browser state (SoundManager::Init -> fnaudio_init,
+    // SoundManagerWebAudio.cpp); if born suspended, it's unlocked by the
+    // splash-time audio-consent overlay tap (shell.html
     // #audio-consent-overlay, wired through mainEmscripten.cpp's
-    // fn_set_audio_enabled / ctx.resume()) -- NOT automatically by SDL2's
-    // gesture handling, which only fires on a later discrete gesture and
-    // never on a pure slice (touchmove).
-    //
-    // First-run default (no persisted choice yet, FN::g_AudioChoiceMade ==
-    // false, see DebugFlags.h / SettingsSave.cpp): SFX shows ON so the sound
-    // button renders in the ON state immediately -- no visible flip on first
-    // touch. GameInit step 23 calls SoundManager::Initialise +
+    // fn_set_audio_enabled / ctx.resume()) -- no detection beyond that born
+    // state, no persistence at all (see mainEmscripten.cpp's g_gameInited
+    // comment block). GameInit step 23 calls SoundManager::Initialise +
     // SetSFXVolume(0.5f) (because m_bSoundOn=true here), so SFX volume is
-    // already correct once the AudioContext resumes via the consent tap.
-    // Music stays OFF / opt-in.
-    //
-    // Returning visit (FN::g_AudioChoiceMade == true, loaded by LoadSettings()
-    // before this runs -- see mainSDL.cpp/mainEmscripten.cpp init order):
-    // apply the persisted choice instead, so the consent overlay is skipped
-    // entirely and the game boots straight into the previously-chosen state
-    // (see BootWait in mainEmscripten.cpp, which reads g_AudioChoiceMade to
-    // decide whether to show the overlay at all).
-    if (FN::g_AudioChoiceMade) {
-        game_work.m_bSoundOn = FN::g_SavedSoundOn;
-        game_work.m_bMusicOn = FN::g_SavedMusicOn;
-    } else {
-        game_work.m_bSoundOn = true;
-        game_work.m_bMusicOn = false;
-    }
+    // already correct once the AudioContext actually unlocks (via the tap,
+    // or because it was already running). Music stays OFF / opt-in; the
+    // user enables it via the in-game music toggle. Nothing here is
+    // remembered across loads -- fn_set_audio_enabled/fn_audio_consent_skip
+    // overwrite both flags for THIS SESSION ONLY on every single load.
+    game_work.m_bSoundOn = true;
+    game_work.m_bMusicOn = false;
 #endif
 
     // InitialiseData step 12: per-power-up slash colour table

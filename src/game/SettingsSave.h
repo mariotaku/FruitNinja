@@ -4,14 +4,17 @@
 // Port specific: settings persistence. Binary (v1.6.1) never saved settings
 // to disk -- this whole module has no binary counterpart.
 //
-// Persists 9 port-side globals to a small flat XML file:
+// Persists 6 port-side globals to a small flat XML file:
 //   game_work.languageFlag, FN::g_MotionMode, FN::g_ShowFps,
 //   FN::g_FpsCap60, FN::g_MotionSpeedThreshold, Layout::IsWideLayout()/
 //   Layout::SetWideLayout() (opt-in widescreen layout, see
-//   src/engine/render/Layout.h), and the web audio-consent choice
-//   (FN::g_AudioChoiceMade / g_SavedSoundOn / g_SavedMusicOn, see
-//   src/debug/DebugFlags.h) -- set once by the consent-overlay tap
-//   (mainEmscripten.cpp) so a returning web visit skips the overlay.
+//   src/engine/render/Layout.h).
+//
+// The web audio-consent overlay's sound/muted choice is intentionally NOT
+// persisted here (or anywhere) -- see mainEmscripten.cpp's g_gameInited
+// comment block: whether the overlay shows is decided fresh every load from
+// the AudioContext's born state, and the tapped choice only ever applies to
+// game_work for that session.
 //
 // Call LoadSettings() once at startup, before any CLI/URL override write to
 // those globals (so an explicit --lang / ?lang= etc. override still wins by
