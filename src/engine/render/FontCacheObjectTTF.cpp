@@ -1,28 +1,23 @@
 #include "render/FontCacheObjectTTF.h"
+#include "render/TtfBackend.h"
 #include "debug/Logger.h"
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
 #include <vector>
 
-// Pull in FreeType headers only in this translation unit.
-#include <ft2build.h>
-#include FT_FREETYPE_H
-#include FT_GLYPH_H
-
 namespace Mortar {
 
-FontCacheObjectTTF::FontCacheObjectTTF(FT_Library ftLib, const char* path,
-                                       int defaultPixelSize)
-    : m_FTLib(ftLib)
-    , m_Face(nullptr)
+FontCacheObjectTTF::FontCacheObjectTTF(const char* path, int defaultPixelSize)
+    : m_Face(nullptr)
     , m_DefaultPixelSize(defaultPixelSize)
     , m_CurrentCharHeight(-1)
     , m_Atlas(nullptr)
 {
-    FT_Error err = FT_New_Face(ftLib, path, 0, &m_Face);
-    if (err) {
-        LOG_ERROR("FontCacheObjectTTF", "FT_New_Face failed for '%s' (err %d)", path, err);
+    m_Face = TtfFace::Open(path, defaultPixelSize);
+    if (!m_Face || !m_Face->IsValid()) {
+        LOG_ERROR("FontCacheObjectTTF", "TtfFace::Open failed for '%s'", path);
+        delete m_Face;
         m_Face = nullptr;
         return;
     }
@@ -35,12 +30,14 @@ FontCacheObjectTTF::FontCacheObjectTTF(FT_Library ftLib, const char* path,
 }
 
 FontCacheObjectTTF::~FontCacheObjectTTF() {
-    if (m_Face) {
-        FT_Done_Face(m_Face);
-        m_Face = nullptr;
-    }
+    delete m_Face;
+    m_Face = nullptr;
     delete m_Atlas;
     m_Atlas = nullptr;
+}
+
+bool FontCacheObjectTTF::IsValid() const {
+    return m_Face != nullptr && m_Face->IsValid();
 }
 
 // Compute the FT 26.6 char height from the raw requestedSize and atlas scale factors.
@@ -176,29 +173,27 @@ static void BuildStrokes(uint8_t* buf, int width, int height, int radius) {
 
 bool FontCacheObjectTTF::SetCharSize(long charHeight_26_6) {
     if (charHeight_26_6 == m_CurrentCharHeight) return true;
-    if (!m_Atlas) return false;
+    if (!m_Atlas || !m_Face) return false;
     // Port specific: m_CacheSize (100) is the binary's Bada IFont cache-slot
-    // constant (v1.6.1 FontInterface ctor @0x002502e0), reused here as the FT
-    // vert_res so glyphs rasterise at charHeight_26_6*(100/72) actual device
-    // pixels. This is NOT a dpi bug -- every consumer of GlyphAtlasEntry's
-    // world-unit metrics (BakedStringTTF's layoutX/Y, cellW/H, cellOrigin, all
-    // consumed RAW with no further scale) is calibrated against this exact
-    // render resolution. Changing vert_res here is a GLOBAL rescale of every
-    // TTF metric and shrinks all TTF text ~1.39x (100/72) vs. the real game --
-    // confirmed via HLE screenshot comparison. Local callers that need a
-    // pixel-size-relative scale (Font.cpp's static DrawStringTTF path) must
-    // normalize locally using the SAME 100/72 factor instead of changing this.
-    FT_Error err = FT_Set_Char_Size(m_Face,
-                                    /*char_width*/0,
-                                    (FT_F26Dot6)charHeight_26_6,
-                                    /*horz_res*/0,
-                                    /*vert_res*/(FT_UInt)m_Atlas->m_CacheSize);
-    if (err) {
-        LOG_ERROR("FontCacheObjectTTF",
-                  "FT_Set_Char_Size(0,%ld,0,0) failed (err %d)",
-                  charHeight_26_6, err);
-        return false;
-    }
+    // constant (v1.6.1 FontInterface ctor @0x002502e0). The pre-refactor code
+    // passed it straight through as FreeType's FT_Set_Char_Size vert_res
+    // (default 72), which rasterises at charHeight_26_6*(100/72) actual
+    // device pixels. The TtfFace seam (TtfBackend.h) has no vert_res concept
+    // (stb_truetype only knows literal pixel height), so that DPI scale is
+    // folded into charHeight_26_6 HERE, backend-neutrally, before calling
+    // SetPixelSize -- both backends agree that SetPixelSize's argument is a
+    // LITERAL pixel height at standard 72dpi (TtfBackendFreetype.cpp's
+    // FT_Set_Char_Size call uses vert_res=72, a no-op scale). This is NOT a
+    // dpi bug -- every consumer of GlyphAtlasEntry's world-unit metrics
+    // (BakedStringTTF's layoutX/Y, cellW/H, cellOrigin, all consumed RAW with
+    // no further scale) is calibrated against this exact render resolution.
+    // Changing this factor is a GLOBAL rescale of every TTF metric and
+    // shrinks all TTF text ~1.39x (100/72) vs. the real game -- confirmed via
+    // HLE screenshot comparison. Local callers that need a pixel-size-relative
+    // scale (Font.cpp's static DrawStringTTF path) must normalize locally
+    // using the SAME 100/72 factor instead of changing this.
+    const long dpiScaledCharHeight = (long)((double)charHeight_26_6 * (100.0 / 72.0));
+    m_Face->SetPixelSize(dpiScaledCharHeight);
     m_CurrentCharHeight = charHeight_26_6;
     return true;
 }
@@ -227,11 +222,11 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     }
 
     // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
-    // Ask FreeType to rasterize at kFontSupersample x the logical size so the atlas holds hi-res glyph bitmaps.
+    // Ask the backend to rasterize at kFontSupersample x the logical size so the atlas holds hi-res glyph bitmaps.
     // The cache key stays at the logical ch26 so callers sharing a logical size share the same cache entry.
     if (!SetCharSize(ch26 * (long)kFontSupersample)) return nullptr;
 
-    FT_UInt glyphIndex = FT_Get_Char_Index(m_Face, (FT_ULong)cp);
+    unsigned glyphIndex = m_Face->GetGlyphIndex(cp);
     if (glyphIndex == 0) {
         GlyphAtlasEntry empty;
         memset(&empty, 0, sizeof(empty));
@@ -244,17 +239,13 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     // and bearing lives in the metrics only. The port never calls
     // FT_Set_Transform, which is the same thing.
     // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc.
-    FT_Error err = FT_Load_Glyph(m_Face, glyphIndex,
-                                  FT_LOAD_RENDER | FT_LOAD_TARGET_NORMAL);
-    if (err) {
-        LOG_ERROR("FontCacheObjectTTF", "FT_Load_Glyph cp=%u err=%d", cp, err);
+    TtfRasterGlyph glyph;
+    if (!m_Face->RasterizeGlyph(glyphIndex, glyph)) {
+        LOG_ERROR("FontCacheObjectTTF", "RasterizeGlyph cp=%u gi=%u failed", cp, glyphIndex);
         return nullptr;
     }
 
-    FT_GlyphSlot slot = m_Face->glyph;
-    FT_Bitmap&   bm   = slot->bitmap;
-
-    // Convert 26.6 metrics to world units: FT 26.6 value * (1/64) * invFontScale.
+    // Convert 26.6 metrics to world units: 26.6 value * (1/64) * invFontScale.
     // Port specific: HD font supersampling -- divide by kFontSupersample so layout
     // dimensions are identical to the non-supersampled case (the atlas holds Nx
     // texels but quads are logical-size).
@@ -266,19 +257,19 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     memset(&entry, 0, sizeof(entry));
 
     // Legacy separate-bearing contract (BakedStringBox / Font.cpp consumers).
-    entry.bearingX = (float)slot->metrics.horiBearingX * invWorld;
-    entry.bearingY = (float)slot->metrics.horiBearingY * invWorld;
-    entry.advanceX = (float)slot->advance.x            * invWorld;
-    entry.width    = (float)bm.width * invLogical;
-    entry.height   = (float)bm.rows  * invLogical;
+    entry.bearingX = (float)glyph.bearingX_26_6 * invWorld;
+    entry.bearingY = (float)glyph.bearingY_26_6 * invWorld;
+    entry.advanceX = (float)glyph.advanceX_26_6 * invWorld;
+    entry.width    = (float)glyph.width  * invLogical;
+    entry.height   = (float)glyph.height * invLogical;
 
     // ASM-verified: v1.6.1 RenderGlyph @0x0024f5dc + RenderGlyphMetrics @0x0024fe5c:
     //  layoutX = trunc(advance.x/64) - bitmap_left (FT_GlyphSlot +0x40 adv, +0x64 bearingL).
     //  Binary is intentionally tight by bitmap_left/glyph; cellOrigin.x=0 (no re-add). Faithful.
     // layoutY = (horiBearingY - height)/64 (ink bottom, baseline-relative).
-    entry.layoutX = ((float)(slot->advance.x >> 6) - (float)slot->bitmap_left)
+    entry.layoutX = ((float)(glyph.advanceX_26_6 >> 6) - (float)glyph.bitmapLeft)
                     * m_Atlas->m_InvFontScale * (1.0f / (float)ss);
-    entry.layoutY = (float)(slot->metrics.horiBearingY - slot->metrics.height) * invWorld;
+    entry.layoutY = (float)(glyph.bearingY_26_6 - glyph.inkHeight_26_6) * invWorld;
 
     // Baked-bearing cell padding, LOGICAL device px, symmetric both sides.
     // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc, per effect:
@@ -299,19 +290,21 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     const int   pageSize = m_Atlas->GetSize();
     const float invS     = 1.0f / (float)pageSize;
 
-    if (bm.width > 0 && bm.rows > 0) {
+    if (glyph.width > 0 && glyph.height > 0) {
         // Port specific: HD font supersampling -- pads scale to texel space so the
         // LOGICAL cell origin stays the exact binary integers (padL, padT).
         const int padLT  = padL * ss;
         const int padTT  = padT * ss;
-        const int cellWT = (int)bm.width + 2 * padLT;
-        const int cellHT = (int)bm.rows  + 2 * padTT;
+        const int cellWT = glyph.width  + 2 * padLT;
+        const int cellHT = glyph.height + 2 * padTT;
 
         std::vector<uint8_t> cell((size_t)cellWT * (size_t)cellHT, 0);
-        for (unsigned int row = 0; row < bm.rows; row++) {
-            memcpy(&cell[(size_t)(row + (unsigned int)padTT) * cellWT + padLT],
-                   bm.buffer + row * bm.pitch,
-                   bm.width);
+        // TtfRasterGlyph::bitmap contract: pitch == width (TtfBackend.h), so
+        // each source row is exactly glyph.width bytes -- one memcpy per row.
+        for (int row = 0; row < glyph.height; row++) {
+            memcpy(&cell[(size_t)(row + padTT) * cellWT + padLT],
+                   glyph.bitmap + (size_t)row * glyph.width,
+                   (size_t)glyph.width);
         }
         if (e == FONT_EFFECT_BLUR && radius > 0) {
             BuildBlur(&cell[0], cellWT, cellHT, radius * ss);
@@ -361,13 +354,13 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
         } else {
             entry.u0 = (float)(x + padLT) * invS;
             entry.v0 = (float)(y + padTT) * invS;
-            entry.u1 = (float)(x + padLT + (int)bm.width) * invS;
-            entry.v1 = (float)(y + padTT + (int)bm.rows)  * invS;
+            entry.u1 = (float)(x + padLT + glyph.width)  * invS;
+            entry.v1 = (float)(y + padTT + glyph.height) * invS;
         }
         entry.pageTextureID = page ? page->m_TextureID : 0;
     } else {
         // Empty (ink-less) glyph, e.g. space: 1x1 transparent LOGICAL cell,
-        // cellOrigin=(0,0), layout metrics kept from the raw FT metrics above.
+        // cellOrigin=(0,0), layout metrics kept from the raw backend metrics above.
         // ASM-spec v1.6.1 Mortar::RenderGlyph @0x0024f5dc (empty-glyph branch).
         std::vector<uint8_t> cell((size_t)(ss * ss), 0);
         int x = 0, y = 0;
@@ -391,9 +384,7 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
 }
 
 float FontCacheObjectTTF::GetKerningForPair(uint32_t a, uint32_t b, float requestedSize) {
-    if (!m_Face) return 0.0f;
-    if (!FT_HAS_KERNING(m_Face)) return 0.0f;
-    if (!m_Atlas) return 0.0f;
+    if (!m_Face || !m_Atlas) return 0.0f;
 
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
@@ -401,16 +392,10 @@ float FontCacheObjectTTF::GetKerningForPair(uint32_t a, uint32_t b, float reques
     // Port specific: HD font supersampling -- set face at Nx size to match GetGlyph.
     if (!SetCharSize(ch26 * (long)kFontSupersample)) return 0.0f;
 
-    FT_UInt idxA = FT_Get_Char_Index(m_Face, (FT_ULong)a);
-    FT_UInt idxB = FT_Get_Char_Index(m_Face, (FT_ULong)b);
-    if (idxA == 0 || idxB == 0) return 0.0f;
-
-    FT_Vector kern;
-    FT_Error err = FT_Get_Kerning(m_Face, idxA, idxB, FT_KERNING_DEFAULT, &kern);
-    if (err) return 0.0f;
-    // kern.x is 26.6; convert to world units and divide by N to restore logical scale.
+    long kern26 = m_Face->GetKerning_26_6(a, b); // 0 if no kern table (matches binary GetKerning stub)
+    // kern26 is 26.6; convert to world units and divide by N to restore logical scale.
     // Port specific: HD font supersampling -- divide by kFontSupersample.
-    return (float)kern.x * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
+    return (float)kern26 * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 
 float FontCacheObjectTTF::GetAscender(float requestedSize) {
@@ -420,7 +405,7 @@ float FontCacheObjectTTF::GetAscender(float requestedSize) {
                                       m_Atlas->m_FontScale);
     // Port specific: HD font supersampling -- set face at Nx size; divide result by N.
     if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return requestedSize;
-    return (float)m_Face->size->metrics.ascender
+    return (float)m_Face->GetAscender_26_6()
            * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 
@@ -431,7 +416,7 @@ float FontCacheObjectTTF::GetDescender(float requestedSize) {
                                       m_Atlas->m_FontScale);
     // Port specific: HD font supersampling -- set face at Nx size; divide result by N.
     if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return 0.0f;
-    return (float)m_Face->size->metrics.descender
+    return (float)m_Face->GetDescender_26_6()
            * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 
@@ -442,7 +427,7 @@ float FontCacheObjectTTF::GetLineHeight(float requestedSize) {
                                       m_Atlas->m_FontScale);
     // Port specific: HD font supersampling -- set face at Nx size; divide result by N.
     if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return requestedSize;
-    return (float)m_Face->size->metrics.height
+    return (float)m_Face->GetLineHeight_26_6()
            * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
 

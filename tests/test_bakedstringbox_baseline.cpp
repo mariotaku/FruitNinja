@@ -205,9 +205,8 @@ static void init_dummy_glyph() {
     s_dummy_initialized = true;
 }
 
-FontCacheObjectTTF::FontCacheObjectTTF(FT_Library, const char*, int pixelSize)
-    : m_FTLib(nullptr)
-    , m_Face(nullptr)
+FontCacheObjectTTF::FontCacheObjectTTF(const char*, int pixelSize)
+    : m_Face(nullptr)
     , m_DefaultPixelSize(pixelSize)
     , m_CurrentCharHeight(-1)
     , m_Atlas(nullptr)
@@ -215,6 +214,7 @@ FontCacheObjectTTF::FontCacheObjectTTF(FT_Library, const char*, int pixelSize)
     init_dummy_glyph();
 }
 FontCacheObjectTTF::~FontCacheObjectTTF() {}
+bool FontCacheObjectTTF::IsValid() const { return true; }
 const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t, float, FONT_EFFECT_ENUM, int) {
     return &s_dummy_glyph;
 }

@@ -8,12 +8,11 @@
 // layout check in the cross-build. This registry provides the TTF state
 // lookup as a separate singleton so Font's layout remains unchanged.
 //
-// Also owns the shared FT_Library instance (one per process).
+// The rasterizer backend (FreeType or stb_truetype, see TtfBackend.h) owns
+// its own process-wide state internally now; this registry only tracks the
+// Font*->FontCacheObjectTTF* map.
 
 #include <map>
-
-struct FT_LibraryRec_;
-typedef FT_LibraryRec_* FT_Library;
 
 namespace Mortar {
 
@@ -34,9 +33,6 @@ public:
     // Look up the TTF face for a Font. Returns nullptr for .fnt fonts.
     FontCacheObjectTTF* Lookup(const Font* font) const;
 
-    // The shared FreeType library instance (lazily initialised).
-    FT_Library GetFTLibrary();
-
 private:
     FontTTFRegistry();
     ~FontTTFRegistry();
@@ -46,7 +42,6 @@ private:
     FontTTFRegistry& operator=(const FontTTFRegistry&);
 
     std::map<const Font*, FontCacheObjectTTF*> m_Map;
-    FT_Library m_FTLib;
 };
 
 } // namespace Mortar

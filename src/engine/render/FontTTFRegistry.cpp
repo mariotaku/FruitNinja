@@ -2,14 +2,9 @@
 #include "render/FontCacheObjectTTF.h"
 #include "debug/Logger.h"
 
-#include <ft2build.h>
-#include FT_FREETYPE_H
-
 namespace Mortar {
 
-FontTTFRegistry::FontTTFRegistry()
-    : m_FTLib(nullptr)
-{
+FontTTFRegistry::FontTTFRegistry() {
 }
 
 FontTTFRegistry::~FontTTFRegistry() {
@@ -19,11 +14,6 @@ FontTTFRegistry::~FontTTFRegistry() {
         delete it->second;
     }
     m_Map.clear();
-
-    if (m_FTLib) {
-        FT_Done_FreeType(m_FTLib);
-        m_FTLib = nullptr;
-    }
 }
 
 FontTTFRegistry& FontTTFRegistry::GetInstance() {
@@ -34,21 +24,10 @@ FontTTFRegistry& FontTTFRegistry::GetInstance() {
     // pre-main globals like FN::s_DebugFont), it would be torn down FIRST, and
     // s_DebugFont's ~Font would then Unregister() into a freed std::map -> crash.
     // Leaking the singleton is the standard static-deinit-order-fiasco fix; the
-    // OS reclaims the memory at process exit (the dtor's FT_Done_FreeType / face
-    // deletes are a clean-exit-only nicety we forgo to stay crash-safe).
+    // OS reclaims the memory at process exit (the dtor's TtfFace deletes are a
+    // clean-exit-only nicety we forgo to stay crash-safe).
     static FontTTFRegistry* instance = new FontTTFRegistry();
     return *instance;
-}
-
-FT_Library FontTTFRegistry::GetFTLibrary() {
-    if (!m_FTLib) {
-        FT_Error err = FT_Init_FreeType(&m_FTLib);
-        if (err) {
-            LOG_ERROR("FontTTFRegistry", "FT_Init_FreeType failed (err %d)", err);
-            m_FTLib = nullptr;
-        }
-    }
-    return m_FTLib;
 }
 
 void FontTTFRegistry::Register(Font* font, FontCacheObjectTTF* ttf) {

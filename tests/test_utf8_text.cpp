@@ -282,9 +282,8 @@ static void init_dummy_glyph() {
 
 namespace Mortar {
 
-FontCacheObjectTTF::FontCacheObjectTTF(FT_Library, const char*, int pixelSize)
-    : m_FTLib(nullptr)
-    , m_Face(nullptr)
+FontCacheObjectTTF::FontCacheObjectTTF(const char*, int pixelSize)
+    : m_Face(nullptr)
     , m_DefaultPixelSize(pixelSize)
     , m_CurrentCharHeight(-1)
     , m_Atlas(nullptr)  // nullptr -> GetAtlas() returns nullptr -> no GL in Layout()
@@ -293,6 +292,7 @@ FontCacheObjectTTF::FontCacheObjectTTF(FT_Library, const char*, int pixelSize)
 }
 
 FontCacheObjectTTF::~FontCacheObjectTTF() {}
+bool FontCacheObjectTTF::IsValid() const { return true; }
 
 // THE RECORDING METHOD: captures every codepoint BakedStringBox asks about.
 const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float /*requestedSize*/,
@@ -480,8 +480,7 @@ static void test_utf8_reset() {
 // ---------------------------------------------------------------------------
 
 static Mortar::FontCacheObjectTTF* make_recording_font() {
-    // FT_Library param is void* in the stub -- pass nullptr.
-    return new Mortar::FontCacheObjectTTF(nullptr, "stub.ttf", 9);
+    return new Mortar::FontCacheObjectTTF("stub.ttf", 9);
 }
 
 static void test_bakedstringbox_ascii_codepoints() {

@@ -16,6 +16,21 @@ option(FN_ASM_VERIFY "Cross-compile for asm-verify (ARM Thumb-2, object files on
 # can opt in; it has zero effect on the host/web/asm-verify configures below.
 option(FRUIT_PLATFORM_WII "Build the Wii (GX/libogc2) platform target -- requires devkitPPC" OFF)
 
+# --- Dynamic-TTF rasterizer backend (compile-time swappable) ---
+# FontCacheObjectTTF (src/engine/render/FontCacheObjectTTF.cpp) rasterizes
+# CJK/Arabic TTF glyphs through the Mortar::TtfFace seam
+# (src/engine/render/TtfBackend.h); exactly one of TtfBackendFreetype.cpp /
+# TtfBackendStb.cpp is compiled, selected here. "freetype" is the default on
+# every platform that has it available (host/web); Wii has no FreeType port
+# (see the FreeType gating further down) so it is forced to "stb" regardless
+# of what the cache entry says.
+set(FN_TTF_BACKEND "freetype" CACHE STRING "Dynamic TTF rasterizer backend: freetype or stb")
+set_property(CACHE FN_TTF_BACKEND PROPERTY STRINGS freetype stb)
+if (FRUIT_PLATFORM_WII)
+    set(FN_TTF_BACKEND "stb")
+endif()
+message(STATUS "FN_TTF_BACKEND = ${FN_TTF_BACKEND}")
+
 # Port specific: compile-time render interpolation toggle.
 # Default ON for host/web builds; always forced OFF under FN_ASM_VERIFY
 # (cross-build must never see RenderInterp.* or unordered_map churn).
@@ -377,9 +392,22 @@ endif()
 
 # --- FreeType ---
 # Used for dynamic glyph rendering of the game's CJK/Arabic TTF fonts
-# (Data/fontstruetype/arabic.ttf, gangofchinese.ttf).
-# The existing .fnt bitmap path is unchanged; FreeType is additive.
-if (EMSCRIPTEN)
+# (Data/fontstruetype/arabic.ttf, gangofchinese.ttf) when FN_TTF_BACKEND is
+# "freetype" (the default -- see the FN_TTF_BACKEND option above). The
+# existing .fnt bitmap path is unchanged either way; dynamic TTF is additive.
+# When FN_TTF_BACKEND is "stb", this whole acquisition block is skipped --
+# src/engine/CMakeLists.txt compiles TtfBackendStb.cpp instead of
+# TtfBackendFreetype.cpp and never links Freetype::Freetype for that backend.
+# NOTE: this whole block (and the rest of this if(NOT FN_ASM_VERIFY AND NOT
+# FRUIT_PLATFORM_WII) branch) is unreachable for FRUIT_PLATFORM_WII anyway --
+# that config takes the else() branch further down, which already stubs a
+# no-op Freetype::Freetype INTERFACE target for both FN_ASM_VERIFY and Wii.
+# This gate only matters for a non-Wii host/web build that opts into
+# -DFN_TTF_BACKEND=stb explicitly.
+if (FN_TTF_BACKEND STREQUAL "stb")
+    # No-op: no FreeType acquisition, no Freetype::Freetype target. Nothing
+    # in src/engine links it for this backend (see src/engine/CMakeLists.txt).
+elseif (EMSCRIPTEN)
     # Port specific: Emscripten ships FreeType as a port; -sUSE_FREETYPE=1
     # activates it at compile+link time. Create an INTERFACE target so the
     # rest of the build links as usual against Freetype::Freetype.

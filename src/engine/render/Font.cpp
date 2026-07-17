@@ -323,15 +323,9 @@ static bool HasTTFExtension(const char* path) {
 }
 
 int Font::LoadTTF(const char* path) {
-    FT_Library ftLib = FontTTFRegistry::GetInstance().GetFTLibrary();
-    if (!ftLib) {
-        LOG_ERROR("FONT/LoadTTF", "FreeType library not initialised");
-        return 0;
-    }
-
     // Port specific: resolve the absolute path via the same FileSystem layer
     // the .fnt path uses (data_dir prefix). We need the real filesystem path
-    // for FT_New_Face which takes an OS path.
+    // for TtfFace::Open (backend's font-file loader), which takes an OS path.
     // Use TextureManager::GetDataDir() to construct the full path.
     const char* dataDir = TextureManager::GetDataDir();
     char fullPath[512] = "";
@@ -351,8 +345,7 @@ int Font::LoadTTF(const char* path) {
     // will re-render at the exact pixel size requested by the caller.
     const int defaultPixelSize = 32;
 
-    FontCacheObjectTTF* ttf = new FontCacheObjectTTF(ftLib, fullPath,
-                                                      defaultPixelSize);
+    FontCacheObjectTTF* ttf = new FontCacheObjectTTF(fullPath, defaultPixelSize);
     if (!ttf->IsValid()) {
         delete ttf;
         LOG_ERROR("FONT/LoadTTF", "failed to load TTF face from '%s'", fullPath);
@@ -370,7 +363,8 @@ int Font::LoadTTF(const char* path) {
 }
 
 int Font::Load(const char* path) {
-    // Port specific: route .ttf / .otf to the FreeType path.
+    // Port specific: route .ttf / .otf to the dynamic-TTF path (backend
+    // chosen at compile time via FN_TTF_BACKEND -- see TtfBackend.h).
     if (HasTTFExtension(path)) {
         return LoadTTF(path);
     }

@@ -568,23 +568,18 @@ int main(int argc, char* argv[]) {
         printf("[text_render] WARN: pFontMain not available -- no bitmap label fallback\n");
     }
 
-    // Verdana via FontCacheObjectTTF (direct FT load, not via Font::Create path resolve).
+    // Verdana via FontCacheObjectTTF (direct backend load, not via Font::Create path resolve).
     Mortar::FontCacheObjectTTF* verdanaFont = NULL;
     {
-        FT_Library ftLib = Mortar::FontTTFRegistry::GetInstance().GetFTLibrary();
-        if (ftLib) {
-            const char* verdanaPath = "C:\\Windows\\Fonts\\verdana.ttf";
-            verdanaFont = new Mortar::FontCacheObjectTTF(ftLib, verdanaPath, 12);
-            if (!verdanaFont->IsValid()) {
-                delete verdanaFont;
-                verdanaFont = NULL;
-                printf("[text_render] WARN: verdana.ttf not found at %s -- using bitmap fallback\n",
-                       verdanaPath);
-            } else {
-                printf("[text_render] Verdana label font: OK (%s)\n", verdanaPath);
-            }
+        const char* verdanaPath = "C:\\Windows\\Fonts\\verdana.ttf";
+        verdanaFont = new Mortar::FontCacheObjectTTF(verdanaPath, 12);
+        if (!verdanaFont->IsValid()) {
+            delete verdanaFont;
+            verdanaFont = NULL;
+            printf("[text_render] WARN: verdana.ttf not found at %s -- using bitmap fallback\n",
+                   verdanaPath);
         } else {
-            printf("[text_render] WARN: FT_Library not ready -- using bitmap label fallback\n");
+            printf("[text_render] Verdana label font: OK (%s)\n", verdanaPath);
         }
     }
 

@@ -1,19 +1,24 @@
 #ifndef FN_ENGINE_RENDER_FONTCACHEOBJECTTTF_H
 #define FN_ENGINE_RENDER_FONTCACHEOBJECTTTF_H
 
-// Mortar::FontCacheObjectTTF — FreeType-backed TTF glyph cache.
+// Mortar::FontCacheObjectTTF — dynamic-TTF glyph cache (backend-neutral).
 //
 // Port specific: not a binary struct. The binary's IFont / IGlyphCache API
-// (Samsung Bada framework) is replaced by this portable FreeType wrapper.
+// (Samsung Bada framework) is replaced by this portable wrapper. The actual
+// rasterizer (FreeType or stb_truetype) is selected at CMake configure time
+// via FN_TTF_BACKEND and lives behind the Mortar::TtfFace seam (TtfBackend.h)
+// -- this class only ever calls TtfFace's backend-neutral API, never FT/stb
+// directly.
 //
 // Lifecycle:
 //   1. Construct with a path to a .ttf file and a pixel size.
 //   2. GetGlyph(cp, pixelSize) returns a GlyphAtlasEntry* (or nullptr if the
 //      codepoint is not in the font), lazily rendering the glyph and packing it
 //      into the shared FontInterface atlas.
-//   3. GetKerningForPair(a, b) returns the kerning advance in pixels (FreeType
-//      FT_Get_Kerning). Always returns 0.0f when the font has no kern table —
-//      matching the binary's GetKerning stub behaviour for .fnt fonts.
+//   3. GetKerningForPair(a, b) returns the kerning advance in pixels (via
+//      TtfFace::GetKerning_26_6). Always returns 0.0f when the font has no
+//      kern table -- matching the binary's GetKerning stub behaviour for
+//      .fnt fonts.
 //
 // Thread safety: not thread-safe; single-threaded game loop is assumed.
 
@@ -21,14 +26,9 @@
 #include <cstdint>
 #include <map>
 
-// Forward-declare FreeType types to avoid including ft2build.h in the header
-// (which would force it into every translation unit that includes this header).
-struct FT_LibraryRec_;
-struct FT_FaceRec_;
-typedef FT_LibraryRec_* FT_Library;
-typedef FT_FaceRec_*    FT_Face;
-
 namespace Mortar {
+
+class TtfFace;
 
 // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
 // FreeType is asked to rasterize glyphs at (requestedSize * kFontSupersample); the resulting bitmap and atlas
@@ -82,10 +82,12 @@ public:
 
     // Loads the TTF face from a file path.
     // pixelSize is the default pixel height; GetGlyph accepts per-call sizes.
-    FontCacheObjectTTF(FT_Library ftLib, const char* path, int defaultPixelSize);
+    // Backend (FreeType or stb_truetype) is chosen at CMake configure time
+    // via FN_TTF_BACKEND -- see TtfBackend.h.
+    FontCacheObjectTTF(const char* path, int defaultPixelSize);
     ~FontCacheObjectTTF();
 
-    bool IsValid() const { return m_Face != nullptr; }
+    bool IsValid() const;
 
     // Returns a cached GlyphAtlasEntry for (cp, requestedSize, effect, radius).
     // requestedSize is the pre-scale font size (e.g. 9.0f).
@@ -126,19 +128,18 @@ public:
     float GetLineHeight(float requestedSize);
 
 private:
-    FT_Library  m_FTLib;           // shared FT_Library (not owned)
-    FT_Face     m_Face;            // owned FT_Face
+    TtfFace*    m_Face;            // owned; backend chosen at compile time (TtfBackend.h)
     int         m_DefaultPixelSize;
-    long        m_CurrentCharHeight; // last charHeight_26_6 passed to FT_Set_Char_Size
+    long        m_CurrentCharHeight; // last charHeight_26_6 passed to m_Face->SetPixelSize
 
     FontInterface* m_Atlas;        // owned glyph atlas
 
     // Glyph cache: GlyphCacheKey -> GlyphAtlasEntry (metrics in world units)
     std::map<GlyphCacheKey, GlyphAtlasEntry> m_Cache;
 
-    // Apply FT_Set_Char_Size for the given charHeight_26_6 value.
+    // Apply TtfFace::SetPixelSize for the given charHeight_26_6 value.
     // charHeight_26_6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0).
-    // Tracks m_CurrentCharHeight to avoid redundant FT calls.
+    // Tracks m_CurrentCharHeight to avoid redundant backend calls.
     bool SetCharSize(long charHeight_26_6);
 };
 

@@ -445,17 +445,14 @@ int main(int argc, char* argv[]) {
 
     Mortar::FontCacheObjectTTF* verdanaFont = NULL;
     {
-        FT_Library ftLib = Mortar::FontTTFRegistry::GetInstance().GetFTLibrary();
-        if (ftLib) {
-            const char* verdanaPath = "C:\\Windows\\Fonts\\verdana.ttf";
-            verdanaFont = new Mortar::FontCacheObjectTTF(ftLib, verdanaPath, 12);
-            if (!verdanaFont->IsValid()) {
-                delete verdanaFont;
-                verdanaFont = NULL;
-                printf("[fancybakedstring_render] WARN: verdana.ttf not found -- bitmap label fallback\n");
-            } else {
-                printf("[fancybakedstring_render] Verdana label font: OK\n");
-            }
+        const char* verdanaPath = "C:\\Windows\\Fonts\\verdana.ttf";
+        verdanaFont = new Mortar::FontCacheObjectTTF(verdanaPath, 12);
+        if (!verdanaFont->IsValid()) {
+            delete verdanaFont;
+            verdanaFont = NULL;
+            printf("[fancybakedstring_render] WARN: verdana.ttf not found -- bitmap label fallback\n");
+        } else {
+            printf("[fancybakedstring_render] Verdana label font: OK\n");
         }
     }
 

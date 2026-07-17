@@ -190,17 +190,12 @@ int main(int argc, char* argv[]) {
     // Load Verdana for caption labels (optional; test still passes if absent).
     Mortar::FontCacheObjectTTF* verdanaFont = NULL;
     {
-        FT_Library ftLib = Mortar::FontTTFRegistry::GetInstance().GetFTLibrary();
-        if (ftLib) {
-            const char* verdanaPath = "C:\\Windows\\Fonts\\verdana.ttf";
-            verdanaFont = new Mortar::FontCacheObjectTTF(ftLib, verdanaPath, 9);
-            if (!verdanaFont->IsValid()) {
-                delete verdanaFont;
-                verdanaFont = NULL;
-                std::printf("[menubutton_render] WARN: verdana.ttf absent -- captions omitted\n");
-            }
-        } else {
-            std::printf("[menubutton_render] WARN: FT_Library not ready -- captions omitted\n");
+        const char* verdanaPath = "C:\\Windows\\Fonts\\verdana.ttf";
+        verdanaFont = new Mortar::FontCacheObjectTTF(verdanaPath, 9);
+        if (!verdanaFont->IsValid()) {
+            delete verdanaFont;
+            verdanaFont = NULL;
+            std::printf("[menubutton_render] WARN: verdana.ttf absent -- captions omitted\n");
         }
     }
 

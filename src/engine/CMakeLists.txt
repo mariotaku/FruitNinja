@@ -119,14 +119,26 @@ target_sources(mortar_engine PRIVATE
     render/Font.cpp
     render/BakedString.cpp
     render/FontInterface.cpp
-    render/FontCacheObjectTTF.cpp
-    render/FontTTFRegistry.cpp
     render/BakedStringBox.cpp
     render/BakedStringTTF.cpp
     render/FancyBakedString.cpp
     # MenuBackground — ChangeBackground + GetCurrentBackground
     MenuBackground.cpp
 )
+# Dynamic TTF glyph rendering -- backend-neutral (see the Mortar::TtfFace
+# seam, src/engine/render/TtfBackend.h). These two TUs never call FreeType or
+# stb_truetype directly, so they compile for every platform including Wii;
+# FN_TTF_BACKEND below selects exactly which backend .cpp implements the seam.
+target_sources(mortar_engine PRIVATE
+    render/FontCacheObjectTTF.cpp
+    render/FontTTFRegistry.cpp
+)
+if (FN_TTF_BACKEND STREQUAL "stb")
+    target_sources(mortar_engine PRIVATE render/TtfBackendStb.cpp)
+    target_include_directories(mortar_engine PRIVATE ${CMAKE_SOURCE_DIR})
+else()
+    target_sources(mortar_engine PRIVATE render/TtfBackendFreetype.cpp)
+endif()
 # TiXml.cpp is the sole tinyxml2 TU for the TiXml-1 shim.
 # Excluded from asm-verify cross-build: no binary counterpart in this form.
 if(NOT FN_ASM_VERIFY)
@@ -176,7 +188,10 @@ if(NOT FN_ASM_VERIFY)
         # fruit-ninja executable target). No system GL library to link here.
         # No target_link_libraries call needed here.
     endif()
-    target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2 Freetype::Freetype)
+    target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2)
+    if (FN_TTF_BACKEND STREQUAL "freetype")
+        target_link_libraries(mortar_engine PUBLIC Freetype::Freetype)
+    endif()
     # Port specific: web compressed textures (libwebp). Decoder linked into the
     # engine (TextureFileFormat.cpp's ReadWebP). PRIVATE: only the .cpp needs it;
     # the public header #if's WebP out. Present on desktop too (reader is inert).
