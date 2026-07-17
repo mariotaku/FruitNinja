@@ -406,6 +406,14 @@
     body.is-fullscreen #fullscreen-btn {
       display: none !important;
     }
+
+    /* Installed PWA: the manifest is display:fullscreen (fallback standalone),
+       so a launched app already has no browser chrome -- the fullscreen toggle
+       is redundant there, hide it. A plain browser tab (display-mode: browser)
+       still shows it. Covers all installed display modes. */
+    @media (display-mode: fullscreen), (display-mode: standalone), (display-mode: minimal-ui) {
+      #fullscreen-btn { display: none !important; }
+    }
   </style>
 </head>
 <body>
