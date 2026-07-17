@@ -1,6 +1,9 @@
 #ifndef FN_ENGINE_UTIL_ENDIAN_H
 #define FN_ENGINE_UTIL_ENDIAN_H
 
+#include <stdint.h>
+#include <cstring>
+
 // Endian -- platform endianness query namespace.
 //
 // Binary: Endian::GetEndian(), Endian::IsBigEndian() referenced in
@@ -11,13 +14,26 @@
 //
 // TODO: v1.6.1 -- RE full Endian namespace: exact enum value constants for
 //   Endianness (LITTLE/BIG), ConvertFromLittle<T> body, any other members.
-//   All SDL2 targets are little-endian; the BE path is dead but must be
-//   modelled to match the binary's conditional.
+//   All SDL2/x86/wasm32 targets are little-endian; the BE path is dead there
+//   but must be modelled to match the binary's conditional. It is LIVE on the
+//   Wii port target (PowerPC, big-endian) -- see FN_BIG_ENDIAN below.
 //
-// Port note: ARM Bada device is little-endian; all supported SDL2 targets
-// (x86, x86_64, Emscripten/wasm32) are also little-endian. GetEndian()
-// always returns LITTLE and IsBigEndian() always returns false. The endian-
-// swap path in ReadBasicType is compiled but never executed.
+// Port note: every on-disk asset format (.tex/.mad/.mmd/string tables/save
+// numeric blobs) and all RE'd struct layouts are little-endian, matching the
+// original ARM Bada device. Host/web targets (x86, x86_64, wasm32) are also
+// little-endian, so GetEndian() returns LITTLE there and the swap paths below
+// are dead code (compiled out). On Wii (PowerPC, big-endian) GetEndian()
+// returns BIG, which activates DataStreamReader::ReadBasicType's existing
+// swap and the FN_BIG_ENDIAN-gated swaps added to the native-load readers.
+//
+// Port specific: FN_BIG_ENDIAN gate. Not from the binary -- the original
+// ARM Bada target is always little-endian, so this macro has no binary
+// counterpart. It exists solely so the Wii (big-endian PowerPC) port can
+// byteswap little-endian on-disk data at the file-read boundary while
+// leaving every little-endian target (host/web/asm-verify) untouched.
+#if defined(FRUIT_PLATFORM_WII) || (defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#define FN_BIG_ENDIAN 1
+#endif
 
 namespace Endian {
 
@@ -31,16 +47,69 @@ enum Endianness {
 
 // GetEndian() -- returns the native host byte order.
 // Binary @ 0x002558A0 (ReadLE) calls this indirectly via IsBigEndian().
-// On all port targets (LE only) this always returns LITTLE.
+// On little-endian port targets (host/web/asm-verify) this always returns
+// LITTLE. On FN_BIG_ENDIAN targets (Wii) it returns BIG, which is what
+// activates DataStreamReader::ReadBasicType's existing (binary-modelled)
+// swap path.
 inline Endianness GetEndian() {
+#if defined(FN_BIG_ENDIAN)
+    return BIG;
+#else
     return LITTLE;
+#endif
 }
 
 // IsBigEndian() -- convenience wrapper around GetEndian().
-// Binary @ 0x002558A0 branches on this; branch is never taken on LE targets.
+// Binary @ 0x002558A0 branches on this; branch is never taken on LE targets,
+// live on FN_BIG_ENDIAN targets (Wii).
 inline bool IsBigEndian() {
     return GetEndian() == BIG;
 }
+
+// ---------------------------------------------------------------------
+// Port specific: byteswap helpers. No binary counterpart (the ARM Bada
+// target never needed them) -- added so the native-load primitive readers
+// (DataReader::ReadLE, StringTable::LoadHeader/LoadLanguage, MeshManager's
+// PSP stream header reads, TextureFileFormat's raw header memcpy reads) can
+// byteswap little-endian on-disk values at the file-read boundary on
+// FN_BIG_ENDIAN targets. Unused (and left undefined) on little-endian
+// targets to keep those builds byte-for-byte unchanged.
+// ---------------------------------------------------------------------
+#if defined(FN_BIG_ENDIAN)
+
+inline uint16_t fnByteSwap16(uint16_t v) {
+    return (uint16_t)((v >> 8) | (v << 8));
+}
+
+inline uint32_t fnByteSwap32(uint32_t v) {
+    return ((v >> 24) & 0x000000FFu)
+         | ((v >>  8) & 0x0000FF00u)
+         | ((v <<  8) & 0x00FF0000u)
+         | ((v << 24) & 0xFF000000u);
+}
+
+inline uint64_t fnByteSwap64(uint64_t v) {
+    return ((v >> 56) & 0x00000000000000FFull)
+         | ((v >> 40) & 0x000000000000FF00ull)
+         | ((v >> 24) & 0x0000000000FF0000ull)
+         | ((v >>  8) & 0x00000000FF000000ull)
+         | ((v <<  8) & 0x000000FF00000000ull)
+         | ((v << 24) & 0x0000FF0000000000ull)
+         | ((v << 40) & 0x00FF000000000000ull)
+         | ((v << 56) & 0xFF00000000000000ull);
+}
+
+// Float swap: reinterpret the 4-byte pattern, swap as uint32_t, reinterpret back.
+inline float fnByteSwapFloat(float v) {
+    uint32_t bits;
+    memcpy(&bits, &v, sizeof(bits));
+    bits = fnByteSwap32(bits);
+    float out;
+    memcpy(&out, &bits, sizeof(out));
+    return out;
+}
+
+#endif // FN_BIG_ENDIAN
 
 } // namespace Endian
 
@@ -62,6 +131,16 @@ enum Endianness {
     LITTLE = ::Endian::LITTLE,
     BIG    = ::Endian::BIG
 };
+
+// Callers inside `namespace Mortar` write `Endian::fnByteSwap*`, which resolves
+// to THIS nested namespace, not global `::Endian`. Re-export the global swap
+// helpers here so those call sites resolve without every one qualifying `::`.
+#if defined(FN_BIG_ENDIAN)
+using ::Endian::fnByteSwap16;
+using ::Endian::fnByteSwap32;
+using ::Endian::fnByteSwap64;
+using ::Endian::fnByteSwapFloat;
+#endif
 
 } // namespace Endian
 } // namespace Mortar

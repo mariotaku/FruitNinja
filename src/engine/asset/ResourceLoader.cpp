@@ -8,6 +8,7 @@
 #include "asset/Model.h"
 #include "util/PathFunctions.h"
 #include "util/StringHash.h"
+#include "util/Endian.h"
 #include "debug/Logger.h"
 #include <cstring>
 
@@ -235,7 +236,12 @@ template SmartPtr<Mesh>          ResourceLoader::Load<Mesh>();
 // Length is clamped to 511 (binary uses 512-byte stack buffer).
 AsciiString ReadString(unsigned char** cursor) {
     unsigned char* p = *cursor;
-    uint32_t len = *(uint32_t*)p;
+    uint32_t len;
+    memcpy(&len, p, 4);
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: on-disk length is little-endian; byteswap the native load.
+    len = Endian::fnByteSwap32(len);
+#endif
     p += 4;                         // advance past 4-byte length
     if (len > 511) len = 511;
     char buf[512];
@@ -249,7 +255,12 @@ AsciiString ReadString(unsigned char** cursor) {
 // Stream: [uint32 len][len bytes][\0].
 // If len >= 101, returns 0 (sanity guard). Otherwise returns StringHash(bytes, len).
 uint32_t ReadChunkHash(unsigned char** cursor) {
-    uint32_t len = **(uint32_t**)cursor;
+    uint32_t len;
+    memcpy(&len, *cursor, 4);
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: on-disk length is little-endian; byteswap the native load.
+    len = Endian::fnByteSwap32(len);
+#endif
     if (len >= 101) return 0;
     unsigned char* p = *(unsigned char**)cursor + 4;  // skip uint32 length
     *(unsigned char**)cursor = p;                     // advance past length
@@ -265,6 +276,10 @@ uint32_t ReadChunkHash(unsigned char** cursor) {
 float ReadFloat(unsigned char** cursor) {
     float* p = (float*)*cursor;
     float val = *p;
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: on-disk float is little-endian; byteswap the native load.
+    val = Endian::fnByteSwapFloat(val);
+#endif
     *cursor = (unsigned char*)(p + 1);  // advance by sizeof(float) = 4
     return val;
 }
@@ -279,6 +294,12 @@ _Vector3<float> ReadVec3(unsigned char** cursor)
     out.x = *(float*)(p + 0);
     out.y = *(float*)(p + 4);
     out.z = *(float*)(p + 8);
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: on-disk floats are little-endian; byteswap the native loads.
+    out.x = Endian::fnByteSwapFloat(out.x);
+    out.y = Endian::fnByteSwapFloat(out.y);
+    out.z = Endian::fnByteSwapFloat(out.z);
+#endif
     return out;
 }
 

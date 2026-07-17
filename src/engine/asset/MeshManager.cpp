@@ -7,10 +7,12 @@
 #include "asset/Effect.h"
 #include "util/Immutable.h"
 #include "util/PathFunctions.h"
+#include "util/Endian.h"
 #include "debug/Logger.h"
 #include <cstring>
 #include <string>
 #include <map>
+#include <vector>
 
 namespace Mortar {
 
@@ -107,6 +109,12 @@ SmartPtr<IVertexStream> LoadVertexStreamPSP(ResourceLoader& rl)
     memcpy(&vertDecl, data + pos, 4); pos += 4;
     uint32_t vertCount = 0;
     memcpy(&vertCount, data + pos, 4); pos += 4;
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: on-disk fields are little-endian (still the binary's format);
+    // byteswap after the native load on big-endian targets (Wii).
+    vertDecl  = Endian::fnByteSwap32(vertDecl);
+    vertCount = Endian::fnByteSwap32(vertCount);
+#endif
     if (vertCount == 0 || vertCount > 100000) return SmartPtr<IVertexStream>();
 
     // PSP vertex declaration layout. Stride is computed per binary
@@ -199,10 +207,36 @@ SmartPtr<IVertexStream> LoadVertexStreamPSP(ResourceLoader& rl)
     size_t vertDataSize = (size_t)vertCount * layout.totalStride;
     if (pos + vertDataSize > dataSize) return SmartPtr<IVertexStream>();
 
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: the on-disk vertex stream is little-endian (binary format
+    // unchanged); the Wii GL-on-GX shim (gl_funcsWii.cpp EmitVertex) reads the
+    // uploaded buffer's tex/normal/pos slots as native float and the colour
+    // slot as 4 raw bytes (endian-neutral). Byteswap only the float slots
+    // in-place per vertex before upload; the packed RGBA colour slot is left
+    // untouched (byte order doesn't matter for a byte array).
+    std::vector<unsigned char> swappedVerts(data + pos, data + pos + vertDataSize);
+    for (uint32_t vi = 0; vi < vertCount; ++vi) {
+        unsigned char* v = swappedVerts.data() + (size_t)vi * layout.totalStride;
+        int floatOffsets[3]   = { layout.texOffset,  layout.normalOffset, layout.posOffset };
+        int floatByteSizes[3] = { layout.texSize,    layout.normalSize,   layout.posSize   };
+        for (int slot = 0; slot < 3; ++slot) {
+            for (int b = 0; b + 4 <= floatByteSizes[slot]; b += 4) {
+                float f;
+                memcpy(&f, v + floatOffsets[slot] + b, 4);
+                f = Endian::fnByteSwapFloat(f);
+                memcpy(v + floatOffsets[slot] + b, &f, 4);
+            }
+        }
+    }
+    const void* uploadData = swappedVerts.data();
+#else
+    const void* uploadData = data + pos;
+#endif
+
     IVertexStream* vs = new IVertexStream();
     glGenBuffers(1, &vs->m_Vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vs->m_Vbo);
-    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vertDataSize, data + pos, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vertDataSize, uploadData, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     vs->m_VertCount = (int)vertCount;
     vs->m_Layout = layout;
@@ -256,15 +290,34 @@ SmartPtr<IIndexStream> LoadIndexStreamPSP(ResourceLoader& rl)
     if (pos + 4 > dataSize) return SmartPtr<IIndexStream>();
     uint32_t idxCount = 0;
     memcpy(&idxCount, data + pos, 4); pos += 4;
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: on-disk field is little-endian; byteswap after the native
+    // load on big-endian targets (Wii).
+    idxCount = Endian::fnByteSwap32(idxCount);
+#endif
     if (idxCount == 0 || idxCount > 100000) return SmartPtr<IIndexStream>();
     size_t idxDataSize = (size_t)idxCount * 2;
     if (pos + idxDataSize > dataSize) return SmartPtr<IIndexStream>();
+
+#if defined(FN_BIG_ENDIAN)
+    // Port specific: on-disk indices are little-endian uint16; the Wii
+    // GL-on-GX shim (gl_funcsWii.cpp glDrawElements) reads the uploaded
+    // buffer as native uint16_t, so byteswap each index before upload.
+    std::vector<unsigned char> swappedIdx(data + pos, data + pos + idxDataSize);
+    uint16_t* idx16 = reinterpret_cast<uint16_t*>(swappedIdx.data());
+    for (uint32_t ii = 0; ii < idxCount; ++ii) {
+        idx16[ii] = Endian::fnByteSwap16(idx16[ii]);
+    }
+    const void* uploadIdxData = swappedIdx.data();
+#else
+    const void* uploadIdxData = data + pos;
+#endif
 
     IIndexStream* is = new IIndexStream();
     is->m_PrimType = primType;
     glGenBuffers(1, &is->m_Ibo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, is->m_Ibo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)idxDataSize, data + pos, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)idxDataSize, uploadIdxData, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
     is->m_IndexCount = (int)idxCount;
 

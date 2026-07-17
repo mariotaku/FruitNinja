@@ -1,126 +1,124 @@
-# Wii port -- scaffolding roadmap
+# Wii port (GX / libogc)
 
-Status: **scaffolding only**. Nothing here renders, plays audio, reads a
-disc/SD file, or reads a Wiimote yet. This is the seam future work fills in.
-Not built by default; see "Build gate" below.
+Status: **builds + links to a bootable `fruit-ninja.dol`** (PowerPC, entry
+`0x80003f00`). Boots the engine + game; input is live (Wii Remote IR). Rendering
+(GX draws) and audio are early — see "State" below. `-DFRUIT_PLATFORM_WII=ON`;
+every other build (host/web/asm-verify) is unaffected.
 
-## Approach
+## Approach — GL-on-GX shim (not a separate GX Renderer)
 
-Same split the SDL/Emscripten backends already use: portable engine/game code
-in `src/engine/`, `src/game/`, `src/entities/`, `src/hud/`, `src/screens/`,
-`src/ui/` stays untouched. Only the platform boundary changes:
+The engine was migrated to hand-written ES2 shaders, and the core render TUs
+(`Renderer.cpp`, `DisplayManager.cpp`, `Texture.cpp`, `ShaderProgram.cpp`,
+`Shaders.cpp`, `MeshManager.cpp`, …) call GL through `gl_compat.h`. Rather than
+fork all of them, the Wii backend implements **GL on top of GX**:
 
-| Concern | SDL backend | Wii backend |
+- `src/engine/render/gl_compat.h` — a `FRUIT_PLATFORM_WII` branch defines the GL
+  types + standard-value constants + `gl*` prototypes (no `SDL_opengl.h`).
+- `src/engine/render/gl_funcsWii.cpp` — the shim. `gl*` are GX-backed:
+  - **real**: state (blend/cull/depth via `GX_Set*`), viewport/scissor, textures
+    (`glTexImage2D` → linear→`GX_TF_RGBA8` tiled `GX_TexObj`), buffers (CPU copy
+    kept), `glUniformMatrix4fv`/`glVertexAttribPointer` recorded for the draw.
+  - **draws**: `glDrawArrays`/`glDrawElements` → GX immediate mode. The recorded
+    ES2 MVP is loaded as the GX projection (`GX_PERSPECTIVE`, full 4×4) with an
+    identity pos-matrix, reproducing `clip = MVP·pos`; TEV = `GX_MODULATE` when
+    textured else `GX_PASSCLR`.
+  - **no-op**: the shader-object calls (`glCreateShader`/`glUseProgram`/…) — GX
+    has no GLSL, so `ShaderProgram`/`Shaders` compile but do nothing; the draw
+    path above replaces them.
+
+So the ~14 GL-owning render/asset files compile **unchanged**; the swap is
+confined to the shim. `MatrixManager` is pure math, reused as-is.
+
+## Platform pieces
+
+| Concern | File | State |
 |---|---|---|
-| Video/GL | OpenGL ES2 via SDL_GL + `gl_funcsSDL.cpp` | GX (libogc2), no GL at all -- see `gx/` |
-| Input | SDL touch/mouse -> `InputTranslatorSDL` | WPAD IR -> `InputTranslatorWii` |
-| Audio | SDL raw audio callback -> `SoundManagerSDL`-style backend | ASND/AESND -> `SoundManagerWii` |
-| Filesystem | `FileSystem_Direct`/`IFile_Direct` (stdio) | same base classes, libfat FILE* -- see `FileSystemWii.cpp` |
-| Entry point | `mainSDL.cpp` | `mainWii.cpp` |
+| Entry + loop | `mainWii.cpp` | real: VIDEO/GX/WPAD/libfat init, fixed-step loop, HOME-quit |
+| Video swap | `../../engine/render/DisplayManagerWii.cpp` | real: `GX_CopyDisp` + VIDEO present |
+| Video seam | `WiiVideo.h` | shared XFB/rmode between mainWii + DisplayManagerWii |
+| Input | `InputTranslatorWii.{h,cpp}` | **real**: WPAD IR pointer → `Mortar::Touch` finger (remote 0..3 → channel 1..4), shared `Layout::TouchToGame` transform |
+| Game glue | `../../GameWii.cpp` | real: SDL-free twin of `GameSDL.cpp` |
+| Licensing | `../../game/LicensingWii.cpp` | stub twin (defunct `OpenBrowser`) |
+| Audio | `SoundManagerWii.cpp` | **stub** — ASND/AESND not wired yet (no sound) |
+| Filesystem | `FileSystemWii.{cpp,h}`, `FileWii.h` | libfat over the `FileSystem_Direct`/`IFile_Direct` bases |
 
-The engine's draw API (`Renderer::DrawQuad`/`DrawTriList`/`DrawTriStrip`/
-`DrawMesh3D` + font/particle wrappers, `src/engine/render/Renderer.h`) is the
-**only** surface gameplay/screen/HUD code calls -- confirmed zero raw GL in
-`src/game/`, `src/entities/`, `src/hud/`, `src/screens/`, `src/ui/`. That
-means the Wii port needs a GX-backed `Renderer` implementation and nothing
-else changes above the render API. `MatrixManager` (`src/engine/render/
-MatrixManager.h`, `MatrixManager.cpp`) is pure math (row/col vectors + 4x4
-multiply, no GL calls) and needs **no changes** -- only the site that
-currently uploads the MVP via `glUniformMatrix4fv` swaps to writing GX
-projection/modelview registers.
+## Endianness
 
-## GX render backend mapping
+Wii/PPC is **big-endian**; assets are **little-endian** on disk.
+`src/engine/util/Endian.h` defines `FN_BIG_ENDIAN` when `FRUIT_PLATFORM_WII`
+is set (or on any `__BYTE_ORDER__`-big-endian target) and provides the
+`Endian::fnByteSwap16/32/64/Float` primitives; undefined (dead code) on
+host/web/asm-verify.
 
-See `gx/README.md` for the file-by-file mapping. Summary: the ~14
-render/asset files that own real GL calls today are:
+Byteswaps are gated behind `FN_BIG_ENDIAN` at each native-load choke point:
+`DataReader::ReadLE<T>`, `DataStreamReader::ReadRaw`/`ReadBasicType` (already
+had a binary-modelled swap keyed on `Endian::GetEndian()`; just needed
+`GetEndian()` to return `BIG`), `StringTable::LoadHeader`/`LoadLanguage`,
+`TextureFileFormat.cpp`'s Tex2/DDS/Tex3 header + FourCC reads, and
+`MeshManager.cpp`'s PSP vertex/index stream header fields. Readers that
+already assembled values byte-by-byte (explicit LE assembly) needed no
+change; see per-reader notes in each file.
 
-- `src/engine/render/`: `Renderer.cpp`, `ShaderProgram.cpp`, `Shaders.cpp`,
-  `DisplayManager.cpp` (+ `DisplayManagerSDL.cpp`), `MatrixManager.cpp`,
-  `gl_funcs.h` (+ `gl_funcsSDL.cpp`/`gl_funcsWin32.cpp`), `Font.cpp`/
-  `BakedString.cpp`/`BakedStringTTF.cpp`/`FancyBakedString.cpp` (font quad
-  batching goes through `Renderer::DrawTriStrip`, no separate GL surface).
-- `src/engine/asset/`: `Texture.cpp`, `ReloadableTexture.cpp`,
-  `TextureManager.cpp`, `Geometry.cpp`, `Mesh.cpp`, `MeshManager.cpp`.
+16-bit texture formats (RGBA5551/RGBA4444/RGB565) are the pixel-path case:
+`Texture.cpp` swaps the raw pixel buffer's `uint16_t` texels on
+`FN_BIG_ENDIAN` before GL/GX upload -- this is live on Wii, since
+`gl_funcsWii.cpp`'s `ExpandToRGBA8` does its own native `uint16_t` read of
+whatever `glTexImage2D` hands it. RGB888/RGBA8888 are plain byte streams, no
+swap needed.
 
-None of these files are edited by this scaffolding pass -- `gx/` holds
-placeholder headers/stubs a future pass fills in, guarded so they only
-compile under `FRUIT_PLATFORM_WII`.
+The GX vertex/index buffer bytes uploaded by `MeshManager.cpp`'s PSP stream
+loaders are also swapped on `FN_BIG_ENDIAN`: `gl_funcsWii.cpp`'s `EmitVertex`/
+`glDrawElements` read the uploaded buffer as native `float` (tex/normal/pos
+slots) and native `uint16_t` (indices), so `LoadVertexStreamPSP`/
+`LoadIndexStreamPSP` byteswap those components in a CPU-side copy before
+`glBufferData`. The packed RGBA colour slot is a plain byte array and is
+left untouched.
 
-## Platform backend pieces (this pass: stubs only)
+## Assets — uncompressed
 
-- `mainWii.cpp` -- entry point. GX/VI init skeleton, `FixedStepDriver`-based
-  fixed-timestep loop calling into `Game`, GX frame swap placeholder. Mirrors
-  `mainEmscripten.cpp`'s structure (reuses the same `fn::FixedStepDriver`) but
-  with no SDL window -- `Game::init(void*, void*)` is called with two null/
-  placeholder opaque pointers since GX has no window-handle or GL-context
-  concept.
-- `InputTranslatorWii.h/.cpp` -- WPAD IR pointer -> `Mortar::Touch` finger
-  channel seam. 4 Wiimotes = 4 IR pointers = 4 finger channels (the same
-  per-finger multi-blade slicing the SDL backend drives from up to 8 touch
-  channels -- see `CLAUDE.md`'s "Preserve simultaneous multi-finger slicing"
-  policy). Each remote's IR dot maps to one fixed channel (remote 0 -> channel
-  0, remote 1 -> channel 1, ...) -- no dynamic channel allocation needed since
-  the Wii has a hard 4-remote ceiling versus SDL's dynamic finger-ID mapping.
-- `SoundManagerWii.cpp` -- ASND/AESND backend for `Mortar::SoundManager`
-  (same public API `SoundManagerSDL`/`SoundManagerWebAudio`-shaped backends
-  implement: `Init`, `SFXPlay`/`Stop`/`Pause`/`Resume`/`SetVolume`,
-  `SongPlay`/`Stop`/`Pause`/`Resume`, `SFXPauseAll`/`UnpauseAll`).
-- `FileSystemWii.cpp`/`FileWii.cpp` -- libfat-backed filesystem. Subclasses
-  the SAME `Mortar::FileSystem_Direct`/`Mortar::IFile_Direct` bases the
-  Win32/Posix backends use (`src/engine/asset/FileSystem_Direct.h`,
-  `IFile_Direct.h`) -- libfat exposes a POSIX-compatible `FILE*`/`fopen`
-  surface, so the existing `stdio`-based `IFile_Direct` body is reusable
-  as-is; the Wii files only need to own `fatInitDefault()` bring-up and pick
-  the mount prefix (`sd:/` or `usb:/`).
+Wii ships **raw Tex1 textures + raw `.wav.pcm` audio** (no WebP/OGG transcode);
+`tools/assets/stage-assets.py --wii` does a verbatim copy. TTF glyphs use
+**stb_truetype** (`-DFN_TTF_BACKEND=stb`, forced for Wii), no FreeType.
 
-## Endianness plan
+## Build (Windows host)
 
-Wii/PPC is **big-endian**; the original Bada binary and all RE'd struct
-layouts/asset formats (`.tex`, `.mad`, `.mmd`, save XML numeric blobs, string
-tables) are **little-endian** on-disk. Every binary file reader that does a
-raw multi-byte load (not just `memcpy` into a struct with matching field
-widths) needs an explicit byte-swap on Wii:
+devkitPPC + libogc are installed via MSYS2 pacman. Configure MUST use the **MSYS
+cmake** (devkitPro's `Wii.cmake` rejects Windows/mingw cmake). Full recipe +
+gotchas: `tmp/wii/CONFIGURE-RECIPE.md`. In short:
 
-- `src/engine/asset/DataReader.cpp`/`DataStreamReader.cpp`/
-  `FileDataReader.cpp`/`VectorDataReader.cpp` -- the actual `ReadInt32`/
-  `ReadFloat`/`ReadShort`-style primitive readers are the single choke point;
-  gate a byteswap there behind a platform macro rather than touching every
-  call site.
-- `src/engine/util/StringHash.cpp`/`StringTable.cpp` -- hash values are
-  computed at runtime from string bytes (endian-neutral), but *serialized*
-  hash tables read as raw `uint32_t` blobs need the same swap.
-- Texture/mesh binary blobs (`TextureFileFormat.cpp`, `Mesh.cpp`) -- decoded
-  through the same `DataReader` primitives, so fixing the choke point above
-  covers them for free.
-- Runtime-only structs (in-memory game state, no on-disk representation) need
-  **no** swapping -- only data that crosses the file I/O boundary.
+```sh
+MSYSTEM=MSYS C:/msys64/usr/bin/bash.exe -lc '
+  export MSYSTEM=MSYS; mkdir -p /c/msys64/tmp; cd <repo>; rm -rf build/wii
+  /usr/bin/cmake -B build/wii -G "Unix Makefiles" \
+    -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake \
+    -DPython3_EXECUTABLE=/usr/bin/python3 -DFRUIT_PLATFORM_WII=ON
+  /usr/bin/cmake --build build/wii -j6'
+# -> build/wii/fruit-ninja.elf ; elf2dol -> fruit-ninja.dol
+```
 
-No swap code is added in this pass; this is the plan for the pass that adds
-`FileSystemWii.cpp`'s actual read path.
+`cmake/wii.toolchain.cmake` wraps devkitPro's `Wii.cmake` + a Windows/MSYS2 shim
+(MSYS `make` drops `TEMP` for the native gcc). **Incremental builds break**
+(MSYS make chokes on Windows-path depfiles → "multiple target patterns") — always
+`rm -rf build/wii` for a clean build.
 
-## Toolchain / build steps (future, once devkitPPC is available)
+## Deploy / boot
 
-1. Install devkitPro + devkitPPC + libogc2 (`$DEVKITPRO`, `$DEVKITPPC` env vars
-   set by the devkitPro installer/pacman).
-2. Configure: `cmake --preset wii` (or manually
-   `cmake -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake -DFRUIT_PLATFORM_WII=ON -B build/wii`).
-3. Build: `cmake --build build/wii` -- produces `fruit-ninja.dol` (or `.elf`
-   if `.dol` conversion is deferred).
-4. Run: `.dol`/`.elf` on real hardware (SD card + Homebrew Channel) or in
-   Dolphin.
+SD layout (the build bakes `FN_DATA_DIR = sd:/apps/fruitninja/Data`):
 
-This CANNOT be exercised in this repo/session -- no devkitPPC install here.
-The toolchain file and CMake option exist so a machine that DOES have
-devkitPro can pick up the Wii sources; every other build (host, web,
-asm-verify) is completely unaffected -- see the CMake guard note in
-`cmake/wii.toolchain.cmake` and `src/platform/CMakeLists.txt`.
+```
+sd:/apps/fruitninja/boot.dol      (renamed from fruit-ninja.dol)
+sd:/apps/fruitninja/meta.xml      (Homebrew Channel metadata, optional)
+sd:/apps/fruitninja/Data/…        (build/wii/staging/Data)
+```
 
-## Files in this directory
+Launch via the Homebrew Channel, or open `boot.dol` in Dolphin with an SD card
+mounted. Point with the Wii Remote to slice; HOME quits.
 
-- `mainWii.cpp` -- entry point stub.
-- `InputTranslatorWii.h` / `.cpp` -- WPAD IR -> Touch stub.
-- `SoundManagerWii.cpp` -- ASND audio backend stub.
-- `FileSystemWii.cpp` / `FileWii.cpp` -- libfat filesystem stub.
-- `gx/` -- GX render backend placeholder (see `gx/README.md`).
-- `CMakeLists.txt` -- Wii-only source list, included only when
-  `FRUIT_PLATFORM_WII` is set (see `src/platform/CMakeLists.txt`).
+## State / remaining
+
+- ✅ compiles + links; ✅ VIDEO/GX/input/fat init; ✅ GX draw path; ✅ endianness gate.
+- ⏳ **rendering unvalidated** — the GX draw math (matrix transpose, projection
+  type, vertex emit order, color byte order) needs a Dolphin/hardware boot to
+  confirm; risks are listed at the top of `gl_funcsWii.cpp`.
+- ⏳ **audio** — `SoundManagerWii` is a stub (ASND wiring pending).
+- ⏳ Korean/Hangul renders degraded under stb (host/web unaffected).

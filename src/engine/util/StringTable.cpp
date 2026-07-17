@@ -24,6 +24,7 @@
 #include "asset/File.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
+#include "util/Endian.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -139,11 +140,18 @@ bool Mortar::StringTable::LoadHeader(Mortar::File& file) {
 
     uint32_t magic;
     memcpy(&magic, hdr, 4);
+#if defined(FN_BIG_ENDIAN)
+    magic = Endian::fnByteSwap32(magic);
+#endif
     if (!CheckHeader(magic, hdr + 4)) return false;
 
     uint32_t blob_byte_size, count;
     memcpy(&blob_byte_size, hdr + 0x44, 4);
     memcpy(&count, hdr + 0x48, 4);
+#if defined(FN_BIG_ENDIAN)
+    blob_byte_size = Endian::fnByteSwap32(blob_byte_size);
+    count          = Endian::fnByteSwap32(count);
+#endif
     if (count == 0) return false;
 
     // Read raw entries + key blob into a temporary buffer.
@@ -165,13 +173,28 @@ bool Mortar::StringTable::LoadHeader(Mortar::File& file) {
     StringTableData::HeaderLookup* entries = (StringTableData::HeaderLookup*)buf;
     char* key_blob = (char*)(buf + count * sizeof(StringTableData::HeaderLookup));
 
-    // Copy key blob.
+    // Copy key blob (raw bytes -- no swap, string data is endian-neutral).
     memcpy(key_blob, raw + count * kHeaderEntrySize, key_blob_size);
 
     // Copy + fixup entries: each file entry is 10 x uint32_t, first is key_offset.
+    // Port specific: FN_BIG_ENDIAN byteswaps each on-disk uint32_t (still little-endian
+    // per the on-disk format) before use -- the file layout itself is unchanged.
     uint32_t* raw_entries = (uint32_t*)raw;
     for (uint32_t i = 0; i < count; i++) {
         uint32_t* src = raw_entries + i * 10;
+#if defined(FN_BIG_ENDIAN)
+        uint32_t key_offset = Endian::fnByteSwap32(src[0]);
+        entries[i].key_ptr  = key_blob + key_offset;
+        entries[i].unknown1 = Endian::fnByteSwap32(src[1]);
+        entries[i].keylen   = Endian::fnByteSwap32(src[2]);
+        entries[i].unknown2 = Endian::fnByteSwap32(src[3]);
+        entries[i].unknown3 = Endian::fnByteSwap32(src[4]);
+        entries[i].unknown4 = Endian::fnByteSwap32(src[5]);
+        entries[i].unknown5 = Endian::fnByteSwap32(src[6]);
+        entries[i].unknown6 = Endian::fnByteSwap32(src[7]);
+        entries[i].unknown7 = Endian::fnByteSwap32(src[8]);
+        entries[i].str_idx  = Endian::fnByteSwap32(src[9]);
+#else
         entries[i].key_ptr  = key_blob + src[0];
         entries[i].unknown1 = src[1];
         entries[i].keylen   = src[2];
@@ -182,6 +205,7 @@ bool Mortar::StringTable::LoadHeader(Mortar::File& file) {
         entries[i].unknown6 = src[7];
         entries[i].unknown7 = src[8];
         entries[i].str_idx  = src[9];
+#endif
     }
 
     free(raw);
@@ -217,11 +241,18 @@ bool Mortar::StringTable::LoadLanguage(Mortar::File& file) {
 
     uint32_t magic;
     memcpy(&magic, hdr, 4);
+#if defined(FN_BIG_ENDIAN)
+    magic = Endian::fnByteSwap32(magic);
+#endif
     if (!CheckHeader(magic, hdr + 4)) return false;
 
     uint32_t blob_byte_size, count;
     memcpy(&blob_byte_size, hdr + 0x44, 4);
     memcpy(&count, hdr + 0x48, 4);
+#if defined(FN_BIG_ENDIAN)
+    blob_byte_size = Endian::fnByteSwap32(blob_byte_size);
+    count          = Endian::fnByteSwap32(count);
+#endif
     if (count == 0) return false;
 
     // Single allocation: StringEntry[count] + str blob.
@@ -236,8 +267,15 @@ bool Mortar::StringTable::LoadLanguage(Mortar::File& file) {
     // str blob that follows the entries) to alloc-relative (offset from alloc[0]
     // to the string).  On 32-bit ARM the binary stores an absolute pointer in
     // this uint32_t field; the port uses alloc-relative for x64 safety.
+    // Port specific: FN_BIG_ENDIAN byteswaps each on-disk uint32_t field (str_offset,
+    // strlen_cached, strlen_cached2 -- all still little-endian on disk) before use.
     StringTableData::StringEntry* entries = (StringTableData::StringEntry*)alloc;
     for (uint32_t i = 0; i < count; i++) {
+#if defined(FN_BIG_ENDIAN)
+        entries[i].str_offset     = Endian::fnByteSwap32(entries[i].str_offset);
+        entries[i].strlen_cached  = Endian::fnByteSwap32(entries[i].strlen_cached);
+        entries[i].strlen_cached2 = Endian::fnByteSwap32(entries[i].strlen_cached2);
+#endif
         entries[i].str_offset += count * kLangEntrySize;
     }
 

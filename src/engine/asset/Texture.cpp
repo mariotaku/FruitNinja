@@ -5,8 +5,26 @@
 #include "asset/File.h"
 #include "render/DisplayManager.h"
 #include "debug/Logger.h"
+#include "util/Endian.h"
 #include <cstring>
 #include <vector>
+
+#if defined(FN_BIG_ENDIAN)
+namespace {
+// Port specific: Tex1 16-bit-per-texel formats (RGBA5551/RGBA4444/RGB565) are
+// little-endian 2-byte values on disk (matching the binary's ARM-LE format).
+// GL/GX both consume them as native uint16_t texels, so on FN_BIG_ENDIAN
+// targets (Wii) the whole pixel buffer must be byteswapped once before upload.
+// RGB888/RGBA8888 are plain byte streams and need no swap.
+void SwapPixels16(const void* src, void* dstBuf, size_t pixelCount) {
+    const uint16_t* s = static_cast<const uint16_t*>(src);
+    uint16_t* d = static_cast<uint16_t*>(dstBuf);
+    for (size_t i = 0; i < pixelCount; ++i) {
+        d[i] = Endian::fnByteSwap16(s[i]);
+    }
+}
+}
+#endif
 
 namespace Mortar {
 
@@ -203,10 +221,18 @@ void Texture2D_Bada::Cache() {
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                              GL_RGBA, GL_UNSIGNED_BYTE, pixels);
                 break;
-            case 0x0f: // RGBA5551
+            case 0x0f: { // RGBA5551
+#if defined(FN_BIG_ENDIAN)
+                std::vector<unsigned char> swapped((size_t)width * (size_t)height * 2);
+                SwapPixels16(pixels, swapped.data(), (size_t)width * (size_t)height);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                             GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, swapped.data());
+#else
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                              GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, pixels);
+#endif
                 break;
+            }
             case 0x10: { // RGBA4444 -> CPU-unpack to RGBA8888
                 const size_t pixCount = (size_t)width * (size_t)height;
                 std::vector<unsigned char> rgba(pixCount * 4);
@@ -214,6 +240,11 @@ void Texture2D_Bada::Cache() {
                 size_t i;
                 for (i = 0; i < pixCount; ++i) {
                     unsigned short p = src16[i];
+#if defined(FN_BIG_ENDIAN)
+                    // On-disk value is little-endian; the native load above
+                    // assembled it byte-swapped, so swap back before unpacking.
+                    p = Endian::fnByteSwap16(p);
+#endif
                     unsigned char r = (unsigned char)((p >> 12) & 0xF);
                     unsigned char g = (unsigned char)((p >>  8) & 0xF);
                     unsigned char b = (unsigned char)((p >>  4) & 0xF);
@@ -227,10 +258,18 @@ void Texture2D_Bada::Cache() {
                              GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
                 break;
             }
-            case 0x11: // RGB565
+            case 0x11: { // RGB565
+#if defined(FN_BIG_ENDIAN)
+                std::vector<unsigned char> swapped((size_t)width * (size_t)height * 2);
+                SwapPixels16(pixels, swapped.data(), (size_t)width * (size_t)height);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                             GL_RGB, GL_UNSIGNED_SHORT_5_6_5, swapped.data());
+#else
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
                              GL_RGB, GL_UNSIGNED_SHORT_5_6_5, pixels);
+#endif
                 break;
+            }
             default:
                 LOG_ERROR("TEXTURE/Cache", "unsupported format 0x%02x", (unsigned)tex1->texFmt);
                 break;
@@ -293,10 +332,18 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                          GL_RGBA, GL_UNSIGNED_BYTE, raw);
             break;
-        case 0x0f: // RGBA5551
+        case 0x0f: { // RGBA5551
+#if defined(FN_BIG_ENDIAN)
+            std::vector<unsigned char> swapped((size_t)width * (size_t)height * 2);
+            SwapPixels16(raw, swapped.data(), (size_t)width * (size_t)height);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
+                         GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, swapped.data());
+#else
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
                          GL_RGBA, GL_UNSIGNED_SHORT_5_5_5_1, raw);
+#endif
             break;
+        }
         case 0x10: { // RGBA4444 -> CPU-unpack to RGBA8888
             const size_t pixCount = (size_t)width * (size_t)height;
             std::vector<unsigned char> rgba(pixCount * 4);
@@ -304,6 +351,11 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
             size_t i;
             for (i = 0; i < pixCount; ++i) {
                 unsigned short p = src16[i];
+#if defined(FN_BIG_ENDIAN)
+                // On-disk value is little-endian; the native load above
+                // assembled it byte-swapped, so swap back before unpacking.
+                p = Endian::fnByteSwap16(p);
+#endif
                 unsigned char r = (unsigned char)((p >> 12) & 0xF);
                 unsigned char g = (unsigned char)((p >>  8) & 0xF);
                 unsigned char b = (unsigned char)((p >>  4) & 0xF);
@@ -317,10 +369,18 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
                          GL_RGBA, GL_UNSIGNED_BYTE, rgba.data());
             break;
         }
-        case 0x11: // RGB565
+        case 0x11: { // RGB565
+#if defined(FN_BIG_ENDIAN)
+            std::vector<unsigned char> swapped((size_t)width * (size_t)height * 2);
+            SwapPixels16(raw, swapped.data(), (size_t)width * (size_t)height);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
+                         GL_RGB, GL_UNSIGNED_SHORT_5_6_5, swapped.data());
+#else
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0,
                          GL_RGB, GL_UNSIGNED_SHORT_5_6_5, raw);
+#endif
             break;
+        }
         default:
             LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", (unsigned)d->texFmt,
                       pathForLog ? pathForLog : "<memory>");

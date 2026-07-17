@@ -12,6 +12,7 @@
 //   [3] = ReadTex1Format v1.6.1 Tex1Format::Read @0x0022b324
 
 #include "asset/TextureFileFormat.h"
+#include "util/Endian.h"
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
@@ -143,6 +144,9 @@ TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned 
     const uint8_t* bytes = static_cast<const uint8_t*>(data);
     uint16_t gate;
     memcpy(&gate, bytes + 2, 2);
+#if defined(FN_BIG_ENDIAN)
+    gate = Endian::fnByteSwap16(gate);
+#endif
     if (gate != 4) {
         return 0;
     }
@@ -158,6 +162,9 @@ TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned 
 
     uint32_t fmt;
     memcpy(&fmt, bytes + 4, 4);
+#if defined(FN_BIG_ENDIAN)
+    fmt = Endian::fnByteSwap32(fmt);
+#endif
 
     // bits-per-pixel from the format descriptor.
     unsigned int hi = fmt & 0xf00u;
@@ -207,8 +214,16 @@ TextureSourceData* TextureFileFormat::ReadTex2Format(const void* data, unsigned 
     d->info.levels       = 1;
     {
         uint16_t v;
-        memcpy(&v, bytes + 0xc, 2); d->info.apparentWidth  = v;
-        memcpy(&v, bytes + 0xe, 2); d->info.apparentHeight = v;
+        memcpy(&v, bytes + 0xc, 2);
+#if defined(FN_BIG_ENDIAN)
+        v = Endian::fnByteSwap16(v);
+#endif
+        d->info.apparentWidth  = v;
+        memcpy(&v, bytes + 0xe, 2);
+#if defined(FN_BIG_ENDIAN)
+        v = Endian::fnByteSwap16(v);
+#endif
+        d->info.apparentHeight = v;
     }
 
     // ---- PixelFormat (12-byte channel-mapping block) ----
@@ -268,6 +283,9 @@ TextureSourceData* TextureFileFormat::ReadDDSFormat(const void* data, unsigned l
     const uint8_t* bytes = static_cast<const uint8_t*>(data);
     uint32_t magic;
     memcpy(&magic, bytes, 4);
+#if defined(FN_BIG_ENDIAN)
+    magic = Endian::fnByteSwap32(magic);
+#endif
     if (magic != 0x20534444u) { // "DDS " LE
         return 0;
     }
@@ -295,6 +313,9 @@ TextureSourceData* TextureFileFormat::ReadTex3Format(const void* data, unsigned 
     const uint8_t* bytes = static_cast<const uint8_t*>(data);
     uint32_t magic;
     memcpy(&magic, bytes, 4);
+#if defined(FN_BIG_ENDIAN)
+    magic = Endian::fnByteSwap32(magic);
+#endif
     if (magic != kTex3FourCC) {
         return 0;
     }
