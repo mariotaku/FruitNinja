@@ -103,7 +103,7 @@ TextureSourceData* ReadTex3Format(const void* data, unsigned long size);
 // The value is identical: bytes { 0x54, 0x45, 0x58, 0x01 }.
 extern const uint32_t kTex3FourCC; // = 0x01584554
 
-#if !defined(__bada__)
+#if !defined(__bada__) && !defined(FRUIT_PLATFORM_WII)
 // ---------------------------------------------------------------------------
 // Reader [web]: WebP -- Port specific: web compressed textures (libwebp).
 //
@@ -115,7 +115,9 @@ extern const uint32_t kTex3FourCC; // = 0x01584554
 // the existing texFmt=0x01 GL upload path handles it unchanged. Any real Tex1
 // .tex (e.g. an unstaged/raw FruitNinjaBada/Data run) fails WebPGetInfo and
 // falls through to the Tex1 reader. Excluded from the __bada__ cross-build (no
-// libwebp there, and the real device never ships WebP-in-.tex).
+// libwebp there, and the real device never ships WebP-in-.tex) and from Wii
+// (ships raw uncompressed Tex1 only, no libwebp dependency -- see
+// stage-assets.py --wii raw copy-only mode).
 // ---------------------------------------------------------------------------
 
 // WebPData -- Tex1Data whose pixel buffer is OWNED (a WebPDecodeRGBA() heap
@@ -133,16 +135,16 @@ struct WebPData : public Tex1Data {
 // Returns null (inert) if data is not WebP (real Tex1 .tex), else a WebPData
 // with texFmt=0x01 RGBA8888 and the decoded pixels.
 TextureSourceData* ReadWebP(const void* data, unsigned long size);
-#endif // !__bada__
+#endif // !__bada__ && !FRUIT_PLATFORM_WII
 
 } // namespace TextureFileFormat
 
 // g_readers -- the reader registry @ 0x2cf8e8 in the binary (4 entries:
 // [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1). The host/web build prepends a
 // port-specific WebP reader at index 0 (FN_TEXTURE_NUM_READERS == 5); the
-// __bada__ cross-build keeps the binary-exact 4-entry array so asm-verify sees
-// no divergence.
-#if defined(__bada__)
+// __bada__ cross-build and Wii (no libwebp, raw Tex1 only) keep the
+// binary-exact 4-entry array so asm-verify sees no divergence.
+#if defined(__bada__) || defined(FRUIT_PLATFORM_WII)
 #  define FN_TEXTURE_NUM_READERS 4
 #else
 #  define FN_TEXTURE_NUM_READERS 5

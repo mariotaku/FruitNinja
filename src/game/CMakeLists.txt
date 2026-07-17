@@ -55,7 +55,20 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ItemParseUtil.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Leaderboard.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Licensing.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LicensingSDL.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Social.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/DeviceQuery.cpp
 )
+
+# Platform twin for Licensing.h's OpenBrowser: LicensingWii.cpp on Wii (no
+# browser app-control to hand off to), LicensingSDL.cpp everywhere else
+# (SDL_OpenURL) -- mirrors the GameSDL.cpp/GameWii.cpp swap in the root
+# CMakeLists.txt.
+if(FRUIT_PLATFORM_WII)
+    target_sources(fruit-ninja-game PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/LicensingWii.cpp
+    )
+else()
+    target_sources(fruit-ninja-game PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/LicensingSDL.cpp
+    )
+endif()

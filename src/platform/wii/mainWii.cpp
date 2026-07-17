@@ -1,70 +1,118 @@
-// Port specific: Wii entry point -- SCAFFOLDING ONLY, not a working build.
+// Port specific: Wii entry point (devkitPPC / libogc).
 //
-// Mirrors mainSDL.cpp / mainEmscripten.cpp's structure: fixed-timestep loop
-// driving Game::pollInput/stepUpdate/renderFrame via the shared
-// fn::FixedStepDriver (src/platform/FixedStepDriver.h). Unlike those two
-// backends there is no SDL_Window*/SDL_GLContext -- GX has no windowing or
-// GL-context concept, so Game::init(void*, void*) is called with placeholder
-// opaque pointers (both parameters are already `void*`/opaque per Game.h's
-// comment "win = SDL_Window*, gl = SDL_GLContext (opaque to header)").
+// Boots VIDEO + GX + WPAD + libfat, constructs the Game, and drives a
+// fixed-timestep loop (fn::FixedStepDriver) of pollInput -> stepUpdate(1/60)
+// -> renderFrame -> swap. HOME quits. Input comes from up to 4 Wiimote IR
+// pointers via InputTranslatorWii (see InputTranslatorWii.h).
 //
-// Only compiled when FRUIT_PLATFORM_WII is set (see
-// src/platform/wii/CMakeLists.txt) and only links successfully with
-// devkitPPC + libogc2 present -- neither is available in this repo/session.
-// This file will NOT compile as-is; every libogc2 call is a
-// // TODO(wii): marker, not a real header include, so it does not
-// accidentally get pulled into a non-Wii TU scan.
+// PASS 1 SCOPE: boot to a cleared screen. The GX draw shim (gl_funcsWii.cpp)
+// no-ops actual geometry this pass, so the presented frame is the clear
+// colour. GX/VIDEO/WPAD/fat init here is real so Pass 2's draws land.
+//
+// Only compiled when FRUIT_PLATFORM_WII is set.
 #ifdef FRUIT_PLATFORM_WII
 
-// TODO(wii): #include <gccore.h>      -- GX, VIDEO, core libogc types
-// TODO(wii): #include <wiiuse/wpad.h> -- Wiimote input
-// TODO(wii): #include <fat.h>         -- libfat filesystem init
-// TODO(wii): #include <ogc/lwp_watchdog.h> -- gettime()-based real elapsed ms
+#include <gccore.h>
+#include <wiiuse/wpad.h>
+#include <fat.h>
+#include <ogc/lwp_watchdog.h>
+#include <malloc.h>
+#include <cstring>
 
 #include "Game.h"
 #include "platform/FixedStepDriver.h"
-#include "platform/wii/gx/GxRenderer.h"
+#include "platform/wii/WiiVideo.h"
 #include "platform/wii/InputTranslatorWii.h"
 #include "debug/Logger.h"
 
-// Port specific: Game instance lives as a file-static, matching
-// mainEmscripten.cpp's g_game (the C main-loop callback needs a stable
-// pointer; here it's just main()'s own local loop, but keeping the same
-// shape as the other backends eases future diffing).
+// ---------------------------------------------------------------------------
+// Shared VIDEO/GX state (WiiVideo.h seam consumed by DisplayManagerWii.cpp).
+// ---------------------------------------------------------------------------
+namespace {
+GXRModeObj* s_rmode      = 0;
+void*       s_xfb[2]     = { 0, 0 };
+int         s_xfbActive  = 0;
+void*       s_gxFifo     = 0;
+const u32   kFifoSize    = 256 * 1024;
+}
+
+namespace fn {
+namespace wii {
+
+void* CurrentXFB() { return s_xfb[s_xfbActive]; }
+void  FlipXFB()    { s_xfbActive ^= 1; }
+void* VideoMode()  { return s_rmode; }
+
+} // namespace wii
+} // namespace fn
+
+// ---------------------------------------------------------------------------
+
 static Game g_game;
 static fn::FixedStepDriver g_driver;
+
+static void WiiVideoInit() {
+    VIDEO_Init();
+    s_rmode = VIDEO_GetPreferredMode(NULL);
+
+    s_xfb[0] = MEM_K0_TO_K1(SYS_AllocateFramebuffer(s_rmode));
+    s_xfb[1] = MEM_K0_TO_K1(SYS_AllocateFramebuffer(s_rmode));
+    s_xfbActive = 0;
+
+    VIDEO_Configure(s_rmode);
+    VIDEO_SetNextFramebuffer(s_xfb[s_xfbActive]);
+    VIDEO_SetBlack(FALSE);
+    VIDEO_Flush();
+    VIDEO_WaitVSync();
+    if (s_rmode->viTVMode & VI_NON_INTERLACE) {
+        VIDEO_WaitVSync();
+    }
+}
+
+static void WiiGxInit() {
+    s_gxFifo = MEM_K0_TO_K1(memalign(32, kFifoSize));
+    memset(s_gxFifo, 0, kFifoSize);
+    GX_Init(s_gxFifo, kFifoSize);
+
+    GXColor bg = { 0, 0, 0, 255 };
+    GX_SetCopyClear(bg, GX_MAX_Z24);
+
+    // EFB / copy setup from the chosen video mode.
+    GX_SetViewport(0, 0, s_rmode->fbWidth, s_rmode->efbHeight, 0, 1);
+    f32 yscale = GX_GetYScaleFactor(s_rmode->efbHeight, s_rmode->xfbHeight);
+    u32 xfbHeight = GX_SetDispCopyYScale(yscale);
+    GX_SetScissor(0, 0, s_rmode->fbWidth, s_rmode->efbHeight);
+    GX_SetDispCopySrc(0, 0, s_rmode->fbWidth, s_rmode->efbHeight);
+    GX_SetDispCopyDst(s_rmode->fbWidth, xfbHeight);
+    GX_SetCopyFilter(s_rmode->aa, s_rmode->sample_pattern, GX_TRUE, s_rmode->vfilter);
+    GX_SetFieldMode(s_rmode->field_rendering,
+                    ((s_rmode->viHeight == 2 * s_rmode->xfbHeight) ? GX_ENABLE : GX_DISABLE));
+    GX_SetPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
+    GX_SetCullMode(GX_CULL_NONE);
+    GX_CopyDisp(s_xfb[s_xfbActive], GX_TRUE);
+    GX_SetDispCopyGamma(GX_GM_1_0);
+    GX_InvalidateTexAll();
+}
 
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
 
-    // TODO(wii): VIDEO_Init(); read VIDEO_GetPreferredMode into an
-    // GXRModeObj*; allocate + clear double-buffered external framebuffers
-    // (MEM_K0_TO_K1(SYS_AllocateFramebuffer(rmode)) x2); VIDEO_Configure;
-    // VIDEO_SetNextFramebuffer; VIDEO_SetBlack(FALSE); VIDEO_Flush;
-    // VIDEO_WaitVSync (x2 if interlaced) -- standard libogc2 boot sequence.
+    WiiVideoInit();
+    WiiGxInit();
 
-    // TODO(wii): fatInitDefault() -- mounts sd:/ and usb:/ via libfat before
-    // any Mortar::IFileSystem is registered (FileSystemWii.cpp's
-    // FileSystem_Direct subclass needs this to have already run).
+    // libfat: mounts sd:/ and usb:/ so FileSystemWii can read assets.
+    if (!fatInitDefault()) {
+        LOG_ERROR("mainWii", "fatInitDefault() failed -- no SD/USB filesystem");
+    }
 
-    // TODO(wii): WPAD_Init(); WPAD_SetDataFormat(WPAD_CHAN_ALL,
-    // WPAD_FMT_BTNS_ACC_IR); WPAD_SetVRes(chan, screenWidth, screenHeight)
-    // for each of the 4 channels -- see InputTranslatorWii.h for the IR ->
-    // finger-channel mapping this feeds.
+    WPAD_Init();
+    WPAD_SetDataFormat(WPAD_CHAN_ALL, WPAD_FMT_BTNS_ACC_IR);
+    WPAD_SetVRes(WPAD_CHAN_ALL, s_rmode->fbWidth, s_rmode->xfbHeight);
 
-    // TODO(wii): GX fifo setup -- allocate a ~256KB fifo buffer
-    // (MEM_K0_TO_K1(memalign(32, fifoSize))), GX_Init(fifo, fifoSize),
-    // then fn::wii::GxInit(xfb, rmode) (src/platform/wii/gx/GxRenderer.h)
-    // for the GX_SetCopyClear/GX_SetViewport/TEV-stage one-time setup.
+    LOG_INFO("mainWii", "VIDEO/GX/WPAD/fat initialised (%dx%d)",
+             (int)s_rmode->fbWidth, (int)s_rmode->efbHeight);
 
-    LOG_INFO("mainWii", "Wii entry point reached (scaffolding -- no GX/VIDEO init yet)");
-
-    // TODO(wii): once GX/VIDEO/WPAD/libfat are actually initialised above,
-    // pass real opaque handles here if the Wii Game::init path ever needs
-    // them; today Game::init(void*, void*) only uses its params to pass
-    // through to SDL-specific setup that doesn't exist on this backend, so
-    // nullptr is correct for scaffolding purposes.
-    if (!g_game.init(nullptr, nullptr)) {
+    if (!g_game.init(NULL, NULL)) {
         LOG_ERROR("mainWii", "Failed to init game");
         return 1;
     }
@@ -72,30 +120,37 @@ int main(int argc, char* argv[]) {
     static InputTranslatorWii inputTranslator;
     inputTranslator.Init();
 
-    // TODO(wii): real elapsed-time source. libogc2 provides gettime()/
-    // ticks_to_millisecs() (ogc/lwp_watchdog.h) for a monotonic clock;
-    // mainEmscripten.cpp's emscripten_get_now()-driven accumulator is the
-    // model to follow (same fn::FixedStepDriver, same maxSteps=5 spiral-of-
-    // death guard).
-    double lastTimeMs = 0.0;
+    // Monotonic clock: gettime() ticks -> ms via ticks_to_millisecs.
+    u64 lastTicks = gettime();
 
     while (g_game.running) {
-        // TODO(wii): WPAD_ScanPads(); read each channel's IR data via
-        // WPAD_IR(chan, &ir) and feed inputTranslator.DrainWiimoteIR(chan, ir)
-        // -- see InputTranslatorWii.h. Also poll WPAD_ButtonsDown(WPAD_CHAN_0)
-        // for HOME-button-quit (binary has no equivalent; host-only affordance
-        // like the SDL backend's window-close handling).
+        WPAD_ScanPads();
+
+        // HOME on any remote quits (host-only affordance; no binary equiv).
+        for (int chan = 0; chan < InputTranslatorWii::MAX_REMOTES; ++chan) {
+            u32 down = WPAD_ButtonsDown(chan);
+            if (down & WPAD_BUTTON_HOME) {
+                g_game.running = false;
+            }
+            // Feed each remote's IR pointer into its fixed finger channel.
+            ir_t ir;
+            WPAD_IR(chan, &ir);
+            float nx = 0.0f, ny = 0.0f;
+            if (ir.valid && s_rmode->fbWidth > 0 && s_rmode->xfbHeight > 0) {
+                nx = ir.x / (float)s_rmode->fbWidth;
+                ny = ir.y / (float)s_rmode->xfbHeight;
+            }
+            inputTranslator.DrainWiimoteIR(chan, ir.valid != 0, nx, ny);
+        }
+
         g_game.pollInput();
         if (!g_game.running) {
             break;
         }
 
-        // TODO(wii): real elapsed ms since last frame (see clock-source TODO
-        // above). Placeholder 0.0 below means the driver never advances --
-        // this loop body is structural only until a real clock is wired in.
-        double nowMs = lastTimeMs;
-        double elapsedMs = nowMs - lastTimeMs;
-        lastTimeMs = nowMs;
+        u64 nowTicks = gettime();
+        double elapsedMs = (double)ticks_to_millisecs(nowTicks - lastTicks);
+        lastTicks = nowTicks;
 
         int steps = g_driver.advance(elapsedMs);
         for (int i = 0; i < steps && g_game.running; ++i) {
@@ -103,19 +158,11 @@ int main(int argc, char* argv[]) {
             g_game.stepUpdate();
         }
 
-        // TODO(wii): fn::wii::GxBeginFrame() (gx/GxRenderer.h) before
-        // Game::renderFrame() so the GX equivalent of the GL frame-begin
-        // state reset runs; GxSwapBuffers() after, replacing
-        // SDL_GL_SwapWindow (which renderFrame() calls internally on the
-        // SDL backend and which does not exist here).
-        g_game.renderFrame(static_cast<float>(g_driver.alpha()), steps);
+        g_game.renderFrame((float)g_driver.alpha(), steps);
     }
 
     g_game.shutdown();
-
-    // TODO(wii): WPAD_Shutdown(); GX/VIDEO teardown is normally skipped on
-    // Wii homebrew (the loader/HBC handles it), matching how mainSDL.cpp's
-    // post-loop teardown is "kept for symmetry" rather than load-bearing.
+    WPAD_Shutdown();
     return 0;
 }
 

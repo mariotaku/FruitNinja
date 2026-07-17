@@ -16,7 +16,7 @@
 #include <cstring>
 #include <cstdlib>
 
-#if !defined(__bada__)
+#if !defined(__bada__) && !defined(FRUIT_PLATFORM_WII)
 #include "webp/decode.h" // Port specific: web compressed textures (libwebp)
 #endif
 
@@ -302,7 +302,7 @@ TextureSourceData* TextureFileFormat::ReadTex3Format(const void* data, unsigned 
     return 0;
 }
 
-#if !defined(__bada__)
+#if !defined(__bada__) && !defined(FRUIT_PLATFORM_WII)
 // ---- Reader [web]: WebP ---------------------------------------------------
 // Port specific: web compressed textures (libwebp). No binary counterpart.
 // Web textures are transcoded to WebP and stored inside .tex-named files; this
@@ -346,14 +346,15 @@ TextureSourceData* TextureFileFormat::ReadWebP(const void* data, unsigned long s
 
     return d;
 }
-#endif // !__bada__
+#endif // !__bada__ && !FRUIT_PLATFORM_WII
 
 // ---- g_readers registry ---------------------------------------------------
 // Binary: 4-entry array @ 0x2cf8e8. Order: [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1.
 // Host/web prepend a port-specific WebP reader at index 0 (highest priority) so
 // WebP-in-.tex content is detected before the raw parsers; the __bada__
-// cross-build keeps the binary-exact 4-entry array (see TextureFileFormat.h).
-#if defined(__bada__)
+// cross-build (and Wii, which ships raw uncompressed Tex1 only -- no libwebp)
+// keeps the binary-exact 4-entry array (see TextureFileFormat.h).
+#if defined(__bada__) || defined(FRUIT_PLATFORM_WII)
 TextureReadFn g_readers[4] = {
     TextureFileFormat::ReadTex3Format,  // [0] v1.6.1 Tex3Format::Read @0x0022bd7c
     TextureFileFormat::ReadDDSFormat,   // [1] v1.6.1 DDSFormat::Read @0x0022cc04

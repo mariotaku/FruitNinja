@@ -537,7 +537,13 @@ else()
 endif()
 
 if(NOT FN_ASM_VERIFY)
-    add_library(fruit-ninja-game STATIC src/Game.cpp src/GameSDL.cpp)
+    # Platform twin for the Game:: methods (init/pollInput/step/render/run):
+    # GameWii.cpp on Wii (GX, no SDL), GameSDL.cpp everywhere else.
+    if(FRUIT_PLATFORM_WII)
+        add_library(fruit-ninja-game STATIC src/Game.cpp src/GameWii.cpp)
+    else()
+        add_library(fruit-ninja-game STATIC src/Game.cpp src/GameSDL.cpp)
+    endif()
     target_include_directories(fruit-ninja-game PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_BINARY_DIR}
@@ -763,10 +769,15 @@ elseif (FRUIT_PLATFORM_WII)
     # link without devkitPPC/libogc2 present.
     add_executable(fruit-ninja src/platform/wii/mainWii.cpp)
     add_dependencies(fruit-ninja fn_asset_staging)
-    target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game)
-    # TODO(wii): -logc2 -lm (or the split -lwiiuse -lbte -logc -lfat set,
-    # depending on which libogc2 packaging is installed) once a real
-    # devkitPPC environment is available to verify link flags against.
+    # libogc link set. -lfat (SD/USB), -lwiiuse + -lbte (Wiimote/Bluetooth),
+    # -lasnd (audio, SoundManagerWii), -logc (GX/VIDEO/core), -lm (libm).
+    # devkitPro's Wii.cmake toolchain already put $DEVKITPRO/libogc/lib/wii on
+    # the link path, so bare -l names resolve. --gc-sections is fine: main()
+    # transitively references every needed symbol, and libogc functions are
+    # pulled by the shim/backends -- nothing live is dropped.
+    target_link_libraries(fruit-ninja PRIVATE
+        fruit-ninja-game
+        -lfat -lwiiuse -lbte -lasnd -logc -lm)
     # TODO(wii): elf2dol POST_BUILD step to produce fruit-ninja.dol.
 else()
     # Native desktop/webOS entry point.

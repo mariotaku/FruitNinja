@@ -32,6 +32,15 @@ if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
         render/DisplayManagerSDL.cpp
     )
 endif()
+if(NOT FN_ASM_VERIFY AND FRUIT_PLATFORM_WII)
+    # Wii: GL-on-GX shim (backs every gl* call the core render TUs make) +
+    # the GX/VIDEO swap. Replaces the SDL/Win32 GL backend files above so
+    # Renderer.cpp/Texture.cpp/ShaderProgram.cpp/etc. compile unchanged.
+    target_sources(mortar_engine PRIVATE
+        render/gl_funcsWii.cpp
+        render/DisplayManagerWii.cpp
+    )
+endif()
 if(NOT FN_ASM_VERIFY)
     target_sources(mortar_engine PRIVATE
         render/NineSlice.cpp        # Port specific: 9-slice panel draw (no binary counterpart)
