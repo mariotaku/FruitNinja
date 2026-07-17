@@ -7,6 +7,15 @@ if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
 option(FN_ASM_VERIFY "Cross-compile for asm-verify (ARM Thumb-2, object files only)" OFF)
+
+# --- Wii port scaffolding (OFF by default; not buildable without devkitPPC) ---
+# When ON, adds src/platform/wii sources and a fruit-ninja.dol-style
+# executable target. Requires -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake
+# (a devkitPPC/libogc2 cross-compiler) -- see src/platform/wii/README.md.
+# Default OFF: the option exists purely so a machine WITH devkitPPC installed
+# can opt in; it has zero effect on the host/web/asm-verify configures below.
+option(FRUIT_PLATFORM_WII "Build the Wii (GX/libogc2) platform target -- requires devkitPPC" OFF)
+
 # Port specific: compile-time render interpolation toggle.
 # Default ON for host/web builds; always forced OFF under FN_ASM_VERIFY
 # (cross-build must never see RenderInterp.* or unordered_map churn).
@@ -29,6 +38,14 @@ option(FN_WEB_FORCE_60FPS "Force emscripten main loop to a fixed 60fps (web debu
 option(FN_DEBUG_TOUCH "Enable touch drain/dispatch debug logging (InputTranslatorSDL)" OFF)
 
 project(FruitNinja LANGUAGES CXX)
+
+# Propagate FRUIT_PLATFORM_WII as a compile definition so the #ifdef
+# FRUIT_PLATFORM_WII guards in src/platform/wii/*.{h,cpp} actually gate
+# compilation when this path is deliberately opted into. OFF by default, so
+# this add_compile_definitions call is a no-op for every other configure.
+if (FRUIT_PLATFORM_WII)
+    add_compile_definitions(FRUIT_PLATFORM_WII=1)
+endif()
 
 # Used to invoke tools/assets/stage-assets.py (asset staging: textures ->
 # WebP for both host + web) and tools/web/web-hash-assets.py (web cache
@@ -660,6 +677,21 @@ if (EMSCRIPTEN)
             VERBATIM
         )
     endif()
+elseif (FRUIT_PLATFORM_WII)
+    # Wii entry point -- SCAFFOLDING ONLY. Only reachable when the caller
+    # explicitly set -DFRUIT_PLATFORM_WII=ON (default OFF, see the option()
+    # near the top of this file) AND configured with
+    # -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake (a devkitPPC
+    # cross-compiler). Neither is true for the default host/web configure,
+    # so this branch has zero effect unless deliberately opted into.
+    # See src/platform/wii/README.md for the full roadmap; this will NOT
+    # link without devkitPPC/libogc2 present.
+    add_executable(fruit-ninja src/platform/wii/mainWii.cpp)
+    target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game)
+    # TODO(wii): -logc2 -lm (or the split -lwiiuse -lbte -logc -lfat set,
+    # depending on which libogc2 packaging is installed) once a real
+    # devkitPPC environment is available to verify link flags against.
+    # TODO(wii): elf2dol POST_BUILD step to produce fruit-ninja.dol.
 else()
     # Native desktop/webOS entry point.
     # Port specific: on Windows, compile the .rc resource script into the exe

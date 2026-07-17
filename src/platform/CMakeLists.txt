@@ -17,3 +17,13 @@ if(NOT FN_ASM_VERIFY AND FN_RENDER_INTERP)
         ${CMAKE_CURRENT_SOURCE_DIR}/RenderInterp.cpp
     )
 endif()
+
+# Wii backend scaffolding -- OFF by default, gated by FRUIT_PLATFORM_WII
+# (set in the top-level CMakeLists.txt, off unless a devkitPPC toolchain is
+# explicitly requested via cmake/wii.toolchain.cmake). When OFF (the default
+# for host/web/asm-verify), this add_subdirectory is a complete no-op -- no
+# Wii source is added to any target, so the default configure/build is
+# byte-for-byte unaffected. See src/platform/wii/README.md for the roadmap.
+if(FRUIT_PLATFORM_WII)
+    add_subdirectory(wii)
+endif()
