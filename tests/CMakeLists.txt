@@ -1054,6 +1054,18 @@ foreach(_ws_combo freeze frenzy x2 freeze+frenzy all)
         LABELS "category_rendering;component_widescreen")
 endforeach()
 
+# Segment 3: in-game HUD (ScoreControl) at both 3:2 and 16:9 -- isolates the
+# top-left SCORE readout (score number + watermelon icon; no wordmark in true
+# steady-state gameplay, see test_widescreen_render.cpp's ingame_hud comment)
+# so its widescreen edge-alignment can be eyeballed against gameover.factboard.
+# Output: tmp/test/screenshots/widescreen/ingame_hud_{3x2,16x9}.png
+add_test(NAME widescreen_ingame_hud_3x2
+         COMMAND test_widescreen_render --screenshot --combo=ingame_hud)
+add_test(NAME widescreen_ingame_hud_16x9
+         COMMAND test_widescreen_render --screenshot --widescreen --combo=ingame_hud)
+set_tests_properties(widescreen_ingame_hud_3x2 widescreen_ingame_hud_16x9 PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_widescreen")
+
 # TimeSinkControl ("Berry Blast" time-award board) render test. Drives the
 # real PowerUpManager::ActivatePower("time_sink") activation path (poweruplist.xml),
 # settles the ACTIVE alpha ratchet, forces a natural expiry into the RELEASE
