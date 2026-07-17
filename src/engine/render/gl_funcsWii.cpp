@@ -6,11 +6,15 @@
 // ShaderProgram.cpp / Shaders.cpp / Geometry.cpp / MeshManager.cpp compile
 // and link UNCHANGED against the Wii target.
 //
-// PASS 1 SCOPE (this file): LINK + BOOT to a cleared screen. Textures and
-// buffers are really uploaded/converted so Pass 2's GX draw has the data it
-// needs, but the actual draw calls (glDrawArrays / glDrawElements) are
-// no-ops -- nothing is rasterized yet. Shader objects are no-op stubs (GX
-// uses fixed TEV stages, not GLSL). Every deferred piece carries a
+// PASS 2 SCOPE (this file): real GX immediate-mode rendering. glDrawArrays /
+// glDrawElements build a GX_Begin/GX_End batch from the recorded shim state
+// (g_ShimAttrib pointers, g_ShimMVP, bound texture): the full 4x4 MVP is
+// loaded as the GX projection with an identity pos modelview (clip = MVP*pos
+// for both 2D-ortho and 3D-perspective), and a single GX_MODULATE / GX_PASSCLR
+// TEV stage reproduces GL_MODULATE. Textures are uploaded/converted to
+// GX_TF_RGBA8 tiled. Shader objects remain no-op stubs (GX uses fixed TEV
+// stages, not GLSL). Remaining deferred pieces (glTexSubImage2D, per-frame
+// viewport/scissor Y-flip, compressed textures, glReadPixels) carry a
 // // TODO(wii Pass 2): marker.
 //
 // Only compiled when FRUIT_PLATFORM_WII is set (see src/engine/CMakeLists.txt).
@@ -19,9 +23,11 @@
 #include "render/gl_compat.h"
 
 #include <gccore.h>
+#include <ogc/gu.h>
 #include <malloc.h>
 #include <cstring>
 #include <cstdio>
+#include <stdint.h>
 
 // ---------------------------------------------------------------------------
 // Shared shim state (read by DisplayManagerWii.cpp + Pass 2's GX draw).
@@ -55,6 +61,14 @@ struct ShimAttrib {
     bool        enabled;
 };
 ShimAttrib g_ShimAttrib[8];
+
+// Constant vertex-attribute values (glVertexAttrib4f) -- used for an attrib
+// index when its array is DISABLED. DrawMesh3D sets attrib 2 (colour) to
+// white this way for uncoloured meshes, and attrib 1 (uv) to zero.
+float g_ShimConstAttrib[8][4] = {
+    {0,0,0,1},{0,0,0,1},{1,1,1,1},{0,0,0,1},
+    {0,0,0,1},{0,0,0,1},{0,0,0,1},{0,0,0,1}
+};
 
 // ---- Buffer objects (glGenBuffers / glBufferData) -----------------------
 struct ShimBuffer {
@@ -209,6 +223,142 @@ unsigned char* ExpandToRGBA8(int w, int h, GLenum format, GLenum type,
         }
     }
     return out;
+}
+
+// GL primitive-mode -> GX primitive-type. Best-effort for the modes this
+// port actually issues (TRIANGLES / TRIANGLE_STRIP / TRIANGLE_FAN /
+// LINE_STRIP / LINES).
+u8 GxPrim(GLenum mode) {
+    switch (mode) {
+        case GL_TRIANGLES:      return GX_TRIANGLES;
+        case GL_TRIANGLE_STRIP: return GX_TRIANGLESTRIP;
+        case GL_TRIANGLE_FAN:   return GX_TRIANGLEFAN;
+        case GL_LINE_STRIP:     return GX_LINESTRIP;
+        case GL_LINES:          return GX_LINES;
+        default:                return GX_TRIANGLES;
+    }
+}
+
+// Resolve an attribute's byte base pointer: when a GL_ARRAY_BUFFER was bound
+// at glVertexAttribPointer time, `ptr` is a byte OFFSET into that buffer's
+// CPU copy; otherwise `ptr` is a raw client pointer. Returns NULL when the
+// buffer id is stale / empty.
+const unsigned char* AttribBase(const ShimAttrib& a) {
+    if (a.boundBuffer) {
+        if (a.boundBuffer >= (unsigned)kMaxBuffers) return NULL;
+        const ShimBuffer& b = g_Buffers[a.boundBuffer];
+        if (!b.used || !b.data) return NULL;
+        return b.data + (size_t)(uintptr_t)a.ptr;
+    }
+    return (const unsigned char*)a.ptr;
+}
+
+// Effective stride for an attribute: GL treats stride==0 as "tightly packed",
+// i.e. the size of one element.
+int AttribStride(const ShimAttrib& a) {
+    if (a.stride != 0) return a.stride;
+    int comp = (a.type == GL_UNSIGNED_BYTE) ? 1 : 4;   // bytes per component
+    return a.size * comp;
+}
+
+// Set up GX vertex descriptor + attribute formats + TEV/channel state for the
+// current draw, based on which shim attribs are enabled and whether a texture
+// is bound. Must be called BEFORE GX_Begin.
+void SetupGxDrawState(bool haveUV, bool haveColor, bool textured) {
+    // --- Matrix: full 4x4 MVP into the PROJECTION slot (row-major GX), with
+    // an identity position modelview. clip = proj * (identity * pos) = MVP*pos,
+    // reproducing the ES2 shader for both 2D-ortho and 3D-perspective paths.
+    Mtx44 proj;
+    for (int r = 0; r < 4; ++r)
+        for (int c = 0; c < 4; ++c)
+            proj[r][c] = g_ShimMVP[c * 4 + r];   // column-major GL -> row-major GX
+    GX_LoadProjectionMtx(proj, GX_PERSPECTIVE);
+
+    Mtx ident;
+    guMtxIdentity(ident);
+    GX_LoadPosMtxImm(ident, GX_PNMTX0);
+
+    // --- Vertex descriptor.
+    GX_ClearVtxDesc();
+    GX_SetVtxDesc(GX_VA_POS, GX_DIRECT);
+    GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
+    if (haveUV) {
+        GX_SetVtxDesc(GX_VA_TEX0, GX_DIRECT);
+        GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
+    }
+    GX_SetVtxDesc(GX_VA_CLR0, GX_DIRECT);
+    GX_SetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
+    (void)haveColor;   // CLR0 always emitted (const white when array off)
+
+    // --- Colour channel: pass the vertex colour straight through, no lighting.
+    GX_SetNumChans(1);
+    GX_SetChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX,
+                   0, GX_DF_NONE, GX_AF_NONE);
+
+    // --- TEV: GL_MODULATE = texel * vertex colour when textured; PASSCLR
+    // (vertex colour only) when untextured.
+    if (textured) {
+        GX_SetNumTexGens(1);
+        GX_SetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+        GX_SetNumTevStages(1);
+        GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+        GX_SetTevOp(GX_TEVSTAGE0, GX_MODULATE);
+    } else {
+        GX_SetNumTexGens(0);
+        GX_SetNumTevStages(1);
+        GX_SetTevOrder(GX_TEVSTAGE0, GX_TEXCOORDNULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+        GX_SetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    }
+}
+
+// Emit one vertex worth of GX immediate-mode data for logical vertex `idx`.
+// posBase/uvBase/colBase already resolved to CPU byte pointers (or NULL). The
+// enabled flags mirror g_ShimAttrib[]; when an array is off the tracked
+// glVertexAttrib4f constant is used instead.
+void EmitVertex(int idx,
+                const unsigned char* posBase, int posStride, int posSize,
+                bool haveUV, const unsigned char* uvBase, int uvStride,
+                bool haveColor, const unsigned char* colBase, int colStride,
+                unsigned colType) {
+    // Position.
+    const float* p = (const float*)(posBase + (size_t)posStride * idx);
+    float x = p[0];
+    float y = p[1];
+    float z = (posSize >= 3) ? p[2] : 0.0f;
+    GX_Position3f32(x, y, z);
+
+    // Colour (always emitted -- CLR0 is GX_DIRECT).
+    u8 cr = 255, cg = 255, cb = 255, ca = 255;
+    if (haveColor && colBase) {
+        if (colType == GL_UNSIGNED_BYTE) {
+            const unsigned char* c = colBase + (size_t)colStride * idx;
+            cr = c[0]; cg = c[1]; cb = c[2]; ca = c[3];
+        } else {
+            const float* c = (const float*)(colBase + (size_t)colStride * idx);
+            cr = (u8)(c[0] * 255.0f);
+            cg = (u8)(c[1] * 255.0f);
+            cb = (u8)(c[2] * 255.0f);
+            ca = (u8)(c[3] * 255.0f);
+        }
+    } else {
+        const float* c = g_ShimConstAttrib[2];
+        cr = (u8)(c[0] * 255.0f);
+        cg = (u8)(c[1] * 255.0f);
+        cb = (u8)(c[2] * 255.0f);
+        ca = (u8)(c[3] * 255.0f);
+    }
+    GX_Color4u8(cr, cg, cb, ca);
+
+    // Texcoord (only when TEX0 is in the descriptor).
+    if (haveUV) {
+        if (uvBase) {
+            const float* uv = (const float*)(uvBase + (size_t)uvStride * idx);
+            GX_TexCoord2f32(uv[0], uv[1]);
+        } else {
+            const float* uv = g_ShimConstAttrib[1];
+            GX_TexCoord2f32(uv[0], uv[1]);
+        }
+    }
 }
 
 } // namespace
@@ -520,10 +670,13 @@ void glVertexAttribPointer(GLuint index, GLint size, GLenum type,
     a.boundBuffer = g_ArrayBufferBinding;
 }
 
-void glVertexAttrib4f(GLuint /*index*/, GLfloat /*x*/, GLfloat /*y*/,
-                      GLfloat /*z*/, GLfloat /*w*/) {
-    // TODO(wii Pass 2): constant vertex attribute (used when an attrib array
-    // is disabled). No-op boot.
+void glVertexAttrib4f(GLuint index, GLfloat x, GLfloat y,
+                      GLfloat z, GLfloat w) {
+    if (index >= 8) return;
+    g_ShimConstAttrib[index][0] = x;
+    g_ShimConstAttrib[index][1] = y;
+    g_ShimConstAttrib[index][2] = z;
+    g_ShimConstAttrib[index][3] = w;
 }
 
 void glEnableVertexAttribArray(GLuint index) {
@@ -535,21 +688,118 @@ void glDisableVertexAttribArray(GLuint index) {
 }
 
 // ===========================================================================
-// Draw calls -- STUBBED for this pass (boot to a cleared screen).
+// Draw calls -- real GX immediate-mode rendering.
+//
+// Both paths share the same state setup (SetupGxDrawState) and per-vertex
+// emit (EmitVertex): full 4x4 MVP loaded as the GX projection (identity pos
+// modelview), a single GX_MODULATE / GX_PASSCLR TEV stage, and vertex attrs
+// read directly out of the shim's client/bound-buffer CPU copies.
 // ===========================================================================
+namespace {
 
-void glDrawArrays(GLenum /*mode*/, GLint /*first*/, GLsizei /*count*/) {
-    // TODO(wii Pass 2): GX immediate draw from g_ShimAttrib + g_ShimMVP +
-    // bound tex (g_BoundTexture). Emit a GX_Begin/GX_End batch reading the
-    // attribute table's CPU pointers (buffer id 0 => client array, else the
-    // g_Buffers[] copy). No-op for now.
+// Common preamble for both draw entry points. Resolves attribute bases and
+// texture binding, sets GX state. Fills the out-params the emit loop needs.
+// Returns false when position data is missing (nothing to draw).
+bool BeginGxDraw(const unsigned char** posBase, int* posStride, int* posSize,
+                 bool* haveUV, const unsigned char** uvBase, int* uvStride,
+                 bool* haveColor, const unsigned char** colBase, int* colStride,
+                 unsigned* colType) {
+    const ShimAttrib& pos = g_ShimAttrib[0];
+    const ShimAttrib& uv  = g_ShimAttrib[1];
+    const ShimAttrib& col = g_ShimAttrib[2];
+
+    if (!pos.enabled) return false;
+    *posBase = AttribBase(pos);
+    if (!*posBase) return false;
+    *posStride = AttribStride(pos);
+    *posSize   = pos.size;
+
+    *haveUV = uv.enabled;
+    *uvBase = *haveUV ? AttribBase(uv) : NULL;
+    *uvStride = *haveUV ? AttribStride(uv) : 0;
+
+    *haveColor = col.enabled;
+    *colBase = *haveColor ? AttribBase(col) : NULL;
+    *colStride = *haveColor ? AttribStride(col) : 0;
+    *colType = col.type;
+
+    // Textured when a real texture with an uploaded image is bound AND the UV
+    // stream is present (either via the enabled array or a constant is moot
+    // without texcoords -- GX needs a texgen, which needs UVs).
+    bool textured = false;
+    if (g_BoundTexture && g_BoundTexture < (unsigned)kMaxTextures) {
+        const ShimTexture& t = g_Textures[g_BoundTexture];
+        if (t.hasImage && *haveUV) {
+            GX_LoadTexObj((GXTexObj*)&t.obj, GX_TEXMAP0);
+            textured = true;
+        }
+    }
+    // If we won't texture, drop the UV stream from the descriptor so GX
+    // doesn't expect texcoords it has no texgen for.
+    if (!textured) *haveUV = false;
+
+    SetupGxDrawState(*haveUV, *haveColor, textured);
+    return true;
 }
 
-void glDrawElements(GLenum /*mode*/, GLsizei /*count*/, GLenum /*type*/,
-                    const void* /*indices*/) {
-    // TODO(wii Pass 2): GX indexed draw. `indices` is a byte offset into the
-    // bound GL_ELEMENT_ARRAY_BUFFER (g_Buffers[g_ElementBufferBinding]) when
-    // an index buffer is bound. No-op for now.
+} // namespace
+
+void glDrawArrays(GLenum mode, GLint first, GLsizei count) {
+    if (count <= 0) return;
+
+    const unsigned char *posBase, *uvBase, *colBase;
+    int posStride, posSize, uvStride, colStride;
+    bool haveUV, haveColor;
+    unsigned colType;
+    if (!BeginGxDraw(&posBase, &posStride, &posSize, &haveUV, &uvBase, &uvStride,
+                     &haveColor, &colBase, &colStride, &colType)) {
+        return;
+    }
+
+    GX_Begin(GxPrim(mode), GX_VTXFMT0, (u16)count);
+    for (int i = 0; i < count; ++i) {
+        EmitVertex(first + i, posBase, posStride, posSize,
+                   haveUV, uvBase, uvStride,
+                   haveColor, colBase, colStride, colType);
+    }
+    GX_End();
+}
+
+void glDrawElements(GLenum mode, GLsizei count, GLenum type,
+                    const void* indices) {
+    if (count <= 0) return;
+
+    const unsigned char *posBase, *uvBase, *colBase;
+    int posStride, posSize, uvStride, colStride;
+    bool haveUV, haveColor;
+    unsigned colType;
+    if (!BeginGxDraw(&posBase, &posStride, &posSize, &haveUV, &uvBase, &uvStride,
+                     &haveColor, &colBase, &colStride, &colType)) {
+        return;
+    }
+
+    // Index source: byte offset into the bound GL_ELEMENT_ARRAY_BUFFER's CPU
+    // copy, or a raw client pointer when no index buffer is bound.
+    const unsigned char* idxBase;
+    if (g_ElementBufferBinding && g_ElementBufferBinding < (unsigned)kMaxBuffers &&
+        g_Buffers[g_ElementBufferBinding].used && g_Buffers[g_ElementBufferBinding].data) {
+        idxBase = g_Buffers[g_ElementBufferBinding].data + (size_t)(uintptr_t)indices;
+    } else {
+        idxBase = (const unsigned char*)indices;
+    }
+    if (!idxBase) return;
+
+    const unsigned short* idx16 = (const unsigned short*)idxBase;
+    const unsigned char*   idx8 = idxBase;
+
+    GX_Begin(GxPrim(mode), GX_VTXFMT0, (u16)count);
+    for (int i = 0; i < count; ++i) {
+        int vi = (type == GL_UNSIGNED_BYTE) ? (int)idx8[i] : (int)idx16[i];
+        EmitVertex(vi, posBase, posStride, posSize,
+                   haveUV, uvBase, uvStride,
+                   haveColor, colBase, colStride, colType);
+    }
+    GX_End();
 }
 
 // ===========================================================================
