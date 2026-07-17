@@ -1,69 +1,63 @@
 # devkitPPC / libogc2 toolchain file for the Wii port target.
 #
-# SCAFFOLDING -- not exercised by any build in this repo/session (no
-# devkitPPC install here). Provided so a machine that HAS devkitPro/devkitPPC
-# installed can configure the Wii target:
+# Thin wrapper over devkitPro's own CMake toolchain support, plus a
+# Windows-host MSYS2 workaround (see below). Configure with:
 #
-#   cmake -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake \
-#         -DFRUIT_PLATFORM_WII=ON -B build/wii
+#   cmake -B build/wii -G "Unix Makefiles" \
+#         -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake \
+#         -DFRUIT_PLATFORM_WII=ON
 #   cmake --build build/wii
 #
-# This file is NEVER included by the default host/web configure -- CMake
-# only reads a toolchain file when -DCMAKE_TOOLCHAIN_FILE explicitly points
-# at it (or a preset does), so its mere presence in the repo has zero effect
-# on any other build.
-#
-# Requires $DEVKITPRO and $DEVKITPPC environment variables, set by the
-# devkitPro installer / pacman (https://devkitpro.org/wiki/Getting_Started).
+# Requires $DEVKITPRO set (devkitPro installer / pacman:
+# https://devkitpro.org/wiki/Getting_Started; `pacman -S wii-dev`).
 
 if(NOT DEFINED ENV{DEVKITPRO})
     message(FATAL_ERROR
         "wii.toolchain.cmake: $DEVKITPRO is not set. Install devkitPro "
-        "(https://devkitpro.org/wiki/Getting_Started) and devkitPPC + libogc2 "
-        "via its package manager, then re-run cmake.")
-endif()
-if(NOT DEFINED ENV{DEVKITPPC})
-    message(FATAL_ERROR
-        "wii.toolchain.cmake: $DEVKITPPC is not set. Install the devkitPPC "
-        "package via devkitPro's pacman (pacman -S wii-dev) and re-run cmake.")
+        "(https://devkitpro.org/wiki/Getting_Started) and the wii-dev "
+        "package (devkitPPC + libogc2) via its package manager, then "
+        "re-run cmake.")
 endif()
 
-set(DEVKITPRO $ENV{DEVKITPRO})
-set(DEVKITPPC $ENV{DEVKITPPC})
+# devkitPro ships its own CMake toolchain file that sets up the
+# powerpc-eabi-* compilers, CMAKE_SYSTEM_NAME/PROCESSOR, find_root_path,
+# and the libogc2 include/lib dirs. Delegate to it instead of hand-rolling
+# those bits (they're kept in sync with devkitPro releases upstream).
+include("$ENV{DEVKITPRO}/cmake/Wii.cmake")
 
-set(CMAKE_SYSTEM_NAME Generic)
-set(CMAKE_SYSTEM_PROCESSOR ppc)
+# --- Windows-host MSYS2 workaround (NOT fidelity-relevant) ---
+#
+# MSYS `make` mangles the TEMP/TMP env vars it hands to child processes, so
+# the native (non-MSYS) devkitPPC gcc.exe falls back to an unwritable
+# `C:\WINDOWS` for its temp files and fails to compile anything. Fix: wrap
+# the compiler in a tiny shell script that re-exports a writable TEMP/TMP
+# before exec'ing the real compiler, and point CMAKE_C/CXX_COMPILER at the
+# wrapper instead of the raw exe. Linux/macOS hosts don't hit this and skip
+# the block entirely.
+if(CMAKE_HOST_WIN32)
+    set(_fn_wii_tmp_dir "C:/msys64/tmp")
+    file(MAKE_DIRECTORY "${_fn_wii_tmp_dir}")
 
-# TODO(wii): point at the real devkitPPC cross-compilers once verified on a
-# machine with the toolchain installed. Expected layout:
-#   ${DEVKITPPC}/bin/powerpc-eabi-gcc / powerpc-eabi-g++ / powerpc-eabi-ar
-set(CMAKE_C_COMPILER   "${DEVKITPPC}/bin/powerpc-eabi-gcc")
-set(CMAKE_CXX_COMPILER "${DEVKITPPC}/bin/powerpc-eabi-g++")
-set(CMAKE_AR           "${DEVKITPPC}/bin/powerpc-eabi-ar" CACHE FILEPATH "")
+    set(_fn_wii_real_gcc "$ENV{DEVKITPRO}/devkitPPC/bin/powerpc-eabi-gcc.exe")
+    set(_fn_wii_real_gxx "$ENV{DEVKITPRO}/devkitPPC/bin/powerpc-eabi-g++.exe")
 
-# TODO(wii): confirm exact Wii CPU flags. Broadwell/libogc2 samples
-# conventionally use: -mcpu=750 -meabi -mhard-float -DGEKKO
-set(CMAKE_C_FLAGS_INIT   "-mcpu=750 -meabi -mhard-float -DGEKKO")
-set(CMAKE_CXX_FLAGS_INIT "-mcpu=750 -meabi -mhard-float -DGEKKO")
+    set(_fn_wii_gcc_wrapper "${CMAKE_BINARY_DIR}/powerpc-eabi-gcc-wrap.sh")
+    set(_fn_wii_gxx_wrapper "${CMAKE_BINARY_DIR}/powerpc-eabi-g++-wrap.sh")
 
-# libogc2 install location (portlibs + libogc headers/libs).
-set(FN_LIBOGC2_DIR "${DEVKITPRO}/libogc2" CACHE PATH "libogc2 install root")
-set(FN_PORTLIBS_DIR "${DEVKITPRO}/portlibs/wii" CACHE PATH "devkitPro portlibs (wii)")
+    file(WRITE "${_fn_wii_gcc_wrapper}"
+"#!/bin/sh
+export TEMP='${_fn_wii_tmp_dir}'
+export TMP='${_fn_wii_tmp_dir}'
+exec \"${_fn_wii_real_gcc}\" \"$@\"
+")
+    file(WRITE "${_fn_wii_gxx_wrapper}"
+"#!/bin/sh
+export TEMP='${_fn_wii_tmp_dir}'
+export TMP='${_fn_wii_tmp_dir}'
+exec \"${_fn_wii_real_gxx}\" \"$@\"
+")
+    execute_process(COMMAND chmod +x "${_fn_wii_gcc_wrapper}" "${_fn_wii_gxx_wrapper}")
 
-include_directories(SYSTEM
-    "${FN_LIBOGC2_DIR}/include"
-    "${FN_PORTLIBS_DIR}/include"
-)
-link_directories(
-    "${FN_LIBOGC2_DIR}/lib/wii"
-    "${FN_PORTLIBS_DIR}/lib"
-)
-
-set(CMAKE_FIND_ROOT_PATH "${DEVKITPPC}" "${FN_LIBOGC2_DIR}" "${FN_PORTLIBS_DIR}")
-set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
-
-# TODO(wii): elf2dol step (devkitPPC ships elf2dol) to produce fruit-ninja.dol
-# from the linked .elf -- add as a POST_BUILD custom command once the
-# executable target actually links.
+    set(CMAKE_C_COMPILER   "${_fn_wii_gcc_wrapper}" CACHE FILEPATH "" FORCE)
+    set(CMAKE_CXX_COMPILER "${_fn_wii_gxx_wrapper}" CACHE FILEPATH "" FORCE)
+endif()

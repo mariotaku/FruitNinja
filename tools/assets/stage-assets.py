@@ -4,7 +4,7 @@ tools/assets/stage-assets.py -- Build-phase asset staging, shared by BOTH the
 host and web targets.
 
 Usage:
-    python3 stage-assets.py <repo_root> <out_staging_data_dir> [--web]
+    python3 stage-assets.py <repo_root> <out_staging_data_dir> [--web|--wii]
 
 Mirrors FruitNinjaBada/Data into <out_staging_data_dir>. The real
 FruitNinjaBada/Data files are never modified; the staged copy is a build/
@@ -12,6 +12,18 @@ artifact (gitignored). CMakeLists.txt's fn_asset_staging custom target runs
 this before fruit-ninja links (host: FN_DATA_DIR_PATH points straight at the
 staging dir via GameSDL.cpp's existing SetDataDir call, no runtime code
 changes; web: additionally preloaded into MEMFS via --preload-file).
+
+WII MODE (--wii): the Wii target ships UNCOMPRESSED assets -- raw Tex1
+textures (no WebP transcode; GX has no software WebP decoder wired up) and raw
+.wav.pcm audio (no Ogg/Vorbis; ASND/AESND plays raw PCM). --wii short-circuits
+straight to a verbatim recursive copy of FruitNinjaBada/Data with NO Pillow,
+NO ffmpeg, NO fontTools, and NO node/svg-to-webp dependency (the CMake Wii
+branch does not even resolve NODE_EXECUTABLE -- see the FRUIT_PLATFORM_WII
+guard in the root CMakeLists.txt). Widget art
+(assets/ui-widgets/generated/*.tex) is merged in only if already present from
+a prior non-Wii configure; it is never generated under --wii, so Wii
+SettingsScreen widgets fall back to placeholder art until a real GX rasterizer
+path exists (same non-fatal contract as the host/web "node not found" case).
 
 ALWAYS (both host and web):
 
@@ -592,6 +604,25 @@ def copy_if_different(src_path, dst_path):
     return True
 
 
+def stage_tree_raw(src_root, dst_root):
+    """--wii mode: verbatim recursive copy, no transcoding of any kind.
+    Every *.tex stays raw Tex1 bytes; every *.wav.pcm stays raw PCM. Pure
+    stdlib (shutil/os only) -- no Pillow/ffmpeg/fontTools dependency."""
+    stats = {"other_copied": 0, "other_skipped": 0, "widget_tex_copied": 0}
+    for root, _dirs, files in os.walk(src_root):
+        rel_dir = os.path.relpath(root, src_root)
+        dst_dir = os.path.join(dst_root, rel_dir) if rel_dir != "." else dst_root
+        os.makedirs(dst_dir, exist_ok=True)
+        for name in files:
+            src_path = os.path.join(root, name)
+            dst_path = os.path.join(dst_dir, name)
+            if copy_if_different(src_path, dst_path):
+                stats["other_copied"] += 1
+            else:
+                stats["other_skipped"] += 1
+    return stats
+
+
 def stage_tree(src_root, dst_root, is_web, font_codepoints, font_charset_sources,
                font_charset_txt_path):
     stats = {
@@ -676,20 +707,13 @@ def sweep_stale_pcm(dst_root):
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: stage-assets.py <repo_root> <out_staging_data_dir> [--web]", file=sys.stderr)
+        print("Usage: stage-assets.py <repo_root> <out_staging_data_dir> [--web|--wii]", file=sys.stderr)
         sys.exit(1)
 
     repo_root = sys.argv[1]
     dst_root = sys.argv[2]
     is_web = "--web" in sys.argv[3:]
-
-    # Self-provision the external tools (install-where-used). Raises a clear
-    # error if missing and not auto-installable. Pillow is needed regardless
-    # of --web (texture transcode runs for host too).
-    _ensure_pillow()
-    if is_web:
-        ensure_ffmpeg()
-        ensure_fonttools()
+    is_wii = "--wii" in sys.argv[3:]
 
     src_root = os.path.join(repo_root, "FruitNinjaBada", "Data")
 
@@ -698,6 +722,26 @@ def main():
         sys.exit(1)
 
     os.makedirs(dst_root, exist_ok=True)
+
+    if is_wii:
+        # Raw verbatim copy only -- no Pillow/ffmpeg/fontTools/node dependency.
+        # See the module docstring's "WII MODE" section.
+        print("[stage-assets] staging {} -> {} (wii, raw/uncompressed)".format(src_root, dst_root))
+        stats = stage_tree_raw(src_root, dst_root)
+        merge_widget_textures(repo_root, dst_root, stats)
+        print("[stage-assets] other assets: {} copied, {} unchanged (skipped)".format(
+            stats["other_copied"], stats["other_skipped"]))
+        print("[stage-assets] widget textures: {} merged from {}".format(
+            stats["widget_tex_copied"], WIDGET_TEX_RELDIR))
+        return
+
+    # Self-provision the external tools (install-where-used). Raises a clear
+    # error if missing and not auto-installable. Pillow is needed regardless
+    # of --web (texture transcode runs for host too).
+    _ensure_pillow()
+    if is_web:
+        ensure_ffmpeg()
+        ensure_fonttools()
 
     font_codepoints, font_charset_sources = set(), []
     font_charset_txt_path = os.path.join(os.path.dirname(dst_root), "gangofchinese-charset.txt")

@@ -75,7 +75,9 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 # load the generated widget textures directly (no placeholder-art runtime
 # fallback), so node must be present to produce them.
 find_program(NODE_EXECUTABLE NAMES node)
-if(NOT FN_ASM_VERIFY AND NOT NODE_EXECUTABLE)
+# Wii ships uncompressed Tex1 textures (no WebP), so it needs neither node nor
+# the svg-to-webp rasterizer. See the Wii branch in fn_asset_staging below.
+if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII AND NOT NODE_EXECUTABLE)
     message(FATAL_ERROR "node not found -- required to rasterize assets/ui-widgets/*.svg "
                          "(tools/assets/svg-to-webp.mjs). Install Node.js and re-run cmake.")
 endif()
@@ -259,7 +261,11 @@ endif()
 include(FetchContent)
 set(_SDL2_VER 2.30.11)
 
-if(NOT FN_ASM_VERIFY)
+# Wii has no SDL2/SDL2_image/FreeType -- GX handles video, ASND/AESND audio,
+# libfat filesystem, WPAD input. Guard each dependency block below so a Wii
+# configure never touches FetchContent/find_package for these; nothing in
+# src/platform/wii links against them (see src/platform/wii/README.md).
+if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
 
 if (EMSCRIPTEN)
     # Port specific: Emscripten ships SDL2 as a port; -sUSE_SDL=2 at compile+link
@@ -343,7 +349,7 @@ endif()
 #   2. MSVC: FetchContent prebuilt VC zip from libsdl-org/SDL_image releases.
 set(_SDL2_IMAGE_VER 2.8.2)
 
-if(NOT FN_ASM_VERIFY)
+if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
 
 find_package(SDL2_image QUIET)
 if (NOT SDL2_image_FOUND AND MSVC)
@@ -374,11 +380,15 @@ if (NOT SDL2_image_FOUND AND NOT MSVC)
     message(WARNING "SDL2_image not found; install mingw-w64-x86_64-SDL2_image (MSYS2) or libsdl2-image-dev (Debian). Test screenshots will not link.")
 endif()
 
-endif() # NOT FN_ASM_VERIFY (SDL2_image block)
+endif() # NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII (SDL2_image block)
 
 # Prefer a system/vcpkg tinyxml2 (provides tinyxml2::tinyxml2); fall back to a
 # FetchContent source build when not installed. Both providers export the same
 # tinyxml2::tinyxml2 target, so the link line is identical either way.
+# NOTE: this block only runs for host/web (it's inside the
+# `NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII` wrapper). The Wii tinyxml2
+# source build lives in that wrapper's else() branch below, and asm-verify
+# stubs it -- both providers export the same tinyxml2::tinyxml2 target.
 find_package(tinyxml2 CONFIG QUIET)
 if (NOT tinyxml2_FOUND)
     message(STATUS "System/vcpkg tinyxml2 not found -- fetching tinyxml2 10.0.0 source")
@@ -474,9 +484,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(libwebp)
 
 else()
-# FN_ASM_VERIFY=ON: stub INTERFACE targets. Cross-headers provide replacement
-# headers; no SDL2/GL/FreeType libraries are linked. tinyxml2 headers are
-# copied by verify.sh from the host build into build/host/_deps/tinyxml2-src.
+# FN_ASM_VERIFY=ON or FRUIT_PLATFORM_WII=ON: stub INTERFACE targets so any
+# stray target_link_libraries reference resolves to a no-op rather than a
+# configure error. Cross-headers provide replacement headers for the
+# asm-verify branch; no SDL2/GL/FreeType libraries are actually linked for
+# either branch. tinyxml2 headers are copied by verify.sh from the host
+# build into build/host/_deps/tinyxml2-src (asm-verify only).
 foreach(_tgt SDL2::SDL2 SDL2::SDL2main)
     if(NOT TARGET ${_tgt})
         add_library(${_tgt} INTERFACE IMPORTED)
@@ -484,6 +497,18 @@ foreach(_tgt SDL2::SDL2 SDL2::SDL2main)
 endforeach()
 if(NOT TARGET Freetype::Freetype)
     add_library(Freetype::Freetype INTERFACE IMPORTED)
+endif()
+# tinyxml2 is REAL for Wii (portable C++, cross-compiles for PPC). Only the
+# asm-verify branch keeps the header-stub path (verify.sh copies headers); the
+# Wii branch builds tinyxml2 from source so tinyxml2::tinyxml2 exists to link.
+if(FRUIT_PLATFORM_WII AND NOT TARGET tinyxml2::tinyxml2)
+    message(STATUS "Wii: fetching tinyxml2 10.0.0 source (no system/vcpkg config under the cross-root)")
+    FetchContent_Declare(
+        tinyxml2
+        GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
+        GIT_TAG        10.0.0
+    )
+    FetchContent_MakeAvailable(tinyxml2)
 endif()
 endif()
 
@@ -534,9 +559,19 @@ if(NOT FN_ASM_VERIFY)
     add_subdirectory(src/game)
     add_subdirectory(src/debug)
 
-    target_link_libraries(fruit-ninja-game PUBLIC
-        SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine
-    )
+    if (FRUIT_PLATFORM_WII)
+        # No SDL2 on Wii -- GX/ASND/libfat/WPAD replace it entirely (see
+        # src/platform/wii/README.md). tinyxml2 is portable C++ and still
+        # links; mortar_engine's own OpenGL::GL link is skipped for this
+        # platform too (see src/engine/CMakeLists.txt).
+        target_link_libraries(fruit-ninja-game PUBLIC
+            tinyxml2::tinyxml2 mortar_engine
+        )
+    else()
+        target_link_libraries(fruit-ninja-game PUBLIC
+            SDL2::SDL2 tinyxml2::tinyxml2 mortar_engine
+        )
+    endif()
 endif()
 
 # --- Executable ---
@@ -570,12 +605,24 @@ if(NOT FN_ASM_VERIFY)
     # guarantees this runs before fruit-ninja links on both branches (build
     # time, not configure time -- FruitNinjaBada/Data need not exist yet when
     # CMake configures, only when this target actually runs).
-    set(FN_ASSET_STAGING_COMMANDS
-        COMMAND ${NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.mjs ${CMAKE_SOURCE_DIR}
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
-                ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR}
-                $<$<BOOL:${EMSCRIPTEN}>:--web>
-    )
+    # Wii ships uncompressed assets (raw Tex1 textures, raw .wav.pcm audio) and
+    # has no node/PIL/webp toolchain requirement -- skip svg-to-webp.mjs (no
+    # NODE_EXECUTABLE is even resolved for this platform, see the find_program
+    # guard above) and pass --wii to stage-assets.py instead of --web, which
+    # selects its raw copy-only mode (see stage-assets.py's --wii handling).
+    if (FRUIT_PLATFORM_WII)
+        set(FN_ASSET_STAGING_COMMANDS
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
+                    ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR} --wii
+        )
+    else()
+        set(FN_ASSET_STAGING_COMMANDS
+            COMMAND ${NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.mjs ${CMAKE_SOURCE_DIR}
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
+                    ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR}
+                    $<$<BOOL:${EMSCRIPTEN}>:--web>
+        )
+    endif()
     # ALL: the host runtime + every test read assets from FN_STAGING_DATA_DIR
     # (FN_DATA_DIR_PATH points there), so staging must run on ANY build -- not just
     # when the fruit-ninja exe target is built. Idempotent (mtime), so it's a no-op
@@ -715,6 +762,7 @@ elseif (FRUIT_PLATFORM_WII)
     # See src/platform/wii/README.md for the full roadmap; this will NOT
     # link without devkitPPC/libogc2 present.
     add_executable(fruit-ninja src/platform/wii/mainWii.cpp)
+    add_dependencies(fruit-ninja fn_asset_staging)
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game)
     # TODO(wii): -logc2 -lm (or the split -lwiiuse -lbte -logc -lfat set,
     # depending on which libogc2 packaging is installed) once a real
@@ -807,8 +855,10 @@ if (FN_DEBUG_TOUCH)
     message(STATUS "FN_DEBUG_TOUCH = ON")
 endif()
 
-if (NOT EMSCRIPTEN)
+if (NOT EMSCRIPTEN AND NOT FRUIT_PLATFORM_WII)
     # --- ctest ---
+    # Wii: cross-compiled PPC binaries can't run on the host anyway, and the
+    # test executables link SDL2_image/host GL which are unavailable here.
     enable_testing()
     add_subdirectory(tests)
 endif()

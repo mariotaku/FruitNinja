@@ -25,11 +25,15 @@ add_library(mortar_engine ${FN_LIB_TYPE}
     render/DisplayManager.cpp
     render/Layout.cpp        # Port specific: opt-in widescreen layout seam (DIFFERS enhancement)
 )
-if(NOT FN_ASM_VERIFY)
+if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
     target_sources(mortar_engine PRIVATE
         render/gl_funcsSDL.cpp
         render/gl_funcsWin32.cpp
         render/DisplayManagerSDL.cpp
+    )
+endif()
+if(NOT FN_ASM_VERIFY)
+    target_sources(mortar_engine PRIVATE
         render/NineSlice.cpp        # Port specific: 9-slice panel draw (no binary counterpart)
     )
 endif()
@@ -96,6 +100,10 @@ if(NOT FN_ASM_VERIFY)
         target_sources(mortar_engine PRIVATE
             audio/SoundManagerWebAudio.cpp
         )
+    elseif(FRUIT_PLATFORM_WII)
+        # Wii: ASND/AESND backend. SoundManagerWii.cpp is added to
+        # fruit-ninja-game (not mortar_engine) by
+        # src/platform/wii/CMakeLists.txt -- see src/platform/wii/README.md.
     else()
         target_sources(mortar_engine PRIVATE
             audio/SoundManagerSDL.cpp
@@ -157,7 +165,11 @@ target_sources(mortar_engine PRIVATE
     # Debug logger (SDL_Log backend)
 )
 if(NOT FN_ASM_VERIFY)
-    target_sources(mortar_engine PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../debug/LoggerSDL.cpp)
+    if(FRUIT_PLATFORM_WII)
+        target_sources(mortar_engine PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../debug/LoggerWii.cpp)
+    else()
+        target_sources(mortar_engine PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../debug/LoggerSDL.cpp)
+    endif()
 endif()
 target_include_directories(mortar_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -168,10 +180,12 @@ if(FN_ASM_VERIFY)
         ${FN_ASM_VERIFY_TOOLS}/cross-headers)
 endif()
 
-if(NOT FN_ASM_VERIFY)
+if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
     # GL backend link target. find_package(OpenGL) covers desktop GL_COMPAT
     # (libGL on Linux/Mesa; opengl32 on Windows); the ES1 / ES2 paths are
-    # wired separately by FRUIT_GL_API.
+    # wired separately by FRUIT_GL_API. Skipped entirely for Wii -- GX
+    # (libogc2) replaces GL and is linked from the wii platform lib/exe, not
+    # here (see src/platform/wii/README.md's "GX render backend mapping").
     if (FRUIT_GL_API STREQUAL "GL_COMPAT")
         find_package(OpenGL REQUIRED)
         target_link_libraries(mortar_engine PUBLIC OpenGL::GL)
@@ -204,5 +218,9 @@ if(NOT FN_ASM_VERIFY)
             target_include_directories(mortar_engine PRIVATE ${libwebp_SOURCE_DIR}/src)
         endif()
     endif()
+endif()
+if(NOT FN_ASM_VERIFY AND FRUIT_PLATFORM_WII)
+    # tinyxml2 is portable C++ and still needed on Wii (see root CMakeLists.txt).
+    target_link_libraries(mortar_engine PUBLIC tinyxml2::tinyxml2)
 endif()
 target_compile_features(mortar_engine PUBLIC cxx_std_11)
