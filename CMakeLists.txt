@@ -530,6 +530,12 @@ if (EMSCRIPTEN)
     # filesystem path, so it stays independent of FN_STAGING_DATA_DIR.
     set(CMAKE_EXECUTABLE_SUFFIX ".html")
     set(FN_DATA_DIR_PATH "/FruitNinjaBada/Data")
+elseif (FRUIT_PLATFORM_WII)
+    # Wii: assets live on the SD card under the homebrew app dir; libfat mounts
+    # sd:/ at boot (see mainWii.cpp fatInitDefault), so this is a device path,
+    # NOT a host path. Deploy build/wii/staging/Data -> sd:/apps/fruitninja/Data
+    # on the card (alongside boot.dol). Uncompressed Tex1/.wav.pcm (--wii staging).
+    set(FN_DATA_DIR_PATH "sd:/apps/fruitninja/Data")
 else()
     # Host now reads from the staged dir (WebP-transcoded textures), not
     # FruitNinjaBada/Data directly -- see fn_asset_staging below.
