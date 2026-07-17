@@ -910,14 +910,18 @@
       };
     }
 
-    soundBtn.addEventListener('click',      _mk(true));
-    soundBtn.addEventListener('touchstart', _mk(true), {passive: false});
+    soundBtn.addEventListener('click',    _mk(true));
+    // touchend (finger UP = a completed tap), not touchstart (finger down), so a
+    // stray touch-down/drag doesn't trigger; preventDefault suppresses the ghost
+    // click. Both still count as the audio-unlock gesture. _onAudioConsentTap is
+    // idempotent so any click/touchend overlap is a no-op.
+    soundBtn.addEventListener('touchend', _mk(true), {passive: false});
     soundBtn.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') _mk(true)(e);
     });
 
-    mutedBtn.addEventListener('click',      _mk(false));
-    mutedBtn.addEventListener('touchstart', _mk(false), {passive: false});
+    mutedBtn.addEventListener('click',    _mk(false));
+    mutedBtn.addEventListener('touchend', _mk(false), {passive: false});
     mutedBtn.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') _mk(false)(e);
     });
