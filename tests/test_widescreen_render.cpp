@@ -56,6 +56,26 @@
 //      test_powerup_hud.cpp; this segment exists to prove the powerup HUD
 //      still renders correctly under the wider viewport, not to re-baseline 3:2)
 //
+// 3. IN-GAME HUD / SCORECONTROL (--combo=ingame_hud) -- component isolation
+//    mode, same InitComponent() pattern as segment 2 but without PowerUpManager:
+//    a single ScoreControl is constructed and added as the sole HUD control,
+//    with game_work seeded to the TRUE steady-state gameplay values
+//    (gameMode=CLASSIC, bM_Mode=false, bM_bPaused=0, m_PauseAmount=0.0f --
+//    see WaveManager.cpp:1613, "m_PauseAmount == 0.0f during [active gameplay]")
+//    and currentScore=12345 so the score number renders a visible multi-digit
+//    value. IMPORTANT: at m_PauseAmount==0 the "SCORE" wordmark (ScoreControl::
+//    PreDraw Section D, gated on transTimer > 0.0f) does NOT draw -- that gate
+//    only opens during the wave-transition/game-over settle (m_PauseAmount -> 1.0,
+//    see GameOverScreen.cpp:489/1121/1295), which is a DIFFERENT visual moment
+//    than steady in-game play even though both share the same ScoreControl
+//    instance and the same "hud.score" Layout::MapX key. This capture is the
+//    faithful true-in-game frame (score number + watermelon icon only, no
+//    wordmark) -- see the orchestrator's report for the full analysis of
+//    whether the in-game and game-over anchor should be made independently
+//    adjustable.
+//    Captures (tmp/test/screenshots/widescreen/):
+//      ingame_hud_3x2.png / ingame_hud_16x9.png
+//
 // C++11 / GCC 4.4.1 NOT required -- host-only test TU (no cross-build target).
 
 #include "test_harness.h"
@@ -73,6 +93,8 @@
 #include "game/GameModifier.h"
 #include "game/GameMode.h"
 #include "hud/HUD.h"
+#include "hud/HUDLayer.h"
+#include "hud/ScoreControl.h"
 #include "entities/ActorManager.h"   // DeactivateAllEntities (drain menu fruit)
 #include "particle/PSPParticleManager.h"
 #include "engine/util/StringHash.h"
@@ -191,6 +213,41 @@ static void RunPowerUpFrameWidescreenAware(fn::TestHarness& h, PowerUpManager* p
     }
 }
 
+// ---- Segment 3 helper: in-game HUD (ScoreControl) frame loop. Same
+// widescreen viewport/ortho/background sequence as
+// RunPowerUpFrameWidescreenAware (Game::renderFrame's real per-frame calls),
+// minus the PowerUpManager pre/post hooks -- this segment isolates
+// ScoreControl only, no powerup activation involved.
+static void RunHudFrameWidescreenAware(fn::TestHarness& h, int n) {
+    static const float kDt = 1.0f / 60.0f;
+    for (int i = 0; i < n; ++i) {
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev)) { if (ev.type == SDL_QUIT) return; }
+
+        int ww = 0, wh = 0;
+        SDL_GL_GetDrawableSize(h.window, &ww, &wh);
+        Layout::SetWindowAspect((float)ww, (float)wh);
+        int vpX, vpY, vpW, vpH;
+        Layout::ComputeViewport(ww, wh, &vpX, &vpY, &vpW, &vpH);
+        glViewport(vpX, vpY, vpW, vpH);
+        Layout::SetActiveViewport(vpX, vpY, vpW, vpH, ww, wh);
+
+        Mortar::DisplayManager::GetInstance().BeginFrame();
+        MatrixManager::GetInstance().SetupOrtho(
+            160.0f, -160.0f, -Layout::HalfWidth(), Layout::HalfWidth(), 2000.0f, -6000.0f);
+
+        DrawBackground();
+
+        if (game_work.mHud) {
+            game_work.mHud->Update(kDt);
+            game_work.mHud->BeginDraw(kDt);
+            game_work.mHud->Draw(0x7FFFFFFF);
+        }
+
+        SDL_GL_SwapWindow(h.window);
+    }
+}
+
 // ---- Segment 1 helper: hide every existing HUD control (mirrors
 // test_screen.cpp's hideAllExisting lambda, spelled as an explicit loop so
 // this TU stays lambda-free like the rest of the render-test suite). ----
@@ -230,6 +287,84 @@ int main(int argc, char* argv[]) {
     const char* suffix = wide ? "16x9" : "3x2";
 
     int failures = 0;
+
+    if (combo && std::strcmp(combo, "ingame_hud") == 0) {
+        // ---- Segment 3: in-game HUD (ScoreControl), component isolation ----
+        // Same InitComponent + wide-window-up-front pattern as segment 2, minus
+        // PowerUpManager -- isolates the top-left SCORE readout so its
+        // widescreen edge-alignment can be eyeballed against the game-over
+        // fact-board capture (widescreen/gamemode_*, shop_*, etc. in segment 1
+        // are menu screens; this is the actual gameplay HUD element).
+        h.SetInitFrames(120);
+        if (wide) h.SetWindowSize(1136, 640);
+        Layout::SetWideLayout(wide);
+        if (!h.InitComponent()) return 1;
+        if (!game_work.mHud) {
+            std::fprintf(stderr, "FAIL: mHud null after boot\n");
+            return 1;
+        }
+
+        // Steady-state in-game gameplay: gameMode=CLASSIC, bM_Mode=false
+        // (gameplay active, not menu-paused per GameWork.h:40), m_PauseAmount=0.0f
+        // (WaveManager.cpp:1613 -- "0.0f during [active gameplay]"; GameInit's
+        // menu-boot value is -1.0f, GameOverScreen's settled-display value is
+        // ~1.0f -- see ScoreControl.cpp Update's waveTimer comment). A nonzero
+        // score exercises the "SCORE" wordmark... except Section D
+        // (ScoreControl::PreDraw, ScoreControl.cpp ~line 622) gates the wordmark
+        // on transTimer > 0.0f, which steady-state gameplay (m_PauseAmount==0)
+        // never satisfies -- see this test's header comment / the orchestrator
+        // report for the analysis. Only the score NUMBER + watermelon icon are
+        // visible in this true in-game state; this capture is intentionally the
+        // faithful "no wordmark during gameplay" frame, not a fudged wordmark-on
+        // frame.
+        game_work.gameMode      = (uint8_t)Mortar::GAME_MODE_CLASSIC;
+        game_work.bM_Mode        = false;
+        game_work.bM_bPaused    = 0;
+        game_work.m_PauseAmount = 0.0f;
+        game_work.currentScore  = 12345;
+
+        ScoreControl* sc = new ScoreControl();
+        sc->m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
+        game_work.mHud->AddControl(sc);
+
+        // 60 frames: settle m_ScoreSmoothed's eased catch-up to currentScore
+        // (ScoreControl::Update Stage 2, ~0.1-lerp per frame) and the
+        // size-pulse decay, same settle budget as test_scorecontrol.cpp's
+        // "active" case.
+        for (int i = 0; i < 60; ++i) {
+            game_work.m_PauseAmount = 0.0f;
+            game_work.currentScore  = 12345;
+            RunHudFrameWidescreenAware(h, 1);
+        }
+
+        std::printf("[widescreen/ingame_hud] pos=(%.2f, %.2f) drawPos=(%.2f, %.2f) displayedScore=%d\n",
+                    sc->pos.x, sc->pos.y, sc->m_DrawPosX, sc->m_DrawPosY, sc->m_DisplayedScore);
+
+        if (h.IsScreenshot()) {
+            char label[64];
+            std::snprintf(label, sizeof(label), "widescreen/ingame_hud_%s", suffix);
+            if (!h.ScreenshotPng(label)) {
+                std::fprintf(stderr, "FAIL: ScreenshotPng('%s') failed\n", label);
+                ++failures;
+            } else {
+                std::printf("[%s] screenshot written\n", label);
+            }
+        }
+
+        // Port specific: test teardown -- drop the score control's pending-removal
+        // flag and settle one more frame so HUD::Update processes the removal
+        // before Shutdown() tears down mHud (same discipline as test_scorecontrol.cpp).
+        sc->m_bPendingRemoval = 1;
+        RunHudFrameWidescreenAware(h, 1);
+
+        if (failures > 0) {
+            std::fprintf(stderr, "FAIL: %d check(s) failed\n", failures);
+            h.Shutdown();
+            return 1;
+        }
+        std::printf("PASS: widescreen ingame_hud (%s) OK\n", suffix);
+        return h.Shutdown();
+    }
 
     if (combo) {
         // ---- Segment 2: powerup frenzy/freeze, component isolation ----
