@@ -127,12 +127,30 @@ int main(int argc, char* argv[]) {
         WPAD_ScanPads();
 
         // HOME on any remote quits (host-only affordance; no binary equiv).
+        //
+        // Port specific: the IR pointer itself IS the finger (matches
+        // InputTranslatorWii.h's "IR pointer -> Touch finger channel" model,
+        // the direct analogue of a touch being present/absent on the SDL
+        // backend). No A/B-button gating is used -- pointing the remote at
+        // the sensor bar presses the blade, pointing away releases it, same
+        // as a finger touching/lifting off a touchscreen. ir.valid is WPAD's
+        // own "is the dot currently visible" signal, so a remote pointed off
+        // the sensor bar naturally reports no press; there is no "last known
+        // position" fallback to preserve since the IR read already carries
+        // that semantic (ir.valid false leaves ir.x/y at their last value,
+        // but DrainWiimoteIR only acts on it while irValid is true).
         for (int chan = 0; chan < InputTranslatorWii::MAX_REMOTES; ++chan) {
             u32 down = WPAD_ButtonsDown(chan);
             if (down & WPAD_BUTTON_HOME) {
                 g_game.running = false;
             }
             // Feed each remote's IR pointer into its fixed finger channel.
+            // WPAD_SetVRes(WPAD_CHAN_ALL, fbWidth, xfbHeight) above makes
+            // ir.x/ir.y report in that same fb pixel space; normalize here
+            // to [0,1] top-left/y-down (the same convention SDL's normalized
+            // touch coords use) before handing off to DrainWiimoteIR, which
+            // forwards to Layout::TouchToGame for the actual game-coord
+            // transform (see InputTranslatorWii.cpp).
             ir_t ir;
             WPAD_IR(chan, &ir);
             float nx = 0.0f, ny = 0.0f;

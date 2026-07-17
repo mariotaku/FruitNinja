@@ -42,16 +42,18 @@ public:
     // mirroring InputTranslatorSDL::Init().
     void Init();
 
-    // TODO(wii): drain one WPAD channel's IR pointer state into the
-    // Mortar::Touch ring buffer (OnPressed/OnMoved/OnReleased), same
-    // immediate-push model InputTranslatorSDL::DrainSDLEvent uses for
-    // channels 0-7. Called once per WPAD_ScanPads() from the main loop
-    // (mainWii.cpp), once per remote channel.
+    // Drains one WPAD channel's IR pointer state into the Mortar::Touch ring
+    // buffer (OnPressed/OnMoved/OnReleased), same immediate-push model
+    // InputTranslatorSDL::DrainSDLEvent uses for channels 0-7. Called once
+    // per WPAD_ScanPads() from the main loop (mainWii.cpp), once per remote
+    // channel.
     //   chan: WPAD_CHAN_0..WPAD_CHAN_3 (0-3)
     //   irValid: whether the remote is currently pointed at the sensor bar
-    //   x, y: normalized screen-space IR pointer position (opaque float pair;
-    //         real signature will take a `struct ir_t` or similar from
-    //         <wiiuse/wpad.h> once that header is wired in)
+    //   x, y: normalized ([0,1], top-left origin, y-down) IR pointer position
+    //         in the WPAD_SetVRes-configured fb space -- caller (mainWii.cpp)
+    //         normalizes the raw `ir_t` x/y before calling; kept as opaque
+    //         floats here so this header stays parseable without
+    //         <wiiuse/wpad.h>.
     void DrainWiimoteIR(int chan, bool irValid, float x, float y);
 
     // Drain the Mortar::Touch ring buffer and dispatch InputManager hash
@@ -79,8 +81,31 @@ private:
     float channelY[MAX_REMOTES];
     bool  prevActive[MAX_REMOTES];
 
-    // TODO(wii): normalized IR-pointer -> game coords (centred ortho),
-    // mirroring InputTranslatorSDL::TransformTouchNormalized.
+    // Port specific: per-channel previous IR-valid edge state, mirroring
+    // InputTranslatorSDL's fingerSuspended/fingerActive edge tracking but
+    // simpler -- there's no out-of-window concept, just a valid/invalid IR
+    // read per remote each WPAD_ScanPads(). prevIRValid[chan] is what
+    // DrainWiimoteIR compares against to detect the false->true (press) and
+    // true->false (release) edges.
+    bool  prevIRValid[MAX_REMOTES];
+
+    // Port specific: press-vs-motion gate, same semantics as
+    // InputTranslatorSDL::motionSinceDown -- false on a fresh IR press, set
+    // true once a subsequent DrainWiimoteIR call for this channel reports a
+    // changed position while still valid. A pointer that presses and is
+    // released without moving emits TouchScreen + TouchDown_N + TouchUp_N
+    // and NO TouchMove (v1.6.1 tap semantics), matching the SDL translator.
+    bool  motionSinceDown[MAX_REMOTES];
+
+    // Port specific: DOWN_EDGE latch for the InputManager hash dispatch,
+    // mirroring InputTranslatorSDL::pendingEdge. Set on the press edge,
+    // consumed (and cleared) the next DispatchForSimTick.
+    bool  pendingEdge[MAX_REMOTES];
+
+    // Transform normalized IR-pointer coords (nx, ny in [0,1], top-left
+    // origin, y-down -- same convention WPAD_SetVRes/ir.x,ir.y normalize to)
+    // into centred game-ortho coords, mirroring
+    // InputTranslatorSDL::TransformTouchNormalized. See InputTranslatorWii.cpp.
     void TransformIRNormalized(float nx, float ny, float& gx, float& gy);
 };
 
