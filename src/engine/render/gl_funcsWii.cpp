@@ -29,6 +29,8 @@
 #include <cstdio>
 #include <stdint.h>
 
+#include "render/gl_funcsWii.h"
+
 // ---------------------------------------------------------------------------
 // Shared shim state (read by DisplayManagerWii.cpp + Pass 2's GX draw).
 // ---------------------------------------------------------------------------
@@ -422,6 +424,41 @@ void EmitVertex(int idx,
 }
 
 } // namespace
+
+// ===========================================================================
+// RendererGX seam accessors (gl_funcsWii.h) -- plain C++ linkage, not part of
+// the GL-shaped extern "C" block below. Let RendererGX.cpp reach into this
+// shim's texture/buffer/viewport state directly for native GX immediate-mode
+// drawing (see RendererGX.cpp's file-top comment for why it bypasses the
+// glDrawArrays/glDrawElements shim path).
+// ===========================================================================
+
+GXTexObj* Wii_GetTexObj(unsigned int glTexId) {
+    if (!glTexId || glTexId >= (unsigned)kMaxTextures) return NULL;
+    ShimTexture& t = g_Textures[glTexId];
+    if (!t.used || !t.hasImage) return NULL;
+    return (GXTexObj*)&t.obj;
+}
+
+const void* Wii_GetBufferData(unsigned int glBufId, unsigned int* outSize) {
+    if (outSize) *outSize = 0;
+    if (!glBufId || glBufId >= (unsigned)kMaxBuffers) return NULL;
+    ShimBuffer& b = g_Buffers[glBufId];
+    if (!b.used || !b.data) return NULL;
+    if (outSize) *outSize = (unsigned)b.size;
+    return b.data;
+}
+
+void Wii_GetViewport(int vp[4]) {
+    vp[0] = g_ShimViewport[0];
+    vp[1] = g_ShimViewport[1];
+    vp[2] = g_ShimViewport[2];
+    vp[3] = g_ShimViewport[3];
+}
+
+unsigned int Wii_GetBoundTexture() {
+    return g_BoundTexture;
+}
 
 extern "C" {
 

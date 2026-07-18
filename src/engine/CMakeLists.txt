@@ -41,6 +41,15 @@ if(NOT FN_ASM_VERIFY AND FRUIT_PLATFORM_WII)
         render/DisplayManagerWii.cpp
     )
 endif()
+# Renderer backend: link-time split (mirrors GameSDL.cpp/GameWii.cpp). The GL
+# backend (RendererGL.cpp) drives every platform whose gl* is real GL or the
+# GX shim's baseline; the Wii native path swaps in RendererGX.cpp, which issues
+# GX draws directly (separate proj + modelview -> correct 3D perspective).
+if(FRUIT_PLATFORM_WII)
+    target_sources(mortar_engine PRIVATE render/RendererGX.cpp)
+else()
+    target_sources(mortar_engine PRIVATE render/RendererGL.cpp)
+endif()
 if(NOT FN_ASM_VERIFY)
     target_sources(mortar_engine PRIVATE
         render/NineSlice.cpp        # Port specific: 9-slice panel draw (no binary counterpart)
@@ -48,8 +57,7 @@ if(NOT FN_ASM_VERIFY)
 endif()
 target_sources(mortar_engine PRIVATE
     # Phase 3 — Rendering
-    render/Renderer.cpp
-    render/RendererGL.cpp     # GL-backend half of Renderer (link-time split, mirrors GameSDL.cpp/GameWii.cpp)
+    render/Renderer.cpp       # portable public API; backend (RendererGL/GX.cpp) selected above
     render/Shaders.cpp        # Port specific: GLES2 2D shader sources
     render/ShaderProgram.cpp  # Port specific: GL program wrapper
     render/MortarCamera.cpp
