@@ -261,6 +261,11 @@ int AttribStride(const ShimAttrib& a) {
     return a.size * comp;
 }
 
+// True when the current draw's MVP is a perspective (non-affine) transform:
+// EmitVertex then does the full MVP*pos + perspective divide on the CPU and
+// emits NDC, since GX's 3x4 modelview can't carry the perspective w.
+bool g_SoftwareXform = false;
+
 // Set up GX vertex descriptor + attribute formats + TEV/channel state for the
 // current draw, based on which shim attribs are enabled and whether a texture
 // is bound. Must be called BEFORE GX_Begin.
@@ -276,15 +281,33 @@ void SetupGxDrawState(bool haveUV, bool haveColor, bool textured) {
     // TODO(wii): 3D perspective meshes (DrawMesh3D) have a non-affine MVP (4th
     // row != [0,0,0,1]); the perspective w is lost in the 3x4 here -- needs a
     // separate proj/modelview split for those draws.
+    // Detect a non-affine (perspective) MVP. In GL column-major layout the 4th
+    // row is at indices 3,7,11,15; an affine 2D-ortho MVP has [0,0,0,1] there.
+    // 3D meshes (DrawMesh3D) carry a perspective row -> the 3x4 modelview below
+    // can't hold the perspective w, so those are transformed on the CPU in
+    // EmitVertex (full MVP * pos + perspective divide -> NDC) with an identity
+    // modelview here. Affine 2D draws keep the fast GX-hardware transform.
+    {
+        float r3a = g_ShimMVP[3],  r3b = g_ShimMVP[7];
+        float r3c = g_ShimMVP[11], r3d = g_ShimMVP[15];
+        if (r3a < 0) r3a = -r3a; if (r3b < 0) r3b = -r3b; if (r3c < 0) r3c = -r3c;
+        float d = r3d - 1.0f; if (d < 0) d = -d;
+        g_SoftwareXform = (r3a > 1e-5f || r3b > 1e-5f || r3c > 1e-5f || d > 1e-5f);
+    }
+
     Mtx mv;
-    for (int r = 0; r < 3; ++r)
-        for (int c = 0; c < 4; ++c)
-            mv[r][c] = g_ShimMVP[c * 4 + r];     // col-major GL -> row-major GX, rows 0-2
+    if (g_SoftwareXform) {
+        guMtxIdentity(mv);                        // EmitVertex emits NDC directly
+    } else {
+        for (int r = 0; r < 3; ++r)
+            for (int c = 0; c < 4; ++c)
+                mv[r][c] = g_ShimMVP[c * 4 + r];  // col-major GL -> row-major GX, rows 0-2
+    }
     GX_LoadPosMtxImm(mv, GX_PNMTX0);
 
-    // Identity x/y passthrough, but remap z: the MVP outputs GL clip-z in
-    // [-1,1] while GX clips at [-1,0]. z' = 0.5*z - 0.5*w maps [-1,1] -> [-1,0]
-    // so 2D geometry (z=0 -> -0.5) isn't clipped away.
+    // Identity x/y passthrough, but remap z: NDC z is GL [-1,1] while GX clips
+    // at [-1,0]. z' = 0.5*z - 0.5*w maps [-1,1] -> [-1,0] so geometry at z=0
+    // (-> -0.5) isn't clipped away.
     Mtx44 proj;
     memset(proj, 0, sizeof(proj));
     proj[0][0] = 1.0f;
@@ -340,7 +363,19 @@ void EmitVertex(int idx,
     float x = p[0];
     float y = p[1];
     float z = (posSize >= 3) ? p[2] : 0.0f;
-    GX_Position3f32(x, y, z);
+    if (g_SoftwareXform) {
+        // Perspective MVP: transform + divide on the CPU, emit NDC (GX modelview
+        // is identity for this draw). g_ShimMVP is GL column-major.
+        const float* m = g_ShimMVP;
+        float cx = m[0]*x + m[4]*y + m[8]*z  + m[12];
+        float cy = m[1]*x + m[5]*y + m[9]*z  + m[13];
+        float cz = m[2]*x + m[6]*y + m[10]*z + m[14];
+        float cw = m[3]*x + m[7]*y + m[11]*z + m[15];
+        if (cw != 0.0f) { float inv = 1.0f / cw; cx *= inv; cy *= inv; cz *= inv; }
+        GX_Position3f32(cx, cy, cz);
+    } else {
+        GX_Position3f32(x, y, z);
+    }
 
     // Colour (always emitted -- CLR0 is GX_DIRECT).
     u8 cr = 255, cg = 255, cb = 255, ca = 255;
