@@ -212,7 +212,41 @@ public:
     }
 
     // Binary @ 0x00255398 -- ReadBytes(void*, unsigned long)
+    // Raw opaque-byte copy, endian-UNAWARE. Use for byte blobs that are not
+    // arrays of a scalar type (AsciiString payloads, sub-resource blobs).
+    // For arrays of a scalar type (float[], uint32_t[], etc.) use ReadArray<T>
+    // below instead so FN_BIG_ENDIAN targets byteswap each element.
     void ReadBytes(void* dest, unsigned long count);
+
+    // Port specific: FN_BIG_ENDIAN-aware typed-array read. No binary counterpart
+    // (single choke point invented for the port) -- centralises the "read a
+    // packed array of scalar T off disk, then byteswap each element on
+    // big-endian targets" pattern instead of scattering per-call-site
+    // `#if FN_BIG_ENDIAN` byteswap loops after ReadBytes/memcpy (that pattern
+    // is what caused the bind-pose-matrix and mesh-bounds-AABB Wii bugs: a raw
+    // ReadBytes copy of typed floats with no follow-up swap).
+    //
+    // LE codegen note: this calls the real ReadBytes() (a real function, binary
+    // symbol @ 0x00255398 -- matches the binary's own call shape more closely
+    // than inlining a copy here) to advance the cursor, THEN on FN_BIG_ENDIAN
+    // byteswaps in place via the same IntToType tag dispatch Read<T>() uses
+    // above. On little-endian targets (host/web/x86, and the asm-verify Bada
+    // cross-build) the #if FN_BIG_ENDIAN arm is not emitted at all -- the
+    // function body reduces to exactly the old bare `ReadBytes(dst, N)` call,
+    // byte-for-byte unchanged codegen. See Endian.h's FN_READ_ARRAY macro for
+    // the raw-pointer (non-cursor) sibling of this same pattern.
+    // Only instantiate T as a scalar (float/uint32_t/int32_t/etc.); same
+    // restriction as Read<T>() above.
+    template<typename T>
+    void ReadArray(T* dst, size_t count) {
+        ReadBytes(dst, (unsigned long)(count * sizeof(T)));
+#if defined(FN_BIG_ENDIAN)
+        for (size_t i = 0; i < count; i++) {
+            ByteSwapInPlace(dst[i], IntToType<sizeof(T)>());
+        }
+#endif
+    }
+
     // Binary @ 0x002553cc -- ReadSubResourceLookup(): Read<u32> 1-based index, ConvertFromLittle, return &m_Children[index-1]
     ResourceLoader* ReadSubResourceLookup();
     // ReadString funnels through ReadBytes (Read<AsciiString> equivalent)
@@ -240,16 +274,16 @@ public:
             bones[i].m_ParentIndex = (int)Read<int32_t>();   // long = 4 bytes
 
             if (m_ReadCursor + 64 > (int32_t)m_Data.size()) return;
-            ReadBytes(bones[i].m_BindPoseMat, 64);           // float[16]
+            ReadArray<float>(bones[i].m_BindPoseMat, 16);         // float[16]
 
             if (m_ReadCursor + 12 > (int32_t)m_Data.size()) return;
-            ReadBytes(bones[i].m_LocalTranslation, 12);      // float[3]
+            ReadArray<float>(bones[i].m_LocalTranslation, 3);     // float[3]
 
             if (m_ReadCursor + 16 > (int32_t)m_Data.size()) return;
-            ReadBytes(bones[i].m_LocalRotation, 16);         // float[4]
+            ReadArray<float>(bones[i].m_LocalRotation, 4);        // float[4]
 
             if (m_ReadCursor + 36 > (int32_t)m_Data.size()) return;
-            ReadBytes(bones[i].m_LocalScale, 36);            // float[9]
+            ReadArray<float>(bones[i].m_LocalScale, 9);           // float[9]
         }
         outSkeleton.Swap(bones);
     }

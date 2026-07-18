@@ -109,7 +109,87 @@ inline float fnByteSwapFloat(float v) {
     return out;
 }
 
+// fnByteSwap(T) overload set -- scalar dispatch used by CopyArrayLE<T> below.
+// Mirrors Mortar::ResourceLoader's IntToType-tag ByteSwapInPlace dispatch,
+// but as a return-by-value overload set (no tag type needed since these are
+// free functions, not template-dispatched on sizeof at a single call site).
+inline uint16_t fnByteSwap(uint16_t v) { return fnByteSwap16(v); }
+inline int16_t  fnByteSwap(int16_t v)  { return (int16_t)fnByteSwap16((uint16_t)v); }
+inline uint32_t fnByteSwap(uint32_t v) { return fnByteSwap32(v); }
+inline int32_t  fnByteSwap(int32_t v)  { return (int32_t)fnByteSwap32((uint32_t)v); }
+inline float    fnByteSwap(float v)    { return fnByteSwapFloat(v); }
+inline uint64_t fnByteSwap(uint64_t v) { return fnByteSwap64(v); }
+inline int64_t  fnByteSwap(int64_t v)  { return (int64_t)fnByteSwap64((uint64_t)v); }
+
 #endif // FN_BIG_ENDIAN
+
+// ---------------------------------------------------------------------
+// Port specific: canonical asm-verify-facing typed-read macros.
+//
+// These are THE choke point for "read a little-endian scalar/array off disk"
+// and are deliberately macros, not inline functions/templates: the asm-verify
+// cross-build compiles the LE path (Bada target has no FN_BIG_ENDIAN) and its
+// generated ASM must byte-match the original binary's plain raw read with
+// NO extra call/branch/loop overhead. A macro guarantees the LE expansion is
+// textually the bare operation the binary does -- an aligned pointer read
+// (FN_READ_U16/U32/F32) or a straight memcpy (FN_READ_ARRAY) -- with zero risk
+// of the compiler leaving behind a stray call frame or failing to fully
+// inline a template. Under FN_BIG_ENDIAN (Wii) the same macros add the
+// fnByteSwap* call; LE callers (Bada/host/web) never see that branch at all
+// (the swap arm is not just dead-code-eliminated, it isn't even *emitted*
+// as source on the LE expansion -- see the #else arm of each macro).
+//
+// dst/src are expected to already be the correct pointer type; casts are
+// left to the call site (mirrors the binary's raw pointer arithmetic).
+// ---------------------------------------------------------------------
+#if defined(FN_BIG_ENDIAN)
+#define FN_READ_U16(ptr)   (::Endian::fnByteSwap16(*(const uint16_t*)(ptr)))
+#define FN_READ_U32(ptr)   (::Endian::fnByteSwap32(*(const uint32_t*)(ptr)))
+#define FN_READ_F32(ptr)   (::Endian::fnByteSwapFloat(*(const float*)(ptr)))
+#define FN_READ_U64(ptr)   (::Endian::fnByteSwap64(*(const uint64_t*)(ptr)))
+#else
+// Byte-faithful: identical to the binary's plain aligned read. No swap, no
+// function call -- this is what the asm-verify cross-build compiles.
+#define FN_READ_U16(ptr)   (*(const uint16_t*)(ptr))
+#define FN_READ_U32(ptr)   (*(const uint32_t*)(ptr))
+#define FN_READ_F32(ptr)   (*(const float*)(ptr))
+#define FN_READ_U64(ptr)   (*(const uint64_t*)(ptr))
+#endif
+
+// FN_READ_ARRAY(dst, src, type, count) -- copy `count` elements of `type`
+// from `src` into `dst`. LE expansion is the bare memcpy the binary's
+// ReadBytes-style raw copy already does. BE expansion additionally
+// byteswaps each element in place after the copy.
+#if defined(FN_BIG_ENDIAN)
+#define FN_READ_ARRAY(dst, src, type, count)                                 \
+    do {                                                                     \
+        size_t fn_read_array_n_ = (size_t)(count);                           \
+        memcpy((dst), (src), fn_read_array_n_ * sizeof(type));               \
+        for (size_t fn_read_array_i_ = 0; fn_read_array_i_ < fn_read_array_n_; ++fn_read_array_i_) { \
+            (dst)[fn_read_array_i_] = ::Endian::fnByteSwap((dst)[fn_read_array_i_]);                 \
+        }                                                                     \
+    } while (0)
+#else
+// Byte-faithful: identical to the binary's plain memcpy. No swap loop.
+#define FN_READ_ARRAY(dst, src, type, count)                                 \
+    memcpy((dst), (src), (size_t)(count) * sizeof(type))
+#endif
+
+// ---------------------------------------------------------------------
+// Port specific: CopyArrayLE<T> -- typed-array copy convenience wrapper
+// around FN_READ_ARRAY, for callers that prefer a function call over the
+// macro (e.g. passing a template-deduced T without spelling it twice).
+// This wrapper is ergonomics-only; it is NOT the asm-verify-facing surface
+// -- FN_READ_ARRAY above is. On LE, CopyArrayLE's body reduces to exactly
+// the same single memcpy FN_READ_ARRAY expands to (no swap code emitted at
+// all, since the #if FN_BIG_ENDIAN arm is absent from the LE translation
+// unit), so using either at a call site produces identical LE codegen; the
+// macro is preferred at any call site the asm-verify cross-build measures.
+// ---------------------------------------------------------------------
+template<typename T>
+inline void CopyArrayLE(T* dst, const void* src, size_t count) {
+    FN_READ_ARRAY(dst, src, T, count);
+}
 
 } // namespace Endian
 
@@ -140,7 +220,9 @@ using ::Endian::fnByteSwap16;
 using ::Endian::fnByteSwap32;
 using ::Endian::fnByteSwap64;
 using ::Endian::fnByteSwapFloat;
+using ::Endian::fnByteSwap;
 #endif
+using ::Endian::CopyArrayLE;
 
 } // namespace Endian
 } // namespace Mortar

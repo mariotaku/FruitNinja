@@ -303,11 +303,12 @@ SmartPtr<IIndexStream> LoadIndexStreamPSP(ResourceLoader& rl)
     // Port specific: on-disk indices are little-endian uint16; the Wii
     // GL-on-GX shim (gl_funcsWii.cpp glDrawElements) reads the uploaded
     // buffer as native uint16_t, so byteswap each index before upload.
-    std::vector<unsigned char> swappedIdx(data + pos, data + pos + idxDataSize);
-    uint16_t* idx16 = reinterpret_cast<uint16_t*>(swappedIdx.data());
-    for (uint32_t ii = 0; ii < idxCount; ++ii) {
-        idx16[ii] = Endian::fnByteSwap16(idx16[ii]);
-    }
+    // FN_READ_ARRAY (Endian.h) is the canonical asm-verify-facing typed-array
+    // read macro -- memcpy + per-element byteswap on FN_BIG_ENDIAN. This whole
+    // block only compiles on Wii; the LE arm below is untouched (bare pointer,
+    // no copy at all).
+    std::vector<uint16_t> swappedIdx(idxCount);
+    FN_READ_ARRAY(swappedIdx.data(), data + pos, uint16_t, idxCount);
     const void* uploadIdxData = swappedIdx.data();
 #else
     const void* uploadIdxData = data + pos;
@@ -372,8 +373,12 @@ SmartPtr<Mesh> LoadMesh(ResourceLoader& rl)
             AsciiString boneName = rl.ReadString();
             bones[i].m_BoneName = boneName;
             if (rl.m_ReadCursor + 24 <= (int32_t)rl.DataSize()) {
-                rl.ReadBytes(&bones[i].m_Bounds.min, sizeof(_Vector3<float>));
-                rl.ReadBytes(&bones[i].m_Bounds.max, sizeof(_Vector3<float>));
+                // Port specific: ReadArray<T> (ResourceLoader.h) is the centralised
+                // FN_BIG_ENDIAN-aware typed-array reader -- byteswaps each float on
+                // big-endian targets (Wii); zero-overhead memcpy on little-endian.
+                // Sibling fix to the bind-pose/TRS swap in ResourceLoader::ReadSkeleton.
+                rl.ReadArray<float>(&bones[i].m_Bounds.min.x, 3);
+                rl.ReadArray<float>(&bones[i].m_Bounds.max.x, 3);
             }
         }
         mesh->SetBones(bones.data(), (unsigned long)boneCount);
