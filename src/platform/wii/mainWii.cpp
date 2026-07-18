@@ -181,6 +181,12 @@ int main(int argc, char* argv[]) {
             g_game.stepUpdate();
         }
 
+        // Port specific: no binary counterpart. Per-PRESENT UI tick (see
+        // Game.h tickRealtimeUi), matching GameSDL.cpp's run() loop -- reuses
+        // this loop's own wall-clock elapsedMs (gettime()/ticks_to_millisecs
+        // above), converted to seconds, rather than a second clock source.
+        g_game.tickRealtimeUi((float)(elapsedMs / 1000.0));
+
         g_game.renderFrame((float)g_driver.alpha(), steps);
     }
 
