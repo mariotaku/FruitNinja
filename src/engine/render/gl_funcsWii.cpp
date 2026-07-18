@@ -265,18 +265,33 @@ int AttribStride(const ShimAttrib& a) {
 // current draw, based on which shim attribs are enabled and whether a texture
 // is bound. Must be called BEFORE GX_Begin.
 void SetupGxDrawState(bool haveUV, bool haveColor, bool textured) {
-    // --- Matrix: full 4x4 MVP into the PROJECTION slot (row-major GX), with
-    // an identity position modelview. clip = proj * (identity * pos) = MVP*pos,
-    // reproducing the ES2 shader for both 2D-ortho and 3D-perspective paths.
-    Mtx44 proj;
-    for (int r = 0; r < 4; ++r)
+    // --- Matrix. GX_LoadProjectionMtx does NOT do a general 4x4 multiply -- for
+    // GX_PERSPECTIVE/ORTHOGRAPHIC it extracts only the ~6 frustum elements and
+    // assumes a standard projection shape. The ES2 shader hands us a COMBINED
+    // MVP (proj*view*world) that already maps vertex -> clip/NDC, so cramming it
+    // into the projection slot mangles the transform. Instead load the MVP as
+    // the POSITION modelview (3x4 affine; exact for the 2D-ortho UI where the
+    // MVP's 4th row is [0,0,0,1]) and use an identity passthrough projection so
+    // clip = I * (MVP * pos) = MVP*pos.
+    // TODO(wii): 3D perspective meshes (DrawMesh3D) have a non-affine MVP (4th
+    // row != [0,0,0,1]); the perspective w is lost in the 3x4 here -- needs a
+    // separate proj/modelview split for those draws.
+    Mtx mv;
+    for (int r = 0; r < 3; ++r)
         for (int c = 0; c < 4; ++c)
-            proj[r][c] = g_ShimMVP[c * 4 + r];   // column-major GL -> row-major GX
-    GX_LoadProjectionMtx(proj, GX_PERSPECTIVE);
+            mv[r][c] = g_ShimMVP[c * 4 + r];     // col-major GL -> row-major GX, rows 0-2
+    GX_LoadPosMtxImm(mv, GX_PNMTX0);
 
-    Mtx ident;
-    guMtxIdentity(ident);
-    GX_LoadPosMtxImm(ident, GX_PNMTX0);
+    // Identity x/y passthrough, but remap z: the MVP outputs GL clip-z in
+    // [-1,1] while GX clips at [-1,0]. z' = 0.5*z - 0.5*w maps [-1,1] -> [-1,0]
+    // so 2D geometry (z=0 -> -0.5) isn't clipped away.
+    Mtx44 proj;
+    memset(proj, 0, sizeof(proj));
+    proj[0][0] = 1.0f;
+    proj[1][1] = 1.0f;
+    proj[2][2] = 0.5f; proj[2][3] = -0.5f;
+    proj[3][3] = 1.0f;
+    GX_LoadProjectionMtx(proj, GX_ORTHOGRAPHIC);
 
     // --- Vertex descriptor.
     GX_ClearVtxDesc();
