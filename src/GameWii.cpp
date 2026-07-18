@@ -65,6 +65,13 @@ bool Game::init(void* win, void* gl) {
     SetHardware("BADA", true);
     GameInitialise(nullptr, nullptr);
 
+    // Wii is a fixed 4:3 display: force the native 3:2 layout (widescreen is a
+    // host/web-only enhancement) so the UI uses HalfWidth==240 positions and
+    // Layout::ComputeViewport returns the FULL viewport -- the native 3:2 frame
+    // then stretches to fill the 4:3 EFB (no letterbox bars) rather than being
+    // aspect-fit. Overrides whatever the loaded save's widescreen pref was.
+    Layout::SetWideLayout(false);
+
     game_work.taskStateIndex = 0;
     running = true;
     return true;
