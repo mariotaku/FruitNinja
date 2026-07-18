@@ -381,8 +381,17 @@ void EmitVertex(int idx,
     u8 cr = 255, cg = 255, cb = 255, ca = 255;
     if (haveColor && colBase) {
         if (colType == GL_UNSIGNED_BYTE) {
-            const unsigned char* c = colBase + (size_t)colStride * idx;
-            cr = c[0]; cg = c[1]; cb = c[2]; ca = c[3];
+            // The vertex colour is a packed uint32 (r | g<<8 | b<<16 | a<<24),
+            // NOT four independent bytes. Reading it as raw bytes reverses the
+            // channels on big-endian (particles swizzle, alpha lands in R so
+            // semi-transparent quads read alpha=0 and vanish). Reconstruct the
+            // native uint32 via memcpy and extract -- correct on both endians.
+            uint32_t v;
+            memcpy(&v, colBase + (size_t)colStride * idx, 4);
+            cr = (u8)(v & 0xFFu);
+            cg = (u8)((v >> 8) & 0xFFu);
+            cb = (u8)((v >> 16) & 0xFFu);
+            ca = (u8)((v >> 24) & 0xFFu);
         } else {
             const float* c = (const float*)(colBase + (size_t)colStride * idx);
             cr = (u8)(c[0] * 255.0f);
