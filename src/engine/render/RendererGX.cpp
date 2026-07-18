@@ -63,9 +63,9 @@
 // via Wii_GetBufferData (extended in this pass to retain buffer bytes after
 // upload -- see gl_funcsWii.cpp/.h changes noted at the top of that file).
 //
-// Only compiled when FRUIT_PLATFORM_WII is set (see src/engine/CMakeLists.txt).
-// NOT wired into CMake this pass -- RendererGL.cpp remains the active Wii
-// TU until a later pass switches the target.
+// Only compiled when FRUIT_PLATFORM_WII is set -- src/engine/CMakeLists.txt
+// adds this TU (and excludes RendererGL.cpp) for the FRUIT_PLATFORM_WII
+// target, so this is the active Wii Renderer backend.
 #ifdef FRUIT_PLATFORM_WII
 
 #include "render/Renderer.h"
@@ -208,111 +208,29 @@ void LoadGxOrtho(const Matrix44& proj, Mtx44 out) {
     out[2][3] = proj.m[14] - 1.0f;
 }
 
-// TODO(wii): one-shot [GXDIAG] instrumentation for the fullscreen-wood-bg
-// black-render bug + the fruit-mesh cull fix -- remove once both are
-// confirmed fixed on-device (orchestrator reads Dolphin's OSREPORT log).
-// Guarded by function-local `static bool` so each fires exactly once per
-// process, avoiding per-frame log spam.
-void DiagLogProjectionOnce(const Matrix44& proj, bool isPerspective) {
-    static bool logged = false;
-    if (logged) return;
-    logged = true;
-
-    LOG_INFO("GXDIAG", "proj m[0..3]=%.4f %.4f %.4f %.4f", proj.m[0], proj.m[1], proj.m[2], proj.m[3]);
-    LOG_INFO("GXDIAG", "proj m[4..7]=%.4f %.4f %.4f %.4f", proj.m[4], proj.m[5], proj.m[6], proj.m[7]);
-    LOG_INFO("GXDIAG", "proj m[8..11]=%.4f %.4f %.4f %.4f", proj.m[8], proj.m[9], proj.m[10], proj.m[11]);
-    LOG_INFO("GXDIAG", "proj m[12..15]=%.4f %.4f %.4f %.4f", proj.m[12], proj.m[13], proj.m[14], proj.m[15]);
-    LOG_INFO("GXDIAG", "proj classified=%s (m[11]=%.4f)",
-             isPerspective ? "perspective" : "ortho", proj.m[11]);
-
-    if (!isPerspective) {
-        float invRL = proj.m[0] * 0.5f;
-        float invTB = proj.m[5] * 0.5f;
-        float rl = proj.m[0] != 0.0f ? 1.0f / invRL : 0.0f;
-        float tb = proj.m[5] != 0.0f ? 1.0f / invTB : 0.0f;
-        float rPlusL = -proj.m[12] * rl;
-        float tPlusB = -proj.m[13] * tb;
-        float right = (rl + rPlusL) * 0.5f;
-        float left  = right - rl;
-        float top   = (tb + tPlusB) * 0.5f;
-        float bottom = top - tb;
-        float farMinusNear = (proj.m[10] != 0.0f) ? (1.0f / proj.m[10]) : 0.0f;
-        float near_ = -proj.m[14] * farMinusNear;
-        float far_  = near_ + farMinusNear;
-        LOG_INFO("GXDIAG", "ortho near=%.2f far=%.2f l=%.2f r=%.2f b=%.2f t=%.2f",
-                 near_, far_, left, right, bottom, top);
-    }
-}
-
-// TODO(wii): one-shot [GXMTX] instrumentation logging the ACTUAL GX matrices
-// (post guOrtho/guPerspective/transpose -- not the source MatrixManager
-// Matrix44) so the bisect can correlate real loaded values against the
-// guOrtho z-row formula rather than re-deriving it from the GL-convention
-// source matrix alone. Remove once the correct ortho z-row fix lands and is
-// confirmed on-device. Each `static bool` fires once per process.
-void DiagLogGxOrthoOnce(const Mtx44 out) {
-    static bool logged = false;
-    if (logged) return;
-    logged = true;
-    LOG_INFO("GXMTX", "ortho.proj row0=%.6f %.6f %.6f %.6f", out[0][0], out[0][1], out[0][2], out[0][3]);
-    LOG_INFO("GXMTX", "ortho.proj row1=%.6f %.6f %.6f %.6f", out[1][0], out[1][1], out[1][2], out[1][3]);
-    LOG_INFO("GXMTX", "ortho.proj row2=%.6f %.6f %.6f %.6f", out[2][0], out[2][1], out[2][2], out[2][3]);
-    LOG_INFO("GXMTX", "ortho.proj row3=%.6f %.6f %.6f %.6f", out[3][0], out[3][1], out[3][2], out[3][3]);
-}
-
-void DiagLogGxPerspOnce(const Mtx44 out) {
-    static bool logged = false;
-    if (logged) return;
-    logged = true;
-    LOG_INFO("GXMTX", "persp.proj row0=%.6f %.6f %.6f %.6f", out[0][0], out[0][1], out[0][2], out[0][3]);
-    LOG_INFO("GXMTX", "persp.proj row1=%.6f %.6f %.6f %.6f", out[1][0], out[1][1], out[1][2], out[1][3]);
-    LOG_INFO("GXMTX", "persp.proj row2=%.6f %.6f %.6f %.6f", out[2][0], out[2][1], out[2][2], out[2][3]);
-    LOG_INFO("GXMTX", "persp.proj row3=%.6f %.6f %.6f %.6f", out[3][0], out[3][1], out[3][2], out[3][3]);
-}
-
-void DiagLogGxModelviewOnce(const char* label, const Mtx mv) {
-    LOG_INFO("GXMTX", "modelview[%s] row0=%.6f %.6f %.6f %.6f", label, mv[0][0], mv[0][1], mv[0][2], mv[0][3]);
-    LOG_INFO("GXMTX", "modelview[%s] row1=%.6f %.6f %.6f %.6f", label, mv[1][0], mv[1][1], mv[1][2], mv[1][3]);
-    LOG_INFO("GXMTX", "modelview[%s] row2=%.6f %.6f %.6f %.6f", label, mv[2][0], mv[2][1], mv[2][2], mv[2][3]);
-}
-
 // Loads MatrixManager's current projection + modelview (view*world) into GX's
 // two independent matrix slots, replacing the combined-MVP-as-posmtx approach
 // the gl_funcsWii.cpp shim uses. Must be called before GX_Begin for every
-// DrawShaded2D / DrawMesh3D. `mvLabel` names the caller ("2d"/"3d") for the
-// one-shot [GXMTX] modelview log -- each label fires once, independent of the
-// other, so both the first 2D and first 3D modelview get logged.
-void LoadGxMatricesFromMatrixManager(const char* mvLabel) {
+// DrawShaded2D / DrawMesh3D.
+void LoadGxMatricesFromMatrixManager() {
     MatrixManager& mm = MatrixManager::GetInstance();
+    const Matrix44& view = mm.GetViewStack().m_Current;
+    const Matrix44& world = mm.GetWorldStack().m_Current;
     const Matrix44& proj = mm.GetProjectionStack().m_Current;
-    Matrix44 modelview = mm.GetViewStack().m_Current * mm.GetWorldStack().m_Current;
+    Matrix44 modelview = view * world;
 
     Mtx mv;
     Gl44ToGxPosMtx(modelview, mv);
     GX_LoadPosMtxImm(mv, GX_PNMTX0);
     GX_SetCurrentMtx(GX_PNMTX0);
 
-    {
-        static bool logged2d = false;
-        static bool logged3d = false;
-        bool is2d = mvLabel[0] == '2';
-        bool& logged = is2d ? logged2d : logged3d;
-        if (!logged) {
-            logged = true;
-            DiagLogGxModelviewOnce(mvLabel, mv);
-        }
-    }
-
     Mtx44 gxProj;
     bool isPersp = IsPerspective(proj);
-    DiagLogProjectionOnce(proj, isPersp);
     if (isPersp) {
         LoadGxPerspective(proj, gxProj);
-        DiagLogGxPerspOnce(gxProj);
         GX_LoadProjectionMtx(gxProj, GX_PERSPECTIVE);
     } else {
         LoadGxOrtho(proj, gxProj);
-        DiagLogGxOrthoOnce(gxProj);
         GX_LoadProjectionMtx(gxProj, GX_ORTHOGRAPHIC);
     }
 }
@@ -375,21 +293,59 @@ void SetStandardAlphaBlend() {
 // `stride`-separated offsets -- same interleaved-vertex convention
 // DrawShaded2D/DrawMesh3D's GL siblings use (Shaded2DVertex / QUADCUSTOMVERTEX
 // layouts, byte offsets passed in by the caller).
+//
+// `colorIsNativePacked` distinguishes the TWO different colour sources the
+// two callers pass, which need OPPOSITE extraction on a big-endian host:
+//
+//  - DrawShaded2D (colorIsNativePacked=true): `Shaded2DVertex::color` is a
+//    `uint32_t` assigned at runtime from `Colour::PlatformColour()` (see
+//    RendererInternal.h) -- i.e. `*(uint32_t*)ptr = a<<24|b<<16|g<<8|r`, a
+//    plain C integer store using the HOST's native endianness. Reading it
+//    back must undo that with the same host-native load: memcpy the 4 bytes
+//    into a uint32_t (reproduces the exact bit pattern, any host) then
+//    extract channels via shifts (`v & 0xFF` == r, mathematically, regardless
+//    of host byte order). This round-trips correctly on any host because
+//    both the write and the read use native integer semantics.
+//
+//  - DrawMesh3D (colorIsNativePacked=false): mesh vertex colour is 4 raw
+//    RGBA8888 bytes read directly off disk (PSP vertex-decl colorFmt==3, see
+//    MeshManager.cpp's stream parse -- "the 4 bytes ... are read by
+//    glColorPointer as 4-byte RGBA vertex colour"). Byte ARRAYS on disk have
+//    a fixed a fixed r,g,b,a address order regardless of host endianness (no
+//    scalar to byteswap -- MeshManager's FN_BIG_ENDIAN swaps only apply to
+//    the multi-byte scalar header fields like vertDecl/vertCount, never to
+//    this byte stream). Positional read (c[0]=r, c[1]=g, ...) is exact here.
+//
+// BUG (previously): both call sites shared one positional-only extraction.
+// That is correct for the mesh path but WRONG for the 2D path on the Wii's
+// big-endian PowerPC -- Shaded2DVertex::color's native uint32 store puts `a`
+// (not `r`) at the lowest address on a BE host, so positional c[0] silently
+// read alpha as red etc, showing up on-device as cyan/magenta/red-swapped UI
+// labels. (An earlier version of this function instead shared the OTHER
+// extraction -- memcpy+shift -- for both callers; that is correct for 2D but
+// wrong for the mesh's on-disk RGBA bytes, which are not a native-endian
+// integer at all. Neither single shared extraction is right for both
+// sources; they read from genuinely different kinds of storage.)
 void EmitInterleavedVertex(const unsigned char* base, int stride,
                            int posOff, bool haveUV, int uvOff,
-                           bool haveColor, int colOff) {
+                           bool haveColor, int colOff,
+                           bool colorIsNativePacked) {
     const float* p = (const float*)(base + posOff);
     GX_Position3f32(p[0], p[1], p[2]);
 
     if (haveColor) {
-        // Packed uint32 (Colour::PlatformColour() -- LE bytes r,g,b,a), same
-        // as gl_funcsWii.cpp's EmitVertex: reconstruct via memcpy so this is
-        // correct regardless of host endianness rather than reading 4 raw
-        // bytes positionally.
-        uint32_t v;
-        memcpy(&v, base + colOff, 4);
-        GX_Color4u8((u8)(v & 0xFFu), (u8)((v >> 8) & 0xFFu),
-                   (u8)((v >> 16) & 0xFFu), (u8)((v >> 24) & 0xFFu));
+        if (colorIsNativePacked) {
+            uint32_t v;
+            memcpy(&v, base + colOff, 4);
+            uint8_t r = (uint8_t)(v & 0xFF);
+            uint8_t g = (uint8_t)((v >> 8) & 0xFF);
+            uint8_t b = (uint8_t)((v >> 16) & 0xFF);
+            uint8_t a = (uint8_t)((v >> 24) & 0xFF);
+            GX_Color4u8(r, g, b, a);
+        } else {
+            const unsigned char* c = base + colOff;
+            GX_Color4u8(c[0], c[1], c[2], c[3]);
+        }
     } else {
         GX_Color4u8(255, 255, 255, 255);
     }
@@ -487,7 +443,7 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
                             GLenum prim, GLuint tex, const Matrix44& /*mvp*/) {
     if (vertCount <= 0) return;
 
-    LoadGxMatricesFromMatrixManager("2d");
+    LoadGxMatricesFromMatrixManager();
 
     // Renderer.h contract: tex==0 means "use whatever is already bound on
     // unit 0" (RendererGL::DrawShaded2D skips glBindTexture entirely in that
@@ -499,23 +455,10 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     // an untinted quad) instead of sampling the bound texture.
     GLuint boundTex = tex ? tex : Wii_GetBoundTexture();
     bool textured = false;
-    GXTexObj* diagTexObj = boundTex ? Wii_GetTexObj(boundTex) : nullptr;
-    if (diagTexObj) {
-        GX_LoadTexObj(diagTexObj, GX_TEXMAP0);
+    GXTexObj* texObj = boundTex ? Wii_GetTexObj(boundTex) : nullptr;
+    if (texObj) {
+        GX_LoadTexObj(texObj, GX_TEXMAP0);
         textured = true;
-    }
-
-    // TODO(wii): remove once the fullscreen-wood-bg black-render bug is
-    // confirmed fixed on-device.
-    {
-        static bool diagLogged = false;
-        if (!diagLogged) {
-            diagLogged = true;
-            const unsigned char* base0 = (const unsigned char*)verts;
-            const float* p0 = (const float*)(base0 + posOff);
-            LOG_INFO("GXDIAG", "shaded2d z0=%.2f tex=%u objnull=%d",
-                     p0[2], (unsigned)boundTex, boundTex != 0 && diagTexObj == nullptr);
-        }
     }
 
     // Port specific: 2D UI quads are unculled in the binary's fixed-function
@@ -531,7 +474,8 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     for (int i = 0; i < vertCount; ++i) {
         EmitInterleavedVertex(base + (size_t)stride * i, stride,
                               posOff, /*haveUV=*/true, uvOff,
-                              /*haveColor=*/true, colOff);
+                              /*haveColor=*/true, colOff,
+                              /*colorIsNativePacked=*/true);
     }
     GX_End();
 }
@@ -556,7 +500,7 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
     const unsigned char* vboData = (const unsigned char*)Wii_GetBufferData(vbo, &vboSize);
     if (!vboData) return;
 
-    LoadGxMatricesFromMatrixManager("3d");
+    LoadGxMatricesFromMatrixManager();
 
     GLuint boundTex = tex ? tex : m_WhiteTex;
     bool haveUV = uvSize > 0;
@@ -571,28 +515,28 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
     }
     if (!textured) haveUV = false;
 
-    // TODO(wii): remove once the fruit-mesh cull fix is confirmed fixed
-    // on-device.
-    {
-        static bool diagLogged = false;
-        if (!diagLogged) {
-            diagLogged = true;
-            const float* p0 = (const float*)(vboData + posOff);
-            LOG_INFO("GXDIAG", "mesh3d z0=%.2f tex=%u textured=%d vertCount=%d indexCount=%d",
-                     p0[2], (unsigned)boundTex, textured, vertCount, indexCount);
-        }
-    }
+    // Port specific: fruit meshes are authored for GL (CCW = front-facing).
+    // Determined empirically on-device with rotation-freeze bisection:
+    // GX_CULL_NONE let the tumbling mesh's back faces win the depth test at
+    // certain angles and overwrite the front with the dark interior -> black
+    // fruit; GX_CULL_FRONT culled the front faces instead (also black, wrong
+    // half discarded). GX_CULL_BACK is the one that keeps the front-facing
+    // surface visible through the full tumble, so that's the winding GX
+    // resolves as "back" for this mesh data despite the CCW/CW convention
+    // mismatch with GL.
+    // TODO(wii): 3D mesh cull/winding vs GL still under investigation (host
+    // renders these meshes clean with GL_CULL_BACK; GX winding differs).
+    GX_SetCullMode(GX_CULL_BACK);
+    // Port specific: match host GL_LESS (DisplayManager.cpp depth func) --
+    // GX_LEQUAL let coincident back faces win at equal depth and overwrite
+    // the front (black-center on tumbling meshes).
+    GX_SetZMode(GX_TRUE, GX_LESS, GX_TRUE);
+    // Port specific: match host Geometry::Render, which does glDisable(GL_BLEND)
+    // for every 3D mesh (opaque). Alpha blend on the mesh let self-overlapping
+    // fragments accumulate/blend against the framebuffer with depth-write on ->
+    // black-center on tumbling fruit. Opaque src-replace mirrors the GL path.
+    GX_SetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
 
-    // TODO(wii): restore correct back-face cull once winding is confirmed
-    // (GX front-winding vs GL CCW). GX's default front-face winding is
-    // opposite GL's CCW convention, so GX_CULL_BACK against this port's
-    // GL-wound mesh vertex order was culling every front face -- the menu
-    // ring fruit rendered nothing. GX_CULL_NONE disables culling entirely so
-    // the geometry/matrix path can be confirmed correct first; re-enable with
-    // GX_CULL_FRONT (or reverse the mesh index winding) once verified.
-    GX_SetCullMode(GX_CULL_NONE);
-    GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    SetStandardAlphaBlend();
     SetupGxVertexAndTev(haveUV, textured);
 
     if (ibo && indexCount > 0) {
@@ -608,14 +552,16 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
         for (int i = 0; i < indexCount; ++i) {
             unsigned short vi = indices[i];
             EmitInterleavedVertex(vboData + (size_t)stride * vi, stride,
-                                  posOff, haveUV, uvOff, haveColor, colOff);
+                                  posOff, haveUV, uvOff, haveColor, colOff,
+                                  /*colorIsNativePacked=*/false);
         }
         GX_End();
     } else {
         GX_Begin(GxPrimFromGL(prim), GX_VTXFMT0, (u16)vertCount);
         for (int i = 0; i < vertCount; ++i) {
             EmitInterleavedVertex(vboData + (size_t)stride * i, stride,
-                                  posOff, haveUV, uvOff, haveColor, colOff);
+                                  posOff, haveUV, uvOff, haveColor, colOff,
+                                  /*colorIsNativePacked=*/false);
         }
         GX_End();
     }
