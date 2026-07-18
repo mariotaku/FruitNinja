@@ -5,6 +5,7 @@
 #include "util/SmartPtr.h"
 #include "util/ReferenceCounter.h"
 #include "util/Delegate.h"
+#include "util/Endian.h"
 #include "asset/DataReader.h"
 #include "asset/Skeleton.h"
 #include "math/_Vector3.h"
@@ -114,6 +115,39 @@ template<> struct LoaderTypeId<Model>          { static const uint32_t value = T
 template<> struct LoaderTypeId<Mesh>           { static const uint32_t value = TYPEID_Mesh; };
 template<> struct LoaderTypeId<AnimationList>  { static const uint32_t value = TYPEID_AnimationList; };
 
+#if defined(FN_BIG_ENDIAN)
+// Port specific: compile-time size-dispatch tag for ResourceLoader::Read<T>'s
+// byteswap. No binary counterpart -- exists solely to select the right
+// fnByteSwap* overload (or no-op for 1-byte T) at compile time without
+// needing C++11 if-constexpr (GCC 4.4.1 cross-build has none).
+template<int Size> struct IntToType {};
+
+inline void ByteSwapInPlace(uint8_t&, IntToType<1>) { /* no-op: single byte */ }
+inline void ByteSwapInPlace(int8_t&, IntToType<1>) { /* no-op: single byte */ }
+
+inline void ByteSwapInPlace(uint16_t& v, IntToType<2>) { v = Endian::fnByteSwap16(v); }
+inline void ByteSwapInPlace(int16_t& v, IntToType<2>) {
+    v = (int16_t)Endian::fnByteSwap16((uint16_t)v);
+}
+
+inline void ByteSwapInPlace(uint32_t& v, IntToType<4>) { v = Endian::fnByteSwap32(v); }
+inline void ByteSwapInPlace(int32_t& v, IntToType<4>) {
+    v = (int32_t)Endian::fnByteSwap32((uint32_t)v);
+}
+inline void ByteSwapInPlace(float& v, IntToType<4>) { v = Endian::fnByteSwapFloat(v); }
+
+inline void ByteSwapInPlace(uint64_t& v, IntToType<8>) { v = Endian::fnByteSwap64(v); }
+inline void ByteSwapInPlace(int64_t& v, IntToType<8>) {
+    v = (int64_t)Endian::fnByteSwap64((uint64_t)v);
+}
+inline void ByteSwapInPlace(double& v, IntToType<8>) {
+    uint64_t bits;
+    memcpy(&bits, &v, sizeof(bits));
+    bits = Endian::fnByteSwap64(bits);
+    memcpy(&v, &bits, sizeof(v));
+}
+#endif // FN_BIG_ENDIAN
+
 // ============================================================
 // ResourceLoader (68 bytes = 0x44)
 // Binary layout confirmed via ctor @ 0x002556B4 / path ctor @ 0x00255730:
@@ -156,11 +190,24 @@ public:
     const uint8_t* DataPtr() const { return m_Data.data(); }
     size_t ChildCount() const { return m_Children.size(); }
 
+    // Port specific: FN_BIG_ENDIAN byteswap. The binary is little-endian-only
+    // (ARM Bada); this template has no swap on that target. On the Wii port
+    // (big-endian PowerPC) every multi-byte scalar Read<T>() pulls off disk
+    // (string-length prefixes, counts, indices, floats) must be byteswapped
+    // here -- this is the single choke point every ResourceLoader-driven
+    // reader (LoadModel/LoadMesh/ReadSkeleton/ReadString/ReadSubResourceLookup)
+    // funnels through, so fixing it here fixes all of them. Dispatches on
+    // sizeof(T) at compile time; 1-byte T (uint8_t) and non-scalar T are
+    // left untouched. Only scalar T (uint8/16/32_t, int32_t, float) are ever
+    // instantiated -- see call sites in AnimationList.cpp / MeshManager.cpp.
     template<typename T>
     T Read() {
         T val;
         memcpy(&val, &m_Data[m_ReadCursor], sizeof(T));
         m_ReadCursor += sizeof(T);
+#if defined(FN_BIG_ENDIAN)
+        ByteSwapInPlace(val, IntToType<sizeof(T)>());
+#endif
         return val;
     }
 
