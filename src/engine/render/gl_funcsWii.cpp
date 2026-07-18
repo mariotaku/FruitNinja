@@ -85,6 +85,7 @@ unsigned   g_ElementBufferBinding = 0;
 struct ShimTexture {
     GXTexObj obj;
     void*    texels;      // 32-aligned GX_TF_RGBA8 tiled data
+    unsigned char* linear; // kept linear RGBA8 copy, for glTexSubImage2D updates
     int      width;
     int      height;
     int      minFilter;
@@ -598,6 +599,7 @@ void glDeleteTextures(GLsizei n, const GLuint* ids) {
         unsigned id = ids[i];
         if (id && id < (unsigned)kMaxTextures && g_Textures[id].used) {
             if (g_Textures[id].texels) free(g_Textures[id].texels);
+            if (g_Textures[id].linear) free(g_Textures[id].linear);
             memset(&g_Textures[id], 0, sizeof(ShimTexture));
         }
     }
@@ -629,6 +631,7 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
     // pixels may legitimately be NULL for a placeholder alloc; expand yields
     // NULL then and we leave the texture without an image this pass.
     if (t.texels) { free(t.texels); t.texels = NULL; }
+    if (t.linear) { free(t.linear); t.linear = NULL; }
     t.width  = width;
     t.height = height;
     t.hasImage = false;
@@ -645,15 +648,36 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
             t.texels   = tiled;
             t.hasImage = true;
         }
-        free(rgba);
+        // Keep the linear copy so glTexSubImage2D can blit + re-tile (TTF atlas).
+        t.linear = rgba;   // owned by the texture now (freed on re-upload/delete)
     }
 }
 
-void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint /*xoff*/,
-                     GLint /*yoff*/, GLsizei /*w*/, GLsizei /*h*/,
-                     GLenum /*format*/, GLenum /*type*/, const void* /*pixels*/) {
-    // TODO(wii Pass 2): partial retile into the bound texture's GX buffer
-    // (used by the dynamic TTF glyph cache, FontInterface.cpp). No-op boot.
+void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
+                     GLint yoff, GLsizei w, GLsizei h,
+                     GLenum format, GLenum type, const void* pixels) {
+    // Update a sub-rect of the bound texture (the dynamic TTF glyph atlas,
+    // FontInterface.cpp). Blit the new pixels into the kept linear copy, then
+    // re-tile the whole texture into its GX buffer and invalidate the TMEM
+    // cache. (Full re-tile per update is simple; the atlas is small.)
+    if (!g_BoundTexture || g_BoundTexture >= (unsigned)kMaxTextures) return;
+    ShimTexture& t = g_Textures[g_BoundTexture];
+    if (!t.linear || !t.texels || !pixels || w <= 0 || h <= 0) return;
+    if (xoff < 0 || yoff < 0 || xoff + w > t.width || yoff + h > t.height) return;
+
+    unsigned char* sub = ExpandToRGBA8(w, h, format, type, pixels);
+    if (!sub) return;
+    for (int row = 0; row < h; ++row) {
+        unsigned char* dst = t.linear + (((size_t)(yoff + row) * t.width + xoff) * 4);
+        const unsigned char* src = sub + ((size_t)row * w * 4);
+        memcpy(dst, src, (size_t)w * 4);
+    }
+    free(sub);
+
+    TileRGBA8(t.linear, t.texels, t.width, t.height);
+    u32 bufSize = GX_GetTexBufferSize(t.width, t.height, GX_TF_RGBA8, GX_FALSE, 0);
+    DCFlushRange(t.texels, bufSize);
+    GX_InvalidateTexAll();
 }
 
 void glCompressedTexImage2D(GLenum /*target*/, GLint /*level*/, GLenum /*fmt*/,
