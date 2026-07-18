@@ -27,22 +27,34 @@
 //      (exact: modelview is always affine, only the projection carries the
 //      perspective divide).
 //   2. Projection -> reconstructed as a native GX projection (GX_PERSPECTIVE
-//      or GX_ORTHOGRAPHIC, correct [-1,0] clip-z) via libogc's guFrustum /
-//      guOrtho, with the frustum parameters recovered algebraically from the
-//      GL-convention projection matrix's coefficients. GX then does the
-//      perspective divide in hardware, exactly like it would for any native
-//      GX title -- no CPU-side divide, no lost precision, no warped meshes.
+//      or GX_ORTHOGRAPHIC, correct [0,1] clip-z per libogc's guFrustum/
+//      guOrtho convention) via libogc's guFrustum / guOrtho, with the
+//      frustum parameters recovered algebraically from the GL-convention
+//      projection matrix's coefficients. GX then does the perspective divide
+//      in hardware, exactly like it would for any native GX title -- no
+//      CPU-side divide, no lost precision, no warped meshes.
 //
-// guFrustum/guOrtho were chosen over the "load the GL matrix + pre-multiply
-// a z-remap" fallback the task spec allows: the frustum-recovery route
-// produces a GX projection matrix built the way libogc expects (verified
-// correct for both GX_PERSPECTIVE and GX_ORTHOGRAPHIC clip conventions),
-// whereas hand-remapping a foreign GL matrix's z/w rows risks subtly wrong
-// near/far clipping that would only show up as a hard-to-diagnose clip-plane
-// bug later. If frustum recovery ever proves fragile for some projection
-// this port issues, fall back to the z-remap approach described in the task
-// spec -- not implemented here because guFrustum/guOrtho covers every
-// projection MatrixManager::SetupPerspective / SetupOrtho actually builds.
+// guFrustum/guPerspective fully cover every perspective projection this port
+// issues (GL perspective's near/far are already positive eye-space
+// distances, guPerspective's expected convention). guOrtho does NOT cover
+// this port's ortho, though: SetupGameOrtho's game-space box uses
+// _Matrix44::OrthoW's convention (linear map of the RAW SIGNED world-z
+// range [near=2000 .. far=-6000] to clip [0,1]), not guOrtho's assumed
+// "n/f are positive eye-space distances in front of a camera looking down
+// -Z" convention -- handing OrthoW's signed far=-6000 to guOrtho inverts its
+// internal 1/(f-n) sign and clips out most of the scene (see LoadGxOrtho).
+// LoadGxOrtho therefore uses guOrtho only for the convention-agnostic X/Y
+// (l/r/t/b) terms and overwrites the z row directly from the GL matrix's own
+// m[10]/m[14] -- an exact coefficient copy, not a re-derivation through
+// guOrtho's incompatible near/far parameterization.
+//
+// CONFIRMED (on-device [GXMTX]/[GXDIAG] logs): the z-row copy alone left the
+// 2D UI rendering entirely black. GX's valid clip-z (NDC z) range is [-1,0],
+// but OrthoW's z-row maps world-z into clip [0,1] (matching what RendererGL
+// feeds the GLES2 shader) -- e.g. a UI vertex at z=0 -> eye-z=-5600 ->
+// clip_z=0.95, outside GX's range, so every 2D draw was clipped. Fix:
+// LoadGxOrtho's out[2][3] additionally subtracts w (=1) to shift [0,1] into
+// GX's [-1,0]; see the comment at that assignment.
 //
 // Texture upload/state (ShimTexture registry, GX_TexObj creation, TileRGBA8)
 // stays entirely in gl_funcsWii.cpp -- RendererGX only BINDS an
@@ -128,16 +140,44 @@ void LoadGxPerspective(const Matrix44& proj, Mtx44 out) {
     guPerspective(out, fovyDeg, aspect, n, f);
 }
 
-// Recover an orthographic box (l,r,b,t,n,f) from a GL column-major ortho
-// projection and load it into `out` via guOrtho. GL ortho coefficients
-// (matches _Matrix44::OrthoW above, same convention MatrixManager::SetupOrtho
-// uses):
+// Recover an orthographic box (l,r,b,t) from a GL column-major ortho
+// projection and load it into `out` via guOrtho, then OVERWRITE guOrtho's
+// z row directly from the GL matrix's own z coefficients. GL ortho
+// coefficients (matches _Matrix44::OrthoW above, same convention
+// MatrixManager::SetupOrtho uses):
 //   m[0]=2/(r-l)  m[5]=2/(t-b)  m[10]=1/(f-n) [note: OrthoW's sign, see below]
 //   m[12]=-(r+l)/(r-l)  m[13]=-(t+b)/(t-b)  m[14]=n/(n-f)
 // _Matrix44::OrthoW (the builder MatrixManager::SetupOrtho/SetupPerspective's
 // sibling actually uses in this port) writes m[10]=1/(far-near) and
-// m[14]=near/(near-far) -- NOT the canonical GL -2/(f-n) form -- so recover
-// against those exact coefficients rather than textbook GL ortho.
+// m[14]=near/(near-far) -- NOT the canonical GL -2/(f-n) form.
+//
+// Why the z row can't go through guOrtho's (n,f) parameters at all: guOrtho
+// (per libogc's gu.h doc comment) requires "n and f... both given as
+// positive distances" under the assumption pre-transformed points have
+// negative eye-space z (camera looks down -Z, near/far both in front of the
+// eye). This port's actual game ortho -- SetupGameOrtho's
+// SetupOrtho(160,-160,-240,240, near=2000, far=-6000) -- is NOT that
+// convention: OrthoW is a generic linear box-map [near..far] -> clip [0..1]
+// over the RAW SIGNED world-z value, with near=+2000 and far=-6000 (far is
+// numerically LESS than near, and negative). Recovering near_/far_ from
+// m[10]/m[14] faithfully reproduces those exact signed values (2000, -6000)
+// -- but then handing far_=-6000 to guOrtho as if it were a positive eye
+// distance flips the sign of guOrtho's internal 1/(f-n) term, producing a
+// z row that clips out most of the game's z range (e.g. the z=-5599
+// background quad) instead of mapping it into GX's [0,1] clip volume.
+// Fix: keep guOrtho only for the well-behaved, convention-agnostic l/r/t/b
+// (X/Y) terms, then set mt[2][2]/mt[2][3] directly from the same m[10]/m[14]
+// this port's OrthoW already uses -- a direct coefficient copy (with the GL
+// column-major -> GX row-major transpose), not a re-derivation through
+// guOrtho's incompatible parameterization. This exactly reproduces OrthoW's
+// clip-z mapping (world z=near -> clip 0, z=far -> clip 1) for GX.
+//
+// CONFIRMED via on-device [GXMTX]/[GXDIAG] logs: modelview[2d] row2 =
+// (0,0,1,-5600) (a UI vertex at z=0 -> eye-z=-5600) and ortho.proj row2 was
+// (0,0,-0.000125,0.25) before this fix, giving
+// clip_z = -0.000125*(-5600) + 0.25 = 0.95 -- OUTSIDE GX's valid clip-z range
+// (see z-translation comment below) -- every 2D draw was being clipped,
+// rendering the whole UI black.
 void LoadGxOrtho(const Matrix44& proj, Mtx44 out) {
     float invRL = proj.m[0] * 0.5f;   // = 1/(r-l)
     float invTB = proj.m[5] * 0.5f;   // = 1/(t-b)
@@ -152,19 +192,97 @@ void LoadGxOrtho(const Matrix44& proj, Mtx44 out) {
     float top   = (tb + tPlusB) * 0.5f;
     float bottom = top - tb;
 
-    // m[10] = 1/(far-near), m[14] = near/(near-far) = -near/(far-near)
-    float farMinusNear = (proj.m[10] != 0.0f) ? (1.0f / proj.m[10]) : 0.0f;
-    float near_ = -proj.m[14] * farMinusNear;
-    float far_  = near_ + farMinusNear;
+    // Dummy n/f: only X/Y terms of guOrtho's output are used below; the z
+    // row is overwritten immediately after with the exact OrthoW mapping.
+    guOrtho(out, top, bottom, left, right, 1.0f, 2.0f);
 
-    guOrtho(out, top, bottom, left, right, near_, far_);
+    // Direct copy of OrthoW's z-row coefficients (GL m[10]/m[14], column-major)
+    // into GX's row-major mt[2][2]/mt[2][3] -- reproduces
+    // clip_z = m[10]*world_z + m[14] exactly, matching what RendererGL feeds
+    // the GLES2 shader's u_mvp for the same draw.
+    //
+    // GX clip-z is [-1,0] but OrthoW maps to [0,1]; subtract w (=1, from proj
+    // row3) to shift [0,1] -> [-1,0]. (2D UI rendered black without this;
+    // on-device [GXMTX] confirmed clip_z=0.95 was being clipped.)
+    out[2][2] = proj.m[10];
+    out[2][3] = proj.m[14] - 1.0f;
+}
+
+// TODO(wii): one-shot [GXDIAG] instrumentation for the fullscreen-wood-bg
+// black-render bug + the fruit-mesh cull fix -- remove once both are
+// confirmed fixed on-device (orchestrator reads Dolphin's OSREPORT log).
+// Guarded by function-local `static bool` so each fires exactly once per
+// process, avoiding per-frame log spam.
+void DiagLogProjectionOnce(const Matrix44& proj, bool isPerspective) {
+    static bool logged = false;
+    if (logged) return;
+    logged = true;
+
+    LOG_INFO("GXDIAG", "proj m[0..3]=%.4f %.4f %.4f %.4f", proj.m[0], proj.m[1], proj.m[2], proj.m[3]);
+    LOG_INFO("GXDIAG", "proj m[4..7]=%.4f %.4f %.4f %.4f", proj.m[4], proj.m[5], proj.m[6], proj.m[7]);
+    LOG_INFO("GXDIAG", "proj m[8..11]=%.4f %.4f %.4f %.4f", proj.m[8], proj.m[9], proj.m[10], proj.m[11]);
+    LOG_INFO("GXDIAG", "proj m[12..15]=%.4f %.4f %.4f %.4f", proj.m[12], proj.m[13], proj.m[14], proj.m[15]);
+    LOG_INFO("GXDIAG", "proj classified=%s (m[11]=%.4f)",
+             isPerspective ? "perspective" : "ortho", proj.m[11]);
+
+    if (!isPerspective) {
+        float invRL = proj.m[0] * 0.5f;
+        float invTB = proj.m[5] * 0.5f;
+        float rl = proj.m[0] != 0.0f ? 1.0f / invRL : 0.0f;
+        float tb = proj.m[5] != 0.0f ? 1.0f / invTB : 0.0f;
+        float rPlusL = -proj.m[12] * rl;
+        float tPlusB = -proj.m[13] * tb;
+        float right = (rl + rPlusL) * 0.5f;
+        float left  = right - rl;
+        float top   = (tb + tPlusB) * 0.5f;
+        float bottom = top - tb;
+        float farMinusNear = (proj.m[10] != 0.0f) ? (1.0f / proj.m[10]) : 0.0f;
+        float near_ = -proj.m[14] * farMinusNear;
+        float far_  = near_ + farMinusNear;
+        LOG_INFO("GXDIAG", "ortho near=%.2f far=%.2f l=%.2f r=%.2f b=%.2f t=%.2f",
+                 near_, far_, left, right, bottom, top);
+    }
+}
+
+// TODO(wii): one-shot [GXMTX] instrumentation logging the ACTUAL GX matrices
+// (post guOrtho/guPerspective/transpose -- not the source MatrixManager
+// Matrix44) so the bisect can correlate real loaded values against the
+// guOrtho z-row formula rather than re-deriving it from the GL-convention
+// source matrix alone. Remove once the correct ortho z-row fix lands and is
+// confirmed on-device. Each `static bool` fires once per process.
+void DiagLogGxOrthoOnce(const Mtx44 out) {
+    static bool logged = false;
+    if (logged) return;
+    logged = true;
+    LOG_INFO("GXMTX", "ortho.proj row0=%.6f %.6f %.6f %.6f", out[0][0], out[0][1], out[0][2], out[0][3]);
+    LOG_INFO("GXMTX", "ortho.proj row1=%.6f %.6f %.6f %.6f", out[1][0], out[1][1], out[1][2], out[1][3]);
+    LOG_INFO("GXMTX", "ortho.proj row2=%.6f %.6f %.6f %.6f", out[2][0], out[2][1], out[2][2], out[2][3]);
+    LOG_INFO("GXMTX", "ortho.proj row3=%.6f %.6f %.6f %.6f", out[3][0], out[3][1], out[3][2], out[3][3]);
+}
+
+void DiagLogGxPerspOnce(const Mtx44 out) {
+    static bool logged = false;
+    if (logged) return;
+    logged = true;
+    LOG_INFO("GXMTX", "persp.proj row0=%.6f %.6f %.6f %.6f", out[0][0], out[0][1], out[0][2], out[0][3]);
+    LOG_INFO("GXMTX", "persp.proj row1=%.6f %.6f %.6f %.6f", out[1][0], out[1][1], out[1][2], out[1][3]);
+    LOG_INFO("GXMTX", "persp.proj row2=%.6f %.6f %.6f %.6f", out[2][0], out[2][1], out[2][2], out[2][3]);
+    LOG_INFO("GXMTX", "persp.proj row3=%.6f %.6f %.6f %.6f", out[3][0], out[3][1], out[3][2], out[3][3]);
+}
+
+void DiagLogGxModelviewOnce(const char* label, const Mtx mv) {
+    LOG_INFO("GXMTX", "modelview[%s] row0=%.6f %.6f %.6f %.6f", label, mv[0][0], mv[0][1], mv[0][2], mv[0][3]);
+    LOG_INFO("GXMTX", "modelview[%s] row1=%.6f %.6f %.6f %.6f", label, mv[1][0], mv[1][1], mv[1][2], mv[1][3]);
+    LOG_INFO("GXMTX", "modelview[%s] row2=%.6f %.6f %.6f %.6f", label, mv[2][0], mv[2][1], mv[2][2], mv[2][3]);
 }
 
 // Loads MatrixManager's current projection + modelview (view*world) into GX's
 // two independent matrix slots, replacing the combined-MVP-as-posmtx approach
 // the gl_funcsWii.cpp shim uses. Must be called before GX_Begin for every
-// DrawShaded2D / DrawMesh3D.
-void LoadGxMatricesFromMatrixManager() {
+// DrawShaded2D / DrawMesh3D. `mvLabel` names the caller ("2d"/"3d") for the
+// one-shot [GXMTX] modelview log -- each label fires once, independent of the
+// other, so both the first 2D and first 3D modelview get logged.
+void LoadGxMatricesFromMatrixManager(const char* mvLabel) {
     MatrixManager& mm = MatrixManager::GetInstance();
     const Matrix44& proj = mm.GetProjectionStack().m_Current;
     Matrix44 modelview = mm.GetViewStack().m_Current * mm.GetWorldStack().m_Current;
@@ -174,12 +292,27 @@ void LoadGxMatricesFromMatrixManager() {
     GX_LoadPosMtxImm(mv, GX_PNMTX0);
     GX_SetCurrentMtx(GX_PNMTX0);
 
+    {
+        static bool logged2d = false;
+        static bool logged3d = false;
+        bool is2d = mvLabel[0] == '2';
+        bool& logged = is2d ? logged2d : logged3d;
+        if (!logged) {
+            logged = true;
+            DiagLogGxModelviewOnce(mvLabel, mv);
+        }
+    }
+
     Mtx44 gxProj;
-    if (IsPerspective(proj)) {
+    bool isPersp = IsPerspective(proj);
+    DiagLogProjectionOnce(proj, isPersp);
+    if (isPersp) {
         LoadGxPerspective(proj, gxProj);
+        DiagLogGxPerspOnce(gxProj);
         GX_LoadProjectionMtx(gxProj, GX_PERSPECTIVE);
     } else {
         LoadGxOrtho(proj, gxProj);
+        DiagLogGxOrthoOnce(gxProj);
         GX_LoadProjectionMtx(gxProj, GX_ORTHOGRAPHIC);
     }
 }
@@ -332,7 +465,10 @@ void Renderer::shutdown() {
 void Renderer::InitGL(int width, int height) {
     GX_SetViewport(0.0f, 0.0f, (f32)width, (f32)height, 0.0f, 1.0f);
     GX_SetScissor(0, 0, (u32)width, (u32)height);
-    GX_SetCullMode(GX_CULL_BACK);
+    // Port specific: initial cull state; DrawShaded2D/DrawMesh3D each set
+    // their own cull mode explicitly per draw (see those functions), so this
+    // is just the boot-time default and never leaks into either draw path.
+    GX_SetCullMode(GX_CULL_NONE);
     SetStandardAlphaBlend();
     GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 }
@@ -351,7 +487,7 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
                             GLenum prim, GLuint tex, const Matrix44& /*mvp*/) {
     if (vertCount <= 0) return;
 
-    LoadGxMatricesFromMatrixManager();
+    LoadGxMatricesFromMatrixManager("2d");
 
     // Renderer.h contract: tex==0 means "use whatever is already bound on
     // unit 0" (RendererGL::DrawShaded2D skips glBindTexture entirely in that
@@ -363,14 +499,30 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     // an untinted quad) instead of sampling the bound texture.
     GLuint boundTex = tex ? tex : Wii_GetBoundTexture();
     bool textured = false;
-    if (boundTex) {
-        GXTexObj* texObj = Wii_GetTexObj(boundTex);
-        if (texObj) {
-            GX_LoadTexObj(texObj, GX_TEXMAP0);
-            textured = true;
+    GXTexObj* diagTexObj = boundTex ? Wii_GetTexObj(boundTex) : nullptr;
+    if (diagTexObj) {
+        GX_LoadTexObj(diagTexObj, GX_TEXMAP0);
+        textured = true;
+    }
+
+    // TODO(wii): remove once the fullscreen-wood-bg black-render bug is
+    // confirmed fixed on-device.
+    {
+        static bool diagLogged = false;
+        if (!diagLogged) {
+            diagLogged = true;
+            const unsigned char* base0 = (const unsigned char*)verts;
+            const float* p0 = (const float*)(base0 + posOff);
+            LOG_INFO("GXDIAG", "shaded2d z0=%.2f tex=%u objnull=%d",
+                     p0[2], (unsigned)boundTex, boundTex != 0 && diagTexObj == nullptr);
         }
     }
 
+    // Port specific: 2D UI quads are unculled in the binary's fixed-function
+    // equivalent (single-sided billboards, winding not guaranteed). Set
+    // explicitly so this draw never inherits DrawMesh3D's back-face cull
+    // state from a preceding 3D draw this frame.
+    GX_SetCullMode(GX_CULL_NONE);
     SetStandardAlphaBlend();
     SetupGxVertexAndTev(/*haveUV=*/true, textured);
 
@@ -404,7 +556,7 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
     const unsigned char* vboData = (const unsigned char*)Wii_GetBufferData(vbo, &vboSize);
     if (!vboData) return;
 
-    LoadGxMatricesFromMatrixManager();
+    LoadGxMatricesFromMatrixManager("3d");
 
     GLuint boundTex = tex ? tex : m_WhiteTex;
     bool haveUV = uvSize > 0;
@@ -419,6 +571,26 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
     }
     if (!textured) haveUV = false;
 
+    // TODO(wii): remove once the fruit-mesh cull fix is confirmed fixed
+    // on-device.
+    {
+        static bool diagLogged = false;
+        if (!diagLogged) {
+            diagLogged = true;
+            const float* p0 = (const float*)(vboData + posOff);
+            LOG_INFO("GXDIAG", "mesh3d z0=%.2f tex=%u textured=%d vertCount=%d indexCount=%d",
+                     p0[2], (unsigned)boundTex, textured, vertCount, indexCount);
+        }
+    }
+
+    // TODO(wii): restore correct back-face cull once winding is confirmed
+    // (GX front-winding vs GL CCW). GX's default front-face winding is
+    // opposite GL's CCW convention, so GX_CULL_BACK against this port's
+    // GL-wound mesh vertex order was culling every front face -- the menu
+    // ring fruit rendered nothing. GX_CULL_NONE disables culling entirely so
+    // the geometry/matrix path can be confirmed correct first; re-enable with
+    // GX_CULL_FRONT (or reverse the mesh index winding) once verified.
+    GX_SetCullMode(GX_CULL_NONE);
     GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
     SetStandardAlphaBlend();
     SetupGxVertexAndTev(haveUV, textured);
