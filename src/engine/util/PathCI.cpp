@@ -37,7 +37,7 @@ bool ExistsOnDisk(const char* path) {
 }
 
 struct SplitPath {
-    std::string root;          // "/" or "" (relative)
+    std::string root;          // "/" or "sd:/" / "usb:/" (device-prefixed) or "" (relative)
     std::vector<std::string> parts;
 };
 
@@ -45,7 +45,26 @@ SplitPath SplitPathParts(const char* path) {
     SplitPath sp;
     if (!path || !*path) return sp;
     size_t i = 0;
-    if (path[0] == '/') { sp.root = "/"; i = 1; }
+    if (path[0] == '/') {
+        sp.root = "/";
+        i = 1;
+    } else {
+        // libfat/devoptab device prefix (Wii: "sd:/...", "usb:/...") — the
+        // "sd:" token names a mounted device, not a directory entry, so it
+        // must never be walked into FindEntryCI's opendir/readdir loop.
+        // Detect a leading "<name>:/" and fold it into the root, matching
+        // how the leading '/' case is handled for POSIX absolute paths.
+        // Only look for the colon ahead of the first '/' so an ordinary
+        // relative path that happens to contain ':' in a later component
+        // (e.g. a filename) is never mistaken for a device prefix.
+        const char* slash = strchr(path, '/');
+        const char* colon = strchr(path, ':');
+        if (colon && colon[1] == '/' && (!slash || colon < slash)) {
+            size_t devLen = (size_t)(colon - path) + 2; // "sd:/" incl. slash
+            sp.root.assign(path, devLen);
+            i = devLen;
+        }
+    }
     std::string cur;
     for (; path[i] != '\0'; ++i) {
         if (path[i] == '/') {
