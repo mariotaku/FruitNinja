@@ -49,6 +49,7 @@ endif()
 target_sources(mortar_engine PRIVATE
     # Phase 3 — Rendering
     render/Renderer.cpp
+    render/RendererGL.cpp     # GL-backend half of Renderer (link-time split, mirrors GameSDL.cpp/GameWii.cpp)
     render/Shaders.cpp        # Port specific: GLES2 2D shader sources
     render/ShaderProgram.cpp  # Port specific: GL program wrapper
     render/MortarCamera.cpp
