@@ -97,6 +97,11 @@ static void WiiGxInit() {
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
 
+    // Route stdout/stderr (the LoggerWii printf backend) to the OS report
+    // channel so LOG_* output shows up in Dolphin's log / USB Gecko for
+    // bring-up debugging. Harmless on real hardware.
+    SYS_STDIO_Report(true);
+
     WiiVideoInit();
     WiiGxInit();
 

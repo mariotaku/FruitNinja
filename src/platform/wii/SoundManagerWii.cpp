@@ -33,6 +33,7 @@
 #ifdef FRUIT_PLATFORM_WII
 
 #include "audio/SoundManager.h"
+#include "audio/MortarSound.h"   // complete type for CreateNewSound's `new MortarSound()`
 #include "debug/Logger.h"
 #include <cstring>
 
@@ -76,9 +77,13 @@ void SoundManager::Initialise(const char* /*basePath*/) {
 }
 
 MortarSound* SoundManager::CreateNewSound() {
-    // TODO(wii): mirror SoundManagerSDL.cpp -- allocate MortarSoundMAM-shaped
-    // sound object once that type is available to this TU.
-    return nullptr;
+    // Return a valid empty MortarSound (m_Handle==0), NOT nullptr -- mirrors
+    // SoundManagerSDL::CreateNewSound. GameSound fills every slot from this at
+    // ctor time and calls sound->SetVolume/SetPitch UNGUARDED (GameSound.cpp:73);
+    // a null here crashes (SetVolume on null this). An empty sound is safe:
+    // SetVolume/SetPitch no-op while m_Handle==0. Real ASND playback is TODO(wii)
+    // (see task: wire SoundManagerWii ASND) but the shape must be non-null.
+    return new MortarSound();
 }
 
 void SoundManager::PreLoadSound(const char* /*name*/) {
