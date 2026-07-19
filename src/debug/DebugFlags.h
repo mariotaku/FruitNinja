@@ -62,6 +62,28 @@ extern float g_MotionSpeedThreshold;   // Port specific: g_MotionMode cut speed 
 // SlashEntity.cpp can reference it without including the SDL translator header.
 static const int POINTER_FINGER_CHANNEL = 15;
 
+// Port specific: Wii motion-mode hover-blade channel range -- Wiimote N
+// (0-3) drives a pointer blade on channel (WII_POINTER_CHANNEL_FIRST + N),
+// the 4-remote analogue of the SDL mouse's POINTER_FINGER_CHANNEL (which is
+// this range's last channel). See src/platform/wii/InputTranslatorWii.h for
+// the full two-role input model.
+static const int WII_POINTER_CHANNEL_FIRST = 12;
+static const int WII_POINTER_CHANNEL_LAST  = 15;
+
+// Port specific: SlashEntity's motion-mode speed-gate range (see
+// SlashEntity::Update). On Wii, A is menu-click-only in motion mode -- both
+// the A-press channels (0-3) and the hover channels (12-15) must be
+// threshold-gated, so the range spans the whole [0, WII_POINTER_CHANNEL_LAST]
+// (4-11 are unused, gating them is harmless). SDL/host has only the single
+// mouse pointer channel, so min==max==POINTER_FINGER_CHANNEL.
+#if defined(FRUIT_PLATFORM_WII)
+static const int MOTION_GATE_CHANNEL_MIN = 0;
+static const int MOTION_GATE_CHANNEL_MAX = WII_POINTER_CHANNEL_LAST;
+#else
+static const int MOTION_GATE_CHANNEL_MIN = POINTER_FINGER_CHANNEL;
+static const int MOTION_GATE_CHANNEL_MAX = POINTER_FINGER_CHANNEL;
+#endif
+
 // Render every active Fruit / Bomb / SplatEntity collision sphere as
 // a translucent circle. Call from GameDraw after the entity pass.
 // No-op when g_DebugHitboxes < 1.

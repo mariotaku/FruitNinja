@@ -1628,15 +1628,22 @@ void SlashEntity::Update(float dt) {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
 
         // Port specific: FN::g_MotionMode velocity gate -- the pointer blade
-        // (m_FingerId == FN::POINTER_FINGER_CHANNEL) tracks the cursor every
-        // tick (see InputTranslatorSDL), but a cut only registers once its
-        // smoothed speed clears FN::g_MotionSpeedThreshold: slow movement
-        // aims, a fast flick cuts. Touch blades (m_FingerId 0-14) and
-        // motion-OFF are never gated -- runCut stays true and this block is
-        // byte-identical to the pre-motion-mode fruit+bomb loops below.
+        // tracks the cursor every tick (see InputTranslatorSDL /
+        // InputTranslatorWii), but a cut only registers once its smoothed
+        // speed clears FN::g_MotionSpeedThreshold: slow movement aims, a fast
+        // flick cuts. FN::MOTION_GATE_CHANNEL_MIN/MAX (DebugFlags.h) is the
+        // single inclusive channel range gated -- SDL/host: just
+        // POINTER_FINGER_CHANNEL (15); Wii: [0, WII_POINTER_CHANNEL_LAST]
+        // (0-3 A-press channels included so A is menu-click-only in motion
+        // mode -- holding A must never produce an ungated slice -- plus the
+        // 12-15 hover channels; 4-11 are unused, gating them is harmless).
+        // Touch blades outside the range and motion-OFF are never gated --
+        // runCut stays true and this block is byte-identical to the
+        // pre-motion-mode fruit+bomb loops below.
         bool runCut = true;
 #if !defined(__bada__)
-        if (FN::g_MotionMode && m_FingerId == FN::POINTER_FINGER_CHANNEL
+        if (FN::g_MotionMode
+            && m_FingerId >= FN::MOTION_GATE_CHANNEL_MIN && m_FingerId <= FN::MOTION_GATE_CHANNEL_MAX
             && m_SmoothedSpeed < FN::g_MotionSpeedThreshold) {
             runCut = false;
         }

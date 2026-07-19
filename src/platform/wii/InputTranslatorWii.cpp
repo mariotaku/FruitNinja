@@ -1,12 +1,9 @@
-// Port specific: Wii WPAD IR -> Mortar::Touch translator.
-// See InputTranslatorWii.h for the 4-remote -> 4-finger-channel mapping
-// rationale. Mirrors InputTranslatorSDL.cpp's DrainSDLEvent/DispatchForSimTick
-// (src/platform/InputTranslatorSDL.cpp) as closely as the WPAD IR model
-// allows: each remote's IR pointer edge (valid transition) plays the role of
-// a FINGERDOWN/FINGERUP, and a position change while valid plays the role of
-// FINGERMOTION. There is no out-of-window / mouse-channel concept here --
-// WPAD IR is either valid (pointed at the sensor bar) or not, no windowed
-// viewport to cross.
+// Port specific: Wii WPAD IR + A-button -> Mortar input translator.
+// See InputTranslatorWii.h for the full two-role model (per remote: a
+// "press finger" on channel N feeding Mortar::Touch slots, plus a motion-mode
+// "hover pointer blade" on channel 12+N using the pending-bool model).
+// InputTranslatorSDL.{h,cpp}'s mouse handling is the reference
+// implementation; every block below cites the SDL counterpart it mirrors.
 //
 // Only compiled when FRUIT_PLATFORM_WII is set (see
 // src/platform/wii/CMakeLists.txt).
@@ -17,34 +14,39 @@
 #include "input/Touch.h"
 #include "util/StringHash.h"
 #include "render/Layout.h"
+#include "debug/DebugFlags.h"
+#include "game/GameWork.h"
+#include "hud/HUD.h"
 #include <cstdio>
 #include <cstring>
 
 InputTranslatorWii::InputTranslatorWii()
     : hashTouchScreen(0)
 {
-    for (int i = 0; i < MAX_REMOTES; ++i) {
-        hashTouchDown[i]  = 0;
-        hashTouchMoveX[i] = 0;
-        hashTouchMoveY[i] = 0;
-        hashTouchUp[i]    = 0;
-        channelActive[i]  = false;
-        channelX[i]       = 0.0f;
-        channelY[i]       = 0.0f;
-        prevActive[i]     = false;
-        prevIRValid[i]    = false;
-        motionSinceDown[i] = false;
-        pendingEdge[i]    = false;
-    }
+    memset(hashTouchDown, 0, sizeof(hashTouchDown));
+    memset(hashTouchMoveX, 0, sizeof(hashTouchMoveX));
+    memset(hashTouchMoveY, 0, sizeof(hashTouchMoveY));
+    memset(hashTouchUp, 0, sizeof(hashTouchUp));
+    memset(fingerX, 0, sizeof(fingerX));
+    memset(fingerY, 0, sizeof(fingerY));
+    memset(fingerActive, 0, sizeof(fingerActive));
+    memset(prevActive, 0, sizeof(prevActive));
+    memset(pendingDown, 0, sizeof(pendingDown));
+    memset(pendingUp, 0, sizeof(pendingUp));
+    memset(pendingEdge, 0, sizeof(pendingEdge));
+    memset(motionSinceDown, 0, sizeof(motionSinceDown));
+    memset(prevButtonDown, 0, sizeof(prevButtonDown));
+    memset(prevIRValid, 0, sizeof(prevIRValid));
 }
 
 // Mirrors InputTranslatorSDL::Init -- same "TouchDown_N"/"TouchMove_XN"/
-// "TouchMove_YN"/"TouchUp_N"/"TouchScreen" action-name convention, just for
-// channels 0-3 (the 4 remote channels) instead of 0-15.
+// "TouchMove_YN"/"TouchUp_N"/"TouchScreen" action-name convention for the
+// full 16-channel space (Role 1 uses 0-3, Role 2 uses 12-15; the unused
+// middle channels cost only the hash precompute).
 void InputTranslatorWii::Init() {
     char buf[32];
 
-    for (int i = 0; i < MAX_REMOTES; i++) {
+    for (int i = 0; i < CHANNEL_COUNT; i++) {
         sprintf(buf, "TouchDown_%d", i);
         hashTouchDown[i] = StringHash(buf);
 
@@ -79,83 +81,209 @@ void InputTranslatorWii::TransformIRNormalized(float nx, float ny, float& gx, fl
     Layout::TouchToGame(nx, ny, &gx, &gy);
 }
 
-// Mirrors InputTranslatorSDL::DrainSDLEvent's FINGERDOWN/MOTION/UP handling,
-// collapsed into one call per channel per WPAD_ScanPads() (mainWii.cpp calls
-// this once per remote per frame with the freshly-scanned IR state).
-void InputTranslatorWii::DrainWiimoteIR(int chan, bool irValid, float x, float y) {
-    if (chan < 0 || chan >= MAX_REMOTES) return;
+// Mirrors InputTranslatorSDL::PointerPressMouseChannel, generalized to any
+// hover-blade channel (12-15). ch >= 8: no Mortar::Touch slot, pending-bool
+// model only. No-op if the channel is already pressed.
+void InputTranslatorWii::PointerPressChannel(int ch, float gx, float gy) {
+    if (fingerActive[ch]) return;
 
-    bool wasValid = prevIRValid[chan];
+    fingerActive[ch] = true;
+    fingerX[ch] = gx;
+    fingerY[ch] = gy;
+    motionSinceDown[ch] = false;
 
-    if (!wasValid && irValid) {
-        // false -> true: press (mirrors SDL_FINGERDOWN).
-        float gx, gy;
-        TransformIRNormalized(x, y, gx, gy);
-        channelX[chan] = gx;
-        channelY[chan] = gy;
-        channelActive[chan] = true;
-        // Port specific: re-arm the press-vs-motion gate -- a tap alone
-        // never moves the blade (v1.6.1 semantics), same as SDL.
-        motionSinceDown[chan] = false;
-
-        Mortar::Touch::GetInstance().OnPressed(chan + 1, gx, gy);
-        pendingEdge[chan] = true;
-    } else if (wasValid && irValid) {
-        // true, still true: move if position changed (mirrors
-        // SDL_FINGERMOTION).
-        float gx, gy;
-        TransformIRNormalized(x, y, gx, gy);
-        if (gx != channelX[chan] || gy != channelY[chan]) {
-            channelX[chan] = gx;
-            channelY[chan] = gy;
-            motionSinceDown[chan] = true;
-            Mortar::Touch::GetInstance().OnMoved(chan + 1, gx, gy);
-        }
-    } else if (wasValid && !irValid) {
-        // true -> false: release (mirrors SDL_FINGERUP).
-        channelActive[chan] = false;
-        Mortar::Touch::GetInstance().OnReleased(chan + 1);
-        pendingEdge[chan] = false;
-    }
-    // false, still false: nothing to do.
-
-    prevIRValid[chan] = irValid;
+    pendingDown[ch] = true;
+    pendingEdge[ch] = true;
+    pendingUp[ch]   = false;
 }
 
-// Mirrors InputTranslatorSDL::DispatchForSimTick's channel 0-7 loop, just
-// for the 4 remote channels. Same phase -> InputManager hash mapping:
-//   phase == -1 (just-pressed): TouchScreen + TouchMove (if moved) + TouchDown|DOWN_EDGE.
-//   phase == 0  (held):         TouchMove (if moved) + TouchDown.
-//   phase == 1 (released) and prevActive: TouchUp.
+// Mirrors InputTranslatorSDL::PointerReleaseMouseChannel. No-op if the
+// channel is not currently active.
+void InputTranslatorWii::PointerReleaseChannel(int ch) {
+    if (!fingerActive[ch]) return;
+
+    fingerActive[ch] = false;
+
+    pendingUp[ch]   = true;
+    pendingDown[ch] = false;
+    pendingEdge[ch] = false;
+}
+
+// One poll-model drain per remote per frame. Composes the two roles from the
+// two raw signals (irValid, aPressed) -- see InputTranslatorWii.h for the
+// SDL-mouse mapping rationale of each block.
+void InputTranslatorWii::DrainWiimoteIR(int chan, bool irValid, bool aPressed, float x, float y) {
+    if (chan < 0 || chan >= MAX_REMOTES) return;
+
+    const int pressCh = chan;                                // Role 1: Touch-slot press finger
+    const int hoverCh = FN::WII_POINTER_CHANNEL_FIRST + chan; // Role 2: hover pointer blade
+
+    float gx = 0.0f, gy = 0.0f;
+    if (irValid) {
+        TransformIRNormalized(x, y, gx, gy);
+    }
+
+    // ---- Role 1: A-press finger on channel `chan` (0-3), both modes ----
+    // Mirrors the SDL synthesized mouse-finger path (DrainSDLEvent
+    // SDL_FINGERDOWN/MOTION/UP, ch < Mortar::Touch::MAX_SLOTS branch):
+    // pressed while A is held AND the IR read is valid. Feeding the
+    // Mortar::Touch ring is what makes menu buttons / widgets clickable
+    // (they consume Touch slots only -- see InputTranslatorWii.h Role 1).
+    {
+        bool down    = aPressed && irValid;
+        bool wasDown = fingerActive[pressCh];
+
+        if (down && !wasDown) {
+            // FINGERDOWN: press at the current IR position.
+            fingerX[pressCh] = gx;
+            fingerY[pressCh] = gy;
+            fingerActive[pressCh] = true;
+            // Re-arm the press-vs-motion gate -- a tap alone never moves the
+            // blade (v1.6.1 semantics), same as SDL.
+            motionSinceDown[pressCh] = false;
+
+            Mortar::Touch::GetInstance().OnPressed(pressCh + 1, gx, gy);
+            pendingEdge[pressCh] = true;
+        } else if (down && wasDown) {
+            // FINGERMOTION: SDL only delivers motion events when the pointer
+            // actually moved; the poll-model equivalent is a position-change
+            // test.
+            if (gx != fingerX[pressCh] || gy != fingerY[pressCh]) {
+                fingerX[pressCh] = gx;
+                fingerY[pressCh] = gy;
+                motionSinceDown[pressCh] = true;
+                Mortar::Touch::GetInstance().OnMoved(pressCh + 1, gx, gy);
+            }
+        } else if (!down && wasDown) {
+            // FINGERUP: A released, or the IR dot lost while held (release at
+            // the last known position in that case -- gx/gy are only fresh
+            // when irValid). SDL's FINGERUP also refreshes the position from
+            // the up event when it has one.
+            if (irValid) {
+                fingerX[pressCh] = gx;
+                fingerY[pressCh] = gy;
+            }
+            fingerActive[pressCh] = false;
+            Mortar::Touch::GetInstance().OnReleased(pressCh + 1);
+            pendingEdge[pressCh] = false;
+        }
+    }
+
+    // ---- Role 2: motion-mode hover blade on channel 12+chan ----
+    // Mirrors InputTranslatorSDL's raw-mouse MOTION MODE handlers; every
+    // sub-block cites its SDL case. Inert when g_MotionMode is OFF (the SDL
+    // handlers early-out on !g_MotionMode the same way).
+    if (FN::g_MotionMode) {
+        bool wasButton = prevButtonDown[chan];
+
+        // A down-edge LIFTS the blade (SDL_MOUSEBUTTONDOWN ->
+        // PointerReleaseMouseChannel: reposition without cutting; the menu
+        // click itself rides Role 1's Touch-slot press).
+        if (aPressed && !wasButton) {
+            PointerReleaseChannel(hoverCh);
+        }
+
+        // A up-edge re-presses at the pointer (SDL_MOUSEBUTTONUP: `inside &&
+        // heldMask == 0` -> PointerPressMouseChannel; here inside==irValid
+        // and heldMask==0 is !aPressed).
+        if (!aPressed && wasButton && irValid) {
+            PointerPressChannel(hoverCh, gx, gy);
+        }
+
+        // IR loss releases the blade -- pointing away from the screen is the
+        // WPAD analogue of the cursor leaving the window
+        // (SDL_WINDOWEVENT_LEAVE -> PointerReleaseMouseChannel).
+        if (!irValid && prevIRValid[chan]) {
+            PointerReleaseChannel(hoverCh);
+        }
+
+        // Hover tracking (SDL_MOUSEMOTION with ev.motion.state == 0 and the
+        // cursor inside the window): ensure pressed, then apply the move.
+        // The position-change test is the poll-model equivalent of "a motion
+        // event arrived" (SDL only delivers them when the cursor moved); a
+        // fresh press sets fingerX/Y to gx/gy, so the pressing frame itself
+        // never opens the motion gate -- tap semantics preserved.
+        if (irValid && !aPressed) {
+            PointerPressChannel(hoverCh, gx, gy);
+            if (gx != fingerX[hoverCh] || gy != fingerY[hoverCh]) {
+                fingerX[hoverCh] = gx;
+                fingerY[hoverCh] = gy;
+                motionSinceDown[hoverCh] = true;
+            }
+        }
+    } else if (fingerActive[hoverCh]) {
+        // Motion mode toggled OFF while the hover blade was live -- retire it
+        // so the channel doesn't stay pressed forever.
+        PointerReleaseChannel(hoverCh);
+    }
+
+    prevButtonDown[chan] = aPressed;
+    prevIRValid[chan]    = irValid;
+}
+
+// Mirror of InputTranslatorSDL::DispatchForSimTick (see that function for the
+// binary-cadence rationale): HUD input-modal gate, Touch::Update(0.0f) full
+// ring drain, slot-derived dispatch + game_work.m_FingerSpawnPos refresh for
+// channels 0-7 (Role 1 lives in 0-3), pending-bool dispatch for channels
+// 8-15 (Role 2 lives in 12-15).
 void InputTranslatorWii::DispatchForSimTick() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
 
+    // Port specific: settings modal captures input -- don't feed the slice
+    // blades while it's open (see the matching block in InputTranslatorSDL::
+    // DispatchForSimTick). Null out mgr rather than early-returning so the
+    // Touch ring still drains and prevActive/pending bookkeeping stays
+    // correct.
+    if (game_work.mHud && game_work.mHud->GetInputModal()) mgr = nullptr;
+
+    // Drain the entire Touch ring buffer for this tick. Binary-faithful:
+    // v1.6.1 Mortar::Touch::Update(dt=0.0) @0x00242d14 with dt==0 skips the
+    // timestamp guard and pops every queued TEvnt in order.
     Mortar::Touch& touch = Mortar::Touch::GetInstance();
     touch.Update(0.0f);
 
-    for (int chan = 0; chan < MAX_REMOTES; ++chan) {
+    // --- Channels 0-7: derive state from drained states1 (Role 1) ---
+    for (int ch = 0; ch < Mortar::Touch::MAX_SLOTS; ++ch) {
+        // Find the states1 slot whose extId matches this channel
+        // (extId = ch+1, assigned by ___UpdateInternal on press).
         int slot = -1;
         for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
-            if (touch.states1[s].extId == (uint32_t)(chan + 1)) {
+            if (touch.states1[s].extId == (uint32_t)(ch + 1)) {
                 slot = s;
                 break;
             }
         }
 
         bool nowActive = (slot >= 0 && touch.states1[slot].phase < 1);
-        bool wasActive = prevActive[chan];
+        bool wasActive = prevActive[ch];
         int  phase     = (slot >= 0) ? touch.states1[slot].phase : 1;
 
+        // Refresh game_work.m_FingerSpawnPos[slot] from the drained Touch
+        // state -- the position source HUD widgets (CheckBox/SliderControl/
+        // ComboBox/VerticalScroller, UiWidget PollTouch) read. Same rationale
+        // and indexing (by `slot`, not `ch`) as the SDL translator -- see the
+        // long comment in InputTranslatorSDL::DispatchForSimTick. .z is the
+        // spawn-anim age counter, only stamped on the press edge.
+        if (slot >= 0 && phase < 1) {
+            _Vector3<float>& spawnPos = game_work.m_FingerSpawnPos[slot];
+            spawnPos.x = touch.states1[slot].currX;
+            spawnPos.y = touch.states1[slot].currY;
+            if (phase == -1) {
+                spawnPos.z = 2.0f;
+            }
+        }
+
         if (phase == -1) {
-            float gx = channelX[chan];
-            float gy = channelY[chan];
-            bool  isEdge = pendingEdge[chan];
-            pendingEdge[chan] = false;
+            // Just-pressed this tick.
+            float gx = fingerX[ch];
+            float gy = fingerY[ch];
+            bool  isEdge = pendingEdge[ch];
+            pendingEdge[ch] = false;
 
             if (mgr) {
                 InputEvent ie;
                 memset(&ie, 0, sizeof(ie));
-                ie.fingerId = chan;
+                ie.fingerId = ch;
                 ie.x = gx;
                 ie.y = gy;
 
@@ -163,94 +291,177 @@ void InputTranslatorWii::DispatchForSimTick() {
                 ie.actionFlags = INPUT_ACTION_DOWN;
                 mgr->DispatchEvent(&ie);
 
-                if (motionSinceDown[chan]) {
-                    ie.actionHash  = hashTouchMoveX[chan];
+                if (motionSinceDown[ch]) {
+                    ie.actionHash  = hashTouchMoveX[ch];
                     ie.actionFlags = INPUT_ACTION_MOVE;
                     mgr->DispatchEvent(&ie);
-                    ie.actionHash  = hashTouchMoveY[chan];
+                    ie.actionHash  = hashTouchMoveY[ch];
                     mgr->DispatchEvent(&ie);
                 }
 
-                ie.actionHash  = hashTouchDown[chan];
+                ie.actionHash  = hashTouchDown[ch];
                 ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
                 mgr->DispatchEvent(&ie);
             }
         } else if (phase == 0) {
-            float gx = channelX[chan];
-            float gy = channelY[chan];
+            // Held finger: emit move + held-down.
+            float gx = fingerX[ch];
+            float gy = fingerY[ch];
 
             if (mgr) {
                 InputEvent ie;
                 memset(&ie, 0, sizeof(ie));
-                ie.fingerId = chan;
+                ie.fingerId = ch;
                 ie.x = gx;
                 ie.y = gy;
 
-                if (motionSinceDown[chan]) {
-                    ie.actionHash  = hashTouchMoveX[chan];
+                // Press-vs-motion gate, same as the press frame.
+                if (motionSinceDown[ch]) {
+                    ie.actionHash  = hashTouchMoveX[ch];
                     ie.actionFlags = INPUT_ACTION_MOVE;
                     mgr->DispatchEvent(&ie);
 
-                    ie.actionHash  = hashTouchMoveY[chan];
+                    ie.actionHash  = hashTouchMoveY[ch];
                     mgr->DispatchEvent(&ie);
                 }
 
-                ie.actionHash  = hashTouchDown[chan];
+                ie.actionHash  = hashTouchDown[ch];
                 ie.actionFlags = INPUT_ACTION_DOWN;
                 mgr->DispatchEvent(&ie);
             }
         } else if (wasActive && !nowActive) {
-            float gx = channelX[chan];
-            float gy = channelY[chan];
+            // Released this tick: emit TouchUp once.
+            float gx = fingerX[ch];
+            float gy = fingerY[ch];
 
             if (mgr) {
                 InputEvent ie;
                 memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = hashTouchUp[chan];
+                ie.actionHash  = hashTouchUp[ch];
                 ie.actionFlags = INPUT_ACTION_UP;
-                ie.fingerId    = chan;
+                ie.fingerId    = ch;
                 ie.x = gx;
                 ie.y = gy;
                 mgr->DispatchEvent(&ie);
             }
         }
 
-        prevActive[chan] = nowActive;
+        prevActive[ch] = nowActive;
+    }
+
+    // --- Channels 8-15: pending-bool model (Role 2, no Mortar::Touch slot) ---
+    for (int ch = Mortar::Touch::MAX_SLOTS; ch < CHANNEL_COUNT; ++ch) {
+        if (pendingDown[ch]) {
+            bool isEdge = pendingEdge[ch];
+            pendingDown[ch] = false;
+            pendingEdge[ch] = false;
+
+            if (!mgr) continue;
+
+            InputEvent ie;
+            memset(&ie, 0, sizeof(ie));
+            ie.fingerId = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
+
+            ie.actionHash  = hashTouchScreen;
+            ie.actionFlags = INPUT_ACTION_DOWN;
+            mgr->DispatchEvent(&ie);
+
+            // Press-vs-motion gate (see channels 0-7).
+            if (motionSinceDown[ch]) {
+                ie.actionHash  = hashTouchMoveX[ch];
+                ie.actionFlags = INPUT_ACTION_MOVE;
+                mgr->DispatchEvent(&ie);
+                ie.actionHash  = hashTouchMoveY[ch];
+                mgr->DispatchEvent(&ie);
+            }
+
+            ie.actionHash  = hashTouchDown[ch];
+            ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
+            mgr->DispatchEvent(&ie);
+
+        } else if (pendingUp[ch]) {
+            pendingUp[ch] = false;
+            fingerActive[ch] = false;
+
+            if (mgr) {
+                InputEvent ie;
+                memset(&ie, 0, sizeof(ie));
+                ie.actionHash  = hashTouchUp[ch];
+                ie.actionFlags = INPUT_ACTION_UP;
+                ie.fingerId    = ch;
+                ie.x = fingerX[ch];
+                ie.y = fingerY[ch];
+                mgr->DispatchEvent(&ie);
+            }
+
+        } else if (fingerActive[ch]) {
+            // Held hover blade: emit one TouchMove (if moved) + held TouchDown.
+            if (!mgr) continue;
+
+            InputEvent ie;
+            memset(&ie, 0, sizeof(ie));
+            ie.fingerId = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
+
+            // Press-vs-motion gate (see channels 0-7).
+            if (motionSinceDown[ch]) {
+                ie.actionHash  = hashTouchMoveX[ch];
+                ie.actionFlags = INPUT_ACTION_MOVE;
+                mgr->DispatchEvent(&ie);
+
+                ie.actionHash  = hashTouchMoveY[ch];
+                mgr->DispatchEvent(&ie);
+            }
+
+            ie.actionHash  = hashTouchDown[ch];
+            ie.actionFlags = INPUT_ACTION_DOWN;
+            mgr->DispatchEvent(&ie);
+        }
     }
 }
 
-// Mirrors InputTranslatorSDL::ReleaseAllFingers -- synthesize a release for
-// every remote channel the engine currently sees as held, then flush the
-// Touch ring so DispatchForSimTick starts clean next tick.
+// Mirrors InputTranslatorSDL::ReleaseAllFingers -- synthesize TouchUp for
+// every held channel (both roles), flush the Touch ring, clear all pending
+// and per-remote edge state so the next DispatchForSimTick starts clean.
 void InputTranslatorWii::ReleaseAllFingers() {
-    for (int chan = 0; chan < MAX_REMOTES; ++chan) {
-        if (!channelActive[chan]) continue;
+    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
 
-        Mortar::Touch::GetInstance().OnReleased(chan + 1);
+    for (int ch = 0; ch < CHANNEL_COUNT; ++ch) {
+        if (!fingerActive[ch]) continue;
 
-        Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
+        if (ch < Mortar::Touch::MAX_SLOTS) {
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);
+        }
+
         if (mgr) {
             InputEvent ie;
             memset(&ie, 0, sizeof(ie));
-            ie.actionHash  = hashTouchUp[chan];
+            ie.actionHash  = hashTouchUp[ch];
             ie.actionFlags = INPUT_ACTION_UP;
-            ie.fingerId    = chan;
-            ie.x = channelX[chan];
-            ie.y = channelY[chan];
+            ie.fingerId    = ch;
+            ie.x = fingerX[ch];
+            ie.y = fingerY[ch];
             mgr->DispatchEvent(&ie);
         }
 
-        channelActive[chan] = false;
-        prevIRValid[chan]   = false;
-        prevActive[chan]    = false;
+        fingerActive[ch] = false;
+        prevActive[ch]   = false;
     }
 
-    Mortar::Touch::GetInstance().Update(0.0f);
-
-    for (int chan = 0; chan < MAX_REMOTES; ++chan) {
-        motionSinceDown[chan] = false;
-        pendingEdge[chan]     = false;
+    // Drain any ring-buffered events that accumulated before the release.
+    if (mgr) {
+        Mortar::Touch::GetInstance().Update(0.0f);
     }
+
+    memset(pendingDown, 0, sizeof(pendingDown));
+    memset(pendingUp, 0, sizeof(pendingUp));
+    memset(pendingEdge, 0, sizeof(pendingEdge));
+    memset(motionSinceDown, 0, sizeof(motionSinceDown));
+    memset(prevButtonDown, 0, sizeof(prevButtonDown));
+    memset(prevIRValid, 0, sizeof(prevIRValid));
 }
 
 #endif // FRUIT_PLATFORM_WII
