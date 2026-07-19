@@ -26,18 +26,25 @@
 #include "config.h"
 #include "render/gl_funcs.h"
 #include "render/Layout.h"
+#include "platform/wii/WiiVideo.h"
+
+#include <gccore.h>
 
 // Port specific: FPS value shown by DebugFps_Draw (fed by mainWii's loop if it
 // ever computes FPS; unused for the boot pass).
 static float s_currentFps = 0.0f;
 
-// Port specific: EFB dimensions for the boot pass. mainWii configures GX for a
-// 640x480 EFB (VIDEO_GetPreferredMode's fbWidth/efbHeight); the game renders in
-// its own 480x320 ortho via Renderer::SetupGameOrtho regardless, so the exact
-// viewport only needs to cover the EFB. A later pass can thread the real rmode
-// dimensions through if a non-4:3 mode is ever used.
-static const int kWiiEfbW = 640;
-static const int kWiiEfbH = 480;
+// Port specific: EFB dimensions, read from the real GXRModeObj chosen by
+// mainWii's VIDEO_GetPreferredMode (via fn::wii::VideoMode()) in Game::init
+// below. 640x480 are only the fallback/NTSC-progressive defaults -- PAL modes
+// report a taller EFB (e.g. 640x528, xfbHeight 574), and hardcoding 640x480
+// here previously clamped Renderer::InitGL's GX viewport/scissor to the top
+// 480 rows of a taller real EFB (letterbox bars + scissored-off bottom rows),
+// while mainWii's IR normalization already divided by the real (taller)
+// xfbHeight -- the mismatch caused a vertical pointer offset.
+static int s_efbW  = 640;
+static int s_efbH  = 480;
+static int s_xfbH  = 480;
 
 // Matches GameSDL.cpp's Game::init flow (FruitNinja::OnAppInitializing) minus
 // the SDL window/context handling -- GX has no window/context concept.
@@ -58,8 +65,22 @@ bool Game::init(void* win, void* gl) {
         return false;
     }
 
+    // Read the real EFB/XFB dimensions mainWii chose via
+    // VIDEO_GetPreferredMode, instead of assuming the NTSC-progressive
+    // 640x480 default -- PAL modes are taller (see s_efbW/s_efbH/s_xfbH
+    // comment above).
+    GXRModeObj* rm = (GXRModeObj*)fn::wii::VideoMode();
+    if (rm) {
+        s_efbW = rm->fbWidth;
+        s_efbH = rm->efbHeight;
+        s_xfbH = rm->xfbHeight;
+    }
+
     // One-shot GL(->GX) state init -- matches FruitNinja::InitGL @0x00181e54.
-    renderer.InitGL(kWiiEfbW, kWiiEfbH);
+    // Uses the real EFB dims so this doesn't re-clamp mainWii.cpp's own
+    // GX_SetViewport/GX_SetScissor(0,0,fbWidth,efbHeight) call to a smaller
+    // rect.
+    renderer.InitGL(s_efbW, s_efbH);
 
     GamePreInitialise();
     SetHardware("BADA", true);
@@ -68,7 +89,7 @@ bool Game::init(void* win, void* gl) {
     // Wii is a fixed 4:3 display: force the native 3:2 layout (widescreen is a
     // host/web-only enhancement) so the UI uses HalfWidth==240 positions and
     // Layout::ComputeViewport returns the FULL viewport -- the native 3:2 frame
-    // then stretches to fill the 4:3 EFB (no letterbox bars) rather than being
+    // then stretches to fill the real EFB (no letterbox bars) rather than being
     // aspect-fit. Overrides whatever the loaded save's widescreen pref was.
     Layout::SetWideLayout(false);
 
@@ -104,14 +125,15 @@ void Game::setCurrentFps(float fps) {
 
 // Port specific: one render pass (no simulation). Mirrors GameSDL.cpp's
 // renderFrame minus SDL drawable-size query + SDL_GL_SwapWindow: uses the
-// fixed EFB dims and DisplayManager::SwapBuffers (DisplayManagerWii.cpp) for
-// the GX_CopyDisp/VIDEO present.
+// real EFB dims read in Game::init (s_efbW/s_efbH) and
+// DisplayManager::SwapBuffers (DisplayManagerWii.cpp) for the GX_CopyDisp/
+// VIDEO present.
 void Game::renderFrame(float /*alpha*/, int /*steps*/) {
-    Layout::SetWindowAspect((float)kWiiEfbW, (float)kWiiEfbH);
+    Layout::SetWindowAspect((float)s_efbW, (float)s_efbH);
     int vpX, vpY, vpW, vpH;
-    Layout::ComputeViewport(kWiiEfbW, kWiiEfbH, &vpX, &vpY, &vpW, &vpH);
+    Layout::ComputeViewport(s_efbW, s_efbH, &vpX, &vpY, &vpW, &vpH);
     glViewport(vpX, vpY, vpW, vpH);
-    Layout::SetActiveViewport(vpX, vpY, vpW, vpH, kWiiEfbW, kWiiEfbH);
+    Layout::SetActiveViewport(vpX, vpY, vpW, vpH, s_efbW, s_efbH);
 
     Mortar::DisplayManager::GetInstance().BeginFrame();
 

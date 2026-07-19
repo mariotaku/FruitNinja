@@ -66,12 +66,15 @@ void InputTranslatorWii::Init() {
 // nx = ir.x/fbWidth, ny = ir.y/xfbHeight) -> centred game-ortho coords.
 // Delegates to Layout::TouchToGame, the single shared transform
 // InputTranslatorSDL::TransformTouchNormalized also uses (src/engine/render/
-// Layout.cpp) -- NOT SDL-specific, guarded only by __bada__. The Wii build
-// never calls Layout::SetActiveViewport (no pillarbox/letterbox concept on a
-// fixed TV framebuffer), so TouchToGame's "no viewport recorded yet" branch
-// is always taken: gx = nx*2*HalfWidth()-HalfWidth(), gy = 160-ny*320 --
-// exactly the original nx*480-240 / 160-ny*320 mapping when widescreen is
-// off (Wii never enables Layout::g_WideLayout).
+// Layout.cpp) -- NOT SDL-specific, guarded only by __bada__. GameWii.cpp DOES
+// call Layout::SetActiveViewport every frame (renderFrame), recording the
+// full real-framebuffer rect (Layout::SetWideLayout(false) makes
+// ComputeViewport return the whole EFB, no pillarbox/letterbox on Wii's fixed
+// TV framebuffer). TouchToGame therefore takes its "invert the recorded
+// viewport" branch, which for a full-window viewport reduces to the same
+// gx = nx*2*HalfWidth()-HalfWidth(), gy = 160-ny*320 mapping -- i.e. the
+// original nx*480-240 / 160-ny*320 mapping when widescreen is off (Wii never
+// enables Layout::g_WideLayout).
 void InputTranslatorWii::TransformIRNormalized(float nx, float ny, float& gx, float& gy) {
     Layout::TouchToGame(nx, ny, &gx, &gy);
 }
