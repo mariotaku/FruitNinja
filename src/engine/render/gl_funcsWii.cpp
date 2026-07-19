@@ -551,7 +551,13 @@ void glDisable(GLenum cap) {
             GX_SetZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
             break;
         case GL_SCISSOR_TEST:
-            // TODO(wii Pass 2): restore full-EFB scissor when disabled.
+            // GX scissor is always active (no test-enable toggle), so a prior
+            // glScissor rect would leak into every subsequent draw. Restore the
+            // full viewport rect here so glDisable(GL_SCISSOR_TEST) matches GL
+            // semantics -- without this the AboutScreen credits' clip rect
+            // stayed active and clipped the whole rest of the frame.
+            GX_SetScissor((u32)g_ShimViewport[0], (u32)g_ShimViewport[1],
+                          (u32)g_ShimViewport[2], (u32)g_ShimViewport[3]);
             break;
         default:
             break;
@@ -583,13 +589,16 @@ void glDepthMask(GLboolean flag) {
 }
 
 void glScissor(GLint x, GLint y, GLsizei w, GLsizei h) {
-    // GL scissor origin is bottom-left; GX is top-left. Flip needs xfb
-    // height (DisplayManagerWii owns it). For the boot pass, set the scissor
-    // in GL coords directly -- nothing draws yet so the exact rect is moot.
+    // GL scissor origin is bottom-left; GX_SetScissor is top-left. Flip Y
+    // using the viewport height (g_ShimViewport[3]): the rect's GX top edge =
+    // vpH - (glScissor y + h). Without this, worldspace-clipped content
+    // (e.g. AboutScreen credits via BakedStringBox's glScissor) is clipped in
+    // the wrong vertical band.
     if (w < 0) w = 0;
     if (h < 0) h = 0;
-    // TODO(wii Pass 2): GX_SetScissor(x, xfbHeight-y-h, w, h) with the Y flip.
-    GX_SetScissor((u32)x, (u32)y, (u32)w, (u32)h);
+    int flippedY = g_ShimViewport[3] - y - h;
+    if (flippedY < 0) flippedY = 0;
+    GX_SetScissor((u32)x, (u32)flippedY, (u32)w, (u32)h);
 }
 
 void glPixelStorei(GLenum /*pname*/, GLint /*param*/) {

@@ -642,7 +642,12 @@ void Renderer::SetClipRect(float left, float top, float right, float bottom) {
     const int vpW = vp[2], vpH = vp[3];
 
     int sx = (int)((left + orthoW * 0.5f) / orthoW * (float)vpW) + vpX;
-    int sy = (int)((bottom + orthoH * 0.5f) / orthoH * (float)vpH) + vpY;
+    // Y-FLIP: glScissor is bottom-left origin, GX_SetScissor is top-left. GL
+    // uses (bottom + H/2)/H * vpH (distance from viewport bottom to the rect's
+    // bottom edge); GX needs the distance from the viewport TOP to the rect's
+    // TOP edge = (H/2 - top)/H * vpH. (Was copied verbatim from RendererGL
+    // without the flip -> clipped the wrong vertical band, e.g. About screen.)
+    int sy = (int)((orthoH * 0.5f - top) / orthoH * (float)vpH) + vpY;
     int sw = (int)((right - left) / orthoW * (float)vpW);
     int sh = (int)((top - bottom) / orthoH * (float)vpH);
     if (sw < 0) sw = 0;
