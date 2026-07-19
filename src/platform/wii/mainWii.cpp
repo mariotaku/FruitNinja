@@ -112,7 +112,10 @@ int main(int argc, char* argv[]) {
 
     WPAD_Init();
     WPAD_SetDataFormat(WPAD_CHAN_ALL, WPAD_FMT_BTNS_ACC_IR);
-    WPAD_SetVRes(WPAD_CHAN_ALL, s_rmode->fbWidth, s_rmode->xfbHeight);
+    // WPAD_SetVRes is deliberately NOT called here: Wiimotes connect
+    // asynchronously over Bluetooth, so at init __wpads[chan] is still NULL and
+    // libogc silently drops the vres (unlike the data format, it is never
+    // re-applied on connect). It is re-issued every frame in the loop below.
 
     LOG_INFO("mainWii", "VIDEO/GX/WPAD/fat initialised (%dx%d)",
              (int)s_rmode->fbWidth, (int)s_rmode->efbHeight);
@@ -130,6 +133,17 @@ int main(int argc, char* argv[]) {
 
     while (g_game.running) {
         WPAD_ScanPads();
+
+        // Re-apply the IR virtual resolution every frame. libogc drops
+        // WPAD_SetVRes for any channel whose remote hasn't connected yet and
+        // never re-applies it on connect, so a one-shot init call is a no-op
+        // and each remote keeps the wiiuse default 560x420 -- which, divided by
+        // the 640x480 basis below, shrinks the pointer to the top-left 87.5% of
+        // the screen (offset) and drives IR toward the FOV edge (roll-skew).
+        // Re-issuing here (cheap, idempotent) makes ir.x/ir.y report in the
+        // (fbWidth, xfbHeight) space the normalization below assumes, the moment
+        // each remote is up. MUST match the nx/ny denominators used below.
+        WPAD_SetVRes(WPAD_CHAN_ALL, s_rmode->fbWidth, s_rmode->xfbHeight);
 
         // HOME on any remote quits (host-only affordance; no binary equiv).
         //
