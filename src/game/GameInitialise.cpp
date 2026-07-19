@@ -62,6 +62,38 @@
 #include "game/GameWork.h"
 #include "engine/render/FontCacheObjectTTF.h"  // GetAtlas()->InitialiseData for #282 lang scale
 
+#if defined(FRUIT_PLATFORM_WII)
+#include <ogc/conf.h>
+#endif
+
+// Port specific: Wii has no in-game language chooser (SettingsScreen hides
+// m_LangDrop there -- see SettingsScreen.cpp), so the console's own system
+// language (CONF_GetLanguage()) is the sole source of game_work.languageFlag
+// on this platform. Maps CONF_LANG_* to the same languageFlag values
+// StringTableUtilLoadStringsTable's kLanguageSuffix table indexes (see
+// src/engine/util/StringTable.cpp:71-94). Only the languages with shipped
+// .str data on Wii are mapped; anything else (CONF_LANG_DUTCH, which has no
+// English-mapped Wii system-menu language code either) falls back to
+// languageFlag 0 (english_us).
+static uint8_t GetWiiSystemLanguageFlag() {
+#if defined(FRUIT_PLATFORM_WII)
+    switch (CONF_GetLanguage()) {
+    case CONF_LANG_JAPANESE:      return 12; // japanese
+    case CONF_LANG_ENGLISH:       return 0;  // english_us
+    case CONF_LANG_GERMAN:        return 4;  // german
+    case CONF_LANG_FRENCH:        return 2;  // french
+    case CONF_LANG_SPANISH:       return 3;  // spanish
+    case CONF_LANG_ITALIAN:       return 5;  // italian
+    case CONF_LANG_SIMP_CHINESE:  return 13; // chinese
+    case CONF_LANG_TRAD_CHINESE:  return 14; // traditional chinese
+    case CONF_LANG_KOREAN:        return 11; // korean
+    default:                      return 0;  // english_us fallback (incl. CONF_LANG_DUTCH)
+    }
+#else
+    return 0;
+#endif
+}
+
 // Matches GamePreInitialise (0x10b588) — zero the Game singleton
 void GamePreInitialise() {
 
@@ -129,6 +161,12 @@ void GameInitialise(void* window, const char* config) {
     // Bonus::Parse) bake real strings instead of the "STRING NOT FOUND" fallback.
     // Needs FileSystem (added above) + game_work.languageFlag (set by main before
     // game.init()); both are ready here.
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: Wii has no in-game language chooser (hidden in Settings);
+    // the console system language (CONF_GetLanguage) is authoritative each boot,
+    // overriding any saved languageFlag. Unmapped Wii languages fall back to English.
+    game_work.languageFlag = GetWiiSystemLanguageFlag();
+#endif
     Localisation::Load(game->data_dir.c_str(), (int)game_work.languageFlag);
 
     // Step 8: MeshManager::Initialise(0x26C00) — mesh cache

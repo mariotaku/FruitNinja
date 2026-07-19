@@ -202,6 +202,15 @@ public:
     void SetAnimOpenForTest();
 
 private:
+    // Port specific: on FRUIT_PLATFORM_WII this member stays declared (kept
+    // NULL -- never constructed) but the row is compiled out everywhere else
+    // (Init()/Update()/Draw(), all guarded `#if !defined(FRUIT_PLATFORM_WII)`)
+    // -- Wii has no in-game language picker; game_work.languageFlag is set
+    // once at boot from the console's system language (see
+    // GameInitialise.cpp GetWiiSystemLanguageFlag()) and cannot be changed
+    // in-session. Motion Mode reflows up to take this row's place; see
+    // kMotionLabelY's FRUIT_PLATFORM_WII branch in the .cpp (same pattern
+    // m_NativeFpsCb/kFpsLabelY already use for the NATIVE FRAME RATE row).
     UiDropdown* m_LangDrop;
     UiCheckbox* m_MotionCb;
     UiSlider*   m_SensSlider;

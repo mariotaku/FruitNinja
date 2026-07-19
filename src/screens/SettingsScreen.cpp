@@ -241,6 +241,14 @@ static const int   kSensMin = 0, kSensMax = 100;
 // bar's TOP edge; kComboY (bar centre) and kLangLabelY (label, kept at the
 // bar centre +2 -- the same small downward-nudge convention the old layout
 // used so the label visually centres on the taller bar) follow from it.
+//
+// Port specific: on FRUIT_PLATFORM_WII the LANGUAGE row (dropdown bar +
+// Divider 1) is compiled out entirely -- see m_LangDrop's header comment --
+// so MOTION MODE becomes the first content row instead. kComboY/kLangLabelY/
+// kDividerY1 stay defined unconditionally (Draw()/Init() skip using them on
+// Wii, see their own `#if !defined(FRUIT_PLATFORM_WII)` guards below) so the
+// non-Wii formulas above are untouched; only kMotionLabelY's derivation
+// branches.
 // ---------------------------------------------------------------------------
 static const float kComboY      = kViewportHalfH - kContentTopPad - kComboScaleY * 0.5f;
 static const float kComboX      = kRightEdge - kComboScaleX * 0.5f;
@@ -250,12 +258,24 @@ static const float kLangLabelY  = kComboY + 2.0f;
 // widget-box edge, not the label baseline).
 static const float kDividerY1 = (kComboY - kComboScaleY * 0.5f) - kDividerPad - kDividerHeight * 0.5f;
 
+#if !defined(FRUIT_PLATFORM_WII)
 // Motion Mode row: TALLEST allocation -- label, then a clear gap, then a
 // 2-line description, then SENSITIVITY, all spaced kRowLineGap apart (the
 // same uniform line spacing used throughout this 4-line block; no divider
 // inside this block, per design). kMotionLabelY sits kDividerPad below
 // Divider 1's own bottom edge.
 static const float kMotionLabelY = (kDividerY1 - kDividerHeight * 0.5f) - kDividerPad;
+#else
+// Port specific: Wii reflow -- LANGUAGE is hidden, so MOTION MODE's label
+// becomes the first content row: its top edge sits kContentTopPad below the
+// viewport top, the SAME "content top" anchor kComboY's own derivation uses
+// for the dropdown bar's top edge (kViewportHalfH - kContentTopPad), just
+// with no widget-box half-height term to subtract since a label line has no
+// box of its own (mirrors how kWideScreenLabelY/kNativeFpsLabelY/
+// kFpsLabelY -- the other single-line label rows -- also anchor directly off
+// a preceding element's edge with no extra half-height term for themselves).
+static const float kMotionLabelY = kViewportHalfH - kContentTopPad;
+#endif
 static const float kMotionDescY0    = kMotionLabelY - kRowLineGap;
 static const float kMotionDescY1    = kMotionDescY0 - kMotionDescLineGap;
 
@@ -356,13 +376,16 @@ static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY    
 // EXCEEDS it by design (kContentH > kViewportH), which is the whole point of
 // this scrollable layout -- UpdateScroll()/Draw() clip + scroll it.
 //
-// kContentTop is the dropdown box's own TOP edge -- kViewportHalfH MINUS the
-// reserved top pad (matches kComboY + kComboScaleY*0.5f == kViewportHalfH -
-// kContentTopPad by construction, see kComboY above). Previously this was
-// written as plain kViewportHalfH (no pad subtracted), which silently
-// dropped kContentTopPad's worth of height from kContentH -- undercounting
-// m_MaxScroll by the same amount and leaving the bottom row permanently
-// unreachable at the bottom of the scroll range.
+// kContentTop is the FIRST content row's own TOP edge -- kViewportHalfH MINUS
+// the reserved top pad (matches kComboY + kComboScaleY*0.5f == kViewportHalfH
+// - kContentTopPad by construction, see kComboY above; on FRUIT_PLATFORM_WII
+// the first row is MOTION MODE's label instead, whose kMotionLabelY Wii
+// branch anchors to this SAME kViewportHalfH - kContentTopPad point -- see
+// its own comment -- so this formula needs no platform branch of its own).
+// Previously this was written as plain kViewportHalfH (no pad subtracted),
+// which silently dropped kContentTopPad's worth of height from kContentH --
+// undercounting m_MaxScroll by the same amount and leaving the bottom row
+// permanently unreachable at the bottom of the scroll range.
 //
 // kContentBottom is now measured off FPS COUNTER (the new bottom-most row)
 // instead of WIDESCREEN -- WIDESCREEN moved up into its own group after
@@ -640,11 +663,19 @@ void SettingsScreen::Init() {
 
     m_InitialLanguageFlag = game_work.languageFlag;
 
-    int langDefault = (int)(game_work.languageFlag < kLanguageCount ? game_work.languageFlag : 0);
-
     // Native language names need CJK/Hangul/Cyrillic glyphs the bitmap
-    // font_fruit_ninja.fnt doesn't ship; switch the dropdown to the TTF font.
+    // font_fruit_ninja.fnt doesn't ship; switch the label/dropdown font to
+    // the TTF font. Loaded unconditionally (even on FRUIT_PLATFORM_WII,
+    // where m_LangDrop itself is never built) -- MOTION MODE/SENSITIVITY/etc
+    // labels use m_LangFont too (see Draw()'s labelFont).
     m_LangFont = Mortar::Font::Create("fontstruetype/gangofchinese.ttf");
+
+#if !defined(FRUIT_PLATFORM_WII)
+    // Port specific: hidden entirely on FRUIT_PLATFORM_WII -- see m_LangDrop's
+    // header comment. game_work.languageFlag is set once at boot from the
+    // console system language (GameInitialise.cpp GetWiiSystemLanguageFlag())
+    // and cannot be changed in-session there, so there is no picker to show.
+    int langDefault = (int)(game_work.languageFlag < kLanguageCount ? game_work.languageFlag : 0);
 
     m_LangDrop = new UiDropdown(_Vector3<float>(kComboX, kComboY, 0.0f), m_LangItems, langDefault,
                                 kComboVisibleRows, kComboScaleX, kComboScaleY);
@@ -673,6 +704,9 @@ void SettingsScreen::Init() {
         Colour(0xEA, 0xD8, 0xB0, 0xFF));  // parchment/cream -- row text
     m_LangDrop->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnLangChanged));
     m_LangDrop->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
+#else
+    m_LangDrop = NULL;
+#endif
 
     // ---- checkboxes / slider, seeded from live globals ----
     m_MotionCb = new UiCheckbox(_Vector3<float>(kMotionCbX, kMotionCbY, 0.0f), kCheckboxSide, FN::g_MotionMode);
@@ -1482,8 +1516,14 @@ void SettingsScreen::Draw(float* hudScale) {
     // ---- kDividerY2), scrolled. On FRUIT_PLATFORM_WII, Divider 2 instead
     // ---- separates Widescreen/FPS Counter directly -- NATIVE FRAME RATE is
     // ---- compiled out (see kFpsLabelY's FRUIT_PLATFORM_WII branch above),
-    // ---- but Divider 2's own formula is unchanged/unconditional. ----
+    // ---- but Divider 2's own formula is unchanged/unconditional. Divider 1
+    // ---- (Language/Motion Mode) is hidden on FRUIT_PLATFORM_WII along with
+    // ---- the LANGUAGE row itself -- MOTION MODE is the first content row
+    // ---- there, with no divider above it (mirrors the plate's own top
+    // ---- padding, not a divider). ----
+#if !defined(FRUIT_PLATFORM_WII)
     DrawDivider(kDividerY1 + off);
+#endif
     DrawDivider(kDividerY1b + off);
     DrawDivider(kDividerY2 + off);
 
@@ -1494,7 +1534,11 @@ void SettingsScreen::Draw(float* hudScale) {
     // edges line up, and share the TTF font (m_LangFont) for mixed-case
     // rendering.
     Mortar::Font* labelFont = m_LangFont.Get();
+#if !defined(FRUIT_PLATFORM_WII)
+    // Port specific: hidden along with the dropdown itself -- see
+    // m_LangDrop's header comment.
     DrawSettingsLabel(labelFont, "LANGUAGE",     kLabelX, kLangLabelY   + 7.0f + off);
+#endif
     DrawSettingsLabel(labelFont, "MOTION MODE",  kLabelX, kMotionLabelY + 7.0f + off);
     DrawSettingsDesc(labelFont, "Slow move aims, fast flick cuts",
                       kLabelX, kMotionDescY0 + 7.0f + off);
