@@ -95,6 +95,17 @@ void LoadSettings() {
     if (fpsCap60) {
         FN::g_FpsCap60 = (strcmp(fpsCap60, "true") == 0);
     }
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: Wii has no capped-fps concept -- native/display refresh
+    // is always on, regardless of a stale/imported SettingsSave.xml carrying
+    // fpsCap60="true" from another platform. The SettingsScreen "NATIVE FRAME
+    // RATE" checkbox is hidden on this platform (see SettingsScreen.h
+    // m_NativeFpsCb), so there is no UI path back to true either -- this just
+    // guards against a foreign save file. The XML attribute/global itself
+    // stay intact (SaveSettings() still writes "false" here on Wii) so the
+    // persistence shape matches every other platform.
+    FN::g_FpsCap60 = false;
+#endif
 
     const char* ws = root.Attribute("widescreen");
     if (ws) {

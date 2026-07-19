@@ -303,6 +303,7 @@ static const float kWideScreenCbX    = kRightEdge - kCheckboxSide * 0.5f, kWideS
 // directly; now off WIDESCREEN since it sits between them.
 static const float kDividerY2 = (kWideScreenCbY - kCheckboxSide * 0.5f) - kRowLineGap - kDividerHeight * 0.5f;
 
+#if !defined(FRUIT_PLATFORM_WII)
 // NATIVE FRAME RATE: a FULL kRowLineGap below Divider 2's own bottom edge
 // (real widget-box edge, not a label baseline) -- wider than the usual
 // kDividerPad divider clearance, since this row and FPS COUNTER below it were
@@ -316,6 +317,13 @@ static const float kDividerY2 = (kWideScreenCbY - kCheckboxSide * 0.5f) - kRowLi
 // higher frame rate"), same kMotionDescY0/kMotionDescY1 spacing formula.
 // kNativeFpsCbY centres the checkbox on the label+2-line-desc sub-block, same
 // formula kMotionCbY uses for MOTION MODE's block.
+//
+// Port specific: on FRUIT_PLATFORM_WII this entire row is compiled out --
+// the Wii build has no "cap to 60fps" concept (FN::g_FpsCap60 is forced
+// false, see SettingsSave.cpp LoadSettings' Wii override); native/display
+// refresh is the only supported mode, so the toggle+its label/description
+// are hidden rather than shown-but-inert. FPS COUNTER below reflows up to
+// take this row's place (see kFpsLabelY's FRUIT_PLATFORM_WII branch).
 static const float kNativeFpsLabelY = (kDividerY2 - kDividerHeight * 0.5f) - kRowLineGap;
 static const float kNativeFpsDescY0 = kNativeFpsLabelY - kRowLineGap;
 static const float kNativeFpsDescY1 = kNativeFpsDescY0 - kMotionDescLineGap;
@@ -329,6 +337,16 @@ static const float kNativeFpsCbY = (kNativeFpsLabelY + kNativeFpsDescY1) * 0.5f;
 // sits between them). Now the BOTTOM-MOST row (WIDESCREEN moved above,
 // after MOTION MODE).
 static const float kFpsLabelY = (kNativeFpsCbY - kCheckboxSide * 0.5f) - kRowLineGap - kCheckboxSide * 0.5f;
+#else
+// Port specific: Wii reflow -- NATIVE FRAME RATE (and Divider 2's role as its
+// top clearance) is removed entirely (see above), so FPS COUNTER becomes the
+// row directly below Divider 2, using the SAME "full kRowLineGap below a
+// divider's own bottom edge" formula WIDESCREEN itself uses off Divider 1b
+// (see kWideScreenLabelY) -- not a hand-tuned offset, just the row-pitch
+// formula already established by every other single-line row in this file,
+// re-anchored one divider earlier.
+static const float kFpsLabelY = (kDividerY2 - kDividerHeight * 0.5f) - kRowLineGap;
+#endif
 static const float kFpsCbX    =   kRightEdge - kCheckboxSide * 0.5f, kFpsCbY     = kFpsLabelY;
 
 // Content height (dropdown box top .. FPS COUNTER checkbox box bottom, plus
@@ -663,16 +681,22 @@ void SettingsScreen::Init() {
     m_MotionCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnMotionToggle));
     m_MotionCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
+#if !defined(FRUIT_PLATFORM_WII)
     // Port specific: checkbox polarity is INVERTED vs FN::g_FpsCap60 -- checked
     // means "use native/display refresh" (the default, g_FpsCap60==false), so
     // seed with !g_FpsCap60. OnFpsCapToggle() applies the same inversion on
     // write. Persistence (SettingsSave) is untouched -- it still reads/writes
     // the global directly, never the checkbox's own polarity.
+    //
+    // Port specific: hidden on FRUIT_PLATFORM_WII -- native/display refresh is
+    // forced always-on there (see SettingsSave.cpp LoadSettings' Wii override
+    // of FN::g_FpsCap60), so there is no user-facing choice to expose.
     m_NativeFpsCb = new UiCheckbox(_Vector3<float>(kNativeFpsCbX, kNativeFpsCbY, 0.0f), kCheckboxSide, !FN::g_FpsCap60);
     m_NativeFpsCb->SetBoxTexture(m_TexBox);
     m_NativeFpsCb->SetCheckGlyph(m_TexCheck);
     m_NativeFpsCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnFpsCapToggle));
     m_NativeFpsCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
+#endif
 
     m_FpsCb = new UiCheckbox(_Vector3<float>(kFpsCbX, kFpsCbY, 0.0f), kCheckboxSide, FN::g_ShowFps);
     m_FpsCb->SetBoxTexture(m_TexBox);
@@ -761,7 +785,9 @@ void SettingsScreen::Init() {
     m_MotionCbBaseY    = kMotionCbY;
     m_SensBaseY        = kSensY;
     m_FpsCbBaseY       = kFpsCbY;
+#if !defined(FRUIT_PLATFORM_WII)
     m_NativeFpsCbBaseY = kNativeFpsCbY;
+#endif
     m_WideScreenBaseY  = kWideScreenCbY;
 
     // ---- scroll extents ----
@@ -1453,7 +1479,10 @@ void SettingsScreen::Draw(float* hudScale) {
 
     // ---- row-group dividers: Language/Motion Mode, Motion Mode/Widescreen,
     // ---- and Widescreen/Native Frame Rate (see kDividerY1/kDividerY1b/
-    // ---- kDividerY2), scrolled ----
+    // ---- kDividerY2), scrolled. On FRUIT_PLATFORM_WII, Divider 2 instead
+    // ---- separates Widescreen/FPS Counter directly -- NATIVE FRAME RATE is
+    // ---- compiled out (see kFpsLabelY's FRUIT_PLATFORM_WII branch above),
+    // ---- but Divider 2's own formula is unchanged/unconditional. ----
     DrawDivider(kDividerY1 + off);
     DrawDivider(kDividerY1b + off);
     DrawDivider(kDividerY2 + off);
@@ -1473,11 +1502,17 @@ void SettingsScreen::Draw(float* hudScale) {
                       kLabelX, kMotionDescY1 + 7.0f + off);
     DrawSettingsLabel(labelFont, "SENSITIVITY", kSensLabelX, kSensLabelY + 7.0f + off);
     DrawSettingsLabel(labelFont, "WIDESCREEN", kLabelX, kWideScreenLabelY + 7.0f + off);
+#if !defined(FRUIT_PLATFORM_WII)
+    // Port specific: NATIVE FRAME RATE label+description hidden on
+    // FRUIT_PLATFORM_WII along with the checkbox itself (see Init()'s
+    // m_NativeFpsCb creation guard) -- native/display refresh is forced
+    // always-on there, so there is nothing to label.
     DrawSettingsLabel(labelFont, "NATIVE FRAME RATE", kLabelX, kNativeFpsLabelY + 7.0f + off);
     DrawSettingsDesc(labelFont, "Smoother graphics for screens",
                       kLabelX, kNativeFpsDescY0 + 7.0f + off);
     DrawSettingsDesc(labelFont, "with higher frame rate",
                       kLabelX, kNativeFpsDescY1 + 7.0f + off);
+#endif
     DrawSettingsLabel(labelFont, "FPS COUNTER", kLabelX, kFpsLabelY    + 7.0f + off);
 
     // ---- the four plain widgets, still inside the content scissor.
@@ -1486,7 +1521,9 @@ void SettingsScreen::Draw(float* hudScale) {
     if (m_MotionCb)   m_MotionCb->Draw(hudScale);
     if (m_SensSlider) m_SensSlider->Draw(hudScale);
     if (m_WideScreenCb) m_WideScreenCb->Draw(hudScale);
+#if !defined(FRUIT_PLATFORM_WII)
     if (m_NativeFpsCb) m_NativeFpsCb->Draw(hudScale);
+#endif
     if (m_FpsCb)      m_FpsCb->Draw(hudScale);
     // Bar draws inside the content scissor -- whether open or closed -- so
     // it clips/fades with the rest of the scrolling content, same as any

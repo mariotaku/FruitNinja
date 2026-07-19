@@ -211,6 +211,15 @@ private:
     // unchecked = cap to 60fps. Inverted vs the
     // underlying global: FN::g_FpsCap60 stays "true == cap to 60"; only the
     // UI checkbox polarity flips (see OnFpsCapToggle()/Init()'s seed line).
+    //
+    // Port specific: on FRUIT_PLATFORM_WII this member stays declared (kept
+    // NULL -- never constructed) but the row is compiled out everywhere else
+    // (Init()/Update()/Draw()/the label+description, all guarded
+    // `#if !defined(FRUIT_PLATFORM_WII)`) -- the Wii build has no capped-fps
+    // concept, FN::g_FpsCap60 is forced false unconditionally (see
+    // SettingsSave.cpp LoadSettings), so there is no user-facing choice to
+    // show. FPS COUNTER reflows up to take this row's place; see
+    // kFpsLabelY's FRUIT_PLATFORM_WII branch in the .cpp.
     UiCheckbox* m_NativeFpsCb;
     // Port specific: "WIDESCREEN" -- its own row-group right after MOTION
     // MODE (divider before it; see kDividerY1b / kWideScreenLabelY layout
