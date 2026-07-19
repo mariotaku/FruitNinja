@@ -913,10 +913,26 @@ void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
     // partial-tile edges still read correct neighbor texels), then re-tile
     // ONLY the 4x4 GX tiles the sub-rect overlaps -- for the 512x512 atlas a
     // single small glyph would otherwise re-swizzle the entire page.
-    if (!g_BoundTexture || g_BoundTexture >= (unsigned)kMaxTextures) return;
+    if (!g_BoundTexture || g_BoundTexture >= (unsigned)kMaxTextures) {
+        g_LastTexSubImageOk = false;
+        LOG_ERROR("gl_funcsWii", "glTexSubImage2D: no texture bound (id=%u)", g_BoundTexture);
+        return;
+    }
     ShimTexture& t = g_Textures[g_BoundTexture];
-    if (!t.linear || !t.texels || !pixels || w <= 0 || h <= 0) return;
-    if (xoff < 0 || yoff < 0 || xoff + w > t.width || yoff + h > t.height) return;
+    if (!t.linear || !t.texels || !pixels || w <= 0 || h <= 0) {
+        g_LastTexSubImageOk = false;
+        LOG_ERROR("gl_funcsWii", "glTexSubImage2D: tex %u not ready for sub-upload "
+                  "(linear=%p texels=%p pixels=%p w=%d h=%d)",
+                  g_BoundTexture, (void*)t.linear, t.texels, pixels, (int)w, (int)h);
+        return;
+    }
+    if (xoff < 0 || yoff < 0 || xoff + w > t.width || yoff + h > t.height) {
+        g_LastTexSubImageOk = false;
+        LOG_ERROR("gl_funcsWii", "glTexSubImage2D: sub-rect (%d,%d %dx%d) out of range "
+                  "for tex %u (%dx%d)", (int)xoff, (int)yoff, (int)w, (int)h,
+                  g_BoundTexture, t.width, t.height);
+        return;
+    }
 
     // Tile-aligned bounds of the touched region: round the sub-rect out to
     // the enclosing 4x4 tile grid, clamped to the texture extents.
@@ -931,7 +947,12 @@ void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
         // LA8 atlas: incoming sub-rect is already 2 B/texel [L][A] (same
         // layout as t.linear) -- blit rows at the 2-byte stride, re-tile only
         // the touched tiles with TileRegion(TILE_FMT_IA8).
-        if (format != GL_LUMINANCE_ALPHA || type != GL_UNSIGNED_BYTE) return;
+        if (format != GL_LUMINANCE_ALPHA || type != GL_UNSIGNED_BYTE) {
+            g_LastTexSubImageOk = false;
+            LOG_ERROR("gl_funcsWii", "glTexSubImage2D: format/type mismatch for LA8 tex %u "
+                      "(format=0x%x type=0x%x)", g_BoundTexture, format, type);
+            return;
+        }
         const unsigned char* src8 = (const unsigned char*)pixels;
         for (int row = 0; row < h; ++row) {
             unsigned char* dst = t.linear + (((size_t)(yoff + row) * t.width + xoff) * 2);
@@ -944,11 +965,17 @@ void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
         u32 bufSize = GX_GetTexBufferSize(t.width, t.height, GX_TF_IA8, GX_FALSE, 0);
         DCFlushRange(t.texels, bufSize);
         GX_InvalidateTexAll();
+        g_LastTexSubImageOk = true;
         return;
     }
 
     unsigned char* sub = ExpandToRGBA8(w, h, format, type, pixels);
-    if (!sub) return;
+    if (!sub) {
+        g_LastTexSubImageOk = false;
+        LOG_ERROR("gl_funcsWii", "glTexSubImage2D: ExpandToRGBA8 failed for tex %u "
+                  "(format=0x%x type=0x%x)", g_BoundTexture, format, type);
+        return;
+    }
     for (int row = 0; row < h; ++row) {
         unsigned char* dst = t.linear + (((size_t)(yoff + row) * t.width + xoff) * 4);
         const unsigned char* src = sub + ((size_t)row * w * 4);
@@ -961,6 +988,7 @@ void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
     u32 bufSize = GX_GetTexBufferSize(t.width, t.height, GX_TF_RGBA8, GX_FALSE, 0);
     DCFlushRange(t.texels, bufSize);
     GX_InvalidateTexAll();
+    g_LastTexSubImageOk = true;
 }
 
 void glCompressedTexImage2D(GLenum /*target*/, GLint /*level*/, GLenum /*fmt*/,
@@ -1225,5 +1253,11 @@ void glDeleteShader(GLuint) {}
 void glDeleteProgram(GLuint) {}
 
 } // extern "C"
+
+// C++ linkage (matches gl_funcsWii.h) -- kept OUTSIDE the GL-shaped extern "C"
+// block above so its declaration and definition agree. Bug #47 accessor.
+bool Wii_LastTexSubImageOk() {
+    return g_LastTexSubImageOk;
+}
 
 #endif // FRUIT_PLATFORM_WII

@@ -131,7 +131,14 @@ public:
     // pageTextureID and page). Retained for old single-entry callers/tests.
     bool PackGlyph(int width, int height, const uint8_t* bitmap, GlyphAtlasEntry* out);
 
-    // Upload dirty regions on ALL pages to their GL textures.
+    // Upload dirty regions on ALL pages to their GL textures. Idempotent /
+    // safe to call every frame: a page's m_Dirty is cleared ONLY once its
+    // sub-upload is confirmed to have reached the GPU. On Wii, a bailed
+    // glTexSubImage2D (invalid rect, texture not ready, etc. -- see
+    // gl_funcsWii.cpp) or a host malloc failure leaves m_Dirty set so the
+    // page's pending glyphs are retried on the next call rather than being
+    // silently dropped forever (bug #47: glyphs first rasterized mid-draw,
+    // e.g. About screen title/CREDITS, could go permanently invisible).
     void BuildPendingTextures();
 
     // Number of allocated atlas pages.

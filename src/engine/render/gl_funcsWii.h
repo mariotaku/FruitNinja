@@ -81,6 +81,19 @@ void Wii_UploadTiledGX(unsigned int glTexId, const void* tiled,
                        unsigned int tiledSize, int w, int h,
                        unsigned int gxFmt);
 
+// Port specific: glTexSubImage2D is declared void (shared GL-shape signature
+// in gl_compat.h, same as host/web) so it cannot report failure through its
+// return value. This accessor exposes the outcome of the MOST RECENT
+// glTexSubImage2D call so a caller (FontInterface::BuildPendingTextures) can
+// tell a real upload from a silent bail (invalid texture id, null pixels/
+// texels, out-of-range sub-rect, wrong format/type) and avoid clearing its
+// dirty flag on failure -- see gl_funcsWii.cpp's glTexSubImage2D for every
+// bail site this reflects. Bug #47: BuildPendingTextures previously cleared
+// m_Dirty unconditionally, so a bailed glyph upload was silently dropped
+// forever (never retried) -- the glyph stayed transparent for the game's
+// lifetime.
+bool Wii_LastTexSubImageOk();
+
 #endif // FRUIT_PLATFORM_WII
 
 #endif // MORTAR_GL_FUNCS_WII_H

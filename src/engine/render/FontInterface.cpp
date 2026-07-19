@@ -11,6 +11,11 @@
 // the real GXTexObj type visible). Must match gl_funcsWii.h's plain C++
 // linkage exactly (no extern "C" -- the shim's seam accessors aren't C).
 extern void Wii_KeepTextureLinear(unsigned int glTexId);
+// Reports whether the MOST RECENT glTexSubImage2D call actually uploaded
+// (vs. silently bailing -- invalid rect, null texels, OOM). See
+// gl_funcsWii.h's doc. Bug #47: BuildPendingTextures must not clear
+// m_Dirty when this comes back false, or the failed glyph is lost forever.
+extern bool Wii_LastTexSubImageOk();
 #endif
 
 namespace Mortar {
@@ -212,6 +217,12 @@ void FontInterface::BuildPendingTextures() {
 
         const int dw = page->m_DirtyX1 - page->m_DirtyX0;
         const int dh = page->m_DirtyY1 - page->m_DirtyY0;
+        // Bug #47: only clear m_Dirty once the upload is CONFIRMED to have
+        // reached the GPU. A malloc failure (tmp == NULL) or -- on Wii -- a
+        // silently-bailed glTexSubImage2D (see gl_funcsWii.cpp) must leave
+        // m_Dirty set so this page's pending glyphs retry next frame instead
+        // of staying transparent forever (previously cleared unconditionally).
+        bool uploaded = false;
         if (dw > 0 && dh > 0) {
             uint8_t* tmp = (uint8_t*)malloc((size_t)(dw * dh * kAtlasBytesPerTexel));
             if (tmp) {
@@ -226,10 +237,28 @@ void FontInterface::BuildPendingTextures() {
                                 page->m_DirtyX0, page->m_DirtyY0, dw, dh,
                                 kAtlasGLFormat, GL_UNSIGNED_BYTE, tmp);
                 free(tmp);
+#ifdef FRUIT_PLATFORM_WII
+                uploaded = Wii_LastTexSubImageOk();
+                if (!uploaded) {
+                    LOG_ERROR("FontInterface", "BuildPendingTextures: page tex %u sub-upload "
+                              "(%d,%d %dx%d) failed -- retrying next frame",
+                              page->m_TextureID, page->m_DirtyX0, page->m_DirtyY0, dw, dh);
+                }
+#else
+                uploaded = true;
+#endif
+            } else {
+                LOG_ERROR("FontInterface", "BuildPendingTextures: malloc(%d bytes) failed for "
+                          "page tex %u -- retrying next frame",
+                          dw * dh * kAtlasBytesPerTexel, page->m_TextureID);
             }
+        } else {
+            // Degenerate dirty rect (shouldn't happen -- MarkPageDirty guards
+            // w/h <= 0) -- treat as nothing-to-do rather than a stuck retry.
+            uploaded = true;
         }
         glBindTexture(GL_TEXTURE_2D, 0);
-        page->m_Dirty = false;
+        if (uploaded) page->m_Dirty = false;
     }
 }
 
