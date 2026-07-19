@@ -26,6 +26,17 @@ void  FlipXFB();
 // flush, and interlace handling.
 void* VideoMode();
 
+// Port specific: boot-splash -> game handoff flag (see SplashBootScreen.h).
+// StartupEffects.cpp's DrawStartFade() calls NotifyGameSplashDrew() the
+// first time it actually draws the logo (game task fully loaded and
+// GameDraw reaching the splash-overlay tail). DisplayManagerWii::SwapBuffers
+// polls GameSplashDrew() every frame: while false it keeps redrawing the
+// embedded boot-splash quad over whatever the game drew (bridging the
+// Splash-task -> Game-task load-stall gap that would otherwise present a
+// black EFB); once true it stops and releases the transient splash buffer.
+void NotifyGameSplashDrew();
+bool GameSplashDrew();
+
 } // namespace wii
 } // namespace fn
 

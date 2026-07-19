@@ -23,6 +23,7 @@
 #include "platform/FixedStepDriver.h"
 #include "platform/wii/WiiVideo.h"
 #include "platform/wii/InputTranslatorWii.h"
+#include "platform/wii/SplashBootScreen.h"
 #include "debug/Logger.h"
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,7 @@ void*       s_xfb[2]     = { 0, 0 };
 int         s_xfbActive  = 0;
 void*       s_gxFifo     = 0;
 const u32   kFifoSize    = 256 * 1024;
+bool        s_gameSplashDrew = false;
 }
 
 namespace fn {
@@ -42,6 +44,9 @@ namespace wii {
 void* CurrentXFB() { return s_xfb[s_xfbActive]; }
 void  FlipXFB()    { s_xfbActive ^= 1; }
 void* VideoMode()  { return s_rmode; }
+
+void NotifyGameSplashDrew() { s_gameSplashDrew = true; }
+bool GameSplashDrew()       { return s_gameSplashDrew; }
 
 } // namespace wii
 } // namespace fn
@@ -104,6 +109,23 @@ int main(int argc, char* argv[]) {
 
     WiiVideoInit();
     WiiGxInit();
+
+    // Port specific: draw the HB logo boot splash's frame-0 appearance right
+    // now, straight to the XFB via GX_CopyDisp, so there is no black screen
+    // during SD mount / asset staging. GX is fully initialised at this point
+    // (WiiGxInit already ran a GX_CopyDisp). PrepareSplashBoot() retains the
+    // inflated texture rather than freeing it: DisplayManagerWii::SwapBuffers
+    // keeps redrawing this same quad every frame (bridging the Splash-task ->
+    // Game-task load-stall gap) until the game's own first real
+    // DrawStartFade() call reports in via NotifyGameSplashDrew(), at which
+    // point it releases the transient buffer. See SplashBootScreen.h.
+    fn::wii::PrepareSplashBoot();
+    fn::wii::DrawSplashBootQuad();
+    GX_CopyDisp(s_xfb[s_xfbActive], GX_TRUE);
+    GX_DrawDone();
+    VIDEO_SetNextFramebuffer(s_xfb[s_xfbActive]);
+    VIDEO_Flush();
+    VIDEO_WaitVSync();
 
     // libfat: mounts sd:/ and usb:/ so FileSystemWii can read assets.
     if (!fatInitDefault()) {
@@ -193,6 +215,7 @@ int main(int argc, char* argv[]) {
         lastTicks = nowTicks;
 
         int steps = g_driver.advance(elapsedMs);
+
         for (int i = 0; i < steps && g_game.running; ++i) {
             inputTranslator.DispatchForSimTick();
             g_game.stepUpdate();

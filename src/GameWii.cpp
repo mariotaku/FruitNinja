@@ -93,6 +93,21 @@ bool Game::init(void* win, void* gl) {
     // aspect-fit. Overrides whatever the loaded save's widescreen pref was.
     Layout::SetWideLayout(false);
 
+    // Port specific: pre-load pSplashTex here (same call GameInit.cpp's
+    // GameUpdate makes lazily on first splashFadeTimer>0 tick) so it's already
+    // resident before the main loop's first renderFrame. mainWii's boot splash
+    // (SplashBootScreen) is still the visible XFB at this point, and the SD
+    // texture load takes long enough that frame 1's DrawStartFade would
+    // otherwise draw nothing -- DisplayManagerWii::SwapBuffers then overwrites
+    // that same visible XFB with the black clear, producing a one-frame flash
+    // between the boot splash and the logo fade-in. Loading now hides the
+    // latency behind the still-displayed boot splash instead. Does not change
+    // splash semantics: same texture, same DrawStartFade draw, same release at
+    // splashFadeTimer<=0 (GameInit.cpp).
+    if (!pSplashTex) {
+        pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
+    }
+
     game_work.taskStateIndex = 0;
     running = true;
     return true;

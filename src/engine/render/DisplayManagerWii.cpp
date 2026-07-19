@@ -11,6 +11,7 @@
 
 #include "render/DisplayManager.h"
 #include "platform/wii/WiiVideo.h"
+#include "platform/wii/SplashBootScreen.h"
 
 #include <gccore.h>
 
@@ -30,6 +31,28 @@ void DisplayManager::SwapBuffers(void* /*window*/) {
     // glDepthMask(GL_TRUE) before glClear. GX_ALWAYS/test-irrelevant since this
     // is only setting the write-enable for the copy-clear.
     GX_SetZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
+
+    // Port specific: boot-splash -> game handoff bridge (see
+    // SplashBootScreen.h and the #48 fix note). Between the boot-time splash
+    // draw (mainWii.cpp) and the game's own first real DrawStartFade() call,
+    // the Splash->Game task transition + frontend load stall would otherwise
+    // present several frames of black-cleared EFB. Until DrawStartFade
+    // reports in via NotifyGameSplashDrew(), redraw the same embedded logo
+    // quad here, AFTER the game's own (currently empty) draw and BEFORE the
+    // copy below, so the presented frame is the logo instead of black.
+    // DrawSplashBootQuad() is fully self-contained (resets viewport/
+    // projection/vtxdesc/TEV/zmode/cull), so clobbering whatever GX state
+    // the game's draw left behind is fine -- next frame's BeginFrame resets
+    // it again. The frame DrawStartFade first actually draws, the flag is
+    // already set (DrawStartFade runs earlier in GameDraw, before
+    // SwapBuffers), so this skips the overlay and releases the transient
+    // buffer -- no double-draw, no pop, since both draw the identical quad.
+    if (!fn::wii::GameSplashDrew()) {
+        fn::wii::DrawSplashBootQuad();
+    } else {
+        fn::wii::ReleaseSplashBoot();
+    }
+
     // GX_CopyDisp clears (via GX_SetCopyClear, set in glClearColor) and copies
     // the EFB to the external framebuffer for scan-out. On the boot pass no
     // geometry was drawn, so this presents the clear colour -- exactly the

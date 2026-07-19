@@ -15,6 +15,9 @@
 #include <cstdint>
 #include "game/GameWork.h"
 #include "render/Layout.h"
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/WiiVideo.h"
+#endif
 
 namespace FN {
 // @ 0x0016bbf0
@@ -117,6 +120,15 @@ void DrawStartFade() {
     Mortar::Mesh::DrawQuadUnCached(col, 0.03125f, 0.96875f, 0.1875f, 0.8125f, NULL);
 
     game->pSplashTex->UnSet();
+
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: hand off from the embedded boot-splash bridge (see
+    // SplashBootScreen.h) to the game's own draw now that DrawStartFade has
+    // actually drawn its first real frame -- pixel-identical to the bridge's
+    // quad, so DisplayManagerWii::SwapBuffers can stop overlaying it and
+    // release the transient buffer with no visible pop.
+    fn::wii::NotifyGameSplashDrew();
+#endif
 }
 
 // v1.6.1 FN::PrepareForLevelStart @ 0x001cb3e8
