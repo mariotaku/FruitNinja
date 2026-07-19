@@ -13,17 +13,35 @@ this before fruit-ninja links (host: FN_DATA_DIR_PATH points straight at the
 staging dir via GameSDL.cpp's existing SetDataDir call, no runtime code
 changes; web: additionally preloaded into MEMFS via --preload-file).
 
-WII MODE (--wii): the Wii target ships UNCOMPRESSED assets -- raw Tex1
-textures (no WebP transcode; GX has no software WebP decoder wired up) and raw
-.wav.pcm audio (no Ogg/Vorbis; ASND/AESND plays raw PCM). --wii short-circuits
-straight to a verbatim recursive copy of FruitNinjaBada/Data with NO Pillow,
-NO ffmpeg, NO fontTools, and NO node/svg-to-webp dependency (the CMake Wii
-branch does not even resolve NODE_EXECUTABLE -- see the FRUIT_PLATFORM_WII
-guard in the root CMakeLists.txt). Widget art
-(assets/ui-widgets/generated/*.tex) is merged in only if already present from
-a prior non-Wii configure; it is never generated under --wii, so Wii
-SettingsScreen widgets fall back to placeholder art until a real GX rasterizer
-path exists (same non-fatal contract as the host/web "node not found" case).
+WII MODE (--wii): the Wii target ships pre-tiled native GX textures and raw
+.wav.pcm audio (no Ogg/Vorbis; ASND/AESND plays raw PCM). The whole Wii
+staging path is pure Python stdlib (struct/os/shutil) -- NO ffmpeg, NO
+fontTools, NO node/svg-to-webp dependency and NO Pillow -- because the msys2
+Python the Wii build uses has no pip/Pillow (the CMake Wii branch does not
+even resolve NODE_EXECUTABLE -- see the FRUIT_PLATFORM_WII guard in the root
+CMakeLists.txt).
+
+  - GAME TEXTURES: every transcodable Tex1 *.tex is decoded to RGBA8888
+    (tools/lib/tex_decoder.py) and re-encoded as a pre-tiled "GXT1" container
+    (tools/lib/gx_encoder.py encode_gxtx; reader ReadGxtx in
+    src/engine/asset/TextureFileFormat.cpp, uploader Wii_UploadTiledGX in
+    src/engine/render/gl_funcsWii.cpp) under the same relative path/basename.
+    The GX format PRESERVES the source's bit-depth so MEM1 isn't bloated by
+    expanding everything to 32bpp at load time: RGBA8888 -> GX_TF_RGBA8
+    (lossless), RGB565/RGB888 -> GX_TF_RGB565, RGBA5551/RGBA4444 ->
+    GX_TF_RGB5A3 (see gx_encoder.TEX1_TO_GX). Non-transcodable .tex
+    (Tex2/Tex3/DDS/PVRTC/unknown) copy verbatim as before.
+  - WIDGET ART: the Wii build compiles ReadWebP out (no libwebp), so the
+    WebP .tex files are ignored; instead each BASE widget's raw-RGBA sidecar
+    (assets/ui-widgets/generated/<name>.rgba: "RRAW" magic + u16le
+    width/height + w*h*4 RGBA8 bytes, little-endian -- emitted next to the
+    WebP by svg-to-webp.mjs during a prior non-Wii configure; never generated
+    under --wii) is re-encoded as a GXT1 (always GX_TF_RGBA8 -- no Tex1
+    source to preserve a bit-depth from), staged under the same <name>.tex
+    basename. hd_* art is skipped (Wii HD is disabled). If generated/ has no
+    .rgba sidecars (clean checkout, no prior host/web node run yet), Wii
+    SettingsScreen widgets fall back to placeholder art (same non-fatal
+    contract as the host/web "node not found" case).
 
 ALWAYS (both host and web):
 
@@ -148,6 +166,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+import gx_encoder
 import tex_decoder
 
 HEADER_FMT = "<5i"
@@ -423,11 +442,77 @@ def transcode_tex_file(src_path, dst_tex, stats):
     stats["tex_webp_bytes"] += os.path.getsize(dst_tex)
 
 
-def merge_widget_textures(repo_root, dst_root, stats):
+# GXT1 encode (tiling + container) lives in tools/lib/gx_encoder.py, shared
+# with its --selftest (registered as the `gx_encoder` ctest case).
+
+
+def transcode_tex_file_wii(src_path, dst_tex, stats):
+    """--wii: decode a transcodable Tex1 .tex to RGBA8888 and re-encode as a
+    pre-tiled GXT1, preserving the source bit-depth via gx_encoder.TEX1_TO_GX
+    (RGBA8888->GX_TF_RGBA8, RGB565/RGB888->GX_TF_RGB565, RGBA5551/RGBA4444->
+    GX_TF_RGB5A3). Non-transcodable .tex copy verbatim. Incremental: an
+    up-to-date (mtime) staged file whose magic confirms a previous GXT1
+    encode is skipped; mtime alone can't prove it -- an earlier verbatim
+    copy2() preserved the source's mtime while leaving raw Tex1 bytes."""
+    erase_boxes = TEX_ERASE_BOXES.get(os.path.basename(src_path).lower())
+
+    if erase_boxes is None and os.path.isfile(dst_tex) and \
+            os.path.getmtime(dst_tex) >= os.path.getmtime(src_path):
+        with open(dst_tex, "rb") as f:
+            head = f.read(9)
+        if len(head) == 9 and head[:4] == b"GXT1":
+            gx = head[8]
+            stats["gx_counts"][gx] = stats["gx_counts"].get(gx, 0) + 1
+            stats["tex_skipped"] += 1
+            return
+        # Staged bytes aren't GXT1: either a verbatim copy of a
+        # non-transcodable source (re-verified below) or a stale pre-GXT1
+        # verbatim Tex1 from an older --wii run -- re-derive from source.
+
+    with open(src_path, "rb") as f:
+        raw = f.read()
+
+    parsed = tex_decoder.parse_tex1(raw)
+    if parsed is None:
+        # Not a transcodable Tex1 (Tex2/Tex3/DDS/PVRTC/unknown) -- copy
+        # verbatim as before (these don't load on Wii anyway).
+        copy_if_different(src_path, dst_tex)
+        stats["tex_verbatim"] += 1
+        return
+
+    fmt, w, h, body = parsed
+    gx = gx_encoder.TEX1_TO_GX[fmt]  # keys == TEX_KNOWN_FORMATS by contract
+    rgba = tex_decoder.unpack_tex1_to_rgba(fmt, w, h, body)
+    if erase_boxes:
+        # Same "Lite" branding erase as the host/web WebP path (see
+        # TEX_ERASE_BOXES) -- keeps the staged trees consistent even though
+        # the only erase target is hd_* art, which Wii doesn't load.
+        rgba = bytearray(rgba)
+        erase_boxes_rgba(rgba, w, h, erase_boxes)
+    blob = gx_encoder.encode_gxtx(rgba, w, h, gx)
+    tmp = dst_tex + ".tmp.gxtx"
+    with open(tmp, "wb") as f:
+        f.write(blob)
+    os.replace(tmp, dst_tex)
+    stats["gx_counts"][gx] = stats["gx_counts"].get(gx, 0) + 1
+    stats["tex_transcoded"] += 1
+
+
+def merge_widget_textures(repo_root, dst_root, stats, is_wii=False):
     """Copy pre-generated assets/ui-widgets/generated/*.tex (already WebP,
     lossless -- see svg-to-webp.mjs) into <dst_root>/textures/, overwriting.
     Non-fatal if the dir is missing/empty (widgets fall back to placeholder
-    art)."""
+    art).
+
+    Wii (is_wii=True): the Wii build has no WebP decoder (ReadWebP compiled
+    out under FRUIT_PLATFORM_WII), so the WebP .tex files are ignored;
+    instead each BASE widget's raw-RGBA sidecar <name>.rgba (written by
+    svg-to-webp.mjs next to the WebP: "RRAW" + u16le w/h + w*h*4 RGBA8,
+    little-endian) is read with pure stdlib (no Pillow -- the msys2 Python
+    the Wii build uses has no pip) and re-encoded as a pre-tiled GX RGBA8
+    "GXT1" container under the same <name>.tex basename (see
+    gx_encoder.encode_gxtx). hd_* files are skipped -- Wii HD is disabled
+    (FN_ENABLE_HD_ASSETS=OFF)."""
     src_dir = os.path.join(repo_root, WIDGET_TEX_RELDIR)
     dst_dir = os.path.join(dst_root, "textures")
 
@@ -438,15 +523,53 @@ def merge_widget_textures(repo_root, dst_root, stats):
               "back to placeholder art".format(src_dir))
         return
 
-    names = [n for n in os.listdir(src_dir) if n.lower().endswith(".tex")]
+    # Wii consumes the .rgba sidecars (no WebP decoder / no Pillow);
+    # host/web copy the WebP .tex verbatim.
+    ext = ".rgba" if is_wii else ".tex"
+    names = [n for n in os.listdir(src_dir) if n.lower().endswith(ext)]
     if not names:
-        print("[stage-assets] WARNING: {} is empty -- widgets will fall back "
-              "to placeholder art".format(src_dir))
+        print("[stage-assets] WARNING: {} has no {} files -- widgets will "
+              "fall back to placeholder art (run a host/web build first so "
+              "svg-to-webp.mjs generates them)".format(src_dir, ext))
         return
 
     os.makedirs(dst_dir, exist_ok=True)
+
+    if not is_wii:
+        for name in names:
+            shutil.copy2(os.path.join(src_dir, name), os.path.join(dst_dir, name))
+            stats["widget_tex_copied"] += 1
+        return
+
+    # Wii: read RRAW sidecar -> tile -> GXT1. Pure stdlib.
     for name in names:
-        shutil.copy2(os.path.join(src_dir, name), os.path.join(dst_dir, name))
+        if name.lower().startswith("hd_"):
+            continue  # Wii HD disabled; don't ship 2x art (no hd_ sidecars are emitted anyway)
+        src_path = os.path.join(src_dir, name)
+        dst_path = os.path.join(dst_dir, name[:-len(".rgba")] + ".tex")
+        if os.path.isfile(dst_path) and \
+                os.path.getmtime(dst_path) >= os.path.getmtime(src_path):
+            # mtime alone can't prove the staged copy is GXT1: an earlier
+            # verbatim copy2() preserved the source's mtime while leaving WebP
+            # bytes. Only skip when the magic confirms a previous encode.
+            with open(dst_path, "rb") as f:
+                if f.read(4) == b"GXT1":
+                    stats["widget_tex_copied"] += 1
+                    continue
+        with open(src_path, "rb") as f:
+            blob_in = f.read()
+        magic, w, h = struct.unpack("<4sHH", blob_in[:8])
+        if magic != b"RRAW" or len(blob_in) != 8 + w * h * 4:
+            raise ValueError("{}: bad RRAW sidecar (magic {!r}, {}x{}, {} bytes; "
+                             "want {} bytes) -- regenerate via svg-to-webp.mjs"
+                             .format(src_path, magic, w, h, len(blob_in), 8 + w * h * 4))
+        # Widgets have no Tex1 source (RRAW RGBA sidecar only), so there is
+        # no source bit-depth to preserve: always GX_TF_RGBA8.
+        blob = gx_encoder.encode_gxtx(blob_in[8:], w, h, gx_encoder.GX_TF_RGBA8)
+        tmp = dst_path + ".tmp.gxtx"
+        with open(tmp, "wb") as f:
+            f.write(blob)
+        os.replace(tmp, dst_path)
         stats["widget_tex_copied"] += 1
 
 
@@ -605,10 +728,14 @@ def copy_if_different(src_path, dst_path):
 
 
 def stage_tree_raw(src_root, dst_root):
-    """--wii mode: verbatim recursive copy, no transcoding of any kind.
-    Every *.tex stays raw Tex1 bytes; every *.wav.pcm stays raw PCM. Pure
-    stdlib (shutil/os only) -- no Pillow/ffmpeg/fontTools dependency."""
-    stats = {"other_copied": 0, "other_skipped": 0, "widget_tex_copied": 0}
+    """--wii mode: recursive mirror. Transcodable Tex1 *.tex are re-encoded
+    as pre-tiled GXT1 (bit-depth-preserving GX format -- see
+    transcode_tex_file_wii); everything else (raw .wav.pcm audio, fonts,
+    XML, non-Tex1 .tex) copies verbatim. Pure stdlib -- no
+    Pillow/ffmpeg/fontTools dependency."""
+    stats = {"other_copied": 0, "other_skipped": 0, "widget_tex_copied": 0,
+             "tex_transcoded": 0, "tex_skipped": 0, "tex_verbatim": 0,
+             "gx_counts": {}}
     for root, _dirs, files in os.walk(src_root):
         rel_dir = os.path.relpath(root, src_root)
         dst_dir = os.path.join(dst_root, rel_dir) if rel_dir != "." else dst_root
@@ -616,7 +743,9 @@ def stage_tree_raw(src_root, dst_root):
         for name in files:
             src_path = os.path.join(root, name)
             dst_path = os.path.join(dst_dir, name)
-            if copy_if_different(src_path, dst_path):
+            if name.lower().endswith(".tex"):
+                transcode_tex_file_wii(src_path, dst_path, stats)
+            elif copy_if_different(src_path, dst_path):
                 stats["other_copied"] += 1
             else:
                 stats["other_skipped"] += 1
@@ -724,14 +853,23 @@ def main():
     os.makedirs(dst_root, exist_ok=True)
 
     if is_wii:
-        # Raw verbatim copy only -- no Pillow/ffmpeg/fontTools/node dependency.
-        # See the module docstring's "WII MODE" section.
-        print("[stage-assets] staging {} -> {} (wii, raw/uncompressed)".format(src_root, dst_root))
+        # Pre-tiled GXT1 texture mirror + verbatim copy of everything else;
+        # no ffmpeg/fontTools/node/Pillow dependency (pure stdlib). Widget
+        # art is re-encoded to GXT1 from the .rgba sidecars. See the module
+        # docstring's "WII MODE" section.
+        print("[stage-assets] staging {} -> {} (wii, pre-tiled GX)".format(src_root, dst_root))
         stats = stage_tree_raw(src_root, dst_root)
-        merge_widget_textures(repo_root, dst_root, stats)
+        merge_widget_textures(repo_root, dst_root, stats, is_wii=True)
+        gc = stats["gx_counts"]
+        print("[stage-assets] textures: {} transcoded to GXT1, {} unchanged (skipped), "
+              "{} verbatim (non-Tex1)".format(
+                  stats["tex_transcoded"], stats["tex_skipped"], stats["tex_verbatim"]))
+        print("[stage-assets] GX: {} RGBA8, {} RGB5A3, {} RGB565, {} verbatim".format(
+            gc.get(gx_encoder.GX_TF_RGBA8, 0), gc.get(gx_encoder.GX_TF_RGB5A3, 0),
+            gc.get(gx_encoder.GX_TF_RGB565, 0), stats["tex_verbatim"]))
         print("[stage-assets] other assets: {} copied, {} unchanged (skipped)".format(
             stats["other_copied"], stats["other_skipped"]))
-        print("[stage-assets] widget textures: {} merged from {}".format(
+        print("[stage-assets] widget textures: {} staged as GXT1 from {}".format(
             stats["widget_tex_copied"], WIDGET_TEX_RELDIR))
         return
 

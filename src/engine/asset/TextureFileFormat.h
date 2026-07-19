@@ -57,8 +57,19 @@ struct Tex1Data : public TextureSourceData {
     // raw width/height from header (also stored in info.rawWidth/rawHeight; apparentWidth/Height = pixel dims)
     uint8_t  wLog2;
     uint8_t  hLog2;
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: native GX texture format of a GXT1 payload
+    // (GX_TF_RGB565=4 / GX_TF_RGB5A3=5 / GX_TF_RGBA8=6) when texFmt ==
+    // kGxtxTexFmt (the routing sentinel); 0 otherwise. Set by ReadGxtx from
+    // header byte[8]; Texture.cpp passes it through to Wii_UploadTiledGX.
+    uint8_t  gxNativeFmt;
+#endif
 
-    Tex1Data() : texFmt(0), wLog2(0), hLog2(0) {}
+    Tex1Data() : texFmt(0), wLog2(0), hLog2(0)
+#if defined(FRUIT_PLATFORM_WII)
+        , gxNativeFmt(0)
+#endif
+    {}
 };
 
 // Binary @0x0022b324 / internal @0x0022ad04.
@@ -116,8 +127,9 @@ extern const uint32_t kTex3FourCC; // = 0x01584554
 // .tex (e.g. an unstaged/raw FruitNinjaBada/Data run) fails WebPGetInfo and
 // falls through to the Tex1 reader. Excluded from the __bada__ cross-build (no
 // libwebp there, and the real device never ships WebP-in-.tex) and from Wii
-// (ships raw uncompressed Tex1 only, no libwebp dependency -- see
-// stage-assets.py --wii raw copy-only mode).
+// (no libwebp dependency; game textures stay raw Tex1 and the WebP-only widget
+// art is pre-tiled to the GXTX container instead -- see ReadGxtx below and
+// stage-assets.py --wii).
 // ---------------------------------------------------------------------------
 
 // WebPData -- Tex1Data whose pixel buffer is OWNED (a WebPDecodeRGBA() heap
@@ -137,14 +149,65 @@ struct WebPData : public Tex1Data {
 TextureSourceData* ReadWebP(const void* data, unsigned long size);
 #endif // !__bada__ && !FRUIT_PLATFORM_WII
 
+#if defined(FRUIT_PLATFORM_WII)
+// ---------------------------------------------------------------------------
+// Reader [wii]: GXTX -- Port specific: pre-tiled native GX textures.
+//
+// Has NO binary counterpart. tools/assets/stage-assets.py --wii pre-tiles
+// ALL Wii textures at STAGING time (tools/lib/gx_encoder.py encode_gxtx)
+// into this self-describing container, still under the same .tex
+// relpath/basename so LoadLocalisedTexture("box.tex") finds it:
+//   - every transcodable Tex1 game texture, with a GX format chosen to
+//     PRESERVE the source bit-depth (the MEM1 win -- no 32bpp expansion):
+//     RGBA8888 -> GX_TF_RGBA8, RGB565/RGB888 -> GX_TF_RGB565,
+//     RGBA5551/RGBA4444 -> GX_TF_RGB5A3 (gx_encoder.TEX1_TO_GX);
+//   - the WebP-only UI widget art (assets/ui-widgets/generated/*.rgba
+//     sidecars; the Wii has no WebP decoder -- ReadWebP is compiled out
+//     above), always GX_TF_RGBA8.
+// Non-transcodable .tex (Tex2/Tex3/DDS/PVRTC) stay verbatim and fall through
+// to the raw readers. Big-endian (Wii native) 12-byte header:
+//   offset 0:  char  magic[4] = "GXT1"   (cannot collide: Tex1 starts with
+//              wLog2/hLog2 bytes, WebP with "RIFF", DDS with "DDS ",
+//              Tex3 with "TEX\x01")
+//   offset 4:  u16be width   (apparent texels)
+//   offset 6:  u16be height
+//   offset 8:  u8    gxFormat (GX_TF_RGB565=4 / GX_TF_RGB5A3=5 / GX_TF_RGBA8=6)
+//   offset 9:  u8    version  = 1
+//   offset 10: u16be reserved = 0
+//   offset 12: tiled texels, ((w+3)/4)*((h+3)/4) * (64 bytes/tile for RGBA8,
+//              32 for the 16bpp formats), in the exact GX hardware tile
+//              layout (see gx_encoder.py's module docstring) -- the loader
+//              uploads directly via Wii_UploadTiledGX, no runtime
+//              decode/tile.
+// The reader returns a Tex1Data with texFmt = kGxtxTexFmt (routing sentinel)
+// + gxNativeFmt = header byte[8] (actual GX format), whose `pixels` point at
+// the tiled bytes inside the file buffer (File-owned, valid for the
+// LockLayers..UnlockLayers window, like the real Tex1 reader);
+// UploadTex1ToGL (Texture.cpp) dispatches kGxtxTexFmt to
+// Wii_UploadTiledGX(gxNativeFmt) instead of glTexImage2D.
+// ---------------------------------------------------------------------------
+
+// Sentinel texFmt for GXTX payloads. Real Tex1 format bytes are 0x00..0x11;
+// this value is port-side only and never appears in on-disk Tex1 headers.
+// The actual GX format travels separately in Tex1Data::gxNativeFmt.
+const uint8_t kGxtxTexFmt = 0xF0;
+
+// Returns null (inert) if data is not a GXT1 container (or its gxFormat byte
+// isn't one of 4/5/6), else a Tex1Data with texFmt=kGxtxTexFmt, gxNativeFmt
+// from the header, apparent dims from the header, and pixels/pixelsSize
+// referencing the pre-tiled texel bytes at offset 12.
+TextureSourceData* ReadGxtx(const void* data, unsigned long size);
+#endif // FRUIT_PLATFORM_WII
+
 } // namespace TextureFileFormat
 
 // g_readers -- the reader registry @ 0x2cf8e8 in the binary (4 entries:
 // [0]=Tex3, [1]=DDS, [2]=Tex2, [3]=Tex1). The host/web build prepends a
-// port-specific WebP reader at index 0 (FN_TEXTURE_NUM_READERS == 5); the
-// __bada__ cross-build and Wii (no libwebp, raw Tex1 only) keep the
-// binary-exact 4-entry array so asm-verify sees no divergence.
-#if defined(__bada__) || defined(FRUIT_PLATFORM_WII)
+// port-specific WebP reader at index 0; Wii (no libwebp) instead prepends the
+// GXTX pre-tiled native-GX reader (FN_TEXTURE_NUM_READERS == 5 either way); the
+// __bada__ cross-build keeps the binary-exact 4-entry array so asm-verify
+// sees no divergence.
+#if defined(__bada__)
 #  define FN_TEXTURE_NUM_READERS 4
 #else
 #  define FN_TEXTURE_NUM_READERS 5

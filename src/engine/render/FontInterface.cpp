@@ -4,6 +4,14 @@
 #include <cstring>
 #include <cstdlib>
 
+#ifdef FRUIT_PLATFORM_WII
+// Forward-declared rather than including render/gl_funcsWii.h to avoid
+// pulling in <gccore.h> (that header's declarations besides this one need
+// the real GXTexObj type visible). Must match gl_funcsWii.h's plain C++
+// linkage exactly (no extern "C" -- the shim's seam accessors aren't C).
+extern void Wii_KeepTextureLinear(unsigned int glTexId);
+#endif
+
 namespace Mortar {
 
 // ASM-verified: 2026-06-14T00:00Z v1.6.1 binary @ 0x0024f568,0x002502e0,0x00250470 (asm-inspector)
@@ -50,6 +58,12 @@ void FontInterface::EnsurePageTexture(FontAtlasPage* page) {
     if (page->m_TextureID) return;
     glGenTextures(1, &page->m_TextureID);
     glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
+#ifdef FRUIT_PLATFORM_WII
+    // The atlas is the only glTexSubImage2D consumer -- opt it into keeping
+    // its linear CPU copy (see Wii_KeepTextureLinear's header doc). Must be
+    // set before the glTexImage2D call below, which consults the flag.
+    Wii_KeepTextureLinear(page->m_TextureID);
+#endif
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);

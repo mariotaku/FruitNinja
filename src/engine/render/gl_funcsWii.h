@@ -50,6 +50,37 @@ void Wii_GetViewport(int vp[4]);
 // prior GL binding active) rather than "draw untextured".
 unsigned int Wii_GetBoundTexture();
 
+// Marks a GL texture id so its NEXT glTexImage2D upload retains the linear
+// (untiled) RGBA8 CPU copy alongside the tiled GX buffer. By default the
+// shim frees the linear copy right after tiling -- retaining a 2nd full-size
+// copy per texture roughly doubles resident texture RAM, which starves
+// MEM1 for the last-loaded batch (particle textures) and causes silent
+// memalign failures -> untextured opaque-quad fallback. Only glTexSubImage2D
+// consumers need the linear copy (currently just the TTF font atlas, see
+// FontInterface.cpp's EnsurePageTexture) -- call this before the atlas
+// texture's glTexImage2D, not for ordinary asset textures. Does not
+// itself allocate; only sets a flag consulted by the next upload.
+void Wii_KeepTextureLinear(unsigned int glTexId);
+
+// Port specific: upload ALREADY-TILED GX texel data to a GL texture id,
+// skipping the glTexImage2D ExpandToRGBA8+TileRGBA8 path entirely. Backs the
+// "GXT1" container (tools/assets/stage-assets.py --wii pre-tiles every
+// transcodable Tex1 game texture -- bit-depth-preserving GX format, the MEM1
+// win -- plus the WebP-only UI widget art at staging time; encoder:
+// tools/lib/gx_encoder.py; reader: TextureFileFormat::ReadGxtx). `gxFmt`
+// must be GX_TF_RGB565 (4), GX_TF_RGB5A3 (5) or GX_TF_RGBA8 (6); anything
+// else is rejected (texture left untextured). `tiled` must be in that
+// format's exact GX hardware tile layout (4x4 tiles; RGBA8 = 64-byte tile,
+// AR half then GB half; 16bpp = 32-byte tile of big-endian u16 texels -- see
+// gx_encoder.py's module docstring); `tiledSize` should equal
+// GX_GetTexBufferSize(w, h, gxFmt, GX_FALSE, 0) -- it is clamped to that
+// defensively. Replaces any previous image on the id (frees old tiled/linear
+// copies); the resulting texture is CLAMP/CLAMP + LINEAR/LINEAR and keeps no
+// linear CPU copy (glTexSubImage2D on it is not supported).
+void Wii_UploadTiledGX(unsigned int glTexId, const void* tiled,
+                       unsigned int tiledSize, int w, int h,
+                       unsigned int gxFmt);
+
 #endif // FRUIT_PLATFORM_WII
 
 #endif // MORTAR_GL_FUNCS_WII_H

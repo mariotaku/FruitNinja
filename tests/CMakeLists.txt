@@ -358,6 +358,16 @@ target_include_directories(test_texture_converter PRIVATE
 )
 add_test(NAME texture_converter COMMAND test_texture_converter)
 
+# GX texture tiler/encoder (tools/lib/gx_encoder.py) selftest -- pins the
+# byte-exact "GXT1" tile layouts (RGBA8 AR/GB half split, RGB565/RGB5A3
+# big-endian u16 tiles, RGB5A3 opaque-bit threshold, oob padding) that the
+# Wii loader uploads verbatim (gl_funcsWii.cpp Wii_UploadTiledGX). High
+# fan-in leaf: every Wii texture goes through these tilers at staging time.
+# Pure Python stdlib -- no GPU, no game binary, no audio.
+add_test(NAME gx_encoder COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/tools/lib/gx_encoder.py --selftest)
+set_tests_properties(gx_encoder PROPERTIES TIMEOUT 30)
+
 # LinkedHeap unit test -- no GPU/audio, pure allocator correctness.
 # Exercises tail-rewind (the shutdown crash path), forward-merge, and split-path
 # integrity. FN_TEST unlocks the test-only accessors in LinkedHeap.h.

@@ -9,6 +9,14 @@
 #include <cstring>
 #include <vector>
 
+#if defined(FRUIT_PLATFORM_WII)
+// Port specific: pre-tiled "GXT1" textures (all transcodable Tex1 game art +
+// widgets) upload via Wii_UploadTiledGX (see the kGxtxTexFmt cases below).
+// <gccore.h> must precede gl_funcsWii.h (GXTexObj typedef).
+#include <gccore.h>
+#include "render/gl_funcsWii.h"
+#endif
+
 #if defined(FN_BIG_ENDIAN)
 namespace {
 // Port specific: Tex1 16-bit-per-texel formats (RGBA5551/RGBA4444/RGB565) are
@@ -270,6 +278,16 @@ void Texture2D_Bada::Cache() {
 #endif
                 break;
             }
+#if defined(FRUIT_PLATFORM_WII)
+            case TextureFileFormat::kGxtxTexFmt:
+                // Port specific: "GXT1" pre-tiled native GX textures; actual
+                // GX format travels in gxNativeFmt (see the identical case in
+                // UploadTex1ToGL below).
+                Wii_UploadTiledGX(m_TexId, pixels,
+                                  (unsigned int)tex1->pixelsSize, width, height,
+                                  tex1->gxNativeFmt);
+                break;
+#endif
             default:
                 LOG_ERROR("TEXTURE/Cache", "unsupported format 0x%02x", (unsigned)tex1->texFmt);
                 break;
@@ -381,6 +399,24 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
 #endif
             break;
         }
+#if defined(FRUIT_PLATFORM_WII)
+        case TextureFileFormat::kGxtxTexFmt:
+            // Port specific: "GXT1" pre-tiled native GX textures
+            // (stage-assets.py --wii + tools/lib/gx_encoder.py; reader
+            // TextureFileFormat::ReadGxtx). All transcodable Tex1 game
+            // textures plus the WebP-only UI widget art are decoded + tiled
+            // at staging time, with the GX format (d->gxNativeFmt: RGB565=4
+            // / RGB5A3=5 / RGBA8=6) preserving the source bit-depth; the
+            // file bytes are already in GX tiled layout and upload directly
+            // -- no glTexImage2D, no runtime tiling. width/height are the
+            // true apparent dims (no isHd halving applies:
+            // FN_ENABLE_HD_ASSETS is OFF on Wii and hd_* widget art is not
+            // staged).
+            Wii_UploadTiledGX(tex->m_TexId, raw,
+                              (unsigned int)d->pixelsSize, width, height,
+                              d->gxNativeFmt);
+            break;
+#endif
         default:
             LOG_ERROR("TEXTURE/Load", "unsupported format 0x%02x in '%s'", (unsigned)d->texFmt,
                       pathForLog ? pathForLog : "<memory>");

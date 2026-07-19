@@ -21,6 +21,7 @@
 #ifdef FRUIT_PLATFORM_WII
 
 #include "render/gl_compat.h"
+#include "debug/Logger.h"
 
 #include <gccore.h>
 #include <ogc/gu.h>
@@ -96,6 +97,13 @@ struct ShimTexture {
     int      wrapT;
     bool     hasImage;
     bool     used;
+    // Set via Wii_KeepTextureLinear before the next glTexImage2D upload.
+    // Only the TTF font atlas (FontInterface.cpp) issues glTexSubImage2D,
+    // which needs `linear` to blit+re-tile from -- every other texture is
+    // upload-once, so retaining a 2nd full-size linear copy for it is pure
+    // memory waste (roughly doubles resident texture RAM). Defaults false;
+    // zeroed by the memset(&t, 0, ...) in glGenTextures/glDeleteTextures.
+    bool     keepLinear;
 };
 const int kMaxTextures = 1024;
 ShimTexture g_Textures[kMaxTextures];
@@ -460,6 +468,66 @@ unsigned int Wii_GetBoundTexture() {
     return g_BoundTexture;
 }
 
+void Wii_KeepTextureLinear(unsigned int glTexId) {
+    if (!glTexId || glTexId >= (unsigned)kMaxTextures) return;
+    g_Textures[glTexId].keepLinear = true;
+}
+
+void Wii_UploadTiledGX(unsigned int glTexId, const void* tiled,
+                       unsigned int tiledSize, int w, int h,
+                       unsigned int gxFmt) {
+    // Port specific: direct upload of pre-tiled GX texel data (the "GXT1"
+    // container, staged by stage-assets.py --wii for all transcodable Tex1
+    // game textures + widget art). Mirrors the tail of glTexImage2D minus
+    // ExpandToRGBA8/TileRGBA8 -- the file bytes are already in the target
+    // format's GX tile layout, so no runtime decode or tiling.
+    if (!glTexId || glTexId >= (unsigned)kMaxTextures) return;
+    ShimTexture& t = g_Textures[glTexId];
+
+    if (t.texels) { free(t.texels); t.texels = NULL; }
+    if (t.linear) { free(t.linear); t.linear = NULL; }
+    t.width    = w;
+    t.height   = h;
+    t.hasImage = false;
+    if (!tiled || w <= 0 || h <= 0) return;
+    if (gxFmt != GX_TF_RGB565 && gxFmt != GX_TF_RGB5A3 && gxFmt != GX_TF_RGBA8) {
+        static bool warnedFmt = false;
+        if (!warnedFmt) {
+            warnedFmt = true;
+            LOG_WARN("gl_funcsWii", "Wii_UploadTiledGX: unsupported GX format %u for "
+                     "tex %u -- texture left untextured (one-shot warning)",
+                     gxFmt, glTexId);
+        }
+        return;
+    }
+
+    u32 bufSize = GX_GetTexBufferSize((u16)w, (u16)h, gxFmt, GX_FALSE, 0);
+    void* buf = memalign(32, bufSize);
+    if (!buf) {
+        static bool warnedOOM = false;
+        if (!warnedOOM) {
+            warnedOOM = true;
+            LOG_WARN("gl_funcsWii", "Wii_UploadTiledGX: memalign(bufSize=%u) failed for "
+                     "tex %u (%dx%d) -- texture left untextured (one-shot warning)",
+                     (unsigned)bufSize, glTexId, w, h);
+        }
+        return;
+    }
+    // File length should equal bufSize (encoder emits exactly
+    // ceil(w/4)*ceil(h/4) * 64 (RGBA8) or 32 (16bpp) bytes =
+    // GX_GetTexBufferSize); clamp defensively.
+    memcpy(buf, tiled, tiledSize <= bufSize ? tiledSize : bufSize);
+    DCFlushRange(buf, bufSize);
+    GX_InvalidateTexAll();
+    GX_InitTexObj(&t.obj, buf, (u16)w, (u16)h, (u8)gxFmt,
+                  GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GX_InitTexObjFilterMode(&t.obj, GX_LINEAR, GX_LINEAR);
+    t.texels     = buf;
+    t.hasImage   = true;
+    t.keepLinear = false;
+    t.linear     = NULL;
+}
+
 extern "C" {
 
 // ===========================================================================
@@ -688,14 +756,32 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
         if (tiled) {
             TileRGBA8(rgba, tiled, width, height);
             DCFlushRange(tiled, bufSize);
+            // A freed heap address can be reused by a new texture; TMEM may
+            // still hold the old occupant's texels. glTexSubImage2D already
+            // invalidates after its re-tile (below) -- mirror that here.
+            GX_InvalidateTexAll();
             GX_InitTexObj(&t.obj, tiled, (u16)width, (u16)height,
                           GX_TF_RGBA8, GxWrap(t.wrapS), GxWrap(t.wrapT), GX_FALSE);
             GX_InitTexObjFilterMode(&t.obj, GxFilter(t.minFilter), GxFilter(t.magFilter));
             t.texels   = tiled;
             t.hasImage = true;
+        } else {
+            static bool warnedOOM = false;
+            if (!warnedOOM) {
+                warnedOOM = true;
+                LOG_WARN("gl_funcsWii", "glTexImage2D: memalign(bufSize=%u) failed for "
+                         "tex %u (%dx%d) -- texture left untextured (one-shot warning)",
+                         (unsigned)bufSize, g_BoundTexture, (int)width, (int)height);
+            }
         }
-        // Keep the linear copy so glTexSubImage2D can blit + re-tile (TTF atlas).
-        t.linear = rgba;   // owned by the texture now (freed on re-upload/delete)
+        if (t.keepLinear) {
+            // TTF atlas: glTexSubImage2D blits+re-tiles from this copy.
+            t.linear = rgba;
+        } else {
+            // No sub-image consumer for this texture -- don't retain a 2nd
+            // full-size linear copy on top of the tiled GX buffer.
+            free(rgba);
+        }
     }
 }
 

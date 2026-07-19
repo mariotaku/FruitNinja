@@ -479,6 +479,14 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     if (texObj) {
         GX_LoadTexObj(texObj, GX_TEXMAP0);
         textured = true;
+    } else if (boundTex) {
+        static bool warnedNoTexObj = false;
+        if (!warnedNoTexObj) {
+            warnedNoTexObj = true;
+            LOG_WARN("RendererGX", "DrawShaded2D: tex %u bound but has no GX_TexObj "
+                     "-- drawing untextured (raw vertex colour, one-shot warning)",
+                     (unsigned)boundTex);
+        }
     }
 
     // Port specific: 2D UI quads are unculled in the binary's fixed-function

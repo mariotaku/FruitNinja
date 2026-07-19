@@ -20,6 +20,14 @@
 // 288 vs the nominal 72 dpi) then resized down to the target box for
 // antialiased edges.
 //
+// Wii sidecar: for each BASE (non-hd_) widget a raw-RGBA sidecar
+// <name>.rgba is also written next to the WebP ("RRAW" magic + u16le
+// width/height + width*height*4 RGBA8 bytes, little-endian -- consumed
+// only on the x86 build host). The Wii build has no WebP decoder, so
+// stage-assets.py --wii reads this sidecar with pure Python stdlib and
+// re-encodes it as a pre-tiled GXTX .tex. hd_ renders get no sidecar
+// (Wii HD assets are disabled, FN_ENABLE_HD_ASSETS=OFF).
+//
 // Self-provisioning: if the `sharp` module isn't installed yet, this runs
 // `npm install` in tools/assets/ once (same trick as the Python scripts'
 // _ensure_pillow) and retries the import.
@@ -34,7 +42,7 @@
 //
 // Idempotent: an output .tex newer than its source .svg is skipped.
 
-import { existsSync, mkdirSync, statSync, renameSync } from "node:fs";
+import { existsSync, mkdirSync, statSync, renameSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -125,6 +133,46 @@ async function main() {
     return true;
   }
 
+  // Write the raw-RGBA sidecar <outName>.rgba for the BASE render only (the
+  // Wii staging path, stage-assets.py --wii, reads it with pure Python
+  // stdlib -- no WebP decoder on the Wii, no Pillow in its msys2 Python).
+  // Layout (little-endian; consumed only on the x86 build host):
+  //   bytes[0..3]  magic "RRAW"
+  //   bytes[4..5]  u16le width
+  //   bytes[6..7]  u16le height
+  //   bytes[8..]   width*height*4 raw RGBA8 bytes
+  // Same idempotency as render(): skipped when newer than the source .svg.
+  async function renderRaw(svgPath, outName, w, h, density) {
+    const outPath = path.join(outDir, outName + ".rgba");
+    if (existsSync(outPath)) {
+      if (statSync(outPath).mtimeMs >= statSync(svgPath).mtimeMs) {
+        skipped++;
+        return false;
+      }
+    }
+    // ensureAlpha() forces a 4th channel in case a fully-opaque SVG
+    // rasterizes as 3-channel -- the sidecar is always RGBA8.
+    const { data, info } = await sharp(svgPath, { density: density })
+      .resize(w, h, { fit: "fill" })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    if (info.channels !== 4 || data.length !== w * h * 4) {
+      throw new Error("raw render of " + outName + " is " + info.channels +
+        "-channel / " + data.length + " bytes (want 4-channel / " + (w * h * 4) + ")");
+    }
+    const header = Buffer.alloc(8);
+    header.write("RRAW", 0, "ascii");
+    header.writeUInt16LE(w, 4);
+    header.writeUInt16LE(h, 6);
+    const tmpPath = outPath + ".tmp.rgba";
+    writeFileSync(tmpPath, Buffer.concat([header, data]));
+    renameSync(tmpPath, outPath);
+    console.log("[svg-to-webp] generated " + outName + ".rgba (" + w + "x" + h + " raw RGBA sidecar)");
+    generated++;
+    return true;
+  }
+
   for (const [name, [w, h]] of Object.entries(MANIFEST)) {
     const svgPath = path.join(svgDir, name + ".svg");
 
@@ -139,6 +187,7 @@ async function main() {
     // hd_ file and halves its reported apparent size, so widgets draw at the
     // SAME on-screen footprint but sample 2x the detail -- crisper vector UI.
     await render(svgPath, name, w, h, DENSITY);
+    await renderRaw(svgPath, name, w, h, DENSITY); // Wii sidecar: base only, no hd_
     await render(svgPath, "hd_" + name, w * 2, h * 2, DENSITY * 2);
   }
 
