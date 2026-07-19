@@ -51,6 +51,33 @@ int g_ShimViewport[4] = { 0, 0, 640, 480 };
 
 namespace {
 
+// ---- Depth (Z) mode shadow state -----------------------------------------
+// Port specific: GX_SetZMode takes all three depth params (enable, compare,
+// write) in one call, but GL exposes them as three independent entry points
+// (glEnable/glDisable(GL_DEPTH_TEST), glDepthFunc, glDepthMask). Each shim
+// function used to call GX_SetZMode with the OTHER two fields hardcoded,
+// so e.g. dm.SetDepthBufferWrite(false) (-> glDepthMask(GL_FALSE)) silently
+// reset the compare func to GX_LEQUAL and force-enabled the test, stomping
+// whatever glDepthFunc/glEnable had just set. RendererGX.cpp's DrawShaded2D/
+// DrawMesh3D then had to re-hardcode GX_SetZMode themselves every draw to
+// compensate, which threw away the real per-phase depth intent GameDraw
+// already expresses faithfully via DisplayManager::SetDepthBuffer /
+// SetDepthBufferWrite (see GameInit.cpp's GameDraw). Fix: track all three
+// fields here and re-issue ONE combined GX_SetZMode from the shadow on every
+// mutator, so 2D HUD (test-on/write-off) vs 3D fruit (LESS/write-on) state
+// set by the real caller survives into the draw.
+struct ShimZMode {
+    bool enable;
+    u8   compare;
+    bool write;
+};
+ShimZMode g_ZMode = { true, GX_LEQUAL, true };
+
+inline void ApplyZMode() {
+    GX_SetZMode(g_ZMode.enable ? GX_TRUE : GX_FALSE, g_ZMode.compare,
+                g_ZMode.write ? GX_TRUE : GX_FALSE);
+}
+
 // ---- Vertex attribute table (glVertexAttribPointer state) ---------------
 struct ShimAttrib {
     const void* ptr;
@@ -112,6 +139,13 @@ const int kMaxTextures = 1024;
 ShimTexture g_Textures[kMaxTextures];
 unsigned    g_ActiveTexUnit    = 0;
 unsigned    g_BoundTexture     = 0;   // texture bound on the active unit
+
+// Outcome of the most recent glTexSubImage2D call. See gl_funcsWii.h's
+// Wii_LastTexSubImageOk doc -- glTexSubImage2D is void (shared GL signature),
+// so this is the only way a caller can distinguish a real upload from a
+// silent bail. Defaults true (no-op-safe) so any code path that never calls
+// glTexSubImage2D doesn't read a stale failure.
+bool g_LastTexSubImageOk = true;
 
 // ---- Shader / program objects (no-op stubs) -----------------------------
 unsigned g_NextShaderId  = 1;
@@ -640,7 +674,8 @@ void glEnable(GLenum cap) {
             GX_SetCullMode(GX_CULL_BACK);
             break;
         case GL_DEPTH_TEST:
-            GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+            g_ZMode.enable = true;
+            ApplyZMode();
             break;
         case GL_SCISSOR_TEST:
             // Scissor rect is applied in glScissor; enabling is implicit.
@@ -659,7 +694,8 @@ void glDisable(GLenum cap) {
             GX_SetCullMode(GX_CULL_NONE);
             break;
         case GL_DEPTH_TEST:
-            GX_SetZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
+            g_ZMode.enable = false;
+            ApplyZMode();
             break;
         case GL_SCISSOR_TEST:
             // GX scissor is always active (no test-enable toggle), so a prior
@@ -687,16 +723,20 @@ void glBlendFunc(GLenum /*src*/, GLenum /*dst*/) {
 }
 
 void glDepthFunc(GLenum func) {
+    // GL->GX compare mapping (only the funcs this port's callers actually
+    // pass -- BeginFrame's GL_LESS and the Wii ZMode default -- get a real
+    // GX enum; anything else falls back to GX_ALWAYS rather than guessing).
     u8 gxFunc = (func == GL_LESS) ? GX_LESS
               : (func == GL_LEQUAL) ? GX_LEQUAL
+              : (func == GL_ALWAYS) ? GX_ALWAYS
               : GX_ALWAYS;
-    GX_SetZMode(GX_TRUE, gxFunc, GX_TRUE);
+    g_ZMode.compare = gxFunc;
+    ApplyZMode();
 }
 
 void glDepthMask(GLboolean flag) {
-    // Re-issue Z mode with the requested write-enable; keep LEQUAL as the
-    // compare (the only compare this port uses alongside depth writes).
-    GX_SetZMode(GX_TRUE, GX_LEQUAL, flag ? GX_TRUE : GX_FALSE);
+    g_ZMode.write = (flag != GL_FALSE);
+    ApplyZMode();
 }
 
 void glScissor(GLint x, GLint y, GLsizei w, GLsizei h) {

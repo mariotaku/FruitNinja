@@ -433,31 +433,25 @@ void Renderer::InitGL(int width, int height) {
 // draw_fullscreen_quad / DrawTriList / DrawTriStrip all funnel here via
 // Renderer.cpp's shared code). Ignores the passed `mvp` -- see the file-top
 // comment for why -- and instead loads MatrixManager's current
-// projection/modelview split into GX directly. 2D UI draws are unlit and
-// typically depth-test-off in the binary's fixed-function equivalent
-// (BeginFrame toggles depth per phase); RendererGL doesn't touch depth state
-// inside DrawShaded2D either (caller's responsibility per Renderer.h).
+// projection/modelview split into GX directly. RendererGL doesn't touch
+// depth state inside DrawShaded2D either (caller's responsibility per
+// Renderer.h) -- this function matches that contract: it neither reads nor
+// sets GX_SetZMode, so whatever GameDraw's real DisplayManager::
+// SetDepthBuffer/SetDepthBufferWrite calls last configured (mirrored into GX
+// by the gl_funcsWii.cpp shadow ZMode, see g_ZMode/ApplyZMode) stays live
+// for this draw. That is what makes 2D HUD correctly overlay 3D fruit
+// (test-on/write-off during the HUD/splat pass -- see GameInit.cpp's
+// GameDraw) instead of the GX layer racing 2D and 3D against a hardcoded,
+// caller-blind ZMode.
 //
-// 2D is now painter's-order, matching the host: depth-TEST stays on
-// (GX_LEQUAL, so same-z layers drawn later still pass over earlier ones and
-// still lose to nearer already-written 3D fruit depth), but depth-WRITE is
-// OFF -- 2D quads no longer punch depth. This matches the host's HUD pass
-// (depth-write-off) and the host's wood background (depth-test-off, writes
-// nothing either way).
-//
-// The depth buffer is no longer 2D's job to seed: DisplayManagerWii::
-// SwapBuffers now forces GX_SetZMode write-enable ON immediately before
-// GX_CopyDisp every frame (see that file), so the EFB Z-clear that
-// GX_CopyDisp performs is never gated off by whatever ZMode the last draw of
-// the frame left behind. That's the root fix for the previous black-center
-// tumbling-fruit bug -- 3D fruit no longer depend on 2D quads writing a
-// depth floor, so 2D can go back to write-off without reintroducing it.
-//
-// Root-fixing the depth clear also removes the two 2D-only side effects that
-// write-on-everything previously required: opaque 2D no longer occludes
-// farther elements it shouldn't (fixes the About screen's sensei rendering
-// over the bomb, and the menu QUIT ring's crescent-clip artifact), both for
-// free, with no alpha-gating needed.
+// The depth buffer is not 2D's job to seed: DisplayManagerWii::SwapBuffers
+// forces GX_SetZMode write-enable ON immediately before GX_CopyDisp every
+// frame (see that file, independent of the shadow state above), so the EFB
+// Z-clear that GX_CopyDisp performs is never gated off by whatever ZMode the
+// last draw of the frame left behind. That's the root fix for the earlier
+// black-center tumbling-fruit bug -- 3D fruit never depended on 2D quads
+// writing a depth floor, so 2D writing off (per the caller's real intent)
+// does not reintroduce it.
 void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
                             int posOff, int uvOff, int colOff,
                             GLenum prim, GLuint tex, const Matrix44& /*mvp*/) {
@@ -495,10 +489,14 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     // state from a preceding 3D draw this frame.
     GX_SetCullMode(GX_CULL_NONE);
     SetStandardAlphaBlend();
-    // 2D UI: depth-TEST on with GX_LEQUAL (painter's-order layering within
-    // the 2D stack and correct occlusion against nearer 3D fruit), write OFF
-    // -- see the function-top comment. Matches the host HUD pass.
-    GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    // Depth state (test/func/write) is NOT set here -- it is driven by the
+    // caller's real GL depth calls (glEnable/glDisable(GL_DEPTH_TEST),
+    // glDepthFunc, glDepthMask), which the gl_funcsWii.cpp shim mirrors into
+    // GX via a shadow GX_SetZMode (see g_ZMode/ApplyZMode there). GameDraw's
+    // DisplayManager::SetDepthBuffer/SetDepthBufferWrite calls already
+    // express the binary-faithful per-phase intent (test-on/write-off for
+    // the HUD/splat/2D pass) -- matches RendererGL::DrawShaded2D, which
+    // likewise leaves depth state to the caller per Renderer.h's contract.
     SetupGxVertexAndTev(/*haveUV=*/true, textured);
 
     const unsigned char* base = (const unsigned char*)verts;
@@ -560,17 +558,20 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
     // face reads similar -- it was still wrong. (The earlier GX_CULL_BACK pick
     // was made against a stale .dol and was incorrect.)
     GX_SetCullMode(GX_CULL_FRONT);
-    // GX_LESS for 3D mesh draws -- matches the host (BeginFrame/InitGL set
-    // glDepthFunc(GL_LESS) and the mesh path never changes it; the GL_LEQUAL
-    // "white-bomb" experiment in commit 99b9bafb was REVERTED in b7bbff1b).
-    // Bomb (and other dual-shell fruit) meshes carry co-incident triangles:
-    // an outward dark-body shell + an inward interior/red shell at the same
-    // positions. Under GX_LESS the FIRST-submitted (dark body) triangle wins
-    // the equal-depth pixel -- correct. Under GX_LEQUAL the later (red inner)
-    // shell wins every pixel -> solid red bomb, and dual-shell nodes show
-    // their inside-out inner shell so a multi-node fruit (pineapple) reads as
-    // separately-tumbling parts. So LESS, not LEQUAL, is correct here.
-    GX_SetZMode(GX_TRUE, GX_LESS, GX_TRUE);
+    // Depth state is NOT set here -- driven by the caller's GL depth calls
+    // via the gl_funcsWii.cpp shadow ZMode (see DrawShaded2D's matching
+    // note). GameDraw's BeginFrame sets glDepthFunc(GL_LESS) once and the 3D
+    // pass (SetDepthBuffer(1)+SetDepthBufferWrite(1) just before
+    // ActorManager::Draw) never changes the func, so GX_LESS is already the
+    // live compare by the time this draw runs -- required for correctness,
+    // not just fidelity: bomb (and other dual-shell fruit) meshes carry
+    // co-incident triangles (outward dark-body shell + inward interior/red
+    // shell at the same positions). Under LESS the FIRST-submitted (dark
+    // body) triangle wins the equal-depth pixel -- correct. Under LEQUAL the
+    // later (red inner) shell wins every pixel -> solid red bomb (the
+    // GL_LEQUAL "white-bomb" experiment in commit 99b9bafb was REVERTED in
+    // b7bbff1b). If a future caller-side change ever leaves GL_LEQUAL active
+    // going into the 3D pass, this invariant breaks -- see BeginFrame.
     // Port specific: match host Geometry::Render, which does glDisable(GL_BLEND)
     // for every 3D mesh (opaque). Alpha blend on the mesh let self-overlapping
     // fragments accumulate/blend against the framebuffer with depth-write on ->
