@@ -37,7 +37,18 @@ class TtfFace;
 // The UV range in the atlas covers the full oversampled bitmap and maps to the logical-size quad, so the
 // magnification ratio at the quad drops to 1/kFontSupersample => crisp text when the 480x320 logical viewport is
 // scaled up to the display window.
+//
+// Gated on FN_ENABLE_HD_ASSETS (global add_compile_definitions, forced OFF on
+// Wii -- see top-level CMakeLists.txt): HD builds oversample 3x; non-HD builds
+// rasterize at 1x (native 480x320-equivalent glyphs). Every consumer
+// (metrics, kerning, atlas margin, UV oversample) is parameterized on this
+// constant, so ss=1 self-cancels -- layout is identical, only atlas texel
+// density changes.
+#if defined(FN_ENABLE_HD_ASSETS)
 static const int kFontSupersample = 3;
+#else
+static const int kFontSupersample = 1;   // non-HD (Wii): native 480x320-equiv glyphs
+#endif
 
 // Key for the glyph cache: (codepoint, scaled_size_26.6, effect, radius).
 // scaled_size_26.6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0)

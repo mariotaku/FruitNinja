@@ -8,7 +8,8 @@
 // provides an equivalent portable interface.
 //
 // DIFFERS: binary uses TextureAtlas @0x00269c9c with std::vector<TextureAtlasPage*>
-//   m_Pages; 256x256 RGBA pages; port uses 512x512 pages (kFontSupersample=3).
+//   m_Pages; 256x256 RGBA pages; port uses 512x512 pages (kFontSupersample is
+//   HD-gated: 3 under FN_ENABLE_HD_ASSETS, 1 otherwise -- see FontCacheObjectTTF.h).
 //
 // Multi-page model (faithful to binary TextureAtlas @0x00269c9c):
 //   PackGlyph tries the current (last) page; if the glyph does not fit it
@@ -18,6 +19,10 @@
 //
 // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
 //   yields vertex-coloured text. Binary used Bada IFont with an RGBA atlas.
+//   On Wii (FRUIT_PLATFORM_WII) the atlas is instead LUMINANCE_ALPHA (2 B/texel:
+//   L=255, A=coverage), uploaded as GX_TF_IA8 -- GL_MODULATE output is identical
+//   ((1,1,1,coverage) either way) at half the memory. See FontInterface.cpp's
+//   kAtlasBytesPerTexel / kAtlasGLFormat.
 //
 // Scaling constants mirror binary FontInterface ctor @ 0x002502e0 and
 // Initialize @ 0x00250470:
@@ -41,7 +46,8 @@ namespace Mortar {
 // TextureAtlasPage* -- same type Mesh.h forward-declares as an opaque atlas pointer
 // for Mesh::DrawTriList/DrawTriStrip/DrawTris). FontAtlasPage is a back-compat alias.
 struct TextureAtlasPage {
-    uint8_t* m_Pixels;       // RGBA buffer [pageSize*pageSize*4], calloc'd
+    uint8_t* m_Pixels;       // texel buffer [pageSize*pageSize*bytesPerTexel], calloc'd
+                             // (RGBA8 host/web; LA8 on Wii -- see FontInterface.cpp)
     GLuint   m_TextureID;    // GL texture object (0 until EnsureTexture is called)
     int      m_CursorX;
     int      m_CursorY;

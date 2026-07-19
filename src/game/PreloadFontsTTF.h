@@ -11,7 +11,8 @@ void PreloadFontsTTF();
 
 // Port specific: task #28 first-screen-open frame-spike mitigation. The binary
 // lazy-bakes each TTF glyph on first use (FontCacheObjectTTF::GetGlyph ->
-// FT_Load_Glyph, amplified 9x by kFontSupersample=3); with no warm pass, every
+// FT_Load_Glyph, amplified 9x in HD builds by kFontSupersample=3 -- 1x when
+// FN_ENABLE_HD_ASSETS is off, e.g. Wii); with no warm pass, every
 // glyph a screen's labels need gets rasterized + atlas-uploaded in a single
 // frame the first time that screen opens. This has no binary counterpart --
 // v1.6.1 has no equivalent bootstrap warm.
