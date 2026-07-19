@@ -14,8 +14,9 @@
 // TEV stage reproduces GL_MODULATE. Textures are uploaded/converted to
 // GX_TF_RGBA8 tiled. Shader objects remain no-op stubs (GX uses fixed TEV
 // stages, not GLSL). Remaining deferred pieces (glTexSubImage2D, per-frame
-// viewport/scissor Y-flip, compressed textures, glReadPixels) carry a
-// // TODO(wii Pass 2): marker.
+// viewport/scissor Y-flip, compressed textures) carry a
+// // TODO(wii Pass 2): marker. (glReadPixels is intentionally absent -- its
+// only caller is SDL/GL-only; see the note near glFinish.)
 //
 // Only compiled when FRUIT_PLATFORM_WII is set (see src/engine/CMakeLists.txt).
 #ifdef FRUIT_PLATFORM_WII
@@ -44,10 +45,6 @@ float g_ShimMVP[16] = {
     0, 0, 1, 0,
     0, 0, 0, 1
 };
-
-// Clear colour stored by glClearColor; applied at swap via GX_SetCopyClear
-// (GX has no glClear -- the clear happens during GX_CopyDisp in the swap).
-GXColor g_ShimClearColor = { 0, 0, 0, 255 };
 
 // Stored viewport (glViewport) -- reported back by glGetIntegerv(GL_VIEWPORT).
 int g_ShimViewport[4] = { 0, 0, 640, 480 };
@@ -87,8 +84,14 @@ unsigned   g_ElementBufferBinding = 0;
 // ---- Texture objects (glGenTextures / glTexImage2D) ---------------------
 struct ShimTexture {
     GXTexObj obj;
-    void*    texels;      // 32-aligned GX_TF_RGBA8 tiled data
-    unsigned char* linear; // kept linear RGBA8 copy, for glTexSubImage2D updates
+    void*    texels;      // 32-aligned GX tiled data (GX_TF_RGBA8, or GX_TF_IA8
+                          // when uploadFormat == GL_LUMINANCE_ALPHA)
+    unsigned char* linear; // kept linear copy in uploadFormat's layout (RGBA8 or
+                           // LA8), for glTexSubImage2D updates
+    // GL format of the last glTexImage2D upload (GL_RGBA or GL_LUMINANCE_ALPHA).
+    // glTexSubImage2D keys its linear-blit stride + re-tiler (TileRGBA8 vs
+    // TileIA8) off this tag. 0 (memset default) until first upload.
+    GLenum   uploadFormat;
     int      width;
     int      height;
     int      minFilter;
@@ -144,60 +147,132 @@ u8 GxFilter(int glFilter) {
     return (glFilter == GL_NEAREST) ? GX_NEAR : GX_LINEAR;
 }
 
-// Tile a linear RGBA8 source into GX_TF_RGBA8's 4x4-block, dual-cacheline
-// layout (AR block then GB block per 4x4 tile). `src` is width*height*4
-// bytes, R,G,B,A order. `dst` must be 32-byte aligned and
-// GX_GetTexBufferSize()-sized. Returns nothing; caller flushes the cache.
-void TileRGBA8(const unsigned char* src, void* dst, int w, int h) {
-    unsigned char* d = (unsigned char*)dst;
-    for (int ty = 0; ty < h; ty += 4) {
-        for (int tx = 0; tx < w; tx += 4) {
-            // AR half-tile (16 texels x 2 bytes = 32 bytes).
-            for (int y = 0; y < 4; ++y) {
-                for (int x = 0; x < 4; ++x) {
-                    int sx = tx + x, sy = ty + y;
-                    unsigned char a = 255, r = 0;
-                    if (sx < w && sy < h) {
-                        const unsigned char* p = src + ((sy * w) + sx) * 4;
-                        r = p[0];
-                        a = p[3];
+// Tiling format tag for TileRegion (below).
+enum TileFmt { TILE_FMT_RGBA8, TILE_FMT_IA8 };
+
+// Core GX tiler, shared by TileRGBA8/TileIA8 (full-texture) and
+// glTexSubImage2D's partial re-tile. Writes ONLY the 4x4-texel tiles whose
+// tile-space coordinates lie in [tileX0,tileX1) x [tileY0,tileY1) -- callers
+// pass the full tile grid for a whole-texture retile, or a tile-aligned
+// sub-rect to touch just the tiles a glyph update overlaps.
+//
+// `src` is the FULL linear image (w*h texels, RGBA8 R,G,B,A or LA8 [L][A]
+// per fmt) -- always the whole linear buffer, never a cropped one, so
+// partial-tile edges read correct neighbor texels straight from it.
+// `dst` is the FULL GX-tiled buffer (GX_GetTexBufferSize()-sized); each tile
+// is written at its natural offset tileIndex*bytesPerTile where
+// tileIndex = (ty/4)*tilesPerRow + (tx/4), tilesPerRow = ceil(w/4) -- i.e.
+// the standard GX_TF_RGBA8/IA8 tile raster order, so writing a subset of
+// tiles is just a subset of the same address computation the full pass uses.
+// bytesPerTile: 64 for RGBA8 (AR half + GB half, 32B each), 32 for IA8.
+void TileRegion(const unsigned char* src, void* dst, int w, int h,
+                TileFmt fmt, int tileX0, int tileY0, int tileX1, int tileY1) {
+    const int tilesPerRow  = (w + 3) / 4;
+    const int bytesPerTile = (fmt == TILE_FMT_RGBA8) ? 64 : 32;
+    unsigned char* base = (unsigned char*)dst;
+
+    for (int ty = tileY0; ty < tileY1; ty += 4) {
+        for (int tx = tileX0; tx < tileX1; tx += 4) {
+            int tileIndex = (ty / 4) * tilesPerRow + (tx / 4);
+            unsigned char* d = base + (size_t)tileIndex * bytesPerTile;
+
+            if (fmt == TILE_FMT_RGBA8) {
+                // AR half-tile (16 texels x 2 bytes = 32 bytes).
+                for (int y = 0; y < 4; ++y) {
+                    for (int x = 0; x < 4; ++x) {
+                        int sx = tx + x, sy = ty + y;
+                        unsigned char a = 255, r = 0;
+                        if (sx < w && sy < h) {
+                            const unsigned char* p = src + ((sy * w) + sx) * 4;
+                            r = p[0];
+                            a = p[3];
+                        }
+                        *d++ = a;
+                        *d++ = r;
                     }
-                    *d++ = a;
-                    *d++ = r;
                 }
-            }
-            // GB half-tile.
-            for (int y = 0; y < 4; ++y) {
-                for (int x = 0; x < 4; ++x) {
-                    int sx = tx + x, sy = ty + y;
-                    unsigned char g = 0, b = 0;
-                    if (sx < w && sy < h) {
-                        const unsigned char* p = src + ((sy * w) + sx) * 4;
-                        g = p[1];
-                        b = p[2];
+                // GB half-tile.
+                for (int y = 0; y < 4; ++y) {
+                    for (int x = 0; x < 4; ++x) {
+                        int sx = tx + x, sy = ty + y;
+                        unsigned char g = 0, b = 0;
+                        if (sx < w && sy < h) {
+                            const unsigned char* p = src + ((sy * w) + sx) * 4;
+                            g = p[1];
+                            b = p[2];
+                        }
+                        *d++ = g;
+                        *d++ = b;
                     }
-                    *d++ = g;
-                    *d++ = b;
+                }
+            } else {
+                // GX_TF_IA8: one BE u16 per texel, memory order [A][I] --
+                // alpha byte first, then intensity (mirrors the AR half above).
+                for (int y = 0; y < 4; ++y) {
+                    for (int x = 0; x < 4; ++x) {
+                        int sx = tx + x, sy = ty + y;
+                        unsigned char i = 0, a = 0;
+                        if (sx < w && sy < h) {
+                            const unsigned char* p = src + ((sy * w) + sx) * 2;
+                            i = p[0];   // L
+                            a = p[1];   // A
+                        }
+                        *d++ = a;
+                        *d++ = i;
+                    }
                 }
             }
         }
     }
 }
 
+// Tile a linear RGBA8 source into GX_TF_RGBA8's 4x4-block, dual-cacheline
+// layout (AR block then GB block per 4x4 tile). `src` is width*height*4
+// bytes, R,G,B,A order. `dst` must be 32-byte aligned and
+// GX_GetTexBufferSize()-sized. Delegates to TileRegion over the full tile grid.
+void TileRGBA8(const unsigned char* src, void* dst, int w, int h) {
+    int tilesW = (w + 3) & ~3;
+    int tilesH = (h + 3) & ~3;
+    TileRegion(src, dst, w, h, TILE_FMT_RGBA8, 0, 0, tilesW, tilesH);
+}
+
+// Tile a linear LA8 source (2 B/texel, [L][A] byte order -- the TTF font
+// atlas's Wii layout, see FontInterface.cpp) into GX_TF_IA8's 4x4-tile layout:
+// one BIG-ENDIAN u16 per texel, 16 texels x 2 bytes = 32 bytes per tile.
+// GX_TF_IA8 texel memory order is [A][I] (BE u16 = (A << 8) | I), so the
+// ALPHA byte is written first, then the INTENSITY byte -- mirrors TileRGBA8's
+// AR half-tile writing A before R. Out-of-bounds texels pad to 0x0000
+// (transparent black). `dst` must be 32-byte aligned and
+// GX_GetTexBufferSize(w, h, GX_TF_IA8, ...)-sized. Delegates to TileRegion
+// over the full tile grid.
+void TileIA8(const unsigned char* src, void* dst, int w, int h) {
+    int tilesW = (w + 3) & ~3;
+    int tilesH = (h + 3) & ~3;
+    TileRegion(src, dst, w, h, TILE_FMT_IA8, 0, 0, tilesW, tilesH);
+}
+
 // Expand an incoming (format,type) source to a temporary linear RGBA8 buffer.
-// Supports the formats Texture.cpp actually uploads: RGBA8 (0x01), RGB8
-// (0x00), plus the packed 5551 / 565 shorts for completeness. Returns a
-// malloc'd w*h*4 buffer the caller must free, or NULL on unsupported input.
+// Only the direct byte formats are supported -- RGBA8 and RGB8. These are the
+// only formats the LIVE Wii glTexImage2D callers use: the dynamic TTF font atlas
+// (FontInterface), the 1x1 white fallback (RendererGX), and placeholder textures
+// (TextureManager). All FILE-backed textures are pre-tiled to GXT1 at staging
+// and upload natively via Wii_UploadTiledGX -- they never reach here -- so the
+// old packed 16-bit (5551/565) CPU-decode paths are dead and removed: any packed
+// or otherwise non-native format now fails loudly (log + NULL) instead of a
+// silent CPU conversion. Returns a malloc'd w*h*4 buffer the caller must free.
 unsigned char* ExpandToRGBA8(int w, int h, GLenum format, GLenum type,
                              const void* pixels) {
     if (!pixels || w <= 0 || h <= 0) return NULL;
-    unsigned char* out = (unsigned char*)malloc((size_t)w * h * 4);
-    if (!out) return NULL;
     const int n = w * h;
 
     if (type == GL_UNSIGNED_BYTE && format == GL_RGBA) {
-        memcpy(out, pixels, (size_t)n * 4);
-    } else if (type == GL_UNSIGNED_BYTE && format == GL_RGB) {
+        unsigned char* out = (unsigned char*)malloc((size_t)n * 4);
+        if (out) memcpy(out, pixels, (size_t)n * 4);
+        return out;
+    }
+    if (type == GL_UNSIGNED_BYTE && format == GL_RGB) {
+        unsigned char* out = (unsigned char*)malloc((size_t)n * 4);
+        if (!out) return NULL;
         const unsigned char* s = (const unsigned char*)pixels;
         for (int i = 0; i < n; ++i) {
             out[i * 4 + 0] = s[i * 3 + 0];
@@ -205,35 +280,15 @@ unsigned char* ExpandToRGBA8(int w, int h, GLenum format, GLenum type,
             out[i * 4 + 2] = s[i * 3 + 2];
             out[i * 4 + 3] = 255;
         }
-    } else if (type == GL_UNSIGNED_SHORT_5_5_5_1 && format == GL_RGBA) {
-        const unsigned short* s = (const unsigned short*)pixels;
-        for (int i = 0; i < n; ++i) {
-            unsigned short v = s[i];
-            out[i * 4 + 0] = (unsigned char)(((v >> 11) & 0x1F) * 255 / 31);
-            out[i * 4 + 1] = (unsigned char)(((v >> 6) & 0x1F) * 255 / 31);
-            out[i * 4 + 2] = (unsigned char)(((v >> 1) & 0x1F) * 255 / 31);
-            out[i * 4 + 3] = (unsigned char)((v & 0x1) ? 255 : 0);
-        }
-    } else if (type == GL_UNSIGNED_SHORT_5_6_5 && format == GL_RGB) {
-        const unsigned short* s = (const unsigned short*)pixels;
-        for (int i = 0; i < n; ++i) {
-            unsigned short v = s[i];
-            out[i * 4 + 0] = (unsigned char)(((v >> 11) & 0x1F) * 255 / 31);
-            out[i * 4 + 1] = (unsigned char)(((v >> 5) & 0x3F) * 255 / 63);
-            out[i * 4 + 2] = (unsigned char)((v & 0x1F) * 255 / 31);
-            out[i * 4 + 3] = 255;
-        }
-    } else {
-        // Unsupported combination -- leave opaque magenta so it's visible if
-        // a Pass 2 draw ever samples it, rather than crashing.
-        for (int i = 0; i < n; ++i) {
-            out[i * 4 + 0] = 255;
-            out[i * 4 + 1] = 0;
-            out[i * 4 + 2] = 255;
-            out[i * 4 + 3] = 255;
-        }
+        return out;
     }
-    return out;
+
+    // Non-native format: on Wii every file texture is GXT1 (native GX), so this
+    // should never happen. Fail loudly rather than CPU-convert.
+    LOG_ERROR("gl_funcsWii", "glTexImage2D: unsupported non-native format=0x%04x "
+              "type=0x%04x -- Wii uploads only RGBA8/RGB8 (assets are GXT1)",
+              (unsigned)format, (unsigned)type);
+    return NULL;
 }
 
 // GL primitive-mode -> GX primitive-type. Best-effort for the modes this
@@ -534,16 +589,9 @@ extern "C" {
 // Frame / global state
 // ===========================================================================
 
-const GLubyte* glGetString(GLenum name) {
-    switch (name) {
-        case GL_VENDOR:   return (const GLubyte*)"Nintendo";
-        case GL_RENDERER: return (const GLubyte*)"GX (libogc)";
-        case GL_VERSION:  return (const GLubyte*)"GL-on-GX shim 1.0";
-        default:          return (const GLubyte*)"";
-    }
-}
-
-GLenum glGetError(void) { return GL_NO_ERROR; }
+// glGetString / glGetError are intentionally absent on the GX shim: their only
+// callers (GL-renderer logging in mainSDL/mainEmscripten/gl_funcsSDL, GL error
+// checks) are SDL/GL-only and never compiled on Wii.
 
 void glViewport(GLint x, GLint y, GLsizei w, GLsizei h) {
     g_ShimViewport[0] = x;
@@ -570,13 +618,8 @@ void glGetIntegerv(GLenum pname, GLint* params) {
     }
 }
 
-void glClearColor(GLfloat r, GLfloat g, GLfloat b, GLfloat a) {
-    g_ShimClearColor.r = (u8)(r * 255.0f);
-    g_ShimClearColor.g = (u8)(g * 255.0f);
-    g_ShimClearColor.b = (u8)(b * 255.0f);
-    g_ShimClearColor.a = (u8)(a * 255.0f);
-    GX_SetCopyClear(g_ShimClearColor, GX_MAX_Z24);
-}
+// glClearColor is intentionally absent on the GX shim: no Wii code path calls
+// it (the EFB clear colour is set once at init via GX_SetCopyClear, mainWii.cpp).
 
 void glClearDepthf(GLclampf /*d*/) {
     // GX depth clear is folded into GX_SetCopyClear's Z arg (always max Z);
@@ -673,20 +716,14 @@ void glPixelStorei(GLenum /*pname*/, GLint /*param*/) {
     // Row alignment is irrelevant to the GX tiled upload path. No-op.
 }
 
-void glReadPixels(GLint /*x*/, GLint /*y*/, GLsizei w, GLsizei h,
-                  GLenum /*format*/, GLenum /*type*/, void* data) {
-    // TODO(wii Pass 2): EFB->texture copy + detile for real screenshots.
-    if (data && w > 0 && h > 0) {
-        memset(data, 0, (size_t)w * h * 4);
-    }
-}
+// glReadPixels is intentionally NOT implemented on Wii: its only caller is
+// GameSDL.cpp's do_screenshot_if_requested (F12 GL readback + SDL_SaveBMP),
+// which is SDL/GL-only and never compiled on the Wii target (GameWii.cpp is
+// used instead, see CMakeLists.txt). No Wii code path reads back the EFB.
 
-void glFinish(void) { GX_Flush(); }
-void glFlush(void)  { GX_Flush(); }
-
-void glPolygonMode(GLenum /*face*/, GLenum /*mode*/) {
-    // Wireframe debug toggle has no GX equivalent. No-op.
-}
+// glFinish / glFlush / glPolygonMode are intentionally absent on the GX shim:
+// none are called by Wii-compiled code (glFinish/glFlush have no callers at all;
+// glPolygonMode's wireframe toggle is RendererGL/GameSDL-only).
 
 // ===========================================================================
 // Textures
@@ -741,6 +778,48 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
     if (!g_BoundTexture || g_BoundTexture >= (unsigned)kMaxTextures) return;
     ShimTexture& t = g_Textures[g_BoundTexture];
 
+    if (format == GL_LUMINANCE_ALPHA && type == GL_UNSIGNED_BYTE) {
+        // LA8 path -- the TTF glyph atlas (FontInterface.cpp's Wii layout,
+        // 2 B/texel [L][A]). Already native-sized for GX_TF_IA8, so no
+        // ExpandToRGBA8 (that helper stays RGBA/RGB-only): copy the linear
+        // bytes as-is and tile with TileIA8.
+        if (t.texels) { free(t.texels); t.texels = NULL; }
+        if (t.linear) { free(t.linear); t.linear = NULL; }
+        t.width  = width;
+        t.height = height;
+        t.hasImage = false;
+        t.uploadFormat = GL_LUMINANCE_ALPHA;
+        if (!pixels || width <= 0 || height <= 0) return;
+
+        unsigned char* la8 = (unsigned char*)malloc((size_t)width * height * 2);
+        if (!la8) return;
+        memcpy(la8, pixels, (size_t)width * height * 2);
+
+        u32 bufSize = GX_GetTexBufferSize(width, height, GX_TF_IA8, GX_FALSE, 0);
+        void* tiled = memalign(32, bufSize);
+        if (tiled) {
+            TileIA8(la8, tiled, width, height);
+            DCFlushRange(tiled, bufSize);
+            GX_InvalidateTexAll();
+            GX_InitTexObj(&t.obj, tiled, (u16)width, (u16)height,
+                          GX_TF_IA8, GxWrap(t.wrapS), GxWrap(t.wrapT), GX_FALSE);
+            GX_InitTexObjFilterMode(&t.obj, GxFilter(t.minFilter), GxFilter(t.magFilter));
+            t.texels   = tiled;
+            t.hasImage = true;
+        } else {
+            LOG_WARN("gl_funcsWii", "glTexImage2D: memalign(bufSize=%u) failed for "
+                     "IA8 tex %u (%dx%d) -- texture left untextured",
+                     (unsigned)bufSize, g_BoundTexture, (int)width, (int)height);
+        }
+        if (t.keepLinear) {
+            // TTF atlas: glTexSubImage2D blits+re-tiles from this copy.
+            t.linear = la8;
+        } else {
+            free(la8);
+        }
+        return;
+    }
+
     unsigned char* rgba = ExpandToRGBA8(width, height, format, type, pixels);
     // pixels may legitimately be NULL for a placeholder alloc; expand yields
     // NULL then and we leave the texture without an image this pass.
@@ -749,6 +828,7 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
     t.width  = width;
     t.height = height;
     t.hasImage = false;
+    t.uploadFormat = GL_RGBA;
 
     if (rgba) {
         u32 bufSize = GX_GetTexBufferSize(width, height, GX_TF_RGBA8, GX_FALSE, 0);
@@ -789,13 +869,43 @@ void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
                      GLint yoff, GLsizei w, GLsizei h,
                      GLenum format, GLenum type, const void* pixels) {
     // Update a sub-rect of the bound texture (the dynamic TTF glyph atlas,
-    // FontInterface.cpp). Blit the new pixels into the kept linear copy, then
-    // re-tile the whole texture into its GX buffer and invalidate the TMEM
-    // cache. (Full re-tile per update is simple; the atlas is small.)
+    // FontInterface.cpp). Blit the new pixels into the kept linear copy (so
+    // partial-tile edges still read correct neighbor texels), then re-tile
+    // ONLY the 4x4 GX tiles the sub-rect overlaps -- for the 512x512 atlas a
+    // single small glyph would otherwise re-swizzle the entire page.
     if (!g_BoundTexture || g_BoundTexture >= (unsigned)kMaxTextures) return;
     ShimTexture& t = g_Textures[g_BoundTexture];
     if (!t.linear || !t.texels || !pixels || w <= 0 || h <= 0) return;
     if (xoff < 0 || yoff < 0 || xoff + w > t.width || yoff + h > t.height) return;
+
+    // Tile-aligned bounds of the touched region: round the sub-rect out to
+    // the enclosing 4x4 tile grid, clamped to the texture extents.
+    int tileX0 = xoff & ~3;
+    int tileY0 = yoff & ~3;
+    int tileX1 = (xoff + w + 3) & ~3;
+    int tileY1 = (yoff + h + 3) & ~3;
+    if (tileX1 > t.width)  tileX1 = (t.width  + 3) & ~3;
+    if (tileY1 > t.height) tileY1 = (t.height + 3) & ~3;
+
+    if (t.uploadFormat == GL_LUMINANCE_ALPHA) {
+        // LA8 atlas: incoming sub-rect is already 2 B/texel [L][A] (same
+        // layout as t.linear) -- blit rows at the 2-byte stride, re-tile only
+        // the touched tiles with TileRegion(TILE_FMT_IA8).
+        if (format != GL_LUMINANCE_ALPHA || type != GL_UNSIGNED_BYTE) return;
+        const unsigned char* src8 = (const unsigned char*)pixels;
+        for (int row = 0; row < h; ++row) {
+            unsigned char* dst = t.linear + (((size_t)(yoff + row) * t.width + xoff) * 2);
+            memcpy(dst, src8 + (size_t)row * w * 2, (size_t)w * 2);
+        }
+        TileRegion(t.linear, t.texels, t.width, t.height, TILE_FMT_IA8,
+                  tileX0, tileY0, tileX1, tileY1);
+        // Flushing the whole buffer is cheap next to a full re-tile; keeps
+        // the DCFlushRange call simple vs. computing the touched byte span.
+        u32 bufSize = GX_GetTexBufferSize(t.width, t.height, GX_TF_IA8, GX_FALSE, 0);
+        DCFlushRange(t.texels, bufSize);
+        GX_InvalidateTexAll();
+        return;
+    }
 
     unsigned char* sub = ExpandToRGBA8(w, h, format, type, pixels);
     if (!sub) return;
@@ -806,7 +916,8 @@ void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
     }
     free(sub);
 
-    TileRGBA8(t.linear, t.texels, t.width, t.height);
+    TileRegion(t.linear, t.texels, t.width, t.height, TILE_FMT_RGBA8,
+              tileX0, tileY0, tileX1, tileY1);
     u32 bufSize = GX_GetTexBufferSize(t.width, t.height, GX_TF_RGBA8, GX_FALSE, 0);
     DCFlushRange(t.texels, bufSize);
     GX_InvalidateTexAll();

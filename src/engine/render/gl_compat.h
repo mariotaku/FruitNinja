@@ -55,6 +55,7 @@
     #define GL_ONE 1
     #define GL_RGB 0x1907
     #define GL_RGBA 0x1908
+    #define GL_LUMINANCE_ALPHA 0x190A
     #define GL_UNSIGNED_BYTE 0x1401
     #define GL_UNSIGNED_SHORT 0x1403
     #define GL_FLOAT 0x1406
@@ -206,6 +207,7 @@
     #define GL_ONE 1
     #define GL_RGB 0x1907
     #define GL_RGBA 0x1908
+    #define GL_LUMINANCE_ALPHA 0x190A
     #define GL_UNSIGNED_BYTE 0x1401
     #define GL_UNSIGNED_SHORT 0x1403
     #define GL_UNSIGNED_INT 0x1405
@@ -241,13 +243,13 @@
     #define GL_COMPILE_STATUS 0x8B81
     #define GL_LINK_STATUS 0x8B82
     #define GL_INFO_LOG_LENGTH 0x8B84
-    // GL entry points -- implemented by the GX shim (gl_funcsWii.cpp).
+    // GL entry points -- implemented by the GX shim (gl_funcsWii.cpp). GL calls
+    // with no Wii caller are intentionally NOT declared here (glGetString/
+    // glGetError/glClearColor/glFinish/glFlush/glPolygonMode/glReadPixels -- all
+    // SDL/GL-renderer-only); see gl_funcsWii.cpp for the per-function notes.
     extern "C" {
-        const GLubyte* glGetString(GLenum);
-        GLenum glGetError(void);
         void glViewport(GLint, GLint, GLsizei, GLsizei);
         void glGetIntegerv(GLenum, GLint*);
-        void glClearColor(GLfloat, GLfloat, GLfloat, GLfloat);
         void glClearDepthf(GLclampf);
         void glClear(GLbitfield);
         void glEnable(GLenum);
@@ -256,9 +258,6 @@
         void glBlendFunc(GLenum, GLenum);
         void glScissor(GLint, GLint, GLsizei, GLsizei);
         void glPixelStorei(GLenum, GLint);
-        void glReadPixels(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void*);
-        void glFinish(void);
-        void glFlush(void);
         void glGenTextures(GLsizei, GLuint*);
         void glDeleteTextures(GLsizei, const GLuint*);
         void glBindTexture(GLenum, GLuint);
@@ -275,7 +274,6 @@
         void glDrawElements(GLenum, GLsizei, GLenum, const void*);
         void glDepthFunc(GLenum);
         void glDepthMask(GLboolean);
-        void glPolygonMode(GLenum, GLenum);
         // GL 2.0 shader entry points.
         GLuint glCreateShader(GLenum);
         void glShaderSource(GLuint, GLsizei, const GLchar* const*, const GLint*);
