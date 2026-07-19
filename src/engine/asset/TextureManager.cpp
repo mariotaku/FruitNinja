@@ -69,11 +69,17 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     char hdPath[512];
     const char* resolvedPath = path;
     bool isHd = false;
+#ifdef FN_ENABLE_HD_ASSETS
     if (BuildHdPath(path, hdPath, sizeof(hdPath)) && Mortar::File::Exists(hdPath, 0)) {
         LOG_DEBUG(kHdLogTag, "Using HD texture: %s", hdPath);
         resolvedPath = hdPath;
         isHd = true;
     }
+#else
+    // HD fallback compiled out (FN_ENABLE_HD_ASSETS=OFF; default on Wii, whose
+    // MEM1 ~24MB can't afford 2x textures) -- always load original-res.
+    (void)hdPath;
+#endif
 
     uint32_t hash = StringHash(resolvedPath);
 

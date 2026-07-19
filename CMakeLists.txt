@@ -52,6 +52,15 @@ option(FN_WEB_FORCE_60FPS "Force emscripten main loop to a fixed 60fps (web debu
 # Default OFF. Used to capture device touch logs (filter console by "[TOUCH]").
 option(FN_DEBUG_TOUCH "Enable touch drain/dispatch debug logging (InputTranslatorSDL)" OFF)
 
+# HD texture fallback: when ON, TextureManager::Load silently prefers an
+# "hd_"-prefixed sibling file (2x pixel art) when present on disk. Default ON,
+# but forced OFF on Wii -- MEM1 (~24MB) can't afford the doubled texture RAM.
+# Override with -DFN_ENABLE_HD_ASSETS=ON to re-enable on Wii anyway.
+option(FN_ENABLE_HD_ASSETS "Load hd_-prefixed 2x textures when available" ON)
+if(FRUIT_PLATFORM_WII)
+    set(FN_ENABLE_HD_ASSETS OFF)
+endif()
+
 project(FruitNinja LANGUAGES CXX)
 
 # Propagate FRUIT_PLATFORM_WII as a compile definition so the #ifdef
@@ -60,6 +69,12 @@ project(FruitNinja LANGUAGES CXX)
 # this add_compile_definitions call is a no-op for every other configure.
 if (FRUIT_PLATFORM_WII)
     add_compile_definitions(FRUIT_PLATFORM_WII=1)
+endif()
+
+# HD texture fallback gate (see the FN_ENABLE_HD_ASSETS option above). Consumed
+# by TextureManager::Load. Defined engine-wide so the asset layer sees it.
+if (FN_ENABLE_HD_ASSETS)
+    add_compile_definitions(FN_ENABLE_HD_ASSETS=1)
 endif()
 
 # Used to invoke tools/assets/stage-assets.py (asset staging: textures ->
