@@ -22,6 +22,14 @@ void DisplayManager::SwapBuffers(void* /*window*/) {
 
     GX_DrawDone();
     GX_SetColorUpdate(GX_TRUE);
+    // Force Z-update ON so GX_CopyDisp actually clears the depth buffer. The
+    // EFB Z clear is gated by the last GX_SetZMode's write-enable; if the frame
+    // ends with depth-write OFF (painter's-order 2D), the Z clear silently
+    // no-ops and stale fruit depth carries into next frame -> black-center on
+    // the tumbling menu fruit. Wii analog of DisplayManager.cpp:66's
+    // glDepthMask(GL_TRUE) before glClear. GX_ALWAYS/test-irrelevant since this
+    // is only setting the write-enable for the copy-clear.
+    GX_SetZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
     // GX_CopyDisp clears (via GX_SetCopyClear, set in glClearColor) and copies
     // the EFB to the external framebuffer for scan-out. On the boot pass no
     // geometry was drawn, so this presents the clear colour -- exactly the

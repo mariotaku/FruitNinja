@@ -436,25 +436,28 @@ void Renderer::InitGL(int width, int height) {
 // projection/modelview split into GX directly. 2D UI draws are unlit and
 // typically depth-test-off in the binary's fixed-function equivalent
 // (BeginFrame toggles depth per phase); RendererGL doesn't touch depth state
-// inside DrawShaded2D either (caller's responsibility per Renderer.h), but
-// GX has no persistent per-context depth state to fall back on, so the 2D
-// path must set its ZMode explicitly. It uses GX_LEQUAL with write ALWAYS
-// on: the opaque parts of every 2D quad (wood background, logo, banner,
-// ring plates) need to write depth so they establish the depth floor the
-// 3D menu fruit render against (without it the tumbling fruit show a black
-// center). Honoring the caller's glDepthMask (depth-write-off for the HUD
-// pass) here instead was tried and reintroduced that black-center bug, so
-// depth-write is unconditional again.
-// The write-on-everything approach previously stomped GameDraw's
-// SetDepthBufferWrite(false) HUD/splat/blast pass a different way: every 2D
-// quad's full rect -- including 100%-transparent texels -- wrote depth,
-// leaving invisible depth walls that clipped later same-frame 2D quads
-// (symptom: the menu QUIT ring rendered as a left crescent, clipped by an
-// earlier transparent overlay quad). That's fixed instead by killing
-// transparent texels before the Z write via GX_SetZCompLoc(GX_FALSE) +
-// GX_SetAlphaCompare below, so only opaque texels reach the depth stage.
-// This mirrors the GL backend's effective per-layer depth behaviour and the
-// gl_funcsWii shim's GL_DEPTH_TEST->GX_LEQUAL mapping.
+// inside DrawShaded2D either (caller's responsibility per Renderer.h).
+//
+// 2D is now painter's-order, matching the host: depth-TEST stays on
+// (GX_LEQUAL, so same-z layers drawn later still pass over earlier ones and
+// still lose to nearer already-written 3D fruit depth), but depth-WRITE is
+// OFF -- 2D quads no longer punch depth. This matches the host's HUD pass
+// (depth-write-off) and the host's wood background (depth-test-off, writes
+// nothing either way).
+//
+// The depth buffer is no longer 2D's job to seed: DisplayManagerWii::
+// SwapBuffers now forces GX_SetZMode write-enable ON immediately before
+// GX_CopyDisp every frame (see that file), so the EFB Z-clear that
+// GX_CopyDisp performs is never gated off by whatever ZMode the last draw of
+// the frame left behind. That's the root fix for the previous black-center
+// tumbling-fruit bug -- 3D fruit no longer depend on 2D quads writing a
+// depth floor, so 2D can go back to write-off without reintroducing it.
+//
+// Root-fixing the depth clear also removes the two 2D-only side effects that
+// write-on-everything previously required: opaque 2D no longer occludes
+// farther elements it shouldn't (fixes the About screen's sensei rendering
+// over the bomb, and the menu QUIT ring's crescent-clip artifact), both for
+// free, with no alpha-gating needed.
 void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
                             int posOff, int uvOff, int colOff,
                             GLenum prim, GLuint tex, const Matrix44& /*mvp*/) {
@@ -484,22 +487,10 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     // state from a preceding 3D draw this frame.
     GX_SetCullMode(GX_CULL_NONE);
     SetStandardAlphaBlend();
-    // 2D UI: depth-TEST on with GX_LEQUAL, write-enable ALWAYS on. LEQUAL (<=)
-    // lets 2D layers drawn in painter's order at the SAME z pass over each
-    // other (logo/top-UI over the wood background), while the farther wood
-    // still fails against the NEARER 3D fruit's written z -- so the fruit
-    // renders correctly AND the 2D stack layers. Write is unconditional (not
-    // gated on the caller's glDepthMask) because the opaque parts of every 2D quad
-    // must write depth for the 3D fruit's depth floor to exist -- see the
-    // function-top comment for why. The crescent-clip bug that motivated
-    // gating write-enable is instead fixed below: kill transparent texels
-    // BEFORE the Z write so they never punch depth holes in later 2D quads.
-    GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    // Kill fully/near-transparent texels BEFORE the Z write (GX_SetZCompLoc
-    // GX_FALSE = compare Z after texture/alpha) so transparent quad regions
-    // don't write depth and punch holes in later 2D quads (e.g. the QUIT ring).
-    GX_SetZCompLoc(GX_FALSE);
-    GX_SetAlphaCompare(GX_GREATER, 16, GX_AOP_AND, GX_ALWAYS, 0);
+    // 2D UI: depth-TEST on with GX_LEQUAL (painter's-order layering within
+    // the 2D stack and correct occlusion against nearer 3D fruit), write OFF
+    // -- see the function-top comment. Matches the host HUD pass.
+    GX_SetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
     SetupGxVertexAndTev(/*haveUV=*/true, textured);
 
     const unsigned char* base = (const unsigned char*)verts;
@@ -572,12 +563,6 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
     // their inside-out inner shell so a multi-node fruit (pineapple) reads as
     // separately-tumbling parts. So LESS, not LEQUAL, is correct here.
     GX_SetZMode(GX_TRUE, GX_LESS, GX_TRUE);
-    // Restore the defaults DrawShaded2D changes (GX_SetZCompLoc(GX_FALSE) +
-    // an alpha-kill compare, see that function) so they don't leak into 3D
-    // mesh draws: 3D meshes are opaque (GX_BM_NONE below) and must compare Z
-    // before texturing like normal, with alpha-compare back to always-pass.
-    GX_SetZCompLoc(GX_TRUE);
-    GX_SetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     // Port specific: match host Geometry::Render, which does glDisable(GL_BLEND)
     // for every 3D mesh (opaque). Alpha blend on the mesh let self-overlapping
     // fragments accumulate/blend against the framebuffer with depth-write on ->
