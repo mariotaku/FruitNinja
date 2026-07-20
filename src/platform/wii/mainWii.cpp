@@ -16,6 +16,7 @@
 #include <wiiuse/wpad.h>
 #include <fat.h>
 #include <ogc/lwp_watchdog.h>
+#include <ogc/stm.h>
 #include <malloc.h>
 #include <cstring>
 #include <sys/stat.h>
@@ -29,6 +30,7 @@
 #include "platform/wii/SplashBootScreen.h"
 #include "platform/wii/SoundManagerWii.h"
 #include "platform/wii/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
+#include "game/SettingsSave.h"
 #include "debug/Logger.h"
 
 // ---------------------------------------------------------------------------
@@ -60,6 +62,16 @@ bool GameSplashDrew()       { return s_gameSplashDrew; }
 
 static Game g_game;
 static fn::FixedStepDriver g_driver;
+
+// Port specific: power/reset callbacks fire in system/interrupt context where
+// file IO is unsafe (SaveOnExit/SaveSettings do tinyxml2 disk writes). So the
+// callbacks only set a flag; the main loop polls it each frame and does the
+// actual save + shutdown from normal task context.
+static volatile bool g_PowerOff = false;
+static volatile bool g_Reset = false;
+
+static void OnPowerCallback(void) { g_PowerOff = true; }
+static void OnResetCallback(u32 irq, void* ctx) { (void)irq; (void)ctx; g_Reset = true; }
 
 static void WiiVideoInit() {
     VIDEO_Init();
@@ -152,6 +164,12 @@ int main(int argc, char* argv[]) {
     // libogc silently drops the vres (unlike the data format, it is never
     // re-applied on connect). It is re-issued every frame in the loop below.
 
+    // Port specific: no binary equivalent. Wii Home Button Menu (power button
+    // on the console/remote, or the reset button) requests a clean shutdown;
+    // register here so the flags above are live before the main loop starts.
+    SYS_SetPowerCallback(OnPowerCallback);
+    SYS_SetResetCallback(OnResetCallback);
+
     LOG_INFO("mainWii", "VIDEO/GX/WPAD/fat initialised (%dx%d)",
              (int)s_rmode->fbWidth, (int)s_rmode->efbHeight);
     fn::wii::LogHeapUsage("pre-init");
@@ -168,6 +186,21 @@ int main(int argc, char* argv[]) {
     u64 lastTicks = gettime();
 
     while (g_game.running) {
+        // Port specific: no binary equivalent. Power/reset requests are
+        // latched by the interrupt-context callbacks above; handle them here
+        // in normal task context where file IO is safe. Save BEFORE the
+        // shutdown action -- neither STM_ShutdownToStandby nor
+        // SYS_ResetSystem returns.
+        if (g_PowerOff || g_Reset) {
+            g_game.SaveOnExit();
+            SaveSettings();
+            if (g_PowerOff) {
+                STM_ShutdownToStandby();
+            } else {
+                SYS_ResetSystem(SYS_RETURNTOMENU, 0, 0);
+            }
+        }
+
         WPAD_ScanPads();
 
         // Re-apply the IR virtual resolution every frame. libogc drops
