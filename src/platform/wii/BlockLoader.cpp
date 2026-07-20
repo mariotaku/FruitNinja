@@ -10,6 +10,8 @@
 #include "entities/SuperFruitControl.h"
 #include "hud/MissControl.h"
 #include "screens/GameOverScreen.h"
+#include "screens/DojoScreen.h"
+#include "screens/ShopScreen.h"
 #include "debug/Logger.h"
 #include <vector>
 #include <gccore.h>  // SYS_GetArena1Size / SYS_GetArena2Size (see LogHeapUsage)
@@ -221,6 +223,17 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
     if (block == RES_BLOCK_SHOP) {
         if (s_ShopPreloaded) return;
         s_ShopPreloaded = true;
+
+        // Task #59 boot trim -- Dojo/Shop screen chrome (BG_store, dojo bg,
+        // etc, 16 tex total) deferred out of GameInitialise() on Wii (see the
+        // FRUIT_PLATFORM_WII guard at the call site in GameInitialise.cpp).
+        // Port-only #28 screens, no binary counterpart, only reachable via
+        // menu -> dojo -> shop, so no fidelity constraint. Refs land in the
+        // screens' own members (same pattern as GameOverScreen above) --
+        // distinct from kShopTex[] below, which is the scroll-in item-icon
+        // set (lazy-loaded per ShopListItem, not screen chrome).
+        DojoScreen::LoadContent();
+        ShopScreen::LoadContent();
 
         for (int i = 0; i < kShopTexCount; i++) {
             PreloadTexture(kShopTex[i], &s_HeldShop);

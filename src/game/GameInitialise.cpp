@@ -487,8 +487,13 @@ void GameInitialise(void* window, const char* config) {
     // Idempotent: TextureManager::Load caches by StringHash(path), so the later
     // ctor-triggered LoadContent() call (DojoScreen ctor / ShopScreen ctor guard) is a
     // cache hit, not a re-decode. No binary counterpart -- v1.6.1 loads these lazily.
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_SHOP) -- task #59
+    // (dojo/shop screen chrome, only reachable via menu -> dojo -> shop)
+#else
     DojoScreen::LoadContent();
     ShopScreen::LoadContent();
+#endif
     // Binary call #48: PreloadSounds (0x00101cac) — 25 named WAVs + per-fruit + arcade variants
     PreloadSounds();   // 0x0010b204 — preload WAVs (implemented + ASM-verified, see PreloadSounds.cpp)
 
