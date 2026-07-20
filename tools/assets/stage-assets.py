@@ -42,21 +42,26 @@ CMakeLists.txt).
     .rgba sidecars (clean checkout, no prior host/web node run yet), Wii
     SettingsScreen widgets fall back to placeholder art (same non-fatal
     contract as the host/web "node not found" case).
-  - PREBAKED TTF FONTS (task #51): tools/wii/bake-fonts.py rasterizes the
-    used glyph set (tmp/prebake/bake_plan.json, produced by a separate
-    offline planning pass -- see tools/wii/prebaked-font-format.md) with
-    FreeType and packs it into native IA8 GXT1 atlas pages + a metrics
-    index, replacing runtime stb_truetype rasterization on Wii (stb clips
-    CJK and breaks Korean). Staged under fonts/prebaked/<lang>/<size>.idx +
+  - PREBAKED TTF FONTS (task #51, extended #54): tools/wii/bake-fonts.py
+    rasterizes the used glyph set (tmp/prebake/bake_plan.json, produced by a
+    separate offline planning pass -- see tools/wii/prebaked-font-format.md)
+    with FreeType and packs it into native IA8 GXT1 atlas pages + a metrics
+    index (FNT3 -- glyph rects/metrics AND face-level ascender/descender/
+    lineHeight). Staged under fonts/prebaked/<lang>/<size>.idx +
     <size>_pN.gxtx. This step needs freetype-py (a bake-time host dependency,
     NOT pure-stdlib like the rest of --wii staging) and the bake_plan.json +
     chars_<lang>.txt inputs; both are optional here -- if either is missing
     (freetype-py not pip-installed on this machine, or the tmp/prebake/ plan
     hasn't been generated yet) this prints one warning and continues
     non-fatally, same "missing tool -> skip, don't fail the whole stage"
-    contract as the widget-art node/Pillow cases above. The eventual Wii
-    font LOADER (not yet written) is expected to fall back to on-device
-    stb_truetype rasterization when a prebaked page is absent.
+    contract as the widget-art node/Pillow cases above. Task #54: this baked
+    atlas is now the ONLY glyph/face-metric source on Wii -- neither
+    stb_truetype nor FreeType is linked into the Wii runtime at all (see
+    src/engine/render/FontCacheObjectTTF.cpp), so a baked miss renders no
+    glyph rather than falling back to an on-device rasterizer. The runtime
+    fontstruetype/*.ttf sources are therefore excluded from the Wii SD stage
+    (see stage_tree_raw below) -- they remain in the repo as bake-time-only
+    inputs to this script.
 
 ALWAYS (both host and web):
 
@@ -804,18 +809,31 @@ def stage_tree_raw(src_root, dst_root):
     """--wii mode: recursive mirror. Transcodable Tex1 *.tex are re-encoded
     as pre-tiled GXT1 (bit-depth-preserving GX format -- see
     transcode_tex_file_wii); everything else (raw .wav.pcm audio, fonts,
-    XML, non-Tex1 .tex) copies verbatim. Pure stdlib -- no
-    Pillow/ffmpeg/fontTools dependency."""
+    XML, non-Tex1 .tex) copies verbatim, EXCEPT the runtime TTF sources
+    under fontstruetype/ (task #54): the Wii build no longer opens a .ttf
+    at runtime at all (FontCacheObjectTTF is FRUIT_PLATFORM_WII-guarded to
+    read the offline-baked FNT3 atlas, stage_wii_prebaked_fonts below,
+    instead -- see src/engine/render/FontCacheObjectTTF.cpp). Shipping
+    gangofchinese.ttf (~5MB) + arabic.ttf to the SD card would be dead
+    weight; the .ttf files stay in the repo as BAKE-TIME-ONLY inputs to
+    tools/wii/bake-fonts.py. Pure stdlib -- no Pillow/ffmpeg/fontTools
+    dependency."""
     stats = {"other_copied": 0, "other_skipped": 0, "widget_tex_copied": 0,
              "tex_transcoded": 0, "tex_skipped": 0, "tex_verbatim": 0,
+             "ttf_excluded": 0,
              "gx_counts": {}}
     for root, _dirs, files in os.walk(src_root):
         rel_dir = os.path.relpath(root, src_root)
         dst_dir = os.path.join(dst_root, rel_dir) if rel_dir != "." else dst_root
+        rel_norm = rel_dir.replace("\\", "/")
+        is_font_dir = rel_norm == FONT_RELPATH
         os.makedirs(dst_dir, exist_ok=True)
         for name in files:
             src_path = os.path.join(root, name)
             dst_path = os.path.join(dst_dir, name)
+            if is_font_dir and name.lower().endswith(".ttf"):
+                stats["ttf_excluded"] += 1
+                continue
             if name.lower().endswith(".tex"):
                 transcode_tex_file_wii(src_path, dst_path, stats)
             elif copy_if_different(src_path, dst_path):
@@ -887,6 +905,26 @@ def stage_tree(src_root, dst_root, is_web, font_codepoints, font_charset_sources
     return stats, loops
 
 
+def sweep_stale_wii_ttf(dst_root):
+    """Remove any stale fontstruetype/*.ttf left in a Wii staging dir from a
+    prior (pre-task-#54) run -- stage_tree_raw no longer copies them (see its
+    docstring), but an existing incrementally-staged dir would otherwise keep
+    the old verbatim copy around indefinitely (stage_tree_raw only copies/
+    skips, never deletes). Wii-only, mirrors sweep_stale_pcm's pattern."""
+    removed = 0
+    dst_font_dir = os.path.join(dst_root, FONT_RELPATH)
+    if not os.path.isdir(dst_font_dir):
+        return removed
+    for name in os.listdir(dst_font_dir):
+        if name.lower().endswith(".ttf"):
+            try:
+                os.remove(os.path.join(dst_font_dir, name))
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
 def sweep_stale_pcm(dst_root):
     """Remove any stale sfx/*.wav.pcm left in staging by the retired resampler.
     Web builds --preload-file the whole staging Data dir, so a lingering
@@ -944,6 +982,12 @@ def main():
             stats["other_copied"], stats["other_skipped"]))
         print("[stage-assets] widget textures: {} staged as GXT1 from {}".format(
             stats["widget_tex_copied"], WIDGET_TEX_RELDIR))
+        print("[stage-assets] runtime TTF sources excluded (bake-time-only, task #54): "
+              "{} file(s) under {}/".format(stats["ttf_excluded"], FONT_RELPATH))
+        removed_ttf = sweep_stale_wii_ttf(dst_root)
+        if removed_ttf:
+            print("[stage-assets] removed {} stale staged .ttf under {}/ "
+                  "(pre-task-#54 leftovers)".format(removed_ttf, FONT_RELPATH))
 
         stage_wii_prebaked_fonts(repo_root, dst_root, stats)
         if stats["prebaked_fonts_baked"]:

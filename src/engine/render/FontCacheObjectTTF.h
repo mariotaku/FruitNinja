@@ -4,40 +4,48 @@
 // Mortar::FontCacheObjectTTF — dynamic-TTF glyph cache (backend-neutral).
 //
 // Port specific: not a binary struct. The binary's IFont / IGlyphCache API
-// (Samsung Bada framework) is replaced by this portable wrapper. The actual
-// rasterizer (FreeType or stb_truetype) is selected at CMake configure time
-// via FN_TTF_BACKEND and lives behind the Mortar::TtfFace seam (TtfBackend.h)
-// -- this class only ever calls TtfFace's backend-neutral API, never FT/stb
-// directly.
+// (Samsung Bada framework) is replaced by this portable wrapper.
 //
-// Lifecycle:
-//   1. Construct with a path to a .ttf file and a pixel size.
-//   2. GetGlyph(cp, pixelSize) returns a GlyphAtlasEntry* (or nullptr if the
-//      codepoint is not in the font), lazily rendering the glyph and packing it
-//      into the shared FontInterface atlas.
-//   3. GetKerningForPair(a, b) returns the kerning advance in pixels (via
-//      TtfFace::GetKerning_26_6). Always returns 0.0f when the font has no
-//      kern table -- matching the binary's GetKerning stub behaviour for
-//      .fnt fonts.
+// Non-Wii (host/web): the actual rasterizer (FreeType or stb_truetype) is
+// selected at CMake configure time via FN_TTF_BACKEND and lives behind the
+// Mortar::TtfFace seam (TtfBackend.h) -- this class only ever calls TtfFace's
+// backend-neutral API, never FT/stb directly. m_Face owns the open .ttf face.
 //
-// Thread safety: not thread-safe; single-threaded game loop is assumed.
-//
-// Port specific (Wii, task #51): on FRUIT_PLATFORM_WII, GetGlyph first consults
-// the prebaked FreeType IA8 atlas store (BakedFontWii) -- stb clips CJK glyphs
-// and breaks Korean composition, whereas the offline FreeType bake is correct.
+// Wii (task #51, extended task #54): NO TtfFace / m_Face exists on this
+// platform at all -- the constructor never opens a .ttf file, and neither
+// stb_truetype nor FreeType are linked into the Wii build. Every glyph AND
+// every face-level metric (ascender/descender/lineHeight) comes from the
+// offline-baked FNT3 atlas (BakedFontWii, tools/wii/bake-fonts.py) --
+// stb clipped CJK glyphs and broke Korean composition, so this is not merely
+// a fallback preference but the SOLE glyph source on Wii:
 //   - Plain (effect==NONE) glyphs: mapped straight onto a GlyphAtlasEntry
 //     (TryBakedGlyph).
 //   - Effect (BLUR/STROKE) glyphs: the effect filter (BuildBlur/BuildStrokes)
 //     runs on the BAKED glyph's UN-TILED coverage (TryBakedEffectGlyph ->
-//     BakedFontWii::GetGlyphCoverage), NOT stb's over-sized CJK raster, so the
-//     shadow/glow is computed at the baked (correct) size and aligns with the
-//     NONE base layer. (Common shadow = zero-offset BLUR, so the blur is
-//     REQUIRED to make the halo visible -- returning the plain baked glyph
-//     would leave it fully occluded behind the base.)
-// A baked MISS (glyph not in the size's baked subset, or the raw page can't be
-// re-read) falls back to the stb effect/plain path. The returned
-// GlyphAtlasEntry shape is identical every way, so BakedStringTTF /
-// BakedStringBox / Font.cpp are untouched. Host/web never take the baked path.
+//     BakedFontWii::GetGlyphCoverage), so the shadow/glow is computed at the
+//     baked (correct) size and aligns with the NONE base layer.
+//   - GetAscender/GetDescender/GetLineHeight read BakedFontWii's per-size FNT3
+//     face metrics instead of TtfFace::GetXxx_26_6.
+//   - GetKerningForPair always returns 0.0f (no live caller on Wii; the baked
+//     pen model doesn't consume pair-kerning -- see its body comment).
+// A baked MISS (glyph not in the size's baked subset, or the raw page can't
+// be re-read) renders NO glyph (GetGlyph returns nullptr) -- there is no
+// rasterizer left to fall back to; BakedFontWii::Lookup/GetGlyphCoverage
+// LOG_WARN the coverage gap. The returned GlyphAtlasEntry shape is identical
+// to the non-Wii path either way, so BakedStringTTF / BakedStringBox /
+// Font.cpp are untouched. Host/web never take the baked path.
+//
+// Lifecycle:
+//   1. Construct with a path to a .ttf file (ignored on Wii) and a pixel size.
+//   2. GetGlyph(cp, pixelSize) returns a GlyphAtlasEntry* (or nullptr if the
+//      codepoint is not in the font), lazily rendering the glyph and packing it
+//      into the shared FontInterface atlas.
+//   3. GetKerningForPair(a, b) returns the kerning advance in pixels (via
+//      TtfFace::GetKerning_26_6 on non-Wii). Always returns 0.0f when the font
+//      has no kern table -- matching the binary's GetKerning stub behaviour
+//      for .fnt fonts.
+//
+// Thread safety: not thread-safe; single-threaded game loop is assumed.
 
 #include "render/FontInterface.h"
 #include <cstdint>
@@ -45,9 +53,10 @@
 
 namespace Mortar {
 
-class TtfFace;
 #if defined(FRUIT_PLATFORM_WII)
 class BakedFontWii;   // Port specific: Wii prebaked-atlas glyph store (task #51)
+#else
+class TtfFace;        // dynamic FreeType/stb backend seam (TtfBackend.h) -- non-Wii only (task #54)
 #endif
 
 // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
@@ -111,10 +120,11 @@ public:
         // 4..11: BEVEL variants -- not ported, no port-side enumerator yet.
     };
 
-    // Loads the TTF face from a file path.
-    // pixelSize is the default pixel height; GetGlyph accepts per-call sizes.
-    // Backend (FreeType or stb_truetype) is chosen at CMake configure time
-    // via FN_TTF_BACKEND -- see TtfBackend.h.
+    // Loads the TTF face from a file path (non-Wii). pixelSize is the default
+    // pixel height; GetGlyph accepts per-call sizes. Backend (FreeType or
+    // stb_truetype) is chosen at CMake configure time via FN_TTF_BACKEND --
+    // see TtfBackend.h. On Wii, `path` is ignored (task #54): no runtime .ttf
+    // is ever opened; see the class-level comment above.
     FontCacheObjectTTF(const char* path, int defaultPixelSize);
     ~FontCacheObjectTTF();
 
@@ -159,9 +169,11 @@ public:
     float GetLineHeight(float requestedSize);
 
 private:
-    TtfFace*    m_Face;            // owned; backend chosen at compile time (TtfBackend.h)
-    int         m_DefaultPixelSize;
+#if !defined(FRUIT_PLATFORM_WII)
+    TtfFace*    m_Face;            // owned; backend chosen at compile time (TtfBackend.h). Non-Wii only (task #54): Wii never opens a runtime .ttf.
     long        m_CurrentCharHeight; // last charHeight_26_6 passed to m_Face->SetPixelSize
+#endif
+    int         m_DefaultPixelSize;
 
     FontInterface* m_Atlas;        // owned glyph atlas
 
@@ -169,42 +181,42 @@ private:
     std::map<GlyphCacheKey, GlyphAtlasEntry> m_Cache;
 
 #if defined(FRUIT_PLATFORM_WII)
-    // Port specific (task #51): prebaked FreeType IA8 atlas store. On Wii,
-    // GetGlyph tries this FIRST (plain, effect==NONE glyphs) and only falls
-    // back to stb rasterisation on a miss -- stb clips CJK / breaks Korean,
-    // so the baked FreeType glyphs are used wherever they exist. Owns one
-    // FontAtlasPage per (size,page) so the baked GL texture flows through the
-    // same GlyphAtlasEntry::page / pageTextureID binding the dynamic atlas uses.
-    // Lazily allocated on first Wii GetGlyph; active-language-only.
+    // Port specific (task #51, extended #54): prebaked FreeType IA8 atlas
+    // store -- the SOLE glyph + face-metric source on Wii (no stb/FreeType
+    // linked). Owns one FontAtlasPage per (size,page) so the baked GL texture
+    // flows through the same GlyphAtlasEntry::page / pageTextureID binding
+    // the dynamic atlas uses. Lazily allocated on first Wii GetGlyph/
+    // GetAscender/etc call; active-language-only.
     BakedFontWii* m_BakedWii;
     // Stable FontAtlasPage wrappers for baked GL textures, keyed by GL id, so
     // repeated lookups of the same page return the SAME page pointer (surface
     // grouping in BakedStringTTF keys off pointer identity).
     std::map<GLuint, FontAtlasPage*> m_BakedPages;
     FontAtlasPage* BakedPageFor(GLuint texId);
-    // Fill `out` from a baked-store hit at requestedSize. Returns false if the
-    // baked store misses (caller then falls through to stb). Scales the baked
-    // pixel metrics (at the snapped native size) by requestedSize/nativeSize.
+    // Fill `out` from a baked-store hit at requestedSize. Returns false on a
+    // baked miss (caller then renders no glyph -- see GetGlyph). Scales the
+    // baked pixel metrics (at the snapped native size) by requestedSize/nativeSize.
     bool TryBakedGlyph(uint32_t cp, float requestedSize, GlyphAtlasEntry* out);
 
     // Task #51 effect-layer path: build an effect (BLUR/STROKE) glyph from the
-    // BAKED coverage instead of stb's over-sized CJK raster, so the effect
-    // layer matches the NONE base layer's size + alignment. Un-tiles the baked
-    // glyph's coverage (BakedFontWii::GetGlyphCoverage), pads it by-effect, runs
-    // the SAME BuildBlur/BuildStrokes filter the stb path uses, packs into the
+    // BAKED coverage. Un-tiles the baked glyph's coverage
+    // (BakedFontWii::GetGlyphCoverage), pads it by-effect, runs the SAME
+    // BuildBlur/BuildStrokes filter the non-Wii path uses, packs into the
     // dynamic atlas, and fills `out` with baked metrics (scaled by
-    // requestedSize/nativeSize) plus the grown bearing shift. Returns false on a
-    // baked miss (caller falls through to the stb effect path). `radius` is
-    // LOGICAL px (== texel on Wii, ss==1).
+    // requestedSize/nativeSize) plus the grown bearing shift. Returns false on
+    // a baked miss (caller then renders no glyph). `radius` is LOGICAL px.
     bool TryBakedEffectGlyph(uint32_t cp, float requestedSize,
                              FONT_EFFECT_ENUM effect, int radius,
                              GlyphAtlasEntry* out);
 #endif
 
+#if !defined(FRUIT_PLATFORM_WII)
     // Apply TtfFace::SetPixelSize for the given charHeight_26_6 value.
     // charHeight_26_6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0).
-    // Tracks m_CurrentCharHeight to avoid redundant backend calls.
+    // Tracks m_CurrentCharHeight to avoid redundant backend calls. Non-Wii
+    // only (task #54): Wii has no TtfFace to set a pixel size on.
     bool SetCharSize(long charHeight_26_6);
+#endif
 };
 
 } // namespace Mortar

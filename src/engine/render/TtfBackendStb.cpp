@@ -1,9 +1,14 @@
 // stb_truetype implementation of the Mortar::TtfFace seam (TtfBackend.h).
 //
-// Selected when FN_TTF_BACKEND=stb (forced for FRUIT_PLATFORM_WII; opt-in
-// elsewhere). Reproduces FreeType 26.6-metric semantics (see TtfBackend.h)
-// on top of stb_truetype's pixel-space API so FontCacheObjectTTF's math is
-// unchanged regardless of which backend is compiled.
+// Selected when FN_TTF_BACKEND=stb (opt-in; "freetype" is the default on
+// every platform that has it). Reproduces FreeType 26.6-metric semantics
+// (see TtfBackend.h) on top of stb_truetype's pixel-space API so
+// FontCacheObjectTTF's math is unchanged regardless of which backend is
+// compiled. NEVER compiled for FRUIT_PLATFORM_WII (task #54): Wii has no
+// TtfFace at all -- FontCacheObjectTTF reads the offline-baked FNT3 atlas
+// (BakedFontWii) instead, so this TU is excluded from the Wii target
+// entirely (see src/engine/CMakeLists.txt's `if (NOT FRUIT_PLATFORM_WII)`
+// guard around the backend selection).
 //
 // STB_TRUETYPE_IMPLEMENTATION is defined in EXACTLY this one TU.
 

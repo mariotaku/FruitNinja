@@ -5,7 +5,9 @@
 // -- see the GetLibrary() comment below, matching the previous
 // FontTTFRegistry "never destroyed" rationale).
 //
-// Selected when FN_TTF_BACKEND=freetype (default, all platforms except Wii).
+// Selected when FN_TTF_BACKEND=freetype (default on every non-Wii platform).
+// NEVER compiled for FRUIT_PLATFORM_WII (task #54): Wii has no TtfFace at
+// all -- see TtfBackendStb.cpp's header comment for the full rationale.
 
 #include "render/TtfBackend.h"
 #include "debug/Logger.h"

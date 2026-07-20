@@ -15,9 +15,11 @@
 // those up at runtime instead of rasterising, so CJK/Korean render correctly.
 //
 // LAYOUT ON DISK (see tools/wii/prebaked-font-format.md for the full spec):
-//   fonts/prebaked/<lang>/<size>.idx        -- 16B header + 20B*glyphCount
-//                                               records, BIG-ENDIAN, sorted by
-//                                               codepoint.
+//   fonts/prebaked/<lang>/<size>.idx        -- 22B FNT3 header (task #54: glyph
+//                                               rects/metrics + face-level
+//                                               ascender/descender/lineHeight)
+//                                               + 20B*glyphCount records,
+//                                               BIG-ENDIAN, sorted by codepoint.
 //   fonts/prebaked/<lang>/<size>_pN.gxtx    -- GXT1 container, GX_TF_IA8, one
 //                                               per atlas page.
 // <lang> is the baker's dir key (english_us, japanese, korean,
@@ -47,8 +49,18 @@
 // LOOKUP CONTRACT: Lookup(cp, requestedSize, out) fills `out` (see
 // BakedGlyphInfo) on a hit and returns true; returns false on a miss (codepoint
 // not baked for the snapped size). The caller (FontCacheObjectTTF::GetGlyph on
-// Wii) maps a hit onto GlyphAtlasEntry and falls back to the stb path on a
-// miss. Misses are LOG_WARN'd so plan-coverage gaps are diagnosable.
+// Wii) maps a hit onto GlyphAtlasEntry; on a miss it renders no glyph at all
+// (task #54: there is no stb/FreeType rasterizer left to fall back to on
+// Wii). Misses are LOG_WARN'd so plan-coverage gaps are diagnosable.
+//
+// FACE METRICS (task #54): the .idx header (FNT3) also carries FACE-LEVEL
+// ascender/descender/lineHeight (captured at bake time from freetype-py's
+// Face.size -- see tools/wii/bake-fonts.py face_metrics_at), in SUPERSAMPLED
+// px like every other metric field. GetAscender/GetDescender/GetLineHeight
+// expose them per (lang, snapped size). This lets FontCacheObjectTTF answer
+// face-metric queries (e.g. Font.cpp's DrawStringTTF ascent-based pen shift)
+// WITHOUT m_Face, which is what makes dropping the runtime TTF open (and
+// stb_truetype entirely) possible on Wii.
 
 #if defined(FRUIT_PLATFORM_WII)
 
@@ -122,6 +134,22 @@ public:
     // layer in size + alignment.
     bool GetGlyphCoverage(uint32_t cp, float requestedSize, GlyphCoverage* out);
 
+    // Face-level metrics (task #54), RAW SUPERSAMPLED px straight from the
+    // FNT3 header, at the canonical size `requestedSize` snaps to. *outPx is
+    // the raw value (ascender/descender/lineHeight); *outNativeSize is the
+    // snapped canonical size and *outSupersample the BAKE_SS used to bake it
+    // -- the caller (FontCacheObjectTTF) combines these with `requestedSize`
+    // via the SAME `pxToWorld = inv * sizeScale / ss` formula TryBakedGlyph
+    // uses for bearing/advance, so the snap-scale is applied consistently in
+    // one place rather than divided out here. Returns false on a miss (no
+    // baked idx for the active language/size) -- caller falls back to a
+    // neutral default (matching the pre-existing no-m_Face guard behaviour)
+    // rather than a stb rasterizer call, since Wii no longer links stb.
+    // Outputs are left unchanged on a miss.
+    bool GetAscender(float requestedSize, int* outPx, int* outNativeSize, float* outSupersample);
+    bool GetDescender(float requestedSize, int* outPx, int* outNativeSize, float* outSupersample);
+    bool GetLineHeight(float requestedSize, int* outPx, int* outNativeSize, float* outSupersample);
+
     // Free all GL textures + parsed idx tables (called on language change and
     // at teardown). Public so a font-cache Clear() can cascade if needed.
     void Clear();
@@ -146,6 +174,10 @@ private:
         int                   atlasDim;  // page dimension, texels
         int                   pageCount;
         float                 supersample; // BAKE_SS from the .idx header (task #52)
+        // Face-level metrics (task #54), SUPERSAMPLED px, straight from the
+        // FNT3 header (see tools/wii/bake-fonts.py face_metrics_at). Divided
+        // by `supersample` on read in GetAscender/GetDescender/GetLineHeight.
+        int16_t               ascender, descender, lineHeight;
         std::vector<GlyphRec> glyphs;    // sorted by cp
         std::vector<GLuint>   pageTex;   // [pageCount], 0 until uploaded
         std::vector<bool>     pageTried; // [pageCount], upload attempted
@@ -160,7 +192,7 @@ private:
         std::vector<bool>                  pageRawTried; // [pageCount], read attempted
 
         SizeIndex() : present(false), tried(false), atlasDim(0), pageCount(0),
-                      supersample(1.0f) {}
+                      supersample(1.0f), ascender(0), descender(0), lineHeight(0) {}
     };
 
     int m_LanguageFlag;                     // active flag; -1 = none set yet

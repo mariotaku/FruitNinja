@@ -21,15 +21,18 @@ option(FRUIT_PLATFORM_WII "Build the Wii (GX/libogc2) platform target -- require
 # CJK/Arabic TTF glyphs through the Mortar::TtfFace seam
 # (src/engine/render/TtfBackend.h); exactly one of TtfBackendFreetype.cpp /
 # TtfBackendStb.cpp is compiled, selected here. "freetype" is the default on
-# every platform that has it available (host/web); Wii has no FreeType port
-# (see the FreeType gating further down) so it is forced to "stb" regardless
-# of what the cache entry says.
-set(FN_TTF_BACKEND "freetype" CACHE STRING "Dynamic TTF rasterizer backend: freetype or stb")
+# every platform that has it available (host/web).
+# Task #54: Wii is TTF-BACKEND-FREE -- neither backend is compiled/linked for
+# FRUIT_PLATFORM_WII (see the `if (NOT FRUIT_PLATFORM_WII)` guard in
+# src/engine/CMakeLists.txt). Every glyph + face metric on Wii comes from the
+# offline-baked FNT3 atlas (BakedFontWii.cpp), not a runtime rasterizer. This
+# cache entry is simply unused/inert when FRUIT_PLATFORM_WII is ON.
+set(FN_TTF_BACKEND "freetype" CACHE STRING "Dynamic TTF rasterizer backend: freetype or stb (ignored on Wii)")
 set_property(CACHE FN_TTF_BACKEND PROPERTY STRINGS freetype stb)
-if (FRUIT_PLATFORM_WII)
-    set(FN_TTF_BACKEND "stb")
-endif()
 message(STATUS "FN_TTF_BACKEND = ${FN_TTF_BACKEND}")
+if (FRUIT_PLATFORM_WII)
+    message(STATUS "  (Wii: FN_TTF_BACKEND ignored -- no runtime TTF backend is linked, see task #54)")
+endif()
 
 # Port specific: compile-time render interpolation toggle.
 # Default ON for host/web builds; always forced OFF under FN_ASM_VERIFY

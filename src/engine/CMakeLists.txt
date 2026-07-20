@@ -154,17 +154,26 @@ target_sources(mortar_engine PRIVATE
 )
 # Dynamic TTF glyph rendering -- backend-neutral (see the Mortar::TtfFace
 # seam, src/engine/render/TtfBackend.h). These two TUs never call FreeType or
-# stb_truetype directly, so they compile for every platform including Wii;
-# FN_TTF_BACKEND below selects exactly which backend .cpp implements the seam.
+# stb_truetype directly, so they compile for every platform including Wii.
+# Non-Wii: FN_TTF_BACKEND below selects exactly which backend .cpp implements
+# the TtfFace seam. Wii: no backend is selected at all (task #54, see below).
 target_sources(mortar_engine PRIVATE
     render/FontCacheObjectTTF.cpp
     render/FontTTFRegistry.cpp
 )
-if (FN_TTF_BACKEND STREQUAL "stb")
-    target_sources(mortar_engine PRIVATE render/TtfBackendStb.cpp)
-    target_include_directories(mortar_engine PRIVATE ${CMAKE_SOURCE_DIR})
-else()
-    target_sources(mortar_engine PRIVATE render/TtfBackendFreetype.cpp)
+# Task #54: Wii has NO TtfFace backend at all -- FontCacheObjectTTF is guarded
+# FRUIT_PLATFORM_WII to never construct/call one (see that file's m_Face
+# guards); every glyph + face metric comes from the offline-baked FNT3 atlas
+# (BakedFontWii.cpp, added above under the Wii render/*.cpp block). Neither
+# TtfBackendStb.cpp (stb_truetype.h) nor TtfBackendFreetype.cpp is compiled or
+# linked for Wii, and FN_TTF_BACKEND is irrelevant there.
+if (NOT FRUIT_PLATFORM_WII)
+    if (FN_TTF_BACKEND STREQUAL "stb")
+        target_sources(mortar_engine PRIVATE render/TtfBackendStb.cpp)
+        target_include_directories(mortar_engine PRIVATE ${CMAKE_SOURCE_DIR})
+    else()
+        target_sources(mortar_engine PRIVATE render/TtfBackendFreetype.cpp)
+    endif()
 endif()
 # TiXml.cpp is the sole tinyxml2 TU for the TiXml-1 shim.
 # Excluded from asm-verify cross-build: no binary counterpart in this form.

@@ -77,8 +77,14 @@ left untouched.
 ## Assets — uncompressed
 
 Wii ships **raw Tex1 textures + raw `.wav.pcm` audio** (no WebP/OGG transcode);
-`tools/assets/stage-assets.py --wii` does a verbatim copy. TTF glyphs use
-**stb_truetype** (`-DFN_TTF_BACKEND=stb`, forced for Wii), no FreeType.
+`tools/assets/stage-assets.py --wii` does a verbatim copy. TTF glyphs are
+**fully pre-baked offline** (task #51, extended #54) -- `tools/wii/bake-fonts.py`
+rasterizes the used glyph set with FreeType at BUILD time into a native IA8
+GXT1 atlas + FNT3 metrics index (glyph rects AND face-level ascender/
+descender/lineHeight), read at runtime by `BakedFontWii`. Neither
+stb_truetype nor FreeType is linked into the Wii runtime binary, and the
+`.ttf` sources (`fontstruetype/*.ttf`) are NOT staged to the SD card -- see
+`tools/wii/prebaked-font-format.md`. `FN_TTF_BACKEND` is ignored for Wii.
 
 ## Build (Windows host)
 

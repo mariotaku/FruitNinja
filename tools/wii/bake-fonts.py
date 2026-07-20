@@ -107,11 +107,32 @@ SHELF_PAD = 2  # 2px transparent gutter between packed glyph cells. Must be >= t
 # glyph rects/metrics are now in SUPERSAMPLED px (BAKE_SS) instead of logical px
 # -- an FNT1 loader reading FNT2 records unscaled would render 1.5x too big, so
 # the loader MUST reject the old magic. Re-bake ALL atlases when bumping.
-# Header layout unchanged in size (16 bytes): the former u32 reserved2 at offset
-# 12 becomes u16 supersample (8.8 fixed-point: SS*256) + u16 reserved.
-MAGIC = b"FNT2"
+#
+# FNT3 (task #54): FNT2 + FACE-LEVEL metrics (ascender/descender/lineHeight),
+# needed so the Wii runtime can drop stb_truetype entirely -- FontCacheObjectTTF
+# ::GetAscender/GetDescender/GetLineHeight used to call into TtfFace::m_Face,
+# which no longer exists once the .ttf isn't opened at runtime (see
+# src/engine/render/BakedFontWii.{h,cpp} GetAscender/GetDescender/GetLineHeight).
+# Captured at the SAME physical size the glyphs are baked at (physical_size(size), i.e.
+# size*FONT_DPI_SCALE*BAKE_SS) via freetype-py's `Face.size` (26.6 fixed
+# point, same fixed-point convention as the per-glyph advance field already
+# stored below) -- mirrors exactly how the glyph advance is captured
+# (g.advance.x >> 6), just read from the face's size metrics instead of a
+# glyph slot. Stored in SUPERSAMPLED px like every other metric field in this
+# format; the loader divides by BAKE_SS (also in this header) to recover
+# LOGICAL px, matching FontCacheObjectTTF's existing invWorld/kFontSupersample
+# scheme. Header magic bumped again because an FNT2 loader has no field to
+# read these into and an FNT3 file read by an FNT2-shaped struct would
+# misparse the trailing glyph table. Re-bake ALL atlases when bumping.
+#
+# Header layout grows from 16 to 22 bytes: the 16-byte FNT2 header is kept
+# byte-for-byte (offsets 0..15 unchanged) and three new signed 16-bit fields
+# are appended (ascender, descender, lineHeight -- SUPERSAMPLED px, 26.6
+# truncated to whole px like the glyph advance field). No reserved padding is
+# added after them; the glyph table starts immediately at offset 22.
+MAGIC = b"FNT3"
 SS_FIXED_SHIFT = 8  # supersample stored as 8.8 fixed-point (value = round(SS*256))
-HEADER_STRUCT = struct.Struct(">4sHBBIHH")  # magic, atlasDim, pageCount, reserved, glyphCount, supersample_8_8, reserved2
+HEADER_STRUCT = struct.Struct(">4sHBBIHHhhh")  # magic, atlasDim, pageCount, reserved, glyphCount, supersample_8_8, reserved2, ascender, descender, lineHeight
 GLYPH_STRUCT = struct.Struct(">IBBHHHHhhH")  # cp, page, reserved, x, y, w, h, bearingX, bearingY, advance
 
 
@@ -177,6 +198,23 @@ def physical_size(size):
     loader divides by the ideal (unrounded) BAKE_SS so a <1px rounding delta in
     the atlas density is harmless."""
     return int(round(size * FONT_DPI_SCALE * BAKE_SS))
+
+
+def face_metrics_at(face_path, size):
+    """Capture FACE-LEVEL metrics (ascender, descender, lineHeight) at
+    physical_size(`size`) px -- the SAME physical size rasterize_glyphs bakes
+    glyphs at, so the two stay self-consistent (task #54). Read from
+    freetype-py's `Face.size` (a `FT_Size_Metrics` wrapper -- NOT
+    `Face.size.metrics`, that attribute doesn't exist on this binding),
+    26.6 fixed point, set by the preceding set_pixel_sizes call, truncated to
+    whole SUPERSAMPLED px exactly like a glyph's advance field (`>> 6`,
+    matching rasterize_glyphs's `g.advance.x >> 6`). Returns
+    (ascender, descender, lineHeight) as signed ints; descender is negative
+    (FreeType convention, below baseline)."""
+    face = freetype.Face(face_path)
+    face.set_pixel_sizes(0, physical_size(size))
+    m = face.size
+    return (m.ascender >> 6, m.descender >> 6, m.height >> 6)
 
 
 def rasterize_glyphs(face_path, size, codepoints, missing_out):
@@ -316,7 +354,7 @@ def pack_glyphs(glyphs):
                         "page dim {} -- increase PAGE_DIM_CANDIDATES".format(dim))
 
 
-def build_idx_bytes(glyphs, placements, page_count, atlas_dim):
+def build_idx_bytes(glyphs, placements, page_count, atlas_dim, face_metrics):
     records = []
     for g, pl in zip(glyphs, placements):
         page_idx, x, y = pl
@@ -325,10 +363,11 @@ def build_idx_bytes(glyphs, placements, page_count, atlas_dim):
     records.sort(key=lambda r: r[0])  # sorted by codepoint for binary search
 
     ss_fixed = int(round(BAKE_SS * (1 << SS_FIXED_SHIFT)))  # 8.8 fixed-point
+    ascender, descender, line_height = face_metrics
 
     out = bytearray()
     out += HEADER_STRUCT.pack(MAGIC, atlas_dim, page_count, 0, len(records),
-                              ss_fixed, 0)
+                              ss_fixed, 0, ascender, descender, line_height)
     for r in records:
         out += GLYPH_STRUCT.pack(*r)
     return bytes(out)
@@ -341,6 +380,7 @@ def bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report):
     missing = []
     glyphs = rasterize_glyphs(face_path, size, codepoints, missing)
     glyphs.sort(key=lambda g: g.cp)
+    face_metrics = face_metrics_at(face_path, size)
 
     pages, placements = pack_glyphs(glyphs)
 
@@ -352,7 +392,7 @@ def bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report):
         with open(os.path.join(lang_dir, "{}_p{}.gxtx".format(size, pi)), "wb") as f:
             f.write(blob)
 
-    idx_bytes = build_idx_bytes(glyphs, placements, len(pages), pages[0].dim)
+    idx_bytes = build_idx_bytes(glyphs, placements, len(pages), pages[0].dim, face_metrics)
     with open(os.path.join(lang_dir, "{}.idx".format(size)), "wb") as f:
         f.write(idx_bytes)
 

@@ -33,8 +33,9 @@ static const int kCanonicalCount   = 9;
 // already Wii-native big-endian).
 static const int kGxtxHeaderSize = 12;
 
-// .idx header: 16 bytes, BIG-ENDIAN.
-static const int kIdxHeaderSize  = 16;
+// .idx header: 22 bytes (FNT3, task #54 -- FNT2's 16-byte header + 3 s16 face
+// metrics), BIG-ENDIAN.
+static const int kIdxHeaderSize  = 22;
 // .idx glyph record: 20 bytes.
 static const int kIdxRecordSize  = 20;
 
@@ -157,13 +158,17 @@ BakedFontWii::SizeIndex* BakedFontWii::LoadSizeIndex(int size) {
         return NULL;
     }
 
-    // Header (16 bytes): magic "FNT2", u16 atlasDim, u8 pageCount, u8 reserved,
-    // u32 glyphCount, u16 supersample_8_8, u16 reserved2. Task #52: magic bumped
-    // FNT1->FNT2 because records are now in SUPERSAMPLED px -- reject FNT1 (an
-    // old atlas would render 1.5x too big if read unscaled; re-bake required).
-    if (buf[0] != 'F' || buf[1] != 'N' || buf[2] != 'T' || buf[3] != '2') {
+    // Header (22 bytes, FNT3 task #54): magic "FNT3", u16 atlasDim, u8
+    // pageCount, u8 reserved, u32 glyphCount, u16 supersample_8_8,
+    // u16 reserved2, s16 ascender, s16 descender, s16 lineHeight. Task #52
+    // bumped FNT1->FNT2 (records now SUPERSAMPLED px); task #54 bumps
+    // FNT2->FNT3 (adds face-level metrics, see BakedFontWii.h). Reject FNT1/
+    // FNT2 -- an old-format atlas read by this loader would either render
+    // 1.5x too big (FNT1) or misparse the glyph table at the wrong offset
+    // (FNT2, which is 6 bytes shorter); re-bake required either way.
+    if (buf[0] != 'F' || buf[1] != 'N' || buf[2] != 'T' || buf[3] != '3') {
         free(buf);
-        LOG_WARN("BakedFontWii", "idx '%s' bad magic (need FNT2 -- re-bake fonts)", path);
+        LOG_WARN("BakedFontWii", "idx '%s' bad magic (need FNT3 -- re-bake fonts)", path);
         return NULL;
     }
     int      atlasDim   = (int)ReadBE16(buf + 4);
@@ -172,6 +177,9 @@ BakedFontWii::SizeIndex* BakedFontWii::LoadSizeIndex(int size) {
     // supersample: 8.8 fixed-point at offset 12 (value = round(BAKE_SS*256)).
     int      ssFixed    = (int)ReadBE16(buf + 12);
     float    supersample = (ssFixed > 0) ? ((float)ssFixed / 256.0f) : 1.0f;
+    int16_t  ascender    = (int16_t)ReadBE16(buf + 16);
+    int16_t  descender   = (int16_t)ReadBE16(buf + 18);
+    int16_t  lineHeight  = (int16_t)ReadBE16(buf + 20);
 
     unsigned long need = (unsigned long)kIdxHeaderSize
                        + (unsigned long)glyphCount * (unsigned long)kIdxRecordSize;
@@ -185,6 +193,9 @@ BakedFontWii::SizeIndex* BakedFontWii::LoadSizeIndex(int size) {
     si.atlasDim    = atlasDim;
     si.pageCount   = pageCount;
     si.supersample = supersample;
+    si.ascender    = ascender;
+    si.descender   = descender;
+    si.lineHeight  = lineHeight;
     si.pageTex.assign((size_t)pageCount, 0);
     si.pageTried.assign((size_t)pageCount, false);
     si.pageRaw.assign((size_t)pageCount, std::vector<uint8_t>());
@@ -300,9 +311,11 @@ bool BakedFontWii::Lookup(uint32_t cp, float requestedSize, BakedGlyphInfo* out)
     if (found < 0) {
         // Glyph absent from a present index = a real plan-coverage gap (the
         // subset for this size didn't include a codepoint the game renders).
-        // GetGlyph caches the resulting stb fallback, so this fires at most
-        // once per unique (cp, size) -- bounded, not per-frame.
-        LOG_WARN("BakedFontWii", "miss cp=U+%04X size=%d lang=%s (falling back to stb)",
+        // Task #54: no stb fallback on Wii -- a miss means the glyph does not
+        // draw (control chars like U+000A are expected; a visible miss means the
+        // bake set needs the cp added). Bounded: GetGlyph caches the empty entry,
+        // so this fires at most once per unique (cp, size), not per-frame.
+        LOG_WARN("BakedFontWii", "miss cp=U+%04X size=%d lang=%s (no glyph -- add to bake if visible)",
                  (unsigned)cp, size, m_LangDir);
         return false;
     }
@@ -334,6 +347,46 @@ bool BakedFontWii::Lookup(uint32_t cp, float requestedSize, BakedGlyphInfo* out)
         return false;
     }
     out->pageTextureID = tex;
+    return true;
+}
+
+// Face-level metrics (task #54). Shared snap+load path with Lookup. Returned
+// RAW in SUPERSAMPLED px (bg.nativeSize/bg.supersample also reported via
+// *outNativeSize/*outSupersample) -- deliberately NOT pre-divided to LOGICAL
+// px here, so the caller (FontCacheObjectTTF) applies the exact same
+// `pxToWorld = inv * sizeScale / ss` formula it already uses for every other
+// baked metric (bearing/advance/width -- see TryBakedGlyph), keeping the
+// snap-scale (requestedSize/nativeSize) applied consistently in one place.
+bool BakedFontWii::GetAscender(float requestedSize, int* outPx, int* outNativeSize, float* outSupersample) {
+    int size = SnapSize(requestedSize);
+    if (size <= 0) return false;
+    SizeIndex* si = LoadSizeIndex(size);
+    if (!si) return false;
+    *outPx = (int)si->ascender;
+    *outNativeSize = size;
+    *outSupersample = (si->supersample > 0.0f) ? si->supersample : 1.0f;
+    return true;
+}
+
+bool BakedFontWii::GetDescender(float requestedSize, int* outPx, int* outNativeSize, float* outSupersample) {
+    int size = SnapSize(requestedSize);
+    if (size <= 0) return false;
+    SizeIndex* si = LoadSizeIndex(size);
+    if (!si) return false;
+    *outPx = (int)si->descender;
+    *outNativeSize = size;
+    *outSupersample = (si->supersample > 0.0f) ? si->supersample : 1.0f;
+    return true;
+}
+
+bool BakedFontWii::GetLineHeight(float requestedSize, int* outPx, int* outNativeSize, float* outSupersample) {
+    int size = SnapSize(requestedSize);
+    if (size <= 0) return false;
+    SizeIndex* si = LoadSizeIndex(size);
+    if (!si) return false;
+    *outPx = (int)si->lineHeight;
+    *outNativeSize = size;
+    *outSupersample = (si->supersample > 0.0f) ? si->supersample : 1.0f;
     return true;
 }
 

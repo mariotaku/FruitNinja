@@ -29,6 +29,30 @@ The old FNT1 magic is bumped to **FNT2** because an FNT1-era atlas read by the
 FNT2 loader would render 1.5x too big (records unscaled). The loader rejects
 FNT1. **Bumping the format requires re-baking ALL atlases.**
 
+## Face-level metrics (FNT3, task #54)
+
+Task #54 removes stb_truetype (and the runtime `.ttf` open) from the Wii
+build entirely. `FontCacheObjectTTF::GetAscender/GetDescender/GetLineHeight`
+previously called into `TtfFace::m_Face` (the FreeType/stb face object) --
+once nothing opens the `.ttf` at runtime, those calls have no face to read.
+The `.idx` header now also carries the FreeType **face-level** metrics
+(`ascender`, `descender`, `lineHeight` from freetype-py's `Face.size`, 26.6 fixed
+point) captured at the SAME physical bake size as the glyphs
+(`physical_size(size)`), truncated to whole SUPERSAMPLED px exactly like a
+glyph's `advance` field. `BakedFontWii::GetAscender/GetDescender/GetLineHeight`
+return these RAW (still SUPERSAMPLED px, plus the snapped native size and
+BAKE_SS) rather than pre-dividing -- `FontCacheObjectTTF` (Wii-only) applies
+the exact same `pxToWorld = invFontScale * sizeScale / ss` formula it already
+uses for glyph bearing/advance (see `TryBakedGlyph`), so a face metric and a
+glyph's own bearingY land in the same world-unit space at the same
+requestedSize.
+
+Magic bumped **FNT2 -> FNT3** because the header grows (an FNT2 loader has no
+field for the new metrics, and an FNT3 file parsed with the FNT2-shaped
+16-byte header would misread the glyph table, which now starts 6 bytes
+later). The loader rejects both FNT1 and FNT2. **Bumping the format requires
+re-baking ALL atlases.**
+
 ## Directory layout
 
 Staged under the Wii data root, mirroring the existing `fonts/` /
@@ -160,16 +184,19 @@ Fixed-size binary, big-endian (Wii-native), no compression. Read the whole
 file, binary-search by codepoint (glyphs are sorted ascending).
 
 ```
-Header (16 bytes):
-  offset 0   char[4]  magic = "FNT2"   (task #52; FNT1 = pre-supersample, rejected)
+Header (22 bytes):
+  offset 0   char[4]  magic = "FNT3"   (task #54; FNT2/FNT1 rejected -- see below)
   offset 4   u16      atlasDim      (page width == height, e.g. 512)
   offset 6   u8       pageCount     (number of <size>_pN.gxtx siblings)
   offset 7   u8       reserved      = 0
   offset 8   u32      glyphCount    (number of glyph records that follow)
   offset 12  u16      supersample   BAKE_SS as 8.8 fixed-point (round(SS*256); 1.5 -> 384)
   offset 14  u16      reserved2     = 0
+  offset 16  s16      ascender      Face.size.ascender >> 6, SUPERSAMPLED px (task #54)
+  offset 18  s16      descender     Face.size.descender >> 6, SUPERSAMPLED px (negative)
+  offset 20  s16      lineHeight    Face.size.height >> 6, SUPERSAMPLED px
 
-Glyph record (20 bytes), repeated glyphCount times, sorted by codepoint ascending:
+Glyph record (20 bytes), starting at offset 22, repeated glyphCount times, sorted by codepoint ascending:
   u32   codepoint     Unicode code point (UTF-32)
   u8    page          index into the <size>_pN.gxtx siblings (0-based)
   u8    reserved      = 0
@@ -182,7 +209,7 @@ Glyph record (20 bytes), repeated glyphCount times, sorted by codepoint ascendin
   u16   advance       FreeType glyph.advance.x >> 6, SUPERSAMPLED px (rounded down)
 ```
 
-Total file size = 16 + 20*glyphCount bytes.
+Total file size = 22 + 20*glyphCount bytes.
 
 All px/texel fields are at the PHYSICAL bake size = `round(size * (100/72) *
 BAKE_SS)` (see `physical_size` in the baker):

@@ -1,5 +1,4 @@
 #include "render/FontCacheObjectTTF.h"
-#include "render/TtfBackend.h"
 #include "debug/Logger.h"
 #include <cstring>
 #include <cstdlib>
@@ -9,19 +8,35 @@
 #if defined(FRUIT_PLATFORM_WII)
 #include "render/BakedFontWii.h"
 #include "game/GameWork.h"   // game_work.languageFlag (active language)
+#else
+// Non-Wii only (task #54): Wii never opens a runtime .ttf / TtfFace at all --
+// see FontCacheObjectTTF.h's m_Face guard.
+#include "render/TtfBackend.h"
 #endif
 
 namespace Mortar {
 
 FontCacheObjectTTF::FontCacheObjectTTF(const char* path, int defaultPixelSize)
-    : m_Face(nullptr)
-    , m_DefaultPixelSize(defaultPixelSize)
+    :
+#if !defined(FRUIT_PLATFORM_WII)
+      m_Face(nullptr)
     , m_CurrentCharHeight(-1)
+    ,
+#endif
+      m_DefaultPixelSize(defaultPixelSize)
     , m_Atlas(nullptr)
 #if defined(FRUIT_PLATFORM_WII)
     , m_BakedWii(nullptr)
 #endif
 {
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific (task #54): Wii never opens the runtime .ttf (no stb_truetype
+    // linked, no FreeType face) -- `path` is unused; the baked FNT3 atlas
+    // (BakedFontWii, constructed lazily on first GetGlyph/GetAscender/etc call)
+    // is the sole glyph + face-metric source. m_Face stays nullptr forever on
+    // Wii; IsValid() below reflects that this construction succeeded WITHOUT it.
+    (void)path;
+#else
     m_Face = TtfFace::Open(path, defaultPixelSize);
     if (!m_Face || !m_Face->IsValid()) {
         LOG_ERROR("FontCacheObjectTTF", "TtfFace::Open failed for '%s'", path);
@@ -29,6 +44,7 @@ FontCacheObjectTTF::FontCacheObjectTTF(const char* path, int defaultPixelSize)
         m_Face = nullptr;
         return;
     }
+#endif
     m_Atlas = new FontInterface();
     // Mirror binary Initialize @ 0x00250470: fontScale=1.0, globalSizeScale=1.0.
     // GameInitialise re-invokes InitialiseData with 0.9 for russian (langId 0x13)
@@ -38,8 +54,10 @@ FontCacheObjectTTF::FontCacheObjectTTF(const char* path, int defaultPixelSize)
 }
 
 FontCacheObjectTTF::~FontCacheObjectTTF() {
+#if !defined(FRUIT_PLATFORM_WII)
     delete m_Face;
     m_Face = nullptr;
+#endif
     delete m_Atlas;
     m_Atlas = nullptr;
 #if defined(FRUIT_PLATFORM_WII)
@@ -54,7 +72,14 @@ FontCacheObjectTTF::~FontCacheObjectTTF() {
 }
 
 bool FontCacheObjectTTF::IsValid() const {
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific (task #54): valid as soon as the atlas exists -- there is
+    // no m_Face to check on Wii. A per-glyph baked miss is handled at the
+    // Lookup call site (LOG_WARN + no-glyph), not here.
+    return m_Atlas != nullptr;
+#else
     return m_Face != nullptr && m_Face->IsValid();
+#endif
 }
 
 // Compute the FT 26.6 char height from the raw requestedSize and atlas scale factors.
@@ -188,6 +213,7 @@ static void BuildStrokes(uint8_t* buf, int width, int height, int radius) {
     }
 }
 
+#if !defined(FRUIT_PLATFORM_WII)
 bool FontCacheObjectTTF::SetCharSize(long charHeight_26_6) {
     if (charHeight_26_6 == m_CurrentCharHeight) return true;
     if (!m_Atlas || !m_Face) return false;
@@ -214,10 +240,15 @@ bool FontCacheObjectTTF::SetCharSize(long charHeight_26_6) {
     m_CurrentCharHeight = charHeight_26_6;
     return true;
 }
+#endif // !FRUIT_PLATFORM_WII
 
 const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requestedSize,
                                                      FONT_EFFECT_ENUM effect, int radius) {
+#if defined(FRUIT_PLATFORM_WII)
+    if (!m_Atlas) return nullptr;
+#else
     if (!m_Face || !m_Atlas) return nullptr;
+#endif
 
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
@@ -259,8 +290,19 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
             return &m_Cache[key];
         }
     }
-#endif
-
+    // Port specific (task #54): no stb_truetype fallback on Wii (removed from
+    // the build entirely -- see TtfBackendStb.cpp exclusion in
+    // src/engine/CMakeLists.txt). A baked-atlas miss here is a genuine
+    // plan-coverage gap (BakedFontWii::Lookup/GetGlyphCoverage already
+    // LOG_WARN "miss cp=..." once per unique (cp,size)); render no glyph
+    // rather than crash or silently substitute a wrong-language rasterizer.
+    {
+        GlyphAtlasEntry empty;
+        memset(&empty, 0, sizeof(empty));
+        m_Cache[key] = empty;
+    }
+    return nullptr;
+#else
     // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
     // Ask the backend to rasterize at kFontSupersample x the logical size so the atlas holds hi-res glyph bitmaps.
     // The cache key stays at the logical ch26 so callers sharing a logical size share the same cache entry.
@@ -421,9 +463,20 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
 
     m_Cache[key] = entry;
     return &m_Cache[key];
+#endif // FRUIT_PLATFORM_WII
 }
 
 float FontCacheObjectTTF::GetKerningForPair(uint32_t a, uint32_t b, float requestedSize) {
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific (task #54): the baked pen model (TryBakedGlyph) ignores
+    // pair-kerning by construction -- layoutX is derived from the glyph's own
+    // advance only (ASM-verified GetKerning is a no-op stub for .fnt fonts;
+    // the dynamic TTF path's kerning was itself best-effort). No live caller
+    // reads this on Wii (grep confirmed zero call sites), so 0.0f preserves
+    // the "no kern table" contract without needing m_Face.
+    (void)a; (void)b; (void)requestedSize;
+    return 0.0f;
+#else
     if (!m_Face || !m_Atlas) return 0.0f;
 
     long ch26 = ComputeCharHeight26_6(requestedSize,
@@ -436,10 +489,38 @@ float FontCacheObjectTTF::GetKerningForPair(uint32_t a, uint32_t b, float reques
     // kern26 is 26.6; convert to world units and divide by N to restore logical scale.
     // Port specific: HD font supersampling -- divide by kFontSupersample.
     return (float)kern26 * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
+#endif
 }
+
+#if defined(FRUIT_PLATFORM_WII)
+// Port specific (task #54): shared world-unit conversion for the three
+// baked face-metric queries below. `rawPx` is SUPERSAMPLED px straight from
+// the FNT3 header; applies the SAME `pxToWorld = inv * sizeScale / ss`
+// formula TryBakedGlyph uses for bearing/advance (see that function's
+// comment), so a face metric and a glyph's own bearingY land in the same
+// world-unit space at the same requestedSize.
+static float BakedMetricToWorld(float invFontScale, float requestedSize,
+                                 int rawPx, int nativeSize, float supersample) {
+    const float sizeScale = (nativeSize > 0) ? (requestedSize / (float)nativeSize) : 1.0f;
+    const float ss = (supersample > 0.0f) ? supersample : 1.0f;
+    const float pxToWorld = invFontScale * sizeScale / ss;
+    return (float)rawPx * pxToWorld;
+}
+#endif
 
 float FontCacheObjectTTF::GetAscender(float requestedSize) {
     if (!m_Atlas) return requestedSize;
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific (task #54): route through the baked FNT3 face metrics --
+    // m_Face no longer exists on Wii once the runtime .ttf open is dropped.
+    if (!m_BakedWii) {
+        m_BakedWii = new BakedFontWii();
+    }
+    m_BakedWii->SetLanguage((int)game_work.languageFlag);
+    int rawPx = 0, nativeSize = 0; float ss = 1.0f;
+    if (!m_BakedWii->GetAscender(requestedSize, &rawPx, &nativeSize, &ss)) return requestedSize;
+    return BakedMetricToWorld(m_Atlas->m_InvFontScale, requestedSize, rawPx, nativeSize, ss);
+#else
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
@@ -447,10 +528,20 @@ float FontCacheObjectTTF::GetAscender(float requestedSize) {
     if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return requestedSize;
     return (float)m_Face->GetAscender_26_6()
            * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
+#endif
 }
 
 float FontCacheObjectTTF::GetDescender(float requestedSize) {
     if (!m_Atlas) return 0.0f;
+#if defined(FRUIT_PLATFORM_WII)
+    if (!m_BakedWii) {
+        m_BakedWii = new BakedFontWii();
+    }
+    m_BakedWii->SetLanguage((int)game_work.languageFlag);
+    int rawPx = 0, nativeSize = 0; float ss = 1.0f;
+    if (!m_BakedWii->GetDescender(requestedSize, &rawPx, &nativeSize, &ss)) return 0.0f;
+    return BakedMetricToWorld(m_Atlas->m_InvFontScale, requestedSize, rawPx, nativeSize, ss);
+#else
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
@@ -458,10 +549,20 @@ float FontCacheObjectTTF::GetDescender(float requestedSize) {
     if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return 0.0f;
     return (float)m_Face->GetDescender_26_6()
            * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
+#endif
 }
 
 float FontCacheObjectTTF::GetLineHeight(float requestedSize) {
     if (!m_Atlas) return requestedSize;
+#if defined(FRUIT_PLATFORM_WII)
+    if (!m_BakedWii) {
+        m_BakedWii = new BakedFontWii();
+    }
+    m_BakedWii->SetLanguage((int)game_work.languageFlag);
+    int rawPx = 0, nativeSize = 0; float ss = 1.0f;
+    if (!m_BakedWii->GetLineHeight(requestedSize, &rawPx, &nativeSize, &ss)) return requestedSize;
+    return BakedMetricToWorld(m_Atlas->m_InvFontScale, requestedSize, rawPx, nativeSize, ss);
+#else
     long ch26 = ComputeCharHeight26_6(requestedSize,
                                       m_Atlas->m_GlobalSizeScale,
                                       m_Atlas->m_FontScale);
@@ -469,6 +570,7 @@ float FontCacheObjectTTF::GetLineHeight(float requestedSize) {
     if (!m_Face || !SetCharSize(ch26 * (long)kFontSupersample)) return requestedSize;
     return (float)m_Face->GetLineHeight_26_6()
            * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
+#endif
 }
 
 #if defined(FRUIT_PLATFORM_WII)
