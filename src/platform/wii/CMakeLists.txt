@@ -25,6 +25,8 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/IResourceSource.cpp
     # Task #36 Stage 2 -- synchronous block-scoped resource preload (V1).
     ${CMAKE_CURRENT_SOURCE_DIR}/BlockLoader.cpp
+    # Task #61 phase 1 -- MEM2 free-list allocator (texture pixel buffers).
+    ${CMAKE_CURRENT_SOURCE_DIR}/Mem2Alloc.cpp
 )
 # mainWii.cpp is the Wii entry point (fruit-ninja-game excludes main*.cpp
 # files, same as mainSDL.cpp/mainEmscripten.cpp) -- added directly to the

@@ -30,6 +30,7 @@
 #include "platform/wii/SplashBootScreen.h"
 #include "platform/wii/SoundManagerWii.h"
 #include "platform/wii/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
+#include "platform/wii/Mem2Alloc.h"    // Wii_MEM2Init (task #61 MEM1->MEM2 texture offload)
 #include "game/SettingsSave.h"
 #include "debug/Logger.h"
 
@@ -126,6 +127,11 @@ int main(int argc, char* argv[]) {
 
     WiiVideoInit();
     WiiGxInit();
+
+    // Task #61 phase 1: carve the MEM2 allocator arena before any
+    // texture/asset load -- gl_funcsWii.cpp's texture pixel-buffer allocs
+    // route to it (see Wii_MEM2Alloc), relieving MEM1's tight boot margin.
+    Wii_MEM2Init();
 
     // Port specific: draw the HB logo boot splash's frame-0 appearance right
     // now, straight to the XFB via GX_CopyDisp, so there is no black screen

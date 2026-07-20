@@ -32,6 +32,7 @@
 #include <stdint.h>
 
 #include "render/gl_funcsWii.h"
+#include "platform/wii/Mem2Alloc.h"  // Task #61: texture pixel buffers -> MEM2
 
 // ---------------------------------------------------------------------------
 // Shared shim state (read by DisplayManagerWii.cpp + Pass 2's GX draw).
@@ -293,19 +294,22 @@ void TileIA8(const unsigned char* src, void* dst, int w, int h) {
 // and upload natively via Wii_UploadTiledGX -- they never reach here -- so the
 // old packed 16-bit (5551/565) CPU-decode paths are dead and removed: any packed
 // or otherwise non-native format now fails loudly (log + NULL) instead of a
-// silent CPU conversion. Returns a malloc'd w*h*4 buffer the caller must free.
+// silent CPU conversion. Returns a Wii_MEM2Alloc'd w*h*4 buffer the caller
+// must free with Wii_MEM2Free (task #61: texture pixel buffers -> MEM2 --
+// this includes the transient glTexSubImage2D scratch use as well as the
+// glTexImage2D use that may be retained long-term as t.linear).
 unsigned char* ExpandToRGBA8(int w, int h, GLenum format, GLenum type,
                              const void* pixels) {
     if (!pixels || w <= 0 || h <= 0) return NULL;
     const int n = w * h;
 
     if (type == GL_UNSIGNED_BYTE && format == GL_RGBA) {
-        unsigned char* out = (unsigned char*)malloc((size_t)n * 4);
+        unsigned char* out = (unsigned char*)Wii_MEM2Alloc((u32)n * 4, 32);
         if (out) memcpy(out, pixels, (size_t)n * 4);
         return out;
     }
     if (type == GL_UNSIGNED_BYTE && format == GL_RGB) {
-        unsigned char* out = (unsigned char*)malloc((size_t)n * 4);
+        unsigned char* out = (unsigned char*)Wii_MEM2Alloc((u32)n * 4, 32);
         if (!out) return NULL;
         const unsigned char* s = (const unsigned char*)pixels;
         for (int i = 0; i < n; ++i) {
@@ -577,8 +581,8 @@ void Wii_UploadTiledGX(unsigned int glTexId, const void* tiled,
     if (!glTexId || glTexId >= (unsigned)kMaxTextures) return;
     ShimTexture& t = g_Textures[glTexId];
 
-    if (t.texels) { free(t.texels); t.texels = NULL; }
-    if (t.linear) { free(t.linear); t.linear = NULL; }
+    if (t.texels) { Wii_MEM2Free(t.texels); t.texels = NULL; }
+    if (t.linear) { Wii_MEM2Free(t.linear); t.linear = NULL; }
     t.width    = w;
     t.height   = h;
     t.hasImage = false;
@@ -602,12 +606,12 @@ void Wii_UploadTiledGX(unsigned int glTexId, const void* tiled,
     }
 
     u32 bufSize = GX_GetTexBufferSize((u16)w, (u16)h, gxFmt, GX_FALSE, 0);
-    void* buf = memalign(32, bufSize);
+    void* buf = Wii_MEM2Alloc(bufSize, 32);
     if (!buf) {
         static bool warnedOOM = false;
         if (!warnedOOM) {
             warnedOOM = true;
-            LOG_WARN("gl_funcsWii", "Wii_UploadTiledGX: memalign(bufSize=%u) failed for "
+            LOG_WARN("gl_funcsWii", "Wii_UploadTiledGX: Wii_MEM2Alloc(bufSize=%u) failed for "
                      "tex %u (%dx%d) -- texture left untextured (one-shot warning)",
                      (unsigned)bufSize, glTexId, w, h);
         }
@@ -800,8 +804,8 @@ void glDeleteTextures(GLsizei n, const GLuint* ids) {
     for (GLsizei i = 0; i < n; ++i) {
         unsigned id = ids[i];
         if (id && id < (unsigned)kMaxTextures && g_Textures[id].used) {
-            if (g_Textures[id].texels) free(g_Textures[id].texels);
-            if (g_Textures[id].linear) free(g_Textures[id].linear);
+            if (g_Textures[id].texels) Wii_MEM2Free(g_Textures[id].texels);
+            if (g_Textures[id].linear) Wii_MEM2Free(g_Textures[id].linear);
             memset(&g_Textures[id], 0, sizeof(ShimTexture));
         }
     }
@@ -834,20 +838,20 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
         // 2 B/texel [L][A]). Already native-sized for GX_TF_IA8, so no
         // ExpandToRGBA8 (that helper stays RGBA/RGB-only): copy the linear
         // bytes as-is and tile with TileIA8.
-        if (t.texels) { free(t.texels); t.texels = NULL; }
-        if (t.linear) { free(t.linear); t.linear = NULL; }
+        if (t.texels) { Wii_MEM2Free(t.texels); t.texels = NULL; }
+        if (t.linear) { Wii_MEM2Free(t.linear); t.linear = NULL; }
         t.width  = width;
         t.height = height;
         t.hasImage = false;
         t.uploadFormat = GL_LUMINANCE_ALPHA;
         if (!pixels || width <= 0 || height <= 0) return;
 
-        unsigned char* la8 = (unsigned char*)malloc((size_t)width * height * 2);
+        unsigned char* la8 = (unsigned char*)Wii_MEM2Alloc((u32)width * height * 2, 32);
         if (!la8) return;
         memcpy(la8, pixels, (size_t)width * height * 2);
 
         u32 bufSize = GX_GetTexBufferSize(width, height, GX_TF_IA8, GX_FALSE, 0);
-        void* tiled = memalign(32, bufSize);
+        void* tiled = Wii_MEM2Alloc(bufSize, 32);
         if (tiled) {
             TileIA8(la8, tiled, width, height);
             DCFlushRange(tiled, bufSize);
@@ -858,7 +862,7 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
             t.texels   = tiled;
             t.hasImage = true;
         } else {
-            LOG_WARN("gl_funcsWii", "glTexImage2D: memalign(bufSize=%u) failed for "
+            LOG_WARN("gl_funcsWii", "glTexImage2D: Wii_MEM2Alloc(bufSize=%u) failed for "
                      "IA8 tex %u (%dx%d) -- texture left untextured",
                      (unsigned)bufSize, g_BoundTexture, (int)width, (int)height);
         }
@@ -866,7 +870,7 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
             // TTF atlas: glTexSubImage2D blits+re-tiles from this copy.
             t.linear = la8;
         } else {
-            free(la8);
+            Wii_MEM2Free(la8);
         }
         return;
     }
@@ -874,8 +878,8 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
     unsigned char* rgba = ExpandToRGBA8(width, height, format, type, pixels);
     // pixels may legitimately be NULL for a placeholder alloc; expand yields
     // NULL then and we leave the texture without an image this pass.
-    if (t.texels) { free(t.texels); t.texels = NULL; }
-    if (t.linear) { free(t.linear); t.linear = NULL; }
+    if (t.texels) { Wii_MEM2Free(t.texels); t.texels = NULL; }
+    if (t.linear) { Wii_MEM2Free(t.linear); t.linear = NULL; }
     t.width  = width;
     t.height = height;
     t.hasImage = false;
@@ -883,7 +887,7 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
 
     if (rgba) {
         u32 bufSize = GX_GetTexBufferSize(width, height, GX_TF_RGBA8, GX_FALSE, 0);
-        void* tiled = memalign(32, bufSize);
+        void* tiled = Wii_MEM2Alloc(bufSize, 32);
         if (tiled) {
             TileRGBA8(rgba, tiled, width, height);
             DCFlushRange(tiled, bufSize);
@@ -900,7 +904,7 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
             static bool warnedOOM = false;
             if (!warnedOOM) {
                 warnedOOM = true;
-                LOG_WARN("gl_funcsWii", "glTexImage2D: memalign(bufSize=%u) failed for "
+                LOG_WARN("gl_funcsWii", "glTexImage2D: Wii_MEM2Alloc(bufSize=%u) failed for "
                          "tex %u (%dx%d) -- texture left untextured (one-shot warning)",
                          (unsigned)bufSize, g_BoundTexture, (int)width, (int)height);
             }
@@ -911,7 +915,7 @@ void glTexImage2D(GLenum /*target*/, GLint /*level*/, GLint /*internalFormat*/,
         } else {
             // No sub-image consumer for this texture -- don't retain a 2nd
             // full-size linear copy on top of the tiled GX buffer.
-            free(rgba);
+            Wii_MEM2Free(rgba);
         }
     }
 }
@@ -992,7 +996,7 @@ void glTexSubImage2D(GLenum /*target*/, GLint /*level*/, GLint xoff,
         const unsigned char* src = sub + ((size_t)row * w * 4);
         memcpy(dst, src, (size_t)w * 4);
     }
-    free(sub);
+    Wii_MEM2Free(sub);
 
     TileRegion(t.linear, t.texels, t.width, t.height, TILE_FMT_RGBA8,
               tileX0, tileY0, tileX1, tileY1);

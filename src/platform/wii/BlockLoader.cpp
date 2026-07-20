@@ -13,6 +13,7 @@
 #include "screens/DojoScreen.h"
 #include "screens/ShopScreen.h"
 #include "debug/Logger.h"
+#include "platform/wii/Mem2Alloc.h"  // Wii_MEM2FreeBytes (see LogHeapUsage)
 #include <vector>
 #include <gccore.h>  // SYS_GetArena1Size / SYS_GetArena2Size (see LogHeapUsage)
 
@@ -149,8 +150,14 @@ void PreloadSfx(const char* name) {
 void LogHeapUsage(const char* label) {
     u32 mem1Free = SYS_GetArena1Size();
     u32 mem2Free = SYS_GetArena2Size();
-    LOG_INFO("HeapUsage", "%s: MEM1 free=%u KB, MEM2 free=%u KB",
-             label, (unsigned)(mem1Free / 1024), (unsigned)(mem2Free / 1024));
+    // Task #61: SYS_GetArena2Size() now reads low once Wii_MEM2Init() has
+    // carved most of MEM2 into our own allocator (see Mem2Alloc.h) -- that's
+    // expected, not a regression. Wii_MEM2FreeBytes() reports the real
+    // remaining headroom inside that carved heap.
+    u32 mem2AllocFree = Wii_MEM2FreeBytes();
+    LOG_INFO("HeapUsage", "%s: MEM1 free=%u KB, MEM2 arena free=%u KB, MEM2 alloc free=%u KB",
+             label, (unsigned)(mem1Free / 1024), (unsigned)(mem2Free / 1024),
+             (unsigned)(mem2AllocFree / 1024));
 }
 
 void BlockLoader::PreloadBlock(ResBlockFlag block) {
