@@ -12,13 +12,20 @@
 //   HD-gated: 3 under FN_ENABLE_HD_ASSETS, 1 otherwise -- see FontCacheObjectTTF.h).
 //
 // Multi-page model (faithful to binary TextureAtlas @0x00269c9c):
-//   PackGlyphCell best-fits across ALL existing pages (backfilling whatever
-//   room earlier strings left behind) and only allocates a NEW page when none
-//   of them have room. Glyphs are NEVER dropped. A BeginGlyphRun/EndGlyphRun
-//   scope (task #60) pins packing to a single reserved page for the run's
-//   duration, so one string's glyphs never straddle a page boundary. Each
-//   GlyphAtlasEntry carries a pageTextureID so callers can bind the right GL
-//   texture per glyph without holding a FontInterface pointer.
+//   PackGlyphCell packs onto the CURRENT page (m_Pages.back()) and allocates a
+//   NEW page only when that page overflows -- no cross-page best-fit search.
+//   Glyphs are NEVER dropped. Each GlyphAtlasEntry carries a pageTextureID so
+//   callers can bind the right GL texture per glyph without holding a
+//   FontInterface pointer.
+//
+// Wii-only (FRUIT_PLATFORM_WII, task #60): PackGlyphCell instead best-fits
+//   across ALL existing pages (backfilling whatever room earlier strings left
+//   behind) before allocating a new one, and a BeginGlyphRun/EndGlyphRun scope
+//   pins packing to a single reserved page for the run's duration so one
+//   string's glyphs never straddle a page boundary (fixed a visible
+//   stroke/blur discontinuity mid-string on Wii's software TTF path). This is
+//   a Wii-specific behavior change, NOT part of the binary-faithful baseline
+//   -- host/web/asm-verify keep the original last-page-only logic above.
 //
 // Port specific: glyph atlas is RGBA (white + coverage-alpha) so GL_MODULATE
 //   yields vertex-coloured text. Binary used Bada IFont with an RGBA atlas.
@@ -120,39 +127,46 @@ public:
     void InitialiseData(float fontScale, float globalSizeScale);
 
     // Pack a glyph cell bitmap (8-bit coverage, width x height bytes) into the
-    // atlas. Tries EVERY existing page (best-fit: first page whose current
-    // shelf cursor -- wrapping a row if needed -- has room) before allocating
-    // a new one, so free space left behind by earlier strings/pages is backfilled
-    // rather than stranded. Allocates a new page only when no existing page fits.
-    // NEVER drops glyphs. Returns the owning page and writes the packed texel
-    // position to *outX / *outY. UV computation is the CALLER's job
-    // (FontCacheObjectTTF CalcUVs) -- this keeps the binary's
-    // TextureAtlas::AddTexture boundary: the atlas packs, the font cache derives
-    // UVs from the packed rec.
+    // atlas. Returns the owning page and writes the packed texel position to
+    // *outX / *outY. UV computation is the CALLER's job (FontCacheObjectTTF
+    // CalcUVs) -- this keeps the binary's TextureAtlas::AddTexture boundary:
+    // the atlas packs, the font cache derives UVs from the packed rec.
     // DIFFERS: binary TextureAtlas::AddTexture @0x00269c9c -- faithful multi-page model.
     //
-    // Glyph-run pinning (task #60): while a run is open (see BeginGlyphRun),
-    // PackGlyphCell packs ONLY onto the page BeginGlyphRun reserved -- the
-    // best-fit search above is skipped so every cell of the run lands on the
-    // SAME page (a single BakedStringTTF's effect glyphs must never straddle
-    // an atlas page boundary, which previously showed up as a visible
-    // stroke/blur discontinuity mid-string, e.g. "ボーナス").
+    // Binary-faithful (host/web/asm-verify): packs onto the CURRENT page
+    // (m_Pages.back()) only; allocates a new page on overflow. NEVER drops
+    // glyphs.
+    //
+    // Wii-only (FRUIT_PLATFORM_WII, task #60): best-fits across ALL existing
+    // pages (first page whose shelf cursor -- wrapping a row if needed -- has
+    // room) before allocating a new one, so free space left behind by earlier
+    // strings/pages is backfilled rather than stranded. While a glyph run is
+    // open (see BeginGlyphRun), packs ONLY onto the page BeginGlyphRun
+    // reserved -- the best-fit search is skipped so every cell of the run
+    // lands on the SAME page (a single BakedStringTTF's effect glyphs must
+    // never straddle an atlas page boundary, which previously showed up as a
+    // visible stroke/blur discontinuity mid-string, e.g. "ボーナス").
     FontAtlasPage* PackGlyphCell(int width, int height, const uint8_t* bitmap,
                                  int* outX, int* outY);
 
-    // Begin a glyph run: reserve ONE page that is guaranteed to hold `cellCount`
-    // cells of up to `maxCellW` x `maxCellH` texels each (shelf-packed, same
-    // padding rule as PackGlyphCell), and pin subsequent PackGlyphCell calls to
-    // that page until EndGlyphRun. Tries existing pages first (backfill -- reuses
-    // whatever room earlier strings left behind); allocates a new page only if
-    // no existing page has enough room. `maxCellW`/`maxCellH` is a caller-supplied
-    // upper bound (the run's actual per-glyph cells may be smaller; the
-    // reservation is a worst case so no mid-run overflow -> no split is possible).
-    // Runs do not nest -- call EndGlyphRun before starting another.
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii-only (task #60): begin a glyph run: reserve ONE page that is
+    // guaranteed to hold `cellCount` cells of up to `maxCellW` x `maxCellH`
+    // texels each (shelf-packed, same padding rule as PackGlyphCell), and pin
+    // subsequent PackGlyphCell calls to that page until EndGlyphRun. Tries
+    // existing pages first (backfill -- reuses whatever room earlier strings
+    // left behind); allocates a new page only if no existing page has enough
+    // room. `maxCellW`/`maxCellH` is a caller-supplied upper bound (the run's
+    // actual per-glyph cells may be smaller; the reservation is a worst case
+    // so no mid-run overflow -> no split is possible). Runs do not nest --
+    // call EndGlyphRun before starting another. Not part of the binary-
+    // faithful baseline -- host/web never call this (compiled out).
     void BeginGlyphRun(int cellCount, int maxCellW, int maxCellH);
 
-    // End the current glyph run: unpin, resume normal best-fit packing.
+    // Wii-only (task #60): end the current glyph run, resume normal best-fit
+    // packing.
     void EndGlyphRun();
+#endif
 
     // Legacy wrapper over PackGlyphCell: packs and fills out's legacy fields
     // (tight-rect UVs u0..v1 spanning exactly width x height texels, plus
@@ -198,9 +212,12 @@ private:
     int m_Size;                          // page dimension (e.g. 512)
     std::vector<FontAtlasPage*> m_Pages; // owned pages, grows on demand
 
-    // Glyph-run pin (task #60): non-null while a BeginGlyphRun/EndGlyphRun
-    // scope is open. PackGlyphCell packs exclusively onto this page.
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii-only (task #60): glyph-run pin, non-null while a BeginGlyphRun/
+    // EndGlyphRun scope is open. PackGlyphCell packs exclusively onto this
+    // page. Not part of the binary-faithful baseline.
     FontAtlasPage* m_RunPage;
+#endif
 
     // Allocate, initialise, and push_back a new page. Returns the new page.
     FontAtlasPage* AllocatePage();
@@ -211,10 +228,14 @@ private:
     // Expand the page's dirty region to include (x, y, w, h).
     void MarkPageDirty(FontAtlasPage* page, int x, int y, int w, int h);
 
-    // Shared shelf-fit check: does `page`'s cursor (after the same wrap rule
-    // PackGlyphCell uses) have room for a width x height cell? Used both by
-    // PackGlyphCell's best-fit search and BeginGlyphRun's reservation search.
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii-only (task #60): shared shelf-fit check -- does `page`'s cursor
+    // (after the same wrap rule PackGlyphCell uses) have room for a width x
+    // height cell? Used both by PackGlyphCell's best-fit search and
+    // BeginGlyphRun's reservation search. Not part of the binary-faithful
+    // baseline.
     bool PageFits(const FontAtlasPage* page, int width, int height) const;
+#endif
 };
 
 } // namespace Mortar

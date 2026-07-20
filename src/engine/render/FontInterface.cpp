@@ -45,7 +45,9 @@ FontInterface::FontInterface()
     , m_InvFontScale(1.0f)
     , m_GlobalSizeScale(1.0f)
     , m_Size(512)
+#if defined(FRUIT_PLATFORM_WII)
     , m_RunPage(nullptr)
+#endif
 {
     // Port specific: pages are allocated lazily on first PackGlyph (binary
     // TextureAtlas @0x00269c9c starts empty; port follows the same model).
@@ -123,10 +125,12 @@ GLuint FontInterface::GetPageTextureID(int idx) const {
     return m_Pages[idx]->m_TextureID;
 }
 
-// Shared shelf-fit check (task #60): would `width x height` fit on `page`
-// after the same row-wrap rule PackGlyphCell applies? Read-only -- does not
-// mutate the page. Used by PackGlyphCell's best-fit search and by
+#if defined(FRUIT_PLATFORM_WII)
+// Wii-only (task #60): shared shelf-fit check -- would `width x height` fit
+// on `page` after the same row-wrap rule PackGlyphCell applies? Read-only --
+// does not mutate the page. Used by PackGlyphCell's best-fit search and by
 // BeginGlyphRun's whole-run reservation search so both use identical rules.
+// Not part of the binary-faithful baseline.
 bool FontInterface::PageFits(const FontAtlasPage* page, int width, int height) const {
     const int padX = kFontSupersample + 1, padY = kFontSupersample + 1;
     int cursorX = page->m_CursorX;
@@ -139,6 +143,7 @@ bool FontInterface::PageFits(const FontAtlasPage* page, int width, int height) c
     }
     return cursorY + height <= m_Size;
 }
+#endif
 
 // DIFFERS: binary TextureAtlas::AddTexture @0x00269c9c never drops glyphs;
 //   on overflow it allocates a new TextureAtlasPage (256x256) and retries.
@@ -159,6 +164,7 @@ FontAtlasPage* FontInterface::PackGlyphCell(int width, int height,
     // next glyph.
     const int padX = kFontSupersample + 1, padY = kFontSupersample + 1;
 
+#if defined(FRUIT_PLATFORM_WII)
     FontAtlasPage* page;
     if (m_RunPage) {
         // Glyph-run pin (task #60): BeginGlyphRun already verified m_RunPage
@@ -183,6 +189,11 @@ FontAtlasPage* FontInterface::PackGlyphCell(int width, int height,
             page = AllocatePage();
         }
     }
+#else
+    // Binary-faithful (host/web/asm-verify): pack onto the CURRENT page only
+    // (m_Pages.back()) -- no cross-page best-fit. See file header note.
+    FontAtlasPage* page = m_Pages.back();
+#endif
 
     // Advance to next row if glyph doesn't fit horizontally on current page.
     if (page->m_CursorX + width + padX > m_Size) {
@@ -192,10 +203,12 @@ FontAtlasPage* FontInterface::PackGlyphCell(int width, int height,
     }
 
     // If the current page is vertically full, allocate a new page.
+#if defined(FRUIT_PLATFORM_WII)
     // Only reachable when m_RunPage is null (best-fit above already picked a
     // page proven to fit) or the caller mispredicted maxCellW/maxCellH for a
     // pinned run -- allocating here rather than dropping the glyph keeps the
     // "never drop glyphs" contract even if that happens.
+#endif
     if (page->m_CursorY + height > m_Size) {
         page = AllocatePage();
     }
@@ -308,13 +321,15 @@ void FontInterface::BuildPendingTextures() {
     }
 }
 
-// Task #60: reserve a page for a whole glyph run before packing any of its
-// cells. Simulates the run's worst case as `cellCount` cells of exactly
+#if defined(FRUIT_PLATFORM_WII)
+// Wii-only, task #60: reserve a page for a whole glyph run before packing any
+// of its cells. Simulates the run's worst case as `cellCount` cells of exactly
 // maxCellW x maxCellH (never smaller than any real cell in the run, per the
 // caller's contract) shelf-packed with PackGlyphCell's own wrap rule, so a
 // page that passes this check is guaranteed to hold the run without
 // overflowing mid-string. Tries existing pages first (backfill), allocates a
 // new page only if none fit -- matching PackGlyphCell's own anti-litter rule.
+// Not part of the binary-faithful baseline.
 void FontInterface::BeginGlyphRun(int cellCount, int maxCellW, int maxCellH) {
     m_RunPage = nullptr;
     if (cellCount <= 0 || maxCellW <= 0 || maxCellH <= 0) return;
@@ -356,6 +371,7 @@ void FontInterface::BeginGlyphRun(int cellCount, int maxCellW, int maxCellH) {
 void FontInterface::EndGlyphRun() {
     m_RunPage = nullptr;
 }
+#endif // FRUIT_PLATFORM_WII
 
 void FontInterface::MarkPageDirty(FontAtlasPage* page, int x, int y, int w, int h) {
     if (w <= 0 || h <= 0) return;
