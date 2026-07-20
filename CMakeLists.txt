@@ -83,20 +83,6 @@ endif()
 # (unreliable on Windows).
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
-# Required: node runs tools/assets/svg-to-webp.mjs (widget SVG -> WebP .tex
-# rasterization via the sharp npm package) as part of fn_asset_staging below.
-# Resolved at CONFIGURE time -- a fresh `cmake` run is needed after installing
-# node for the first time. REQUIRED: SettingsScreen and the widget render tests
-# load the generated widget textures directly (no placeholder-art runtime
-# fallback), so node must be present to produce them.
-find_program(NODE_EXECUTABLE NAMES node)
-# Wii ships uncompressed Tex1 textures (no WebP), so it needs neither node nor
-# the svg-to-webp rasterizer. See the Wii branch in fn_asset_staging below.
-if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII AND NOT NODE_EXECUTABLE)
-    message(FATAL_ERROR "node not found -- required to rasterize assets/ui-widgets/*.svg "
-                         "(tools/assets/svg-to-webp.mjs). Install Node.js and re-run cmake.")
-endif()
-
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -610,14 +596,13 @@ if(NOT FN_ASM_VERIFY)
     # TextureFileFormat.cpp, which dispatches by content magic not extension),
     # and merging in the pre-generated widget art from
     # assets/ui-widgets/generated/*.tex. That widget art is itself generated
-    # AT BUILD TIME (not checked in) by tools/assets/svg-to-webp.mjs -- a
-    # Node/sharp step run FIRST, before stage-assets.py (NODE_EXECUTABLE is
-    # REQUIRED, see the find_program check above); it rasterizes
-    # assets/ui-widgets/*.svg on every platform including Windows/CLion, no
-    # offline pre-generation step needed. Widget textures have no runtime
-    # placeholder fallback (SettingsScreen / the widget render tests load them
-    # directly), so svg-to-webp.mjs exits non-zero on any failure and fails
-    # this build step loudly.
+    # AT BUILD TIME (not checked in) by tools/assets/svg-to-webp.py -- a
+    # resvg-py + Pillow step run FIRST, before stage-assets.py; it rasterizes
+    # assets/ui-widgets/*.svg on every platform including Windows/CLion (no
+    # Node/npm/sharp dependency, no offline pre-generation step needed).
+    # Widget textures have no runtime placeholder fallback (SettingsScreen /
+    # the widget render tests load them directly), so svg-to-webp.py exits
+    # non-zero on any failure and fails this build step loudly.
     # Under --web (EMSCRIPTEN) stage-assets.py additionally transcodes
     # sfx/*.wav.pcm to Ogg/Vorbis (+ sfx-loops.json) and subsets
     # fontstruetype/gangofchinese.ttf, for the Web Audio backend
@@ -633,10 +618,11 @@ if(NOT FN_ASM_VERIFY)
     # time, not configure time -- FruitNinjaBada/Data need not exist yet when
     # CMake configures, only when this target actually runs).
     # Wii ships uncompressed assets (raw Tex1 textures, raw .wav.pcm audio) and
-    # has no node/PIL/webp toolchain requirement -- skip svg-to-webp.mjs (no
-    # NODE_EXECUTABLE is even resolved for this platform, see the find_program
-    # guard above) and pass --wii to stage-assets.py instead of --web, which
-    # selects its raw copy-only mode (see stage-assets.py's --wii handling).
+    # has no WebP toolchain requirement -- skip svg-to-webp.py (its Wii .rgba
+    # sidecars, if present from a prior non-Wii configure of the same tree,
+    # are consumed by stage-assets.py --wii; see that script's WII MODE
+    # docstring) and pass --wii to stage-assets.py instead of --web, which
+    # selects its raw copy-only mode.
     if (FRUIT_PLATFORM_WII)
         set(FN_ASSET_STAGING_COMMANDS
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
@@ -644,7 +630,7 @@ if(NOT FN_ASM_VERIFY)
         )
     else()
         set(FN_ASSET_STAGING_COMMANDS
-            COMMAND ${NODE_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.mjs ${CMAKE_SOURCE_DIR}
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.py ${CMAKE_SOURCE_DIR}
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
                     ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR}
                     $<$<BOOL:${EMSCRIPTEN}>:--web>
@@ -656,7 +642,7 @@ if(NOT FN_ASM_VERIFY)
     # once staged.
     add_custom_target(fn_asset_staging ALL
         ${FN_ASSET_STAGING_COMMANDS}
-        COMMENT "Staging assets (svg->webp via node/sharp; textures->WebP; web:+ogg+font)"
+        COMMENT "Staging assets (svg->webp via resvg-py; textures->WebP; web:+ogg+font)"
         VERBATIM
     )
 if (EMSCRIPTEN)
