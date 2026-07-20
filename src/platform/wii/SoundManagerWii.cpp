@@ -54,6 +54,7 @@
 #include "util/Endian.h"
 #include "debug/Logger.h"
 #include "platform/wii/SoundManagerWii.h"
+#include "platform/wii/ResBlock.h"
 
 #include <asndlib.h>
 #include <gccore.h>   // DCFlushRange -- DSP-visible buffer requirement, see "DMA buffer rules" below
@@ -61,6 +62,7 @@
 
 #include <cstring>
 #include <string>
+#include <set>
 
 // ---------------------------------------------------------------------
 // DMA buffer rules (Port specific -- no binary counterpart, libogc/ASND
@@ -383,6 +385,19 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
 SoundBuffer* SoundManager::LoadSound(const char* name) {
     std::string path = std::string("sfx/") + name + ".wav.pcm";
 
+    // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
+    // see tmp/wii/loader-blueprint.md section 6/7). Fires once per unique name
+    // so a Dolphin run's log enumerates the per-block SFX set without
+    // per-frame/per-play spam (LoadSound is the once-per-cache-miss disk read;
+    // repeated plays hit m_SoundCache and never reach here).
+    {
+        static std::set<std::string> s_LoggedNames;
+        if (s_LoggedNames.insert(name).second) {
+            LOG_INFO("BlockLoad", "[BlockLoad] block=%s loading %s (SFX)",
+                     fn::wii::GetCurrentBlockName(), name);
+        }
+    }
+
     Mortar::File f(path.c_str(), /*openMode=*/0, /*systemID=*/0);
     if (!f.Open()) {
         LOG_ERROR("SoundManager", "LoadSound: cannot open '%s'", path.c_str());
@@ -481,18 +496,55 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     // evict-oldest policy). ASND voices [0..14] are reserved for SFX; slot i
     // maps directly onto ASND voice index i (m_MusicVoice, slot 15, is
     // never part of this loop -- see the class comment above).
+    //
+    // Port specific: a slot's id is never cleared when its one-shot ASND
+    // voice finishes naturally (no per-frame SFX reap/tick exists, unlike
+    // AudioStreamPump for music) -- SFXStop/SFXPause are the only writers
+    // that used to touch id, and neither fires on natural completion. Without
+    // reclaiming finished voices here, every slot fills permanently after
+    // VOICE_COUNT distinct SFX have each played once, and every later
+    // SFXPlay falls into the evict branch and always killed voice[0] --
+    // whatever happened to be playing there -- causing audible truncation
+    // under normal gameplay (many concurrent SFX). Fix: treat a slot as free
+    // if either id==0 OR its ASND voice already finished playing (mirrors
+    // SFXIsActive's own ASND_StatusVoice check below), and when no slot is
+    // idle, evict the OLDEST active SFX voice (smallest m_NextSoundId,
+    // wrap-aware) instead of unconditionally voice[0].
     Voice* slot = nullptr;
     for (int i = 0; i < VOICE_COUNT; i++) {
         if (m_Voices[i].id == 0) { slot = &m_Voices[i]; break; }
+        // A loop-armed voice (intro playing, tail not yet armed) must not be
+        // reclaimed here even if the intro's ASND voice briefly reports
+        // finished right before FinishLoopCallback re-arms it -- armed is
+        // cleared by that callback the instant the tail takes over, so this
+        // guard only protects the narrow intro-to-tail handoff window.
+        if (!s_LoopInfo[i].armed && ASND_StatusVoice(m_Voices[i].cursor) != SND_WORKING) {
+            slot = &m_Voices[i];
+            break;
+        }
     }
     int asndVoice;
     if (slot) {
         asndVoice = (int)(slot - m_Voices);
     } else {
-        // All 15 SFX SoundManager slots busy -- evict the oldest, matching
-        // SDL's wrap-to-voice[0] eviction policy.
-        slot = &m_Voices[0];
-        asndVoice = 0;
+        // All VOICE_COUNT SFX SoundManager slots busy and none idle -- evict
+        // the oldest active voice (smallest monotonic id), not always
+        // voice[0]. m_NextSoundId wraps 0 -> 1 (see ++m_NextSoundId below
+        // and the wrap-to-1 line above), so treat ids past the wrap as
+        // "newer" than ids from just before it by comparing distance from
+        // the current m_NextSoundId rather than raw id value.
+        uint32_t oldestAge = 0;
+        int oldestIdx = 0;
+        for (int i = 0; i < VOICE_COUNT; i++) {
+            uint32_t age = m_NextSoundId - m_Voices[i].id;  // unsigned wraparound-safe distance
+            if (age > oldestAge) {
+                oldestAge = age;
+                oldestIdx = i;
+            }
+        }
+        slot = &m_Voices[oldestIdx];
+        asndVoice = oldestIdx;
+        ASND_StopVoice(asndVoice);
     }
 
     int vol255 = (int)(1.0f * 255.0f);  // freshly (re)armed voice starts at full volume, matches SDL's slot->volume = 1.0f
@@ -672,6 +724,19 @@ void SoundManager::SongPlay(const char* name) {
     int sampleCount = (int)FN_READ_U32(hdrBytes + 12);
     int loopStart   = (int)FN_READ_U32(hdrBytes + 16);
     (void)sampleCount;
+
+    // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
+    // see tmp/wii/loader-blueprint.md section 6/7). BGM is streamed (not
+    // resident, see file-header "BGM" note in the blueprint), so this logs
+    // the stream-open rather than a full-file load; fires once per unique
+    // song name so a Dolphin run's log shows which song each block plays.
+    {
+        static std::set<std::string> s_LoggedSongs;
+        if (s_LoggedSongs.insert(lower).second) {
+            LOG_INFO("BlockLoad", "[BlockLoad] block=%s loading %s (BGM)",
+                     fn::wii::GetCurrentBlockName(), lower.c_str());
+        }
+    }
 
     ASND_StopVoice(MUSIC_ASND_VOICE);
 
