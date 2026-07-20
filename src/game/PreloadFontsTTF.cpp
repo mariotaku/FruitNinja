@@ -106,3 +106,52 @@ void WarmTTFGlyphCache() {
     // Flush the atlas ONCE so the GL upload happens at boot, not on first screen open.
     font->GetAtlas()->BuildPendingTextures();
 }
+
+#if defined(FRUIT_PLATFORM_WII)
+// Task #36 Stage 2 -- see PreloadFontsTTF.h for the full rationale. Sizes
+// pulled from the actual GAMEOVER-path call sites (not guessed):
+//   GameOverScreen::Initialise @0x00187c90 (title):     56.0f
+//   ScoreControl ctor          @0x001ad5fc (score box):  30.0f
+// 50.0f: SuperFruitControl combo popup (FancyBakedString fontScale=50,
+// SuperFruitControl.cpp @ combo popup) -- caught by the #36 fail-loud [BlockLoad]
+// validator as a late size-50 atlas load during gameplay; warm it here too.
+static const float s_WarmSizesGameOver[] = { 30.0f, 50.0f, 56.0f };
+static const int s_WarmSizeCountGameOver =
+    sizeof(s_WarmSizesGameOver) / sizeof(s_WarmSizesGameOver[0]);
+
+struct WarmLabelGameOver {
+    LocalizedString id;
+    float            fontSize;
+};
+
+static const WarmLabelGameOver s_WarmLabelsGameOver[] = {
+    { (LocalizedString)0x2db, 56.0f }, // GameOverScreen title, Classic mode
+    { (LocalizedString)0x2f9, 56.0f }, // GameOverScreen title, Arcade & Zen modes
+    { LSTR_SCORE,             30.0f }, // ScoreControl m_pScoreBox label
+};
+static const int s_WarmLabelCountGameOver =
+    sizeof(s_WarmLabelsGameOver) / sizeof(s_WarmLabelsGameOver[0]);
+
+void WarmTTFGlyphCacheGameOver() {
+    Mortar::FontCacheObjectTTF* font = game_work.m_pTTFFontMain;
+    if (!font) return;
+
+    for (int s = 0; s < s_WarmSizeCountGameOver; s++) {
+        for (uint32_t cp = 0x20; cp <= 0x7E; cp++) {
+            font->GetGlyph(cp, s_WarmSizesGameOver[s]);
+        }
+    }
+
+    for (int i = 0; i < s_WarmLabelCountGameOver; i++) {
+        const char* str = GETSTRING_CAST_0(s_WarmLabelsGameOver[i].id);
+        if (!str) continue;
+        Mortar::Utf8StringIterator it(str);
+        while (!it.IsEmpty()) {
+            font->GetGlyph(it.m_CurrentCodepoint, s_WarmLabelsGameOver[i].fontSize);
+            it++;
+        }
+    }
+
+    font->GetAtlas()->BuildPendingTextures();
+}
+#endif // FRUIT_PLATFORM_WII

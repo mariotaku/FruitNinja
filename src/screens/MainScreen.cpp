@@ -45,6 +45,10 @@
 #include "game/GameWork.h"
 #include "game/ItemManager.h"
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/ResBlock.h"
+#endif
+
 // Timing constants (verified from binary, see docs/screens/main.md)
 static const float CAMERA_LERP_RATE    = 0.125f;
 static const float CAMERA_THRESHOLD    = -0.999f;
@@ -1191,6 +1195,13 @@ void MainScreen::RemoveButton(MenuButton*& btn) {
 // the flag write is not. Called every frame from case 0 (cheap due to
 // per-pointer guards) and gated on m_ButtonsCreatedFlag==0 from case 1.
 void MainScreen::CreateButtons() {
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
+    // tmp/wii/loader-blueprint.md section 2/7). Called every frame from
+    // Update() case 0/1 (per-pointer guards make repeats cheap); a plain
+    // int write here is likewise cheap to repeat.
+    fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_MENU);
+#endif
     m_ButtonsCreatedFlag = 1;
 
     if (!game_work.mHud) return;

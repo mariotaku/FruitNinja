@@ -35,6 +35,11 @@
 #include <cstdio>
 #include "game/GameWork.h"
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/ResBlock.h"
+#include "platform/wii/BlockLoader.h"
+#endif
+
 // Helper functor: captures {screen*, btn*} to call DeletedMenuButton(btn) with no args.
 // Replaces std::bind(&GameModeScreen::DeletedMenuButton, this, btn) — 8 bytes on ARM32,
 // fits the 32-byte Mortar::Delegate inline storage.
@@ -899,6 +904,11 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
 // Plays "menu-bomb" SFX, sets m_State = 0xF (back-out), detaches back
 // button's fruit piece and flings it up-right, then resets tutorial arrow.
 void GameModeScreen::QuitCallback() {
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
+    // tmp/wii/loader-blueprint.md section 2/7). Mode-select "back to menu".
+    fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_MENU);
+#endif
     // 1. SFX
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
@@ -933,6 +943,18 @@ void GameModeScreen::QuitCallback() {
 
 // vtable[18] @ 0x00181428
 void GameModeScreen::SetupLevel() {
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
+    // tmp/wii/loader-blueprint.md section 2/7). Camera-fade-triggered latch
+    // (see m_bSetupLevelFired above) -- the predictive IN-GAME preload point.
+    fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_INGAME);
+    // Task #36 Stage 2 -- force-load the INGAME+GAMEOVER mid-block deltas
+    // synchronously HERE, behind the camera fade that already covers this
+    // moment, instead of letting them lazy-load mid-gameplay / at the
+    // gameover pop. See BlockLoader.h; idempotent across repeated level
+    // starts.
+    fn::wii::BlockLoader::PreloadBlock(fn::wii::RES_BLOCK_INGAME);
+#endif
     PrepareForLevelStart();
 }
 

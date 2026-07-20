@@ -20,6 +20,11 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/FileSystemWii.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SplashBootScreen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/puff.cpp
+    # Task #36 Stage 1 -- block-preload loader groundwork (log-only instrumentation).
+    ${CMAKE_CURRENT_SOURCE_DIR}/ResBlock.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/IResourceSource.cpp
+    # Task #36 Stage 2 -- synchronous block-scoped resource preload (V1).
+    ${CMAKE_CURRENT_SOURCE_DIR}/BlockLoader.cpp
 )
 # mainWii.cpp is the Wii entry point (fruit-ninja-game excludes main*.cpp
 # files, same as mainSDL.cpp/mainEmscripten.cpp) -- added directly to the

@@ -37,6 +37,11 @@
 #include <cmath>
 #include "game/GameWork.h"
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/ResBlock.h"
+#include "platform/wii/BlockLoader.h"
+#endif
+
 // ---------------------------------------------------------------------------
 // Constants (resolved from binary DAT addresses via read_memory)
 // ---------------------------------------------------------------------------
@@ -268,6 +273,18 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     , m_AnimFrame(0)
     , m_State(0)
 {
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
+    // tmp/wii/loader-blueprint.md section 2/7). Set BEFORE LoadContent()
+    // below so the shop's own texture loads are tagged SHOP, not whatever
+    // block was active before entry.
+    fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_SHOP);
+    // Task #36 Stage 2 -- force-load the 17 item-icon textures synchronously
+    // here, during the shop-open transition, instead of letting each one
+    // lazy-load the first time its ShopListItem scrolls into view. See
+    // BlockLoader.h; idempotent across repeated shop entries.
+    fn::wii::BlockLoader::PreloadBlock(fn::wii::RES_BLOCK_SHOP);
+#endif
     // v1.6.1 ShopScreen::ShopScreen @0x001b3f94, 0x001b3fbc-0x001b3fd4: LoadContent is
     // gated at the ctor call site (`if (s_bContentLoaded=='\0') LoadContent();`), not
     // inside LoadContent() itself -- LoadContent has no internal guard, so calling it

@@ -6,6 +6,11 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/ResBlock.h"
+#include <set>
+#endif
+
 namespace Mortar {
 
 namespace {
@@ -90,6 +95,19 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     }
 
     // Cache miss -- load from disk.
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
+    // see tmp/wii/loader-blueprint.md section 6/7). Fires once per unique
+    // resolved path so a Dolphin run's log enumerates the per-block texture
+    // set without per-frame spam.
+    {
+        static std::set<uint32_t> s_LoggedHashes;
+        if (s_LoggedHashes.insert(hash).second) {
+            LOG_INFO("BlockLoad", "[BlockLoad] block=%s loading %s (TEX)",
+                     fn::wii::GetCurrentBlockName(), resolvedPath);
+        }
+    }
+#endif
     // Texture::Load internally calls AlternativeTextureLoader::CreateLoader which
     // handles the Prefix/Postfix path-rewrite when enabled. This is the binary-faithful
     // dispatch order: TextureManager::Load -> Texture::Load -> AlternativeTextureLoader

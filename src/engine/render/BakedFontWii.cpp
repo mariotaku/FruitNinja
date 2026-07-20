@@ -12,6 +12,7 @@
 #include "render/gl_funcsWii.h"   // Wii_UploadTiledGX
 #include "asset/File.h"
 #include "debug/Logger.h"
+#include "platform/wii/ResBlock.h"
 
 #include <cstdio>
 #include <cstring>
@@ -220,6 +221,12 @@ BakedFontWii::SizeIndex* BakedFontWii::LoadSizeIndex(int size) {
     free(buf);
 
     si.present = true;
+    // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
+    // see tmp/wii/loader-blueprint.md section 6/7). Augments this pre-existing
+    // load log (rather than adding a parallel [BlockLoad] line) since this IS
+    // the once-per-(lang,size) disk-load point already gated by si.tried above.
+    LOG_INFO("BlockLoad", "[BlockLoad] block=%s loading %s (FONT)",
+             fn::wii::GetCurrentBlockName(), path);
     LOG_INFO("BakedFontWii", "loaded '%s': %u glyphs, %d page(s), atlas %d, ss %.3f",
              path, glyphCount, pageCount, atlasDim, supersample);
     return &si;

@@ -17,6 +17,10 @@
 #include <cstdio>     // snprintf -- explicit for Sourcery 4.4 newlib
 #include "game/GameWork.h"
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/ResBlock.h"
+#endif
+
 // v1.6.1 GameOver @ 0x001cb788
 void GameOver(int endReason, float endScore, int endParam) {
     Game* game = Game::GetInstance();
@@ -24,6 +28,14 @@ void GameOver(int endReason, float endScore, int endParam) {
 
     // re-entry guard: levelTransitionFlag at g_GameData+0x05
     if (game_work.bM_bPaused != 0) return;
+
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
+    // tmp/wii/loader-blueprint.md section 2/7). ADDITIVE over INGAME (Risk
+    // R4 -- the gameover screen draws over the frozen, still-resident
+    // gameplay state; do NOT clear INGAME here).
+    fn::wii::AddCurrentBlock(fn::wii::RES_BLOCK_GAMEOVER);
+#endif
 
     game_work.bM_bPaused = 1;
 

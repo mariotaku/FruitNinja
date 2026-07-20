@@ -57,6 +57,10 @@
 #include "game/PowerUpManager.h"
 #include "game/ItemManager.h"
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/ResBlock.h"
+#endif
+
 // ASM-spec v1.6.1 GameInit @ 0x001ce1c0 — 18-step sequence.
 // Each step annotated with binary behaviour. Order matches binary 1:1.
 void GameInit(unsigned long) {
@@ -188,6 +192,13 @@ void GameInit(unsigned long) {
 
     // Step 9: MainScreen (binary sizeof 0x12C = 300 bytes; port 0x114)
     {
+#if defined(FRUIT_PLATFORM_WII)
+        // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
+        // tmp/wii/loader-blueprint.md section 2/7). Seeds MENU before the
+        // first MainScreen-owned load so boot-time / pre-mode-select loads
+        // are labelled MENU instead of NONE.
+        fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_MENU);
+#endif
         MainScreen* mainScreen = new MainScreen(*game);
         // DIFFERS: binary stores s_mainScreen file-static; port uses
         // game_work.mMainScreen exclusively.

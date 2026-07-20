@@ -14,6 +14,11 @@
 #include <map>
 #include <vector>
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/ResBlock.h"
+#include <set>
+#endif
+
 namespace Mortar {
 
 MeshManager* MeshManager::s_instance = nullptr;
@@ -690,6 +695,21 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const AsciiString& path) {
     // v1.6.1 @0x00238644: RegisterLoader<Mesh>(Delegate1(&LoadMesh)) @0x0023890c
     ResourceLoader::RegisterLoader<Mesh>(
         Delegate1<SmartPtr<Mesh>, ResourceLoader&>::MakeFree(&LoadMesh));
+
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
+    // see tmp/wii/loader-blueprint.md section 6/7). Fires once per unique
+    // path so a Dolphin run's log enumerates the per-block mesh set without
+    // per-frame spam. MeshManager::Load's cache check above already skips
+    // this function entirely on a hit, so every call here is a real disk load.
+    {
+        static std::set<std::string> s_LoggedPaths;
+        if (s_LoggedPaths.insert(std::string(path.CStr())).second) {
+            LOG_INFO("BlockLoad", "[BlockLoad] block=%s loading %s (MESH)",
+                     fn::wii::GetCurrentBlockName(), path.CStr());
+        }
+    }
+#endif
 
     // Open the file and dispatch Load<Model> via the loader machinery.
     // v1.6.1 @0x00238644: return ResourceLoader::Load<Model>(path) @0x0023e80c

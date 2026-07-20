@@ -36,4 +36,28 @@ void PreloadFontsTTF();
 // No-op if game_work.m_pTTFFontMain is null (font failed to load).
 void WarmTTFGlyphCache();
 
+#if defined(FRUIT_PLATFORM_WII)
+// Task #36 Stage 2 -- Wii-only block-preload of the GAMEOVER-screen TTF
+// glyph sizes (30, 56) that WarmTTFGlyphCache() above does NOT cover (its
+// s_WarmSizes list is 9.9/10/12/14/22, all menu sizes). Without this, the
+// first GameOverScreen/ScoreControl BakedStringBox at these sizes rasterizes
+// its glyphs (BakedFontWii::LoadSizeIndex + EnsurePageTexture, task #51) at
+// the moment gameover POPS over the frozen game -- with no fade/transition
+// covering it (unlike SetupLevel's camera fade) -- so the hitch is worse
+// there than the same lazy-load pattern elsewhere. Called from
+// BlockLoader::PreloadBlock(RES_BLOCK_INGAME) (BlockLoader.cpp) alongside the
+// GAMEOVER texture/mesh/SFX deltas, since GAMEOVER has no block-entry hook of
+// its own that fires ahead of the pop (see ResBlock.h file comment: GAMEOVER
+// is additive over INGAME, not a separate transition).
+//
+// Same two-part warm shape as WarmTTFGlyphCache: (1) ASCII printable range at
+// both sizes -- covers the ScoreControl digit boxes (30.0f) and any latin
+// title fallback; (2) the actual GameOverScreen title label strings (0x2db
+// Classic / 0x2f9 Arcade&Zen, both size 56.0f, see GameOverScreen.cpp:391-397)
+// and LSTR_SCORE (30.0f, see ScoreControl.cpp:151) for the active language's
+// CJK/non-ASCII glyphs. Flushes the atlas once at the end, matching
+// WarmTTFGlyphCache. No-op if game_work.m_pTTFFontMain is null.
+void WarmTTFGlyphCacheGameOver();
+#endif
+
 #endif // FN_GAME_PRELOADFONTSTTF_H
