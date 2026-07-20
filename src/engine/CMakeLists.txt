@@ -39,6 +39,7 @@ if(NOT FN_ASM_VERIFY AND FRUIT_PLATFORM_WII)
     target_sources(mortar_engine PRIVATE
         render/gl_funcsWii.cpp
         render/DisplayManagerWii.cpp
+        render/BakedFontWii.cpp   # Port specific: prebaked FreeType IA8 glyph store (task #51)
     )
 endif()
 # Renderer backend: link-time split (mirrors GameSDL.cpp/GameWii.cpp). The GL

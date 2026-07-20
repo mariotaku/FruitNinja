@@ -68,8 +68,9 @@ void Wii_KeepTextureLinear(unsigned int glTexId);
 // transcodable Tex1 game texture -- bit-depth-preserving GX format, the MEM1
 // win -- plus the WebP-only UI widget art at staging time; encoder:
 // tools/lib/gx_encoder.py; reader: TextureFileFormat::ReadGxtx). `gxFmt`
-// must be GX_TF_RGB565 (4), GX_TF_RGB5A3 (5) or GX_TF_RGBA8 (6); anything
-// else is rejected (texture left untextured). `tiled` must be in that
+// must be GX_TF_RGB565 (4), GX_TF_RGB5A3 (5), GX_TF_RGBA8 (6) or GX_TF_IA8
+// (3, prebaked font atlas pages -- task #51, BakedFontWii); anything else is
+// rejected (texture left untextured). `tiled` must be in that
 // format's exact GX hardware tile layout (4x4 tiles; RGBA8 = 64-byte tile,
 // AR half then GB half; 16bpp = 32-byte tile of big-endian u16 texels -- see
 // gx_encoder.py's module docstring); `tiledSize` should equal

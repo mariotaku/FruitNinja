@@ -579,7 +579,14 @@ void Wii_UploadTiledGX(unsigned int glTexId, const void* tiled,
     t.height   = h;
     t.hasImage = false;
     if (!tiled || w <= 0 || h <= 0) return;
-    if (gxFmt != GX_TF_RGB565 && gxFmt != GX_TF_RGB5A3 && gxFmt != GX_TF_RGBA8) {
+    // GX_TF_IA8 is accepted for the prebaked font atlas pages (task #51,
+    // BakedFontWii): those .gxtx containers are IA8 (I=255, A=coverage), the
+    // same texel layout the dynamic atlas uploads via TileIA8. The tiled body
+    // is already in GX hardware order, so IA8 needs no special handling here
+    // beyond the format whitelist -- GX_GetTexBufferSize / GX_InitTexObj are
+    // format-driven.
+    if (gxFmt != GX_TF_RGB565 && gxFmt != GX_TF_RGB5A3 && gxFmt != GX_TF_RGBA8
+        && gxFmt != GX_TF_IA8) {
         static bool warnedFmt = false;
         if (!warnedFmt) {
             warnedFmt = true;

@@ -42,6 +42,21 @@ CMakeLists.txt).
     .rgba sidecars (clean checkout, no prior host/web node run yet), Wii
     SettingsScreen widgets fall back to placeholder art (same non-fatal
     contract as the host/web "node not found" case).
+  - PREBAKED TTF FONTS (task #51): tools/wii/bake-fonts.py rasterizes the
+    used glyph set (tmp/prebake/bake_plan.json, produced by a separate
+    offline planning pass -- see tools/wii/prebaked-font-format.md) with
+    FreeType and packs it into native IA8 GXT1 atlas pages + a metrics
+    index, replacing runtime stb_truetype rasterization on Wii (stb clips
+    CJK and breaks Korean). Staged under fonts/prebaked/<lang>/<size>.idx +
+    <size>_pN.gxtx. This step needs freetype-py (a bake-time host dependency,
+    NOT pure-stdlib like the rest of --wii staging) and the bake_plan.json +
+    chars_<lang>.txt inputs; both are optional here -- if either is missing
+    (freetype-py not pip-installed on this machine, or the tmp/prebake/ plan
+    hasn't been generated yet) this prints one warning and continues
+    non-fatally, same "missing tool -> skip, don't fail the whole stage"
+    contract as the widget-art node/Pillow cases above. The eventual Wii
+    font LOADER (not yet written) is expected to fall back to on-device
+    stb_truetype rasterization when a prebaked page is absent.
 
 ALWAYS (both host and web):
 
@@ -179,6 +194,12 @@ VORBIS_QUALITY = "5"
 # fn_asset_staging CMake target before this script): repo-relative, sibling
 # of FruitNinjaBada/Data.
 WIDGET_TEX_RELDIR = os.path.join("assets", "ui-widgets", "generated")
+
+# Wii prebaked-font plan inputs (task #51): repo-relative, gitignored scratch
+# dir -- see tools/wii/prebaked-font-format.md. Not committed, so this step
+# is best-effort (see stage_wii_prebaked_fonts).
+WII_PREBAKE_PLAN_RELDIR = os.path.join("tmp", "prebake")
+WII_PREBAKED_FONTS_RELDIR = os.path.join("fonts", "prebaked")
 
 # --- Texture transcoding (host + web): Tex1 .tex -> WebP-in-.tex -------------
 # WEBP_QUALITY is the lossy quality 0..100 (higher = better/larger). If UI/text
@@ -573,6 +594,58 @@ def merge_widget_textures(repo_root, dst_root, stats, is_wii=False):
         stats["widget_tex_copied"] += 1
 
 
+def stage_wii_prebaked_fonts(repo_root, dst_root, stats):
+    """Invoke tools/wii/bake-fonts.py to produce the prebaked TTF glyph
+    atlases (task #51 -- see tools/wii/prebaked-font-format.md). Non-fatal:
+    prints a warning and returns if either input is missing (freetype-py not
+    installed, or the tmp/prebake/ plan hasn't been generated yet) -- same
+    contract as merge_widget_textures' missing-node case."""
+    stats["prebaked_fonts_baked"] = 0
+    stats["prebaked_fonts_skipped_reason"] = None
+
+    plan_dir = os.path.join(repo_root, WII_PREBAKE_PLAN_RELDIR)
+    plan_path = os.path.join(plan_dir, "bake_plan.json")
+    if not os.path.isfile(plan_path):
+        reason = "{} not found (run the #51 offline planning pass first)".format(plan_path)
+        stats["prebaked_fonts_skipped_reason"] = reason
+        print("[stage-assets] WARNING: prebaked fonts skipped -- {} -- Wii will "
+              "fall back to runtime rasterization for this build".format(reason))
+        return
+
+    try:
+        import freetype  # noqa: F401
+    except ImportError:
+        reason = "freetype-py not installed (pip install freetype-py)"
+        stats["prebaked_fonts_skipped_reason"] = reason
+        print("[stage-assets] WARNING: prebaked fonts skipped -- {} -- Wii will "
+              "fall back to runtime rasterization for this build".format(reason))
+        return
+
+    font_dir = os.path.join(repo_root, "FruitNinjaBada", "Data", FONT_RELPATH)
+    out_dir = os.path.join(dst_root, WII_PREBAKED_FONTS_RELDIR)
+
+    # bake-fonts.py's filename has a dash (not a valid module identifier), so
+    # import it by file path rather than by module name.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "wii_bake_fonts", os.path.join(repo_root, "tools", "wii", "bake-fonts.py"))
+    bake_fonts = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(bake_fonts)
+
+    plan = bake_fonts.load_bake_plan(plan_dir)
+    os.makedirs(out_dir, exist_ok=True)
+    report = {}
+    for lang in sorted(plan["plan"].keys()):
+        for size in plan["canonical_sizes"]:
+            bake_fonts.bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report)
+            stats["prebaked_fonts_baked"] += 1
+
+    total_bytes = sum(e["bytes"] for lang_r in report.values() for e in lang_r.values())
+    total_missing = sum(e["missing"] for lang_r in report.values() for e in lang_r.values())
+    stats["prebaked_fonts_bytes"] = total_bytes
+    stats["prebaked_fonts_missing"] = total_missing
+
+
 # --- Font subsetting (web only): CJK/shared TTF subset by used code points --
 FONT_RELPATH = "fontstruetype"
 CJK_FONT_FILENAME = "gangofchinese.ttf"
@@ -871,6 +944,14 @@ def main():
             stats["other_copied"], stats["other_skipped"]))
         print("[stage-assets] widget textures: {} staged as GXT1 from {}".format(
             stats["widget_tex_copied"], WIDGET_TEX_RELDIR))
+
+        stage_wii_prebaked_fonts(repo_root, dst_root, stats)
+        if stats["prebaked_fonts_baked"]:
+            print("[stage-assets] prebaked fonts: {} (lang,size) atlases baked, "
+                  "{:.1f} MB, {} missing-glyph codepoints -> {}".format(
+                      stats["prebaked_fonts_baked"],
+                      stats.get("prebaked_fonts_bytes", 0) / (1024.0 * 1024.0),
+                      stats.get("prebaked_fonts_missing", 0), WII_PREBAKED_FONTS_RELDIR))
         return
 
     # Self-provision the external tools (install-where-used). Raises a clear

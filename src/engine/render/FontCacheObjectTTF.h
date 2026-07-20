@@ -21,6 +21,23 @@
 //      .fnt fonts.
 //
 // Thread safety: not thread-safe; single-threaded game loop is assumed.
+//
+// Port specific (Wii, task #51): on FRUIT_PLATFORM_WII, GetGlyph first consults
+// the prebaked FreeType IA8 atlas store (BakedFontWii) -- stb clips CJK glyphs
+// and breaks Korean composition, whereas the offline FreeType bake is correct.
+//   - Plain (effect==NONE) glyphs: mapped straight onto a GlyphAtlasEntry
+//     (TryBakedGlyph).
+//   - Effect (BLUR/STROKE) glyphs: the effect filter (BuildBlur/BuildStrokes)
+//     runs on the BAKED glyph's UN-TILED coverage (TryBakedEffectGlyph ->
+//     BakedFontWii::GetGlyphCoverage), NOT stb's over-sized CJK raster, so the
+//     shadow/glow is computed at the baked (correct) size and aligns with the
+//     NONE base layer. (Common shadow = zero-offset BLUR, so the blur is
+//     REQUIRED to make the halo visible -- returning the plain baked glyph
+//     would leave it fully occluded behind the base.)
+// A baked MISS (glyph not in the size's baked subset, or the raw page can't be
+// re-read) falls back to the stb effect/plain path. The returned
+// GlyphAtlasEntry shape is identical every way, so BakedStringTTF /
+// BakedStringBox / Font.cpp are untouched. Host/web never take the baked path.
 
 #include "render/FontInterface.h"
 #include <cstdint>
@@ -29,6 +46,9 @@
 namespace Mortar {
 
 class TtfFace;
+#if defined(FRUIT_PLATFORM_WII)
+class BakedFontWii;   // Port specific: Wii prebaked-atlas glyph store (task #51)
+#endif
 
 // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
 // FreeType is asked to rasterize glyphs at (requestedSize * kFontSupersample); the resulting bitmap and atlas
@@ -147,6 +167,39 @@ private:
 
     // Glyph cache: GlyphCacheKey -> GlyphAtlasEntry (metrics in world units)
     std::map<GlyphCacheKey, GlyphAtlasEntry> m_Cache;
+
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific (task #51): prebaked FreeType IA8 atlas store. On Wii,
+    // GetGlyph tries this FIRST (plain, effect==NONE glyphs) and only falls
+    // back to stb rasterisation on a miss -- stb clips CJK / breaks Korean,
+    // so the baked FreeType glyphs are used wherever they exist. Owns one
+    // FontAtlasPage per (size,page) so the baked GL texture flows through the
+    // same GlyphAtlasEntry::page / pageTextureID binding the dynamic atlas uses.
+    // Lazily allocated on first Wii GetGlyph; active-language-only.
+    BakedFontWii* m_BakedWii;
+    // Stable FontAtlasPage wrappers for baked GL textures, keyed by GL id, so
+    // repeated lookups of the same page return the SAME page pointer (surface
+    // grouping in BakedStringTTF keys off pointer identity).
+    std::map<GLuint, FontAtlasPage*> m_BakedPages;
+    FontAtlasPage* BakedPageFor(GLuint texId);
+    // Fill `out` from a baked-store hit at requestedSize. Returns false if the
+    // baked store misses (caller then falls through to stb). Scales the baked
+    // pixel metrics (at the snapped native size) by requestedSize/nativeSize.
+    bool TryBakedGlyph(uint32_t cp, float requestedSize, GlyphAtlasEntry* out);
+
+    // Task #51 effect-layer path: build an effect (BLUR/STROKE) glyph from the
+    // BAKED coverage instead of stb's over-sized CJK raster, so the effect
+    // layer matches the NONE base layer's size + alignment. Un-tiles the baked
+    // glyph's coverage (BakedFontWii::GetGlyphCoverage), pads it by-effect, runs
+    // the SAME BuildBlur/BuildStrokes filter the stb path uses, packs into the
+    // dynamic atlas, and fills `out` with baked metrics (scaled by
+    // requestedSize/nativeSize) plus the grown bearing shift. Returns false on a
+    // baked miss (caller falls through to the stb effect path). `radius` is
+    // LOGICAL px (== texel on Wii, ss==1).
+    bool TryBakedEffectGlyph(uint32_t cp, float requestedSize,
+                             FONT_EFFECT_ENUM effect, int radius,
+                             GlyphAtlasEntry* out);
+#endif
 
     // Apply TtfFace::SetPixelSize for the given charHeight_26_6 value.
     // charHeight_26_6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0).

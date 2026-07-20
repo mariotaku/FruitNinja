@@ -40,6 +40,14 @@ loader uploads these bytes verbatim with no runtime decode/tile):
     RGBA5551 sources (opaque->RGB555, alpha==0->A3=0); alpha 4->3 bit for
     RGBA4444.
 
+  GX_TF_IA8 (32 bytes/tile): 4x4 texel tiles; 16 texels row-major, each a u16
+    BIG-ENDIAN = (A<<8)|I from a 2-byte-per-texel [I][A] (intensity, alpha)
+    source buffer. Out-of-bounds pad = 0x0000 (transparent black). Mirrors
+    src/engine/render/gl_funcsWii.cpp TileIA8/TileRegion(TILE_FMT_IA8)
+    exactly -- used by tools/wii/bake-fonts.py for the prebaked TTF glyph
+    atlases (font-baker's source layout is [I][A] same as the runtime's LA8
+    font atlas path in FontInterface.cpp).
+
 Self-check: `python3 gx_encoder.py --selftest` round-trips known texels
 through each tiler and asserts the exact tile bytes (registered as the
 `gx_encoder` ctest case in tests/CMakeLists.txt).
@@ -47,14 +55,16 @@ through each tiler and asserts the exact tile bytes (registered as the
 
 import struct
 
+GX_TF_IA8    = 3
 GX_TF_RGB565 = 4
 GX_TF_RGB5A3 = 5
-GX_TF_RGBA8 = 6
+GX_TF_RGBA8  = 6
 
 BYTES_PER_TILE = {
+    GX_TF_IA8:    32,
     GX_TF_RGB565: 32,
     GX_TF_RGB5A3: 32,
-    GX_TF_RGBA8: 64,
+    GX_TF_RGBA8:  64,
 }
 
 # Tex1 source format byte (byte[2] of the .tex header, see
@@ -165,7 +175,18 @@ def tile_rgb5a3(rgba, w, h):
     return _tile_u16(vals, w, h)
 
 
+def tile_ia8(ia, w, h):
+    """Tile a flat row-major 2-byte-per-texel [I][A] (intensity, alpha)
+    buffer into GX_TF_IA8 layout. EXACT match of gl_funcsWii.cpp
+    TileRegion's TILE_FMT_IA8 branch: one BIG-ENDIAN u16 per texel =
+    (A<<8)|I (alpha byte first, then intensity -- mirrors TileRGBA8's AR
+    half writing A before R). Out-of-bounds pad = 0x0000."""
+    vals = [(ia[i + 1] << 8) | ia[i] for i in range(0, w * h * 2, 2)]
+    return _tile_u16(vals, w, h)
+
+
 _TILERS = {
+    GX_TF_IA8: tile_ia8,
     GX_TF_RGB565: tile_rgb565,
     GX_TF_RGB5A3: tile_rgb5a3,
     GX_TF_RGBA8: tile_rgba8,
@@ -173,11 +194,12 @@ _TILERS = {
 
 
 def encode_gxtx(rgba, w, h, gx_fmt):
-    """Encode a flat row-major RGBA8888 buffer (R,G,B,A byte order) as a
-    "GXT1" container with the given GX format (module docstring has the full
-    header + tile-layout spec)."""
+    """Encode a flat row-major pixel buffer as a "GXT1" container with the
+    given GX format (module docstring has the full header + tile-layout
+    spec). `rgba` is RGBA8888 (R,G,B,A) for GX_TF_RGBA8/RGB565/RGB5A3, or a
+    2-byte-per-texel [I][A] buffer for GX_TF_IA8."""
     if gx_fmt not in _TILERS:
-        raise ValueError("unsupported GX format {} (want 4/5/6)".format(gx_fmt))
+        raise ValueError("unsupported GX format {} (want 3/4/5/6)".format(gx_fmt))
     out = bytearray(b"GXT1")
     out += struct.pack(">HHBBH", w, h, gx_fmt, 1, 0)
     out += _TILERS[gx_fmt](rgba, w, h)
@@ -236,7 +258,19 @@ def _selftest():
     t = tile_rgb5a3(bytes([0x88, 0x88, 0x88, 0x00]), 1, 1)
     assert t[0:2] == b"\x08\x88", t[0:2]  # (0<<12)|(8<<8)|(8<<4)|8
 
-    # 6) Container: header fields + per-format body length.
+    # 6) IA8: 2-byte-per-texel [I][A] source -> BE u16 (A<<8)|I.
+    #    texel0 I=0x11 A=0x22 -> 0x2211; texel1 I=0xAB A=0xCD -> 0xCDAB.
+    t = tile_ia8(bytes([0x11, 0x22, 0xAB, 0xCD]), 2, 1)
+    assert len(t) == 32
+    assert t[0:2] == b"\x22\x11", t[0:2]
+    assert t[2:4] == b"\xcd\xab", t[2:4]
+    assert t[4:] == b"\x00" * 28  # oob pad = 0x0000
+    # IA8 out-of-bounds pad (3x1 within a 4x4 tile): texel(2,0) real, rest padded.
+    t = tile_ia8(bytes([0x11, 0x22, 0x33, 0x44, 0x55, 0x66]), 3, 1)
+    assert t[0:2] == b"\x22\x11" and t[2:4] == b"\x44\x33" and t[4:6] == b"\x66\x55"
+    assert t[6:8] == b"\x00\x00"  # texel(3,0) oob
+
+    # 7) Container: header fields + per-format body length.
     rgba = bytes(5 * 5 * 4)
     for fmt, tile_bytes in ((GX_TF_RGB565, 32), (GX_TF_RGB5A3, 32), (GX_TF_RGBA8, 64)):
         blob = encode_gxtx(rgba, 5, 5, fmt)
@@ -244,12 +278,16 @@ def _selftest():
         assert struct.unpack(">HHBBH", blob[4:12]) == (5, 5, fmt, 1, 0)
         assert len(blob) == 12 + 4 * tile_bytes  # 2x2 tiles
         assert len(blob) - 12 == tiled_size(5, 5, fmt)
+    ia8_src = bytes(5 * 5 * 2)
+    blob = encode_gxtx(ia8_src, 5, 5, GX_TF_IA8)
+    assert struct.unpack(">HHBBH", blob[4:12]) == (5, 5, GX_TF_IA8, 1, 0)
+    assert len(blob) == 12 + 4 * 32
     try:
-        encode_gxtx(rgba, 5, 5, 3)
+        encode_gxtx(rgba, 5, 5, 7)
     except ValueError:
         pass
     else:
-        raise AssertionError("encode_gxtx accepted invalid GX format 3")
+        raise AssertionError("encode_gxtx accepted invalid GX format 7")
 
     print("gx_encoder selftest: OK")
 

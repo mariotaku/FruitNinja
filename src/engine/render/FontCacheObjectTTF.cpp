@@ -6,6 +6,11 @@
 #include <cmath>
 #include <vector>
 
+#if defined(FRUIT_PLATFORM_WII)
+#include "render/BakedFontWii.h"
+#include "game/GameWork.h"   // game_work.languageFlag (active language)
+#endif
+
 namespace Mortar {
 
 FontCacheObjectTTF::FontCacheObjectTTF(const char* path, int defaultPixelSize)
@@ -13,6 +18,9 @@ FontCacheObjectTTF::FontCacheObjectTTF(const char* path, int defaultPixelSize)
     , m_DefaultPixelSize(defaultPixelSize)
     , m_CurrentCharHeight(-1)
     , m_Atlas(nullptr)
+#if defined(FRUIT_PLATFORM_WII)
+    , m_BakedWii(nullptr)
+#endif
 {
     m_Face = TtfFace::Open(path, defaultPixelSize);
     if (!m_Face || !m_Face->IsValid()) {
@@ -34,6 +42,15 @@ FontCacheObjectTTF::~FontCacheObjectTTF() {
     m_Face = nullptr;
     delete m_Atlas;
     m_Atlas = nullptr;
+#if defined(FRUIT_PLATFORM_WII)
+    delete m_BakedWii;
+    m_BakedWii = nullptr;
+    for (std::map<GLuint, FontAtlasPage*>::iterator it = m_BakedPages.begin();
+         it != m_BakedPages.end(); ++it) {
+        delete it->second;   // wrapper only; the GL texture is owned by m_BakedWii
+    }
+    m_BakedPages.clear();
+#endif
 }
 
 bool FontCacheObjectTTF::IsValid() const {
@@ -220,6 +237,29 @@ const GlyphAtlasEntry* FontCacheObjectTTF::GetGlyph(uint32_t cp, float requested
     if (it != m_Cache.end()) {
         return &it->second;
     }
+
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific (task #51): try the prebaked FreeType IA8 atlas store for
+    // plain glyphs before rasterising via stb (which clips CJK / breaks Korean).
+    // Effect glyphs (STROKE/BLUR/BEVEL) run the effect filter on the BAKED
+    // glyph's coverage (task #51) so the shadow/glow is computed at the baked
+    // (correct) size and aligns with the NONE base layer -- stb over-sizes CJK,
+    // which mismatched the halo behind the text. A baked miss (glyph not in the
+    // size's baked subset) falls through to the stb effect path below.
+    if (effect == FONT_EFFECT_NONE) {
+        GlyphAtlasEntry baked;
+        if (TryBakedGlyph(cp, requestedSize, &baked)) {
+            m_Cache[key] = baked;
+            return &m_Cache[key];
+        }
+    } else {
+        GlyphAtlasEntry bakedFx;
+        if (TryBakedEffectGlyph(cp, requestedSize, effect, radius, &bakedFx)) {
+            m_Cache[key] = bakedFx;
+            return &m_Cache[key];
+        }
+    }
+#endif
 
     // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
     // Ask the backend to rasterize at kFontSupersample x the logical size so the atlas holds hi-res glyph bitmaps.
@@ -430,5 +470,378 @@ float FontCacheObjectTTF::GetLineHeight(float requestedSize) {
     return (float)m_Face->GetLineHeight_26_6()
            * m_Atlas->m_InvFontScale * (1.0f / 64.0f) * (1.0f / (float)kFontSupersample);
 }
+
+#if defined(FRUIT_PLATFORM_WII)
+// Port specific (task #51): return a stable FontAtlasPage wrapper for a baked
+// GL texture id. BakedStringTTF groups glyphs into surfaces keyed by the
+// FontAtlasPage* pointer, so the SAME id must always yield the SAME pointer.
+// The wrapper carries only m_TextureID (the draw path -- BakedStringTTF::Draw --
+// reads nothing else off the page); m_Pixels is NULL and the GL texture is owned
+// by m_BakedWii, not freed here.
+FontAtlasPage* FontCacheObjectTTF::BakedPageFor(GLuint texId) {
+    if (texId == 0) return nullptr;
+    std::map<GLuint, FontAtlasPage*>::iterator it = m_BakedPages.find(texId);
+    if (it != m_BakedPages.end()) return it->second;
+    FontAtlasPage* p = new FontAtlasPage();
+    memset(p, 0, sizeof(*p));
+    p->m_TextureID = texId;
+    m_BakedPages[texId] = p;
+    return p;
+}
+
+// Guaranteed transparent gutter (texels) between ANY two packed cells in a Wii
+// baked atlas page -- must match bake-fonts.py's SHELF_PAD exactly (task #52).
+// Bake-time transparent gutter between packed glyphs (bake-fonts.py SHELF_PAD).
+static const float kAtlasGutterTexels = 2.0f;
+// Hard ceiling for TryBakedGlyph/TryBakedEffectGlyph's UV overscan. It must be
+// kAtlasGutterTexels - 1, NOT the full gutter: with BILINEAR filtering, a UV
+// edge at +G texels blends the last gutter texel (+G-1) with the NEIGHBOUR's
+// first ink texel (+G) -- so overscanning the FULL 2px gutter still bleeds a
+// dark dash of the adjacent glyph (visible when BakedStringBox's shrink-to-fit
+// pushes the ideal overscan =1/pxToWorld above the gutter). Clamping to G-1
+// keeps both bilinear taps inside the transparent gutter. 1 texel is still
+// ample headroom for the FinishMesh +1-world quad grow + hairline glyphs.
+static const float kMaxOverscanTexels = kAtlasGutterTexels - 1.0f;
+
+// Port specific (task #51): fill `out` from a prebaked IA8 atlas hit, matching
+// the plain (effect==NONE) GlyphAtlasEntry the stb path would produce so
+// BakedStringTTF / BakedStringBox / Font.cpp consume it unchanged. Returns
+// false on a baked-store miss (caller falls through to stb).
+//
+// The baked atlas stores TIGHT FreeType bitmap rects (no baked-cell pad -- see
+// tools/wii/prebaked-font-format.md), rasterised at the SUPERSAMPLED size
+// (nativeSize*BAKE_SS, task #52), with a 2px transparent shelf gutter around each
+// glyph. We reconstruct the cell contract with padL=padT=0 (the rect IS the cell)
+// and sample the glyph rect UV with a +1 texel overscan into the gutter (see the
+// OVERSCAN DECISION comment below), so ink registers at the same pen offset.
+//
+// SUPERSAMPLE SPLIT (mirrors the host kFontSupersample scheme): the atlas RECT
+// (bg.x/y/w/h) is in supersampled texels and maps to a LOGICAL-size quad, so the
+// magnification at the quad drops to 1/BAKE_SS => crisp after the EFB upscale.
+// The METRIC px (bearing/advance) and the glyph's WORLD width/height are divided
+// by bg.supersample to recover LOGICAL layout: layout is identical to the 1x
+// bake, only atlas texel density grew. `metricScale = sizeScale / supersample`
+// applies both the snap scale (requestedSize/nativeSize) and the SS divide.
+//
+// OVERSCAN DECISION (task #52, revised after on-device regression): the 1x path
+// added +1 texel to the cell UV to mirror the dynamic path's +ss span. A FIRST
+// pass removed the overscan entirely (tight rect, betting the 2px gutter alone
+// gives clean edge AA) -- that DILUTED nothing, but on real GX hardware a
+// hairline glyph (chonpu U+30FC, h=3 supersampled texels; hyphen, h~1-2) came
+// out fully BLANK: a tight UV rect whose edges land exactly on bg.y/bg.y+bg.h
+// leaves zero sampling headroom, and for a 2-3-texel-tall rect any hardware
+// texel-center/edge-clamp rounding at the GX texture unit can walk the sampled
+// range entirely off the ink rows. A generously-thick glyph never showed this
+// (losing a fractional edge row is invisible against 20+ rows); a hairline has
+// no margin to lose ANY row. Fix: restore a SMALL +1 texel overscan (not the old
+// +1-into-a-1px-gutter, which diluted with only 1 texel of transparent margin
+// past the ink) -- with SHELF_PAD=2 a +1 overscan still leaves 1 full texel of
+// transparent gutter before the next glyph's cell, so there is no bleed, while
+// giving the sampler the same +1 headroom the dynamic (stb/FreeType) NONE path
+// always had. Combined with the 1.5x native resolution (more ink rows to begin
+// with) this keeps thin bars both VISIBLE and not diluted.
+bool FontCacheObjectTTF::TryBakedGlyph(uint32_t cp, float requestedSize,
+                                       GlyphAtlasEntry* out) {
+    if (!m_Atlas) return false;
+    if (!m_BakedWii) {
+        m_BakedWii = new BakedFontWii();
+    }
+    // Pick up language changes cheaply (no-op when unchanged).
+    m_BakedWii->SetLanguage((int)game_work.languageFlag);
+
+    BakedGlyphInfo bg;
+    if (!m_BakedWii->Lookup(cp, requestedSize, &bg)) return false;
+
+    memset(out, 0, sizeof(*out));
+
+    const float inv   = m_Atlas->m_InvFontScale;
+    // Baked at bg.nativeSize LOGICAL (bg.supersample x physically); requested at
+    // requestedSize. Scale pixel metrics so the returned world-unit values match
+    // the dynamic path at requestedSize.
+    const float sizeScale = (bg.nativeSize > 0)
+        ? (requestedSize / (float)bg.nativeSize) : 1.0f;
+    const float ss = (bg.supersample > 0.0f) ? bg.supersample : 1.0f;
+    // px -> world for a size-scaled SUPERSAMPLED-pixel metric quantity: divide by
+    // ss to logicalise, scale by sizeScale for the snap, * inv to world.
+    const float pxToWorld = inv * sizeScale / ss;
+
+    const float fw = (float)bg.w;   // supersampled texels
+    const float fh = (float)bg.h;
+
+    // Legacy separate-bearing contract (BakedStringBox / Font.cpp). All px fields
+    // are supersampled, so pxToWorld folds in the /ss divide -> logical world size.
+    // width/height are set below (ink branch floors them at 1.0f; ink-less branch
+    // leaves them at the natural 0).
+    out->bearingX = (float)bg.bearingX * pxToWorld;
+    out->bearingY = (float)bg.bearingY * pxToWorld;
+    out->advanceX = (float)bg.advance  * pxToWorld;
+    out->width    = fw * pxToWorld;   // overwritten (floored) below when bg.w/h > 0
+    out->height   = fh * pxToWorld;   // overwritten (floored) below when bg.w/h > 0
+
+    // Baked-bearing cell contract (BakedStringTTF GlyphTTF pipeline). Mirrors
+    // the dynamic NONE branch: layoutX = (advance - bitmap_left), layoutY =
+    // (bitmap_top - height), both size-scaled supersampled px -> logical world.
+    out->layoutX = (float)(bg.advance - bg.bearingX) * pxToWorld;
+    out->layoutY = (float)(bg.bearingY - bg.h)       * pxToWorld;
+
+    if (bg.w > 0 && bg.h > 0 && bg.pageTextureID != 0 && bg.atlasDim > 0) {
+        FontAtlasPage* page = BakedPageFor(bg.pageTextureID);
+        out->page          = page;
+        out->pageTextureID = bg.pageTextureID;
+
+        const float invDim = 1.0f / (float)bg.atlasDim;
+        // Cell UV overscan (task #52, base/effect ALIGNMENT fix): FinishMesh grows
+        // EVERY drawable glyph's world quad by a FIXED +1.0f world unit on the far
+        // edge (ASM-verified binary constant, independent of cellW/ss/pad). For the
+        // overscanned UV edge to land EXACTLY on that +1.0f-grown quad edge (i.e.
+        // for the true ink rect to be sampled WITHOUT stretching), the UV overscan
+        // in TEXELS must be exactly `1.0f / pxToWorld` texels -- the texel count
+        // that maps to precisely 1.0 world unit under this glyph's own pxToWorld.
+        // A fixed "+1 texel" (this function's earlier revision) or a rounded "+ssi
+        // texels" (the effect path's, ssi=round(ss)) both stretch the ink by a
+        // few tenths of a world unit on the far edge -- harmless in isolation, but
+        // base (which used +1) and effect (+ssi=2) stretched by DIFFERENT amounts,
+        // so the two layers' ink no longer matched in size/position -> a
+        // zero-offset shadow/stroke visibly misregistered by ~1 texel against the
+        // base layer. Using the exact `uvOverscan` here (and the identical formula
+        // in TryBakedEffectGlyph) makes the stretch ZERO in both paths, so they're
+        // pixel-identical -- not just "close enough": the overscan formula depends
+        // only on ss/inv/sizeScale, never on cellW or pad, so it's IDENTICAL for
+        // base and effect on the same glyph at the same requestedSize.
+        //
+        // CLAMP (task #52, neighbour-bleed fix): `1.0f/pxToWorld` grows WITHOUT
+        // BOUND as sizeScale shrinks (BakedStringBox's shrink-to-fit loop can
+        // request well under the native size for a tight box, e.g. the MainScreen
+        // "slice fruit" 3-line CJK plate) -- at sizeScale ~0.6-0.7 the exact
+        // overscan exceeds kAtlasGutterTexels (2, == bake-fonts.py SHELF_PAD), the
+        // ONLY gap the packer actually guarantees between neighbouring glyphs. Past
+        // that, the overscanned UV samples real ink from the next glyph in the
+        // atlas -- a dark dash/fragment a few texels below the baseline, worst on
+        // glyphs whose packed neighbour-below happens to sit at exactly that
+        // minimum 2-texel gap (observed: U+30A4 (i-katakana) at gap=2; U+3057
+        // (shi) at gap=3 was unaffected at the same sizeScale). Clamping trades a
+        // sub-texel ink stretch (imperceptible at the already-shrunk size that
+        // triggers it) for guaranteed bleed-free sampling -- clamping affects base
+        // and effect IDENTICALLY (same formula, same constant), so it cannot
+        // reintroduce the base/effect misalignment fixed above.
+        float uvOverscan = 1.0f / pxToWorld;   // texels; == ss/(inv*sizeScale)
+        if (uvOverscan > kMaxOverscanTexels) uvOverscan = kMaxOverscanTexels;
+        out->cellU0 = (float)bg.x * invDim;
+        out->cellV0 = (float)bg.y * invDim;
+        out->cellU1 = ((float)(bg.x + bg.w) + uvOverscan) * invDim;
+        out->cellV1 = ((float)(bg.y + bg.h) + uvOverscan) * invDim;
+        out->cellOriginX = 0.0f;   // padL = 0 (baked rect has no internal pad)
+        out->cellOriginY = 0.0f;   // padT = 0
+        // DIFFERS: BakedStringTTF::FinishMesh (v1.6.1 @0x002480a8, ASM-verified) culls
+        // any glyph whose world m_QuadSize is < 1.0 in either axis -- the binary's floor
+        // for "has ink -> at least 1 drawable world unit", which FreeType's dynamic
+        // rasterizer satisfies for free (a bitmap with ANY coverage always has >=1 row/
+        // col at the size it was rasterised AT). The baked path instead rasterises ONCE
+        // at BAKE_SS and divides by ss post-hoc, so a hairline (chonpu/hyphen, 1-3
+        // supersampled texels) can cross below the 1.0-world floor purely from the /ss
+        // divide -- something that never happens in the dynamic path because it always
+        // re-rasterises AT pxToWorld's target size. Floor cellW/cellH (and the legacy
+        // width/height, same consumers) at 1.0f whenever bg.w/bg.h > 0 (there IS ink) so
+        // a supersample-induced sub-1.0 rounding can't defeat FinishMesh's own gate --
+        // this restores the dynamic path's "ink never disappears" guarantee without
+        // touching FinishMesh (which stays binary-faithful) or the bearing/advance/
+        // layout position math (unfloored -- pure pen placement, not ink extent).
+        out->cellW = fw * pxToWorld;
+        out->cellH = fh * pxToWorld;
+        if (out->cellW < 1.0f) out->cellW = 1.0f;
+        if (out->cellH < 1.0f) out->cellH = 1.0f;
+        out->width  = out->cellW;
+        out->height = out->cellH;
+
+        // Legacy UVs (Font.cpp / BakedStringBox legacy consumers): same exact
+        // uvOverscan as the cell UVs above -- Font.cpp's quad also stays ink-tight
+        // (width/height, unstretched) while the UV samples uvOverscan texels past
+        // the ink edge into the gutter, matching the dynamic host path's
+        // tight-quad/+ss-UV convention (here: +uvOverscan, the exact-world-unit
+        // equivalent of the host's +ss).
+        out->u0 = (float)bg.x * invDim;
+        out->v0 = (float)bg.y * invDim;
+        out->u1 = ((float)(bg.x + bg.w) + uvOverscan) * invDim;
+        out->v1 = ((float)(bg.y + bg.h) + uvOverscan) * invDim;
+    } else {
+        // Ink-less glyph (space): no atlas sample; keep the advance/layout above.
+        // page/pageTextureID stay 0, cell size stays 0 (draws nothing) -- matches
+        // the dynamic path's empty-glyph legacy behaviour.
+        out->cellW = 0.0f;
+        out->cellH = 0.0f;
+    }
+    return true;
+}
+
+// Task #51/#52: build a BLUR/STROKE effect glyph from the baked coverage so the
+// effect layer matches the NONE base layer's size + alignment. This mirrors the
+// stb effect path's cell-build / filter / pack / entry-fill in GetGlyph EXACTLY
+// -- the only change is the source coverage (baked un-tile, correct CJK size)
+// and the metric source (baked SUPERSAMPLED-px records scaled by
+// requestedSize/nativeSize and divided by BAKE_SS, same as TryBakedGlyph), so the
+// effect entry registers with the NONE base entry at the same pen. The coverage
+// is at supersampled resolution (task #52), so the LOGICAL cell pad and filter
+// radius are scaled to supersampled texels (pad*ss, radius*ss) exactly like the
+// host kFontSupersample path, then the world metrics divide back by ss.
+bool FontCacheObjectTTF::TryBakedEffectGlyph(uint32_t cp, float requestedSize,
+                                             FONT_EFFECT_ENUM effect, int radius,
+                                             GlyphAtlasEntry* out) {
+    if (!m_Atlas) return false;
+    if (!m_BakedWii) {
+        m_BakedWii = new BakedFontWii();
+    }
+    m_BakedWii->SetLanguage((int)game_work.languageFlag);
+
+    BakedFontWii::GlyphCoverage cov;
+    if (!m_BakedWii->GetGlyphCoverage(cp, requestedSize, &cov)) return false;
+
+    memset(out, 0, sizeof(*out));
+
+    const float inv = m_Atlas->m_InvFontScale;
+    const float sizeScale = (cov.nativeSize > 0)
+        ? (requestedSize / (float)cov.nativeSize) : 1.0f;
+    const float ss   = (cov.supersample > 0.0f) ? cov.supersample : 1.0f;
+    const float pxToWorld = inv * sizeScale / ss;      // supersampled px -> logical world
+
+    const float fw = (float)cov.w;   // supersampled texels
+    const float fh = (float)cov.h;
+
+    // Base (NONE) metrics -- identical to TryBakedGlyph so the effect layer's
+    // pen matches the base layer's before the grown-pad shift is applied.
+    out->bearingX = (float)cov.bearingX * pxToWorld;
+    out->bearingY = (float)cov.bearingY * pxToWorld;
+    out->advanceX = (float)cov.advance  * pxToWorld;
+    out->width    = fw * pxToWorld;
+    out->height   = fh * pxToWorld;
+    out->layoutX  = (float)(cov.advance - cov.bearingX) * pxToWorld;
+    out->layoutY  = (float)(cov.bearingY - cov.h)       * pxToWorld;
+
+    // Per-effect cell pad, in LOGICAL px (same rule + binary constants as the stb
+    // path). The cell is built at supersampled texel resolution, so pads/radius
+    // scale to texels (padLT/padTT/radiusT) exactly like the host ss path; the
+    // cellOrigin/bearing shifts are derived from padLT/padTT*pxToWorld (the
+    // ACTUAL rounded texel pad), not padL/padT*inv -- see the cellOrigin comment
+    // below for why (ssi rounding vs the exact fractional ss).
+    const int e = (int)effect;
+    int padL = 0, padT = 1;
+    if (e == FONT_EFFECT_STROKE || e == FONT_EFFECT_BLUR) {
+        padL = radius + 1;
+        padT = radius + 2;
+    }
+    if (e >= 4 && e <= 11) {
+        padL += 4;
+        padT += 4;
+    }
+
+    // Round the LOGICAL pads/radius up to whole supersampled texels for the cell
+    // (the cell BUFFER needs integer texel dims to allocate/blit into -- this
+    // rounding only affects buffer size, not the UV overscan, see uvOverscan below).
+    const int ssi     = (ss > 0.0f) ? (int)(ss + 0.5f) : 1;  // >= 1; 1.5 -> 2 texels/logical-px
+    const int padLT   = padL * ssi;
+    const int padTT   = padT * ssi;
+    const int radiusT = radius * ssi;
+    // Base/effect ALIGNMENT fix (task #52): see TryBakedGlyph's uvOverscan comment
+    // for the full derivation. FinishMesh grows every quad by a fixed +1.0f world
+    // unit regardless of cellW/pad/ss; the UV overscan therefore must be exactly
+    // `1.0f/pxToWorld` texels (not the rounded ssi) for the overscanned UV edge to
+    // land exactly on that +1.0f-grown quad edge -- otherwise the visible ink
+    // stretches by a different amount than the base layer's, misregistering a
+    // zero-offset effect against the base. This formula depends only on
+    // ss/inv/sizeScale (never on cellW/pad), so it is IDENTICAL to TryBakedGlyph's
+    // uvOverscan for the same glyph at the same requestedSize. Clamped to
+    // kAtlasGutterTexels for the same neighbour-bleed reason (see TryBakedGlyph) --
+    // the clamp constant matches exactly, so base and effect still clamp together.
+    float uvOverscan = 1.0f / pxToWorld;   // texels; == ss/(inv*sizeScale)
+    if (uvOverscan > kMaxOverscanTexels) uvOverscan = kMaxOverscanTexels;
+
+    const int   pageSize = m_Atlas->GetSize();
+    const float invS     = 1.0f / (float)pageSize;
+
+    if (cov.w > 0 && cov.h > 0) {
+        const int cellW = cov.w + 2 * padLT;
+        const int cellH = cov.h + 2 * padTT;
+
+        std::vector<uint8_t> cell((size_t)cellW * (size_t)cellH, 0);
+        for (int row = 0; row < cov.h; row++) {
+            memcpy(&cell[(size_t)(row + padTT) * cellW + padLT],
+                   &cov.alpha[(size_t)row * cov.w],
+                   (size_t)cov.w);
+        }
+        if (e == FONT_EFFECT_BLUR && radiusT > 0) {
+            BuildBlur(&cell[0], cellW, cellH, radiusT);
+        } else if (e == FONT_EFFECT_STROKE && radiusT > 0) {
+            BuildStrokes(&cell[0], cellW, cellH, radiusT);
+        }
+        // BEVEL (4..11): +4/+4 pad (logical), no filter (BuildBevel is an empty stub).
+
+        int x = 0, y = 0;
+        FontAtlasPage* page = m_Atlas->PackGlyphCell(cellW, cellH, &cell[0], &x, &y);
+        out->page          = page;
+        out->pageTextureID = page ? page->m_TextureID : 0;
+
+        // Cell UVs: +uvOverscan (exact, not the rounded ssi) texel span into the
+        // packer's transparent gutter, matching FinishMesh's fixed +1.0f world-unit
+        // quad growth with zero ink stretch (see uvOverscan comment above). The
+        // packer keeps a >=2px gutter (SHELF_PAD=2 >= ceil(uvOverscan)=2) so this
+        // stays bleed-free.
+        out->cellU0 = (float)x * invS;
+        out->cellV0 = (float)y * invS;
+        out->cellU1 = out->cellU0 + ((float)cellW + uvOverscan) * invS;
+        out->cellV1 = out->cellV0 + ((float)cellH + uvOverscan) * invS;
+        // cellOrigin MUST be the exact WORLD size of the padLT/padTT TEXEL buffer
+        // region, i.e. padLT*pxToWorld -- NOT padL*inv. On the host those are
+        // identical because ss is a clean integer that cancels exactly
+        // (padLT=padL*ss, invLogical=inv/ss => padLT*invLogical == padL*inv). On
+        // Wii ss=1.5 is fractional, so the cell buffer is sized with the ROUNDED
+        // ssi=2 (padLT=padL*ssi), while padL*inv silently assumes the UNROUNDED
+        // ss -- a 0.33-world-unit mismatch between the padded cell's actual size
+        // and its claimed origin, which is what misregistered the effect layer
+        // against the base layer's pen (base has no pad, so it was buffer-size-
+        // rounding-immune; this only bit the padded/effect side). Deriving
+        // cellOrigin from padLT (the same integer the buffer/UV overscan use)
+        // keeps ink position self-consistent regardless of the ssi rounding.
+        out->cellOriginX = (float)padLT * pxToWorld;
+        out->cellOriginY = (float)padTT * pxToWorld;
+        out->cellW       = (float)cellW * pxToWorld;  // supersampled texels -> logical world
+        out->cellH       = (float)cellH * pxToWorld;
+
+        // Grown legacy contract (STROKE/BLUR/BEVEL): quad = whole cell, bearings
+        // shifted by the pad so the effect registers with the sharp glyph at the
+        // same pen -- identical to the stb effect path's `grown` branch. Uses
+        // padLT/padTT*pxToWorld (the actual rounded buffer pad), matching
+        // cellOrigin above, NOT padL*inv -- same ssi-rounding reasoning.
+        out->u0 = (float)x * invS;
+        out->v0 = (float)y * invS;
+        out->u1 = (float)(x + cellW) * invS;
+        out->v1 = (float)(y + cellH) * invS;
+        out->bearingX -= (float)padLT * pxToWorld;
+        out->bearingY += (float)padTT * pxToWorld;
+        out->width  = out->cellW;
+        out->height = out->cellH;
+    } else {
+        // Ink-less glyph (space): nothing to filter. Keep advance/layout; the
+        // pad still defines a (transparent) cell so callers see a valid entry.
+        const int cellW = 2 * padLT > 0 ? 2 * padLT : 1;
+        const int cellH = 2 * padTT > 0 ? 2 * padTT : 1;
+        std::vector<uint8_t> cell((size_t)cellW * (size_t)cellH, 0);
+        int x = 0, y = 0;
+        FontAtlasPage* page = m_Atlas->PackGlyphCell(cellW, cellH, &cell[0], &x, &y);
+        out->page          = page;
+        out->pageTextureID = 0;   // no ink
+        out->cellU0 = (float)x * invS;
+        out->cellV0 = (float)y * invS;
+        out->cellU1 = out->cellU0 + ((float)cellW + uvOverscan) * invS;
+        out->cellV1 = out->cellV0 + ((float)cellH + uvOverscan) * invS;
+        // cellOrigin from padLT/padTT (matches the ink branch above) -- no visible
+        // ink here (space), but keeps the ink-less cell's declared size consistent
+        // with the buffer it was actually packed at.
+        out->cellOriginX = (float)padLT * pxToWorld;
+        out->cellOriginY = (float)padTT * pxToWorld;
+        out->cellW = (float)cellW * pxToWorld;
+        out->cellH = (float)cellH * pxToWorld;
+    }
+    return true;
+}
+#endif // FRUIT_PLATFORM_WII
 
 } // namespace Mortar
