@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Name + version from FruitNinjaBada/Info/application.xml + manifest.xml.
+     The Bada manifest ships an empty <Description/> and <Vendor/>, so no
+     description is fabricated here (coder = the game's developer + port credit). -->
+<app version="1">
+  <name>Fruit Ninja</name>
+  <coder>Halfbrick (Wii port: Mariotaku)</coder>
+  <version>1.6.1</version>
+  <release_date>20260721000000</release_date>
+  <short_description></short_description>
+  <long_description></long_description>
+</app>
