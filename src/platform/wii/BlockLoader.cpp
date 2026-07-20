@@ -6,6 +6,9 @@
 #include "asset/MeshManager.h"
 #include "audio/SoundManager.h"
 #include "game/PreloadFontsTTF.h"
+#include "entities/Fruit.h"
+#include "entities/SuperFruitControl.h"
+#include "hud/MissControl.h"
 #include "debug/Logger.h"
 #include <vector>
 #include <gccore.h>  // SYS_GetArena1Size / SYS_GetArena2Size (see LogHeapUsage)
@@ -159,6 +162,21 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
         for (int i = 0; i < kIngameTexCount; i++) {
             PreloadTexture(kIngameTex[i], &s_HeldIngame);
         }
+
+        // Task #59 boot trim -- gameplay-only chunks deferred out of
+        // GameInitialise() on Wii (see the FRUIT_PLATFORM_WII guards at each
+        // call site). Core slicing assets (Fruit/Bomb/Slash/Splat models,
+        // particle textures, SFX) are needed at menu time -- the menu ring
+        // buttons are real Fruit/Bomb entities you slice -- so those stayed
+        // resident at boot; only these genuinely gameplay-only combo/HUD
+        // pieces are deferred. Refs land in each class's own SmartPtr/mesh
+        // members (their natural strong-ref home, matching the binary's
+        // ownership) -- NOT s_HeldIngame, which is reserved for loose
+        // PreloadTexture() calls (kIngameTex/kGameOverTex above) that have
+        // no owning member.
+        Fruit::LoadHudTextures();
+        MissControl::LoadContent();
+        SuperFruitControl::LoadContent();
 
         // GAMEOVER merged in here -- see BlockLoader.h / ResBlock.h file
         // comments: gameover pops instantly over the frozen game with no

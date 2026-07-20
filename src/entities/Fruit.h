@@ -229,6 +229,18 @@ public:
     // MeshManager. Called once from GameInitialise.
     static void LoadFruitModels();
 
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii-only -- task #59 boot trim. Re-runs the per-fruit texture loads
+    // that FruitInfo_Load's boot pass skips on Wii (hud_%s.tex/zen_%s.tex --
+    // gameplay HUD only, never shown at menu; fruit_shadow.tex loads at
+    // boot unconditionally), assigning straight into the FruitInfo array's
+    // m_HudTexture/m_ZenTexture members (their natural strong-ref home --
+    // no BlockLoader holder vector needed). Called once from
+    // BlockLoader::PreloadBlock(RES_BLOCK_INGAME); safe to call more than
+    // once (LoadLocalisedTexture cache-checks).
+    static void LoadHudTextures();
+#endif
+
     // Accessor for a per-fruit pair of half meshes. Returns nullptr if
     // index out of range or LoadFruitModels hasn't run.
     static const FruitModelInfo* GetFruitModelInfo(int fruitType);

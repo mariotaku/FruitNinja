@@ -459,13 +459,23 @@ void GameInitialise(void* window, const char* config) {
     SlashEntity::LoadContent();     // TODO: blade trail textures
     Bomb::LoadContent();            // loads bomb models + textures
     MenuButton::LoadContent();      // loads new_item.tex (star indicator)
-    MissControl::LoadContent();     // load critical / rare / cross overlays
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+    // (gameplay-only: combo/critical/rare overlays, never shown at menu time)
+#else
+    MissControl::LoadContent();     // load critical / rare / cross overlays -- fidelity: host/web/binary load at boot
+#endif
     // Pool allocation + HUD registration happens in GameInit (which
     // runs AFTER the HUD is created).
     GameOverScreen::LoadContent();  // TODO: game-over UI textures
     PowerUpShop::LoadContent();     // binary @ 0x00155b50 — empty body
     // v1.6.1 GameInitialise @0x0011daa8: after PowerUpShop::LoadContent
-    SuperFruitControl::LoadContent();
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+    // (gameplay-only: super-fruit lightning overlay, never shown at menu time)
+#else
+    SuperFruitControl::LoadContent();   // fidelity: host/web/binary load at boot
+#endif
     GameModeScreen::LoadContent();  // mode select screen textures (7 textures)
     // Port specific: task #28 first-screen-open frame-spike mitigation -- decode+upload
     // Dojo (6 .tex) and Shop (10 .tex) textures at boot instead of on first open.

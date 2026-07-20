@@ -597,6 +597,18 @@ void GameModeScreen::Update(float dt) {
     case 4:
     case 5:
     case 6: {
+#if defined(FRUIT_PLATFORM_WII)
+        // #59: the INGAME preload is a synchronous ~1.4s stall. Fire it while the
+        // mode-select panel is still at full opacity (before the alpha decay) so the
+        // freeze is hidden behind the panel, not a half-revealed level. break skips
+        // this frame's decay so the panel doesn't drop before the block runs.
+        if (!m_bSetupLevelFired) {
+            SetupLevel();
+            m_bSetupLevelFired = true;
+            break;
+        }
+#endif
+
         // Mode picked — fade out, decay camera, launch game
         // Decay scaled by debug time-scale (see MainScreen state 0xe).
         const float modeDecay = 1.0f - (1.0f - ALPHA_DECAY_MODE) * FN::g_DebugTimeScale;
@@ -612,7 +624,7 @@ void GameModeScreen::Update(float dt) {
             // toward 0 from -1 (main menu zoom-in), so the actual gate is
             // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
             // Latch keeps it one-shot per mode-pick.
-#if !defined(__bada__)
+#if !defined(__bada__) && !defined(FRUIT_PLATFORM_WII)
             if (!m_bSetupLevelFired && camT > -0.9f) {
                 SetupLevel();
                 m_bSetupLevelFired = true;

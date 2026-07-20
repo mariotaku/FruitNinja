@@ -204,6 +204,10 @@ void FruitInfo_Load(const char* xmlPath)
         }
 
         // --- Textures: hud_%s.tex -> +0x300, zen_%s.tex -> +0x304 ---
+#if defined(FRUIT_PLATFORM_WII)
+        // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+        // (see FruitInfo_LoadHudTextures() below)
+#else
         {
             char texName[64];
             snprintf(texName, 64, "hud_%s.tex", name);
@@ -212,6 +216,7 @@ void FruitInfo_Load(const char* xmlPath)
             snprintf(texName, 64, "zen_%s.tex", name);
             fi.m_ZenTexture = Mortar::TextureManager::LoadLocalisedTexture(texName);
         }
+#endif
 
         // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084: colour/factColour read from a <colours> CHILD of <FruitInfo>; plural/singular/pluralEnglish/singularEnglish from a <titles> CHILD (NOT the parent). alpha==0 (4th CSV) clears m_bScorable + suppresses the SplatEntity::MakeSplat @0x001eb910 background juice splat.
 
@@ -462,6 +467,27 @@ Mortar::Texture* FruitInfo_GetShadowTex()
 {
     return g_FruitShadowTex.IsValid() ? g_FruitShadowTex.Get() : nullptr;
 }
+
+#if defined(FRUIT_PLATFORM_WII)
+// Wii-only -- task #59 boot trim. See FruitInfo.h contract comment.
+// fruit_shadow.tex loads at boot (FruitInfo_Load Step 0, un-deferred --
+// task #59 Stage A scope correction); only the per-fruit hud_%s/zen_%s
+// icons (gameplay HUD only, never shown at menu) stay deferred here.
+void FruitInfo_LoadHudTextures()
+{
+    for (int i = 0; i < s_FruitInfoCount; ++i) {
+        FruitInfo& fi = s_FruitInfos[i];
+        if (!fi.m_Name[0]) continue;
+
+        char texName[64];
+        snprintf(texName, 64, "hud_%s.tex", fi.m_Name);
+        fi.m_HudTexture = Mortar::TextureManager::LoadLocalisedTexture(texName);
+
+        snprintf(texName, 64, "zen_%s.tex", fi.m_Name);
+        fi.m_ZenTexture = Mortar::TextureManager::LoadLocalisedTexture(texName);
+    }
+}
+#endif
 
 // FRUIT_POWERS::AnyActivePowers -- binary @ 0x00175714
 // Returns true if any power in m_pArray is currently active via PowerUpManager.
