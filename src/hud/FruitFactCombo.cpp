@@ -171,7 +171,19 @@ Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(COMBO_TYPE comboType) {
     if (ct >= 25) return Mortar::SmartPtr<Mortar::Texture>();
     const ComboStarEntry& e = kComboStars[ct];
     uint32_t tier = (e.count > 1) ? Math::g_Random.Rand32(e.count) : 0;
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: the returned texture is stored in a write-only member and
+    // NEVER drawn (see FruitFactZenPage -- the star visual is the "* {name}" font
+    // text). On Wii the LoadLocalisedTexture would be a wasted per-combo lazy disk
+    // read of one of ~40 random combo-star icons the #36 block-preload can't cover
+    // (combo-type + random-tier dependent) that never renders. Skip the load; the
+    // Rand32 above still runs so the shared RNG sequence stays byte-identical to
+    // the binary/other platforms. Returns a null ref (the member goes unused).
+    (void)tier;
+    return Mortar::SmartPtr<Mortar::Texture>();
+#else
     return Mortar::TextureManager::LoadLocalisedTexture(e.tex[tier]);
+#endif
 }
 
 // GetComboStarText  binary: _Z16GetComboStarText10COMBO_TYPE @0x001325f8 (v1.6.1)

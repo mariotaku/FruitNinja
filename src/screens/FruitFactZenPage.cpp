@@ -172,7 +172,9 @@ void FruitFactZenPage::Init() {
         m_ComboLevel = FruitFact::CheckCombo(m_Facts, comboCount, &outDominant);
         // Binary stores GetComboStarTexture's result in the write-only member at +0xd0
         // (m_pComboStarTexture) and NEVER draws it -- the star visual is the "* {name}"
-        // font text below, not this sprite. Keeping the load faithful holds the ref.
+        // font text below, not this sprite. Keeping the call faithful holds the ref.
+        // (On Wii GetComboStarTexture skips the actual disk load -- see its body --
+        // since the result is never drawn; the call/RNG side effect is preserved.)
         m_pComboStarTexture = GetComboStarTexture((COMBO_TYPE)m_ComboLevel);
 
         // Star position: if span < 140.0 (DAT_1806dc), use compressed X; else stagger=42.0 (DAT_1806e8).
