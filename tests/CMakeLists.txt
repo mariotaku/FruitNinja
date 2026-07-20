@@ -1207,6 +1207,20 @@ fn_add_game_test(test_text_render test_text_render.cpp)
 add_test(NAME test_text_render_screenshot COMMAND test_text_render --screenshot)
 set_tests_properties(test_text_render_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77)
 
+# Latin + CJK glyph-clip visual regression grid.
+# Renders real in-game strings pulled live (per-language Localisation::Load
+# reload) from the shipped stringtables/translations_*.str -- EN/ZH/ZHT/JA/KO
+# -- at the game's real BakedStringBox font sizes (14/22/30px), with a
+# per-cell grid + baseline + ascent reference line so tall-glyph clipping
+# (kanji radicals poking above the cell top) is visually obvious.
+# Reproduces the Wii tall-glyph clip on host when configured with
+# -DFN_TTF_BACKEND=stb -DFN_ENABLE_HD_ASSETS=OFF (matches the Wii SS=1 path).
+# Output: tmp/test/screenshots/cjk_grid/grid.png
+fn_add_game_test(test_cjk_grid test_cjk_grid.cpp)
+add_test(NAME test_cjk_grid_screenshot COMMAND test_cjk_grid --screenshot)
+set_tests_properties(test_cjk_grid_screenshot PROPERTIES TIMEOUT 180 SKIP_RETURN_CODE 77
+    LABELS "category_rendering;component_bakedstringbox")
+
 # BakedStringBox effects-combination screenshot grid.
 # Renders a 4-column x 7-row grid covering every effect setter and combination:
 #   plain / 2-color gradient / metallic gold+silver (fill row)
