@@ -168,6 +168,29 @@ public:
     float GetDescender(float requestedSize);
     float GetLineHeight(float requestedSize);
 
+#if defined(FRUIT_PLATFORM_WII)
+    // Task #60: open/close a glyph run so every EFFECT glyph (BLUR/STROKE/etc,
+    // never NONE -- NONE reads BakedFontWii's stable prebaked pages via
+    // TryBakedGlyph, which never calls PackGlyphCell and cannot fragment) of a
+    // single string lands on ONE atlas page. Call BeginGlyphRun once before
+    // requesting a string's glyphs (e.g. BakedStringTTF::BuildGlyphs, which is
+    // exactly one call = one string), and EndGlyphRun once after.
+    //
+    // `codepointCount` is the number of GetGlyph calls about to happen (the
+    // string's codepoint count, effect-glyph ones only need counting -- NONE
+    // calls in the same run are harmless no-ops for the reservation since they
+    // never touch the pinned page). Computes a conservative worst-case per-cell
+    // texel bound from GetLineHeight's raw supersampled metric (an upper bound
+    // on any single glyph's ink extent for the active font) plus the effect's
+    // pad, then forwards to FontInterface::BeginGlyphRun so the WHOLE run is
+    // guaranteed to fit one page before any glyph of it is packed -- no rollback
+    // needed. A no-op (does not open a run) if requestedSize/effect can't
+    // produce a meaningful bound (e.g. FONT_EFFECT_NONE, m_Atlas null).
+    void BeginGlyphRun(int codepointCount, float requestedSize,
+                       FONT_EFFECT_ENUM effect, int radius);
+    void EndGlyphRun();
+#endif
+
 private:
 #if !defined(FRUIT_PLATFORM_WII)
     TtfFace*    m_Face;            // owned; backend chosen at compile time (TtfBackend.h). Non-Wii only (task #54): Wii never opens a runtime .ttf.

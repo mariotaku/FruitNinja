@@ -574,6 +574,58 @@ float FontCacheObjectTTF::GetLineHeight(float requestedSize) {
 }
 
 #if defined(FRUIT_PLATFORM_WII)
+// Task #60: see header doc. Bounds a single effect glyph's packed CELL size
+// (supersampled texels, the same domain PackGlyphCell/TryBakedEffectGlyph's
+// cellW/cellH use) without rasterising or looking up any specific codepoint,
+// so it can run once per STRING rather than once per glyph.
+//
+// Bound derivation: GetLineHeight's raw supersampled px (ascender+descender
+// span) is an upper bound on any single glyph's ink height for the active
+// font/size -- no glyph in a well-formed font face extends past its own line
+// height. CJK ink is roughly square (em-box advance ~= line height), and
+// Latin ink is narrower than it is tall, so the same bound conservatively
+// covers width too. Add the effect's pad (same padL/padT rule
+// TryBakedEffectGlyph uses, rounded to texels by ssi) on both sides.
+void FontCacheObjectTTF::BeginGlyphRun(int codepointCount, float requestedSize,
+                                       FONT_EFFECT_ENUM effect, int radius) {
+    if (!m_Atlas || codepointCount <= 0 || effect == FONT_EFFECT_NONE) return;
+
+    if (!m_BakedWii) {
+        m_BakedWii = new BakedFontWii();
+    }
+    m_BakedWii->SetLanguage((int)game_work.languageFlag);
+
+    int rawPx = 0, nativeSize = 0; float ss = 1.0f;
+    if (!m_BakedWii->GetLineHeight(requestedSize, &rawPx, &nativeSize, &ss) || rawPx <= 0) {
+        return;   // no baked metric available -- fall through to normal per-glyph packing
+    }
+
+    const int e = (int)effect;
+    int padL = 0, padT = 1;
+    if (e == FONT_EFFECT_STROKE || e == FONT_EFFECT_BLUR) {
+        padL = radius + 1;
+        padT = radius + 2;
+    }
+    if (e >= 4 && e <= 11) {
+        padL += 4;
+        padT += 4;
+    }
+    const int ssi = (ss > 0.0f) ? (int)(ss + 0.5f) : 1;
+    const int padLT = padL * ssi;
+    const int padTT = padT * ssi;
+
+    const int maxCellW = rawPx + 2 * padLT;
+    const int maxCellH = rawPx + 2 * padTT;
+
+    m_Atlas->BeginGlyphRun(codepointCount, maxCellW, maxCellH);
+}
+
+void FontCacheObjectTTF::EndGlyphRun() {
+    if (m_Atlas) m_Atlas->EndGlyphRun();
+}
+#endif
+
+#if defined(FRUIT_PLATFORM_WII)
 // Port specific (task #51): return a stable FontAtlasPage wrapper for a baked
 // GL texture id. BakedStringTTF groups glyphs into surfaces keyed by the
 // FontAtlasPage* pointer, so the SAME id must always yield the SAME pointer.
@@ -803,14 +855,18 @@ bool FontCacheObjectTTF::TryBakedGlyph(uint32_t cp, float requestedSize,
 bool FontCacheObjectTTF::TryBakedEffectGlyph(uint32_t cp, float requestedSize,
                                              FONT_EFFECT_ENUM effect, int radius,
                                              GlyphAtlasEntry* out) {
-    if (!m_Atlas) return false;
+    if (!m_Atlas) {
+        return false;
+    }
     if (!m_BakedWii) {
         m_BakedWii = new BakedFontWii();
     }
     m_BakedWii->SetLanguage((int)game_work.languageFlag);
 
     BakedFontWii::GlyphCoverage cov;
-    if (!m_BakedWii->GetGlyphCoverage(cp, requestedSize, &cov)) return false;
+    if (!m_BakedWii->GetGlyphCoverage(cp, requestedSize, &cov)) {
+        return false;
+    }
 
     memset(out, 0, sizeof(*out));
 

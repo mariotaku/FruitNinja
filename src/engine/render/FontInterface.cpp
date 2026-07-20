@@ -45,6 +45,7 @@ FontInterface::FontInterface()
     , m_InvFontScale(1.0f)
     , m_GlobalSizeScale(1.0f)
     , m_Size(512)
+    , m_RunPage(nullptr)
 {
     // Port specific: pages are allocated lazily on first PackGlyph (binary
     // TextureAtlas @0x00269c9c starts empty; port follows the same model).
@@ -122,6 +123,23 @@ GLuint FontInterface::GetPageTextureID(int idx) const {
     return m_Pages[idx]->m_TextureID;
 }
 
+// Shared shelf-fit check (task #60): would `width x height` fit on `page`
+// after the same row-wrap rule PackGlyphCell applies? Read-only -- does not
+// mutate the page. Used by PackGlyphCell's best-fit search and by
+// BeginGlyphRun's whole-run reservation search so both use identical rules.
+bool FontInterface::PageFits(const FontAtlasPage* page, int width, int height) const {
+    const int padX = kFontSupersample + 1, padY = kFontSupersample + 1;
+    int cursorX = page->m_CursorX;
+    int cursorY = page->m_CursorY;
+    int rowHeight = page->m_RowHeight;
+    if (cursorX + width + padX > m_Size) {
+        cursorX = 0;
+        cursorY += rowHeight + padY;
+        rowHeight = 0;
+    }
+    return cursorY + height <= m_Size;
+}
+
 // DIFFERS: binary TextureAtlas::AddTexture @0x00269c9c never drops glyphs;
 //   on overflow it allocates a new TextureAtlasPage (256x256) and retries.
 //   Port mirrors this model with 512x512 pages (kFontSupersample: 3 under
@@ -140,7 +158,31 @@ FontAtlasPage* FontInterface::PackGlyphCell(int width, int height,
     // cover that overscan so the sampled texels are transparent, never the
     // next glyph.
     const int padX = kFontSupersample + 1, padY = kFontSupersample + 1;
-    FontAtlasPage* page = m_Pages.back();
+
+    FontAtlasPage* page;
+    if (m_RunPage) {
+        // Glyph-run pin (task #60): BeginGlyphRun already verified m_RunPage
+        // has room for every cell of this run, so skip the best-fit search
+        // and always target the pinned page -- guarantees the whole run
+        // (a single string's effect glyphs) stays on one page.
+        page = m_RunPage;
+    } else {
+        // Anti-litter backfill (task #60): try every existing page in order
+        // (oldest first) and use the first one with room; only allocate a new
+        // page when none of them fit. This is what lets small later strings
+        // (score digits, single combos) reuse whatever space earlier pages
+        // still have free instead of always growing the atlas.
+        page = nullptr;
+        for (size_t i = 0; i < m_Pages.size(); ++i) {
+            if (PageFits(m_Pages[i], width, height)) {
+                page = m_Pages[i];
+                break;
+            }
+        }
+        if (!page) {
+            page = AllocatePage();
+        }
+    }
 
     // Advance to next row if glyph doesn't fit horizontally on current page.
     if (page->m_CursorX + width + padX > m_Size) {
@@ -150,6 +192,10 @@ FontAtlasPage* FontInterface::PackGlyphCell(int width, int height,
     }
 
     // If the current page is vertically full, allocate a new page.
+    // Only reachable when m_RunPage is null (best-fit above already picked a
+    // page proven to fit) or the caller mispredicted maxCellW/maxCellH for a
+    // pinned run -- allocating here rather than dropping the glyph keeps the
+    // "never drop glyphs" contract even if that happens.
     if (page->m_CursorY + height > m_Size) {
         page = AllocatePage();
     }
@@ -260,6 +306,55 @@ void FontInterface::BuildPendingTextures() {
         glBindTexture(GL_TEXTURE_2D, 0);
         if (uploaded) page->m_Dirty = false;
     }
+}
+
+// Task #60: reserve a page for a whole glyph run before packing any of its
+// cells. Simulates the run's worst case as `cellCount` cells of exactly
+// maxCellW x maxCellH (never smaller than any real cell in the run, per the
+// caller's contract) shelf-packed with PackGlyphCell's own wrap rule, so a
+// page that passes this check is guaranteed to hold the run without
+// overflowing mid-string. Tries existing pages first (backfill), allocates a
+// new page only if none fit -- matching PackGlyphCell's own anti-litter rule.
+void FontInterface::BeginGlyphRun(int cellCount, int maxCellW, int maxCellH) {
+    m_RunPage = nullptr;
+    if (cellCount <= 0 || maxCellW <= 0 || maxCellH <= 0) return;
+
+    const int padX = kFontSupersample + 1, padY = kFontSupersample + 1;
+
+    // Try each existing page: walk a local simulated cursor forward by
+    // `cellCount` worst-case cells using the exact same wrap rule PackGlyphCell
+    // applies, bailing out the moment it would overflow the page vertically.
+    for (size_t i = 0; i < m_Pages.size(); ++i) {
+        const FontAtlasPage* p = m_Pages[i];
+        int cursorX = p->m_CursorX;
+        int cursorY = p->m_CursorY;
+        int rowHeight = p->m_RowHeight;
+        bool fits = true;
+        for (int n = 0; n < cellCount; ++n) {
+            if (cursorX + maxCellW + padX > m_Size) {
+                cursorX = 0;
+                cursorY += rowHeight + padY;
+                rowHeight = 0;
+            }
+            if (cursorY + maxCellH > m_Size) { fits = false; break; }
+            cursorX += maxCellW + padX;
+            if (maxCellH > rowHeight) rowHeight = maxCellH;
+        }
+        if (fits) {
+            m_RunPage = m_Pages[i];
+            return;
+        }
+    }
+
+    // No existing page has room for the whole run -- a fresh page always
+    // fits (a run's total footprint is bounded by real usage: MenuButton/
+    // fact-board titles are well under a page's capacity; see PackGlyphCell's
+    // own "never drop glyphs" contract for the degenerate case).
+    m_RunPage = AllocatePage();
+}
+
+void FontInterface::EndGlyphRun() {
+    m_RunPage = nullptr;
 }
 
 void FontInterface::MarkPageDirty(FontAtlasPage* page, int x, int y, int w, int h) {

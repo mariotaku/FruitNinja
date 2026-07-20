@@ -205,10 +205,26 @@ void BakedStringTTF::DeleteSurfaces()
 // DeleteGlyphs; per codepoint: g = FetchGlyph(m_pFontCache, m_ScaledHeight, cp,
 // m_FmtCount, m_Flag); m_Glyphs.push_back(g).
 // ASM-spec v1.6.1 BakedStringTTF::BuildGlyphs @0x00248b28.
+//
+// Task #60 (Wii): one BuildGlyphs() call == one string. Bracket the codepoint
+// loop in a FontCacheObjectTTF glyph run so every EFFECT glyph this string
+// bakes (BLUR/STROKE/etc -- m_Base.m_Flag) lands on a single atlas page,
+// never split mid-string across a page boundary. See FontCacheObjectTTF::
+// BeginGlyphRun's header doc for the mechanism; a no-op for FONT_EFFECT_NONE
+// strings (those never call PackGlyphCell at all -- see TryBakedGlyph).
 void BakedStringTTF::BuildGlyphs()
 {
     DeleteGlyphs();
     if (!m_pFontCache || !m_Text) return;
+
+#if defined(FRUIT_PLATFORM_WII)
+    int codepointCount = 0;
+    for (Utf8StringIterator counter(m_Text); !counter.IsEmpty(); counter++) {
+        ++codepointCount;
+    }
+    m_pFontCache->BeginGlyphRun(codepointCount, m_ScaledHeight,
+        (FontCacheObjectTTF::FONT_EFFECT_ENUM)m_Base.m_Flag, (int)m_Base.m_FmtCount);
+#endif
 
     Utf8StringIterator it(m_Text);
     while (!it.IsEmpty()) {
@@ -217,6 +233,11 @@ void BakedStringTTF::BuildGlyphs()
         m_Glyphs.push_back(g);
         it++;
     }
+
+#if defined(FRUIT_PLATFORM_WII)
+    m_pFontCache->EndGlyphRun();
+#endif
+
     m_GlyphsBuilt = true;
 }
 
