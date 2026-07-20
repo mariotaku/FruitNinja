@@ -9,6 +9,7 @@
 #include "entities/Fruit.h"
 #include "entities/SuperFruitControl.h"
 #include "hud/MissControl.h"
+#include "screens/GameOverScreen.h"
 #include "debug/Logger.h"
 #include <vector>
 #include <gccore.h>  // SYS_GetArena1Size / SYS_GetArena2Size (see LogHeapUsage)
@@ -182,6 +183,18 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
         // comments: gameover pops instantly over the frozen game with no
         // fade of its own to cover a load, so its deltas must land during
         // the pre-level fade alongside INGAME's.
+        //
+        // GameOverScreen::LoadContent() is idempotent (g_LoadContentGuard,
+        // GameOverScreen.cpp:178) and owns its own texture refs (file-static
+        // SmartPtrs) -- no s_HeldIngame entry needed, same pattern as
+        // Fruit/MissControl/SuperFruit above. Its texture set (arcade_time_up,
+        // gameover, time_up, retry, quit, leaderboards, gc_leaderboards,
+        // sensei_head_0N/sensei_body_0N) does NOT overlap kGameOverTex below --
+        // that literal list covers a disjoint set (fact board, dialog boxes,
+        // sml_ap/pl, combo_description, and the base sensei_head.tex which is
+        // a different asset from the sensei_head_0N variants here) -- so both
+        // stay.
+        GameOverScreen::LoadContent();
         for (int i = 0; i < kGameOverTexCount; i++) {
             PreloadTexture(kGameOverTex[i], &s_HeldIngame);
         }

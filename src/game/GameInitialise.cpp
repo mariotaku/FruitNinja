@@ -467,7 +467,12 @@ void GameInitialise(void* window, const char* config) {
 #endif
     // Pool allocation + HUD registration happens in GameInit (which
     // runs AFTER the HUD is created).
-    GameOverScreen::LoadContent();  // TODO: game-over UI textures
+#if defined(FRUIT_PLATFORM_WII)
+    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+    // (game-over UI is never drawn from the menu or during play)
+#else
+    GameOverScreen::LoadContent();  // TODO: game-over UI textures -- fidelity: host/web/binary load at boot
+#endif
     PowerUpShop::LoadContent();     // binary @ 0x00155b50 — empty body
     // v1.6.1 GameInitialise @0x0011daa8: after PowerUpShop::LoadContent
 #if defined(FRUIT_PLATFORM_WII)
