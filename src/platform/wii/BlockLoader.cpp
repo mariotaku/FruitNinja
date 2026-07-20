@@ -37,9 +37,8 @@ bool s_ShopPreloaded   = false;
 // 1 instrumentation) enumerating every asset that lazy-loaded mid-block
 // instead of at boot. Everything else in these two blocks already
 // eager-loads at boot (PreloadSounds.cpp / PreloadFontsTTF.cpp / etc) and
-// needs no entry here. Air-Whoosh-Med/Air-Whoosh-Soft are deliberately
-// EXCLUDED -- missing files on disk (#58); preloading them would only log
-// load errors, not fix anything.
+// needs no entry here. Crit-slice SFX ("Visceral-impact-1/2/3", see
+// Fruit::AddSlice) are already preloaded elsewhere; no entry needed here (#58).
 const char* const kIngameSfx[] = {
     "Bomb-Fuse",
     "Bonus-Banana-Freeze",

@@ -2100,16 +2100,15 @@ static FruitGlobalData g_fruitData;
 //   fruit: dedup/clamp sentinel (real Fruit* or 0/1/3)
 void AddSlice(_Vector3<float> v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ)
 {
-    // Crit SFX: if impulse > 2.5 and 1-in-3 chance, play Air-Whoosh variant.
-    // v1.6.1 @0x001dc990 (GOT-relative SFX name resolution).
-    // TODO: confirm Air-Whoosh sfx names -- v1.6.1 AddSlice @0x001dc990
+    // ASM-spec v1.6.1 AddSlice @0x001dc990: crit-slice SFX (impulse.y>2.5, 1-in-3),
+    //   pick: Rand32(3)==0 -> "Visceral-impact-1"; else Rand32(2)==0 -> "-3"; else "-2".
+    //   (Port previously used invented "Air-Whoosh-*" names; corrected #58.)
     if (v.y > 2.5f && Math::g_Random.Rand32(3) == 0) {
-        const char* sfxName = 0;
-        uint32_t pick = Math::g_Random.Rand32(3);
-        if (pick == 0)      sfxName = "Air-Whoosh-Hard";
-        else if (pick == 1) sfxName = "Air-Whoosh-Med";
-        else                sfxName = "Air-Whoosh-Soft";
-        if (sfxName && game_work.mGameSound) {
+        const char* sfxName;
+        if (Math::g_Random.Rand32(3) == 0)      sfxName = "Visceral-impact-1";
+        else if (Math::g_Random.Rand32(2) == 0) sfxName = "Visceral-impact-3";
+        else                                    sfxName = "Visceral-impact-2";
+        if (game_work.mGameSound) {
             game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
         }
     }
@@ -2357,11 +2356,16 @@ void Fruit::LoadFruitModels() {
             }
         }
 
-        // ---- Outline/MP model: "<name>_outline.mmd" ----
+        // ---- Outline/MP model: "<name>_outline.mmd" (File::Exists guard) ----
+        // ASM-spec v1.6.1 Fruit::LoadFruitModels @0x001e08ec: "%s_outline.mmd" is
+        //   File::Exists-gated (soft) like _single; skip silently when absent.
         {
             char path[256];
             snprintf(path, sizeof(path), "models/Fruit/%s_outline.mmd", name);
-            Mortar::SmartPtr<Mortar::Model> outlineModel = meshMgr->Load(path);
+            Mortar::SmartPtr<Mortar::Model> outlineModel;
+            if (Mortar::File::Exists(path, 0)) {
+                outlineModel = meshMgr->Load(path);
+            }
             if (outlineModel.IsValid()) {
                 SetupLighting(outlineModel);
 
