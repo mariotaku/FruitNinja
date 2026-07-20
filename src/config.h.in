@@ -3,4 +3,8 @@
 
 #define FN_DATA_DIR "@FN_DATA_DIR_PATH@"
 
+#ifdef FRUIT_PLATFORM_WII
+#define FN_SAVE_DIR "@FN_SAVE_DIR_PATH@"
+#endif
+
 #endif

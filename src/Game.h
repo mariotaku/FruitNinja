@@ -75,8 +75,17 @@ struct Game : public Mortar::MortarGame {
     bool soundEnabled;
     bool musicEnabled;
 
-    // Data directory path
+    // Data directory path (read-only asset tree -- see FileSystem_Direct
+    // Initialise(data_dir, /*writable=*/false) in GameInitialise.cpp).
     std::string data_dir;
+
+    // Port specific: writable save directory, separate from data_dir so the
+    // (read-only) asset tree can become a disc/archive later without taking
+    // save files with it. Only set on Wii today (FN_SAVE_DIR, GameWii.cpp);
+    // other platforms' save helpers still route through data_dir directly
+    // (host) or a hardcoded IDBFS path (web) -- see GetSavePath() /
+    // GetSettingsSavePath() / BuildItemSaveFullPath().
+    std::string save_dir;
 
     // Port control
     bool running;

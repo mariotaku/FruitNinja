@@ -56,6 +56,10 @@ bool Game::init(void* win, void* gl) {
 
     data_dir = FN_DATA_DIR;
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
+    // Port specific: writable save dir, separate from the read-only asset
+    // tree above (see Game.h save_dir comment). mainWii.cpp mkdir()s this
+    // path at boot, before Game::init() runs.
+    save_dir = FN_SAVE_DIR;
 
     // DisplayManager holds game-space dimensions (480x320), not EFB pixels.
     Mortar::DisplayManager::GetInstance().SetWindowSize(0, FN_SCREEN_H, 0, FN_SCREEN_W);

@@ -18,8 +18,11 @@
 #include <ogc/lwp_watchdog.h>
 #include <malloc.h>
 #include <cstring>
+#include <sys/stat.h>
+#include <errno.h>
 
 #include "Game.h"
+#include "config.h"
 #include "platform/FixedStepDriver.h"
 #include "platform/wii/WiiVideo.h"
 #include "platform/wii/InputTranslatorWii.h"
@@ -132,6 +135,14 @@ int main(int argc, char* argv[]) {
     // libfat: mounts sd:/ and usb:/ so FileSystemWii can read assets.
     if (!fatInitDefault()) {
         LOG_ERROR("mainWii", "fatInitDefault() failed -- no SD/USB filesystem");
+    }
+
+    // Port specific: create the writable save dir (FN_SAVE_DIR) if it doesn't
+    // exist yet -- unlike FN_DATA_DIR (assets), it isn't part of the staged
+    // deploy. errno==EEXIST is the expected steady-state case, not an error.
+    if (mkdir(FN_SAVE_DIR, 0777) != 0 && errno != EEXIST) {
+        LOG_ERROR("mainWii", "mkdir('%s') failed (errno=%d) -- saves won't persist",
+                   FN_SAVE_DIR, errno);
     }
 
     WPAD_Init();

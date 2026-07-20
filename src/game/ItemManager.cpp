@@ -68,6 +68,11 @@ const char* ItemManager::GetItemSavePath() const {
 static std::string BuildItemSaveFullPath() {
 #if defined(__EMSCRIPTEN__)
     return std::string("/save/ItemSave.xml");
+#elif defined(FRUIT_PLATFORM_WII)
+    // Port specific: Wii's data_dir (FN_DATA_DIR) is mounted read-only
+    // (FileSystem_Direct writable=false); saves go to the separate writable
+    // save_dir (FN_SAVE_DIR) instead -- see Game.h save_dir comment.
+    return Game::GetInstance()->save_dir + "/ItemSave.xml";
 #else
     return Game::GetInstance()->data_dir + "/ItemSave.xml";
 #endif

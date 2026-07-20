@@ -230,11 +230,21 @@ bool TiXmlDocument::LoadFile(const char* path) {
     tinyxml2::XMLDocument* doc = AsDoc(m_node);
 
     // Detect absolute paths: save-file callers use OS-absolute paths not routed via FileManager.
+    // Port specific: also recognise devkitPPC/libogc device-prefixed paths
+    // (sd:/..., usb:/...) as absolute -- general "letters+':'+'/'" check
+    // rather than a Wii-only #ifdef, since no relative asset path used by
+    // FileManager ever contains ':' (host paths use '/'; web IDBFS paths use
+    // a leading '/', already covered above).
     bool isAbsolute = (path[0] == '/'
 #ifdef _WIN32
         || (path[0] != '\0' && path[1] == ':')
 #endif
     );
+    if (!isAbsolute) {
+        const char* p = path;
+        while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z')) ++p;
+        if (p != path && p[0] == ':' && p[1] == '/') isAbsolute = true;
+    }
 
     if (isAbsolute) {
         tinyxml2::XMLError err = doc->LoadFile(path);

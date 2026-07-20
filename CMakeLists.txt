@@ -540,6 +540,11 @@ elseif (FRUIT_PLATFORM_WII)
     # NOT a host path. Deploy build/wii/staging/Data -> sd:/apps/fruitninja/Data
     # on the card (alongside boot.dol). Uncompressed Tex1/.wav.pcm (--wii staging).
     set(FN_DATA_DIR_PATH "sd:/apps/fruitninja/Data")
+    # Writable save dir, kept SEPARATE from the (read-only) asset dir above --
+    # see FileSystem_Direct::Initialise(data_dir, /*writable=*/false) in
+    # GameInitialise.cpp. mainWii.cpp mkdir()s this at boot (it doesn't ship
+    # with the staged asset deploy).
+    set(FN_SAVE_DIR_PATH "sd:/apps/fruitninja/save")
 else()
     # Host now reads from the staged dir (WebP-transcoded textures), not
     # FruitNinjaBada/Data directly -- see fn_asset_staging below.
