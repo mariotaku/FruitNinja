@@ -25,6 +25,7 @@
 #include "platform/wii/InputTranslatorWii.h"
 #include "platform/wii/SplashBootScreen.h"
 #include "platform/wii/SoundManagerWii.h"
+#include "platform/wii/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
 #include "debug/Logger.h"
 
 // ---------------------------------------------------------------------------
@@ -142,6 +143,7 @@ int main(int argc, char* argv[]) {
 
     LOG_INFO("mainWii", "VIDEO/GX/WPAD/fat initialised (%dx%d)",
              (int)s_rmode->fbWidth, (int)s_rmode->efbHeight);
+    fn::wii::LogHeapUsage("pre-init");
 
     if (!g_game.init(NULL, NULL)) {
         LOG_ERROR("mainWii", "Failed to init game");

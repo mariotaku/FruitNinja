@@ -46,6 +46,15 @@ public:
     static void PreloadBlock(ResBlockFlag block);
 };
 
+// Task #36/#59 diagnostic -- logs libogc's MEM1/MEM2 arena free size (bytes
+// still allocatable, via SYS_GetArena1Size/SYS_GetArena2Size) as
+// "[HeapUsage] <label>: MEM1 free=<n> KB, MEM2 free=<n> KB" at LOG_INFO.
+// Cheap (a couple of reads) -- call at low-frequency points only (boot,
+// block-preload transitions), never per-frame. `label` identifies the call
+// site (e.g. "boot-done", "INGAME+GAMEOVER", "SHOP") so a Dolphin log can be
+// grepped into a before/after residency timeline.
+void LogHeapUsage(const char* label);
+
 } // namespace wii
 } // namespace fn
 

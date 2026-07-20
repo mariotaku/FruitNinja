@@ -64,6 +64,7 @@
 
 #if defined(FRUIT_PLATFORM_WII)
 #include <ogc/conf.h>
+#include "platform/wii/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
 #endif
 
 // Port specific: Wii has no in-game language chooser (SettingsScreen hides
@@ -480,6 +481,9 @@ void GameInitialise(void* window, const char* config) {
     PreloadRings();
 
     LOG_INFO("GAMEINIT", "GameInitialise: done");
+#if defined(FRUIT_PLATFORM_WII)
+    fn::wii::LogHeapUsage("boot-done");
+#endif
 }
 
 // Matches GameDestroy (0x10b7ec, 174 lines) — full engine teardown.

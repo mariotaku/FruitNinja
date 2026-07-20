@@ -8,6 +8,7 @@
 #include "game/PreloadFontsTTF.h"
 #include "debug/Logger.h"
 #include <vector>
+#include <gccore.h>  // SYS_GetArena1Size / SYS_GetArena2Size (see LogHeapUsage)
 
 namespace fn {
 namespace wii {
@@ -137,6 +138,16 @@ void PreloadSfx(const char* name) {
 
 } // namespace
 
+// See BlockLoader.h. SYS_GetArena1Size/SYS_GetArena2Size return the bytes
+// still free in each arena (not the total heap) -- exactly the "how much
+// headroom is left before OOM" figure #36/#59 need.
+void LogHeapUsage(const char* label) {
+    u32 mem1Free = SYS_GetArena1Size();
+    u32 mem2Free = SYS_GetArena2Size();
+    LOG_INFO("HeapUsage", "%s: MEM1 free=%u KB, MEM2 free=%u KB",
+             label, (unsigned)(mem1Free / 1024), (unsigned)(mem2Free / 1024));
+}
+
 void BlockLoader::PreloadBlock(ResBlockFlag block) {
     if (block == RES_BLOCK_INGAME) {
         if (s_IngamePreloaded) return;
@@ -172,6 +183,7 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
                  "(%d sfx, %d tex, %d mesh, font sizes 30/50/56)",
                  kIngameSfxCount + kGameOverSfxCount,
                  kIngameTexCount + kGameOverTexCount, 1);
+        LogHeapUsage("INGAME+GAMEOVER");
         return;
     }
 
@@ -184,6 +196,7 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
         }
 
         LOG_INFO("BlockLoader", "PreloadBlock: SHOP done (%d tex)", kShopTexCount);
+        LogHeapUsage("SHOP");
         return;
     }
 
