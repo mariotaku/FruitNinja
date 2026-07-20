@@ -27,7 +27,11 @@
 
 Renderer* Renderer::s_instance = nullptr;
 
+#if defined(FRUIT_PLATFORM_WII)
+Renderer::Renderer() : m_WhiteTexBuf(nullptr), m_WhiteTex(kWhiteTexSentinel) {}
+#else
 Renderer::Renderer() : m_QuadVBO(0), m_WhiteTex(0) {}
+#endif
 
 void Renderer::SetupGameOrtho() {
     // Verified from binary: SetupOrtho(160, -160, -240, 240, 2000, -6000)

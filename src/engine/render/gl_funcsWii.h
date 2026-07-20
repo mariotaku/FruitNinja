@@ -50,6 +50,14 @@ void Wii_GetViewport(int vp[4]);
 // prior GL binding active) rather than "draw untextured".
 unsigned int Wii_GetBoundTexture();
 
+// Sets the shim's bound-texture id (same state glBindTexture(GL_TEXTURE_2D,
+// id) writes) without calling gl*. Backs Renderer::BindTexture2D so
+// RendererGX.cpp's debug-overlay texture bind stays a plain seam call instead
+// of glActiveTexture+glBindTexture -- keeps g_BoundTexture the single source
+// of truth for both this debug path and the game's Texture::Set/glBindTexture
+// path (both feed Wii_GetBoundTexture()'s tex==0 "currently bound" contract).
+void Wii_SetBoundTexture(unsigned int glTexId);
+
 // Marks a GL texture id so its NEXT glTexImage2D upload retains the linear
 // (untiled) RGBA8 CPU copy alongside the tiled GX buffer. By default the
 // shim frees the linear copy right after tiling -- retaining a 2nd full-size

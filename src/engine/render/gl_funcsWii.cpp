@@ -557,6 +557,10 @@ unsigned int Wii_GetBoundTexture() {
     return g_BoundTexture;
 }
 
+void Wii_SetBoundTexture(unsigned int glTexId) {
+    g_BoundTexture = glTexId;
+}
+
 void Wii_KeepTextureLinear(unsigned int glTexId) {
     if (!glTexId || glTexId >= (unsigned)kMaxTextures) return;
     g_Textures[glTexId].keepLinear = true;

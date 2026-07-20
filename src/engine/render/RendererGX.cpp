@@ -1,11 +1,15 @@
 // Port specific: Wii-native GX implementation of the Renderer backend.
 //
 // Companion to RendererGL.cpp (the GL/GLES2 backend) -- same class
-// (`Renderer`), same public method signatures (Renderer.h), same private
-// member access (m_Quad2D / m_Mesh3D / m_QuadVBO / m_WhiteTex). GX has no
-// binary counterpart (the Bada original is fixed-function OpenGL ES 1.x), so
-// every method here is a from-scratch Wii port decision -- no binary
-// fidelity applies, all of it is `// Port specific:`.
+// (`Renderer`), same public method signatures (Renderer.h). Unlike the GL
+// backend, RendererGX makes ZERO gl* calls itself: it draws pure native GX
+// (GX_Begin/End immediate mode, its own private m_WhiteTexObj GXTexObj) and
+// only reaches into gl_funcsWii.cpp's shim state via plain-C++ `Wii_*` seam
+// accessors for resources that TU still owns (game texture registry, mesh
+// VBO/IBO bytes, viewport). GX has no binary counterpart (the Bada original
+// is fixed-function OpenGL ES 1.x), so every method here is a from-scratch
+// Wii port decision -- no binary fidelity applies, all of it is
+// `// Port specific:`.
 //
 // WHY A SEPARATE proj/modelview LOAD (not the gl_funcsWii.cpp shim path):
 // gl_funcsWii.cpp's glUniformMatrix4fv shim jams the app's already-combined
@@ -75,6 +79,7 @@
 
 #include <gccore.h>
 #include <ogc/gu.h>
+#include <malloc.h>
 #include <cstring>
 #include <cmath>
 #include <cstdint>
@@ -360,55 +365,43 @@ void EmitInterleavedVertex(const unsigned char* base, int stride,
 
 // Port specific: Wii boot -- GX FIFO/video are already brought up by
 // mainWii.cpp before the render loop starts, so init() only needs the same
-// non-GL bookkeeping RendererGL::init() does (instance pointer, shader
-// "program" handles via the gl_funcsWii.cpp no-op stubs, the streaming quad
-// VBO id, and the 1x1 white texture used by DrawColorQuad/untextured meshes).
-// ShaderProgram::Compile talks to the shim's no-op glCreateShader/
-// glLinkProgram stubs (GX has no GLSL -- TEV stages replace it, set up per
-// draw in SetupGxVertexAndTev), so it always "succeeds" here; kept for API
-// parity so Renderer.cpp's shared code (DrawQuad/DrawTriList/etc., which
-// route through DrawShaded2D/DrawMesh3D) doesn't need a Wii-specific branch.
+// non-GL bookkeeping RendererGL::init() does (instance pointer, the 1x1
+// white texture used by DrawColorQuad/untextured meshes). No shader programs
+// to compile (GX has no GLSL -- TEV stages replace it, set up per draw in
+// SetupGxVertexAndTev) and no streaming VBO (GX draws immediate-mode via
+// GX_Begin/End straight off the CPU vertex bytes -- see DrawShaded2D).
+//
+// The white texel is a RendererGX-private GXTexObj, built directly rather
+// than riding the gl_funcsWii.cpp shim's texture registry -- an all-opaque-
+// white RGBA8 tile is just every byte 0xFF, so no tiling swizzle is needed
+// (TileRGBA8 and a memset(0xFF) produce byte-identical output for this one
+// case). DCFlushRange pushes the CPU-written bytes out of dcache so GX's
+// texture sampler (which DMA-reads main RAM into TMEM) sees them;
+// GX_InvalidateTexAll drops any stale TMEM cache lines from a previous
+// texture at this address.
 bool Renderer::init() {
     s_instance = this;
 
-    if (!m_Quad2D.Compile(nullptr, nullptr)) {
-        LOG_ERROR("RENDERER/init", "GX: 2D shader stub failed to build");
+    u32 whiteBufSize = GX_GetTexBufferSize(1, 1, GX_TF_RGBA8, GX_FALSE, 0);
+    m_WhiteTexBuf = memalign(32, whiteBufSize);
+    if (!m_WhiteTexBuf) {
+        LOG_ERROR("RENDERER/init", "GX: memalign(%u) failed for white texel", (unsigned)whiteBufSize);
         return false;
     }
-    if (!m_Mesh3D.Compile(nullptr, nullptr)) {
-        LOG_ERROR("RENDERER/init", "GX: 3D mesh shader stub failed to build");
-        m_Quad2D.Destroy();
-        return false;
-    }
-
-    glGenBuffers(1, &m_QuadVBO);
-
-    glGenTextures(1, &m_WhiteTex);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_WhiteTex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    static const unsigned char kWhiteTexel[4] = { 255, 255, 255, 255 };
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0,
-                GL_RGBA, GL_UNSIGNED_BYTE, kWhiteTexel);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    memset(m_WhiteTexBuf, 0xFF, whiteBufSize);
+    DCFlushRange(m_WhiteTexBuf, whiteBufSize);
+    GX_InvalidateTexAll();
+    GX_InitTexObj(&m_WhiteTexObj, m_WhiteTexBuf, 1, 1, GX_TF_RGBA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GX_InitTexObjFilterMode(&m_WhiteTexObj, GX_NEAR, GX_NEAR);
     return true;
 }
 
 // Port specific: GX FIFO/video teardown is owned by mainWii.cpp; this only
-// releases the shim-side handles init() allocated (mirrors RendererGL::shutdown).
+// releases the resource init() allocated (mirrors RendererGL::shutdown).
 void Renderer::shutdown() {
-    m_Quad2D.Destroy();
-    m_Mesh3D.Destroy();
-    if (m_WhiteTex) {
-        glDeleteTextures(1, &m_WhiteTex);
-        m_WhiteTex = 0;
-    }
-    if (m_QuadVBO) {
-        glDeleteBuffers(1, &m_QuadVBO);
-        m_QuadVBO = 0;
+    if (m_WhiteTexBuf) {
+        free(m_WhiteTexBuf);
+        m_WhiteTexBuf = nullptr;
     }
 }
 
@@ -467,9 +460,17 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
     // background, logo, banner, ring-label plates) passes tex=0 and rendered
     // solid white (GX_PASSCLR = vertex colour only, which is opaque white for
     // an untinted quad) instead of sampling the bound texture.
+    //
+    // tex==kWhiteTexSentinel: Renderer.cpp::DrawColorQuad (portable, shared
+    // with the GL backend) passes m_WhiteTex explicitly to force "sample
+    // opaque white regardless of what's bound". On Wii m_WhiteTex is a fixed
+    // sentinel (not a shim registry id -- the white texel lives in
+    // RendererGX's own m_WhiteTexObj, see init()), so it's resolved here
+    // directly instead of through Wii_GetTexObj.
     GLuint boundTex = tex ? tex : Wii_GetBoundTexture();
     bool textured = false;
-    GXTexObj* texObj = boundTex ? Wii_GetTexObj(boundTex) : nullptr;
+    GXTexObj* texObj = (tex == kWhiteTexSentinel) ? &m_WhiteTexObj
+                      : boundTex ? Wii_GetTexObj(boundTex) : nullptr;
     if (texObj) {
         GX_LoadTexObj(texObj, GX_TEXMAP0);
         textured = true;
@@ -532,12 +533,14 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
 
     LoadGxMatricesFromMatrixManager();
 
-    GLuint boundTex = tex ? tex : m_WhiteTex;
     bool haveUV = uvSize > 0;
     bool haveColor = colSize > 0;
     bool textured = false;
-    if (boundTex && haveUV) {
-        GXTexObj* texObj = Wii_GetTexObj(boundTex);
+    if (haveUV) {
+        // tex==0 -> RendererGX-private white GXTexObj (untextured meshes
+        // still sample a texture so the shared GX_MODULATE TEV stage in
+        // SetupGxVertexAndTev works unmodified); tex!=0 -> shim registry.
+        GXTexObj* texObj = tex ? Wii_GetTexObj(tex) : &m_WhiteTexObj;
         if (texObj) {
             GX_LoadTexObj(texObj, GX_TEXMAP0);
             textured = true;
@@ -610,13 +613,16 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
 
 // Port specific: records the bound texture id; GX_LoadTexObj happens at draw
 // time (DrawShaded2D/DrawMesh3D resolve `tex` -> GX_TexObj themselves), so
-// this only needs to route through the shim's glBindTexture bookkeeping —
+// this only needs to route through the shim's bound-texture bookkeeping —
 // matches RendererGL::BindTexture2D's raw-GLuint debug-overlay use case
 // (Renderer.h: "no binary counterpart... raw GLuint textures, not
-// Mortar::Texture").
+// Mortar::Texture"). Uses the Wii_SetBoundTexture seam (plain C++, not gl*)
+// instead of glActiveTexture+glBindTexture so RendererGX.cpp stays gl-free;
+// the shim's g_BoundTexture stays the single source of truth for both this
+// debug path and the game's Texture::Set/glBindTexture path (both feed
+// DrawShaded2D's tex==0 "use currently-bound texture" contract).
 void Renderer::BindTexture2D(uint32_t texId) {
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, (GLuint)texId);
+    Wii_SetBoundTexture(texId);
 }
 
 // Port specific: world-space rect (same centered-ortho convention as

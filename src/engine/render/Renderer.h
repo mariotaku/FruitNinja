@@ -8,6 +8,10 @@
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
 
+#if defined(FRUIT_PLATFORM_WII)
+#include <gccore.h>  // GXTexObj (m_WhiteTexObj)
+#endif
+
 // GL renderer — targets the same behaviour as the binary's ES 1.x pipeline.
 //
 // GLES2 migration phase 2: the 2D quad/UI draws (DrawQuad, DrawTriList,
@@ -128,10 +132,31 @@ private:
                       int posOff, int uvOff, int colOff,
                       GLenum prim, GLuint tex, const Matrix44& mvp);
 
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: GX has no GLSL -- TEV stages (SetupGxVertexAndTev in
+    // RendererGX.cpp) replace the Quad2D/Mesh3D shader programs entirely, and
+    // GX immediate mode (GX_Begin/End) needs no streaming VBO. The white
+    // texel is a self-contained GXTexObj built inline by RendererGX::init()
+    // (see m_WhiteTexObj/m_WhiteTexBuf below) rather than riding the
+    // gl_funcsWii.cpp shim's texture registry.
+    GXTexObj m_WhiteTexObj;  // 1x1 opaque white, built directly (no shim registry slot)
+    void* m_WhiteTexBuf;     // GX_GetTexBufferSize(1,1,GX_TF_RGBA8)-sized, memalign(32)'d backing store
+    // m_WhiteTex stays a GLuint SENTINEL (not a shim registry id -- the shim
+    // registry no longer holds the white texture) so the portable
+    // Renderer.cpp::DrawColorQuad can keep passing it into DrawShaded2D
+    // unmodified. DrawShaded2D (RendererGX.cpp) recognises this exact value
+    // and loads &m_WhiteTexObj directly instead of resolving it through
+    // Wii_GetTexObj. Any fixed non-zero value works; kept distinct from real
+    // shim texture ids (which start at 1 and are allocated sequentially, see
+    // gl_funcsWii.cpp's ShimTexture registry) by using the max GLuint.
+    static const GLuint kWhiteTexSentinel = 0xFFFFFFFFu;
+    GLuint m_WhiteTex;       // == kWhiteTexSentinel, always (see above)
+#else
     ShaderProgram m_Quad2D;  // the Shaders.h Quad2D program
     ShaderProgram m_Mesh3D;  // the Shaders.h Mesh3D program (3D mesh path)
     GLuint m_QuadVBO;        // streaming VBO for DrawShaded2D
     GLuint m_WhiteTex;       // 1x1 opaque white — lets DrawColorQuad reuse the textured shader
+#endif
 };
 
 #endif
