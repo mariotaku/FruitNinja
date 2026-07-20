@@ -578,11 +578,21 @@ bool FontCacheObjectTTF::TryBakedGlyph(uint32_t cp, float requestedSize,
     out->width    = fw * pxToWorld;   // overwritten (floored) below when bg.w/h > 0
     out->height   = fh * pxToWorld;   // overwritten (floored) below when bg.w/h > 0
 
-    // Baked-bearing cell contract (BakedStringTTF GlyphTTF pipeline). Mirrors
-    // the dynamic NONE branch: layoutX = (advance - bitmap_left), layoutY =
-    // (bitmap_top - height), both size-scaled supersampled px -> logical world.
-    out->layoutX = (float)(bg.advance - bg.bearingX) * pxToWorld;
-    out->layoutY = (float)(bg.bearingY - bg.h)       * pxToWorld;
+    // Port specific (Wii invented prebaked atlas): bake-fonts.py stores each glyph
+    // as a TIGHT bbox (ink at cell top-left), UNLIKE the binary's cell which folds
+    // bearingX into the ink origin. Under the binary's tight pen model (pen step =
+    // layoutX; ink drawn at penX - cellOriginX), the faithful "layoutX = advance -
+    // bearingX, cellOriginX = 0" spaces ADJACENT INK by (advance - bearingX): CJK is
+    // fine (bearingX ~= 0) but Latin/digits (bearingX > 0) crowd/overlap -- most
+    // visibly with negative tracking (BakedStringBox m_Weight = -1, e.g. the
+    // GameModeScreen "90 秒" plate). The binary avoids this because its atlas cell
+    // already carries bearingX; the tight Wii atlas does not. So lay the tight atlas
+    // out Font::DrawString-style instead: pen steps by FULL advance and the ink cell
+    // is shifted RIGHT by bearingX (cellOriginX = -bearingX, in the ink branch below),
+    // making adjacent ink spacing = the true advance. CJK is unchanged (bearingX ~= 0
+    // => layoutX == advance, cellOriginX == 0). Wii-only (inside FRUIT_PLATFORM_WII).
+    out->layoutX = (float)bg.advance * pxToWorld;
+    out->layoutY = (float)(bg.bearingY - bg.h) * pxToWorld;
 
     if (bg.w > 0 && bg.h > 0 && bg.pageTextureID != 0 && bg.atlasDim > 0) {
         FontAtlasPage* page = BakedPageFor(bg.pageTextureID);
@@ -630,7 +640,12 @@ bool FontCacheObjectTTF::TryBakedGlyph(uint32_t cp, float requestedSize,
         out->cellV0 = (float)bg.y * invDim;
         out->cellU1 = ((float)(bg.x + bg.w) + uvOverscan) * invDim;
         out->cellV1 = ((float)(bg.y + bg.h) + uvOverscan) * invDim;
-        out->cellOriginX = 0.0f;   // padL = 0 (baked rect has no internal pad)
+        // Port specific: shift the tight-bbox ink RIGHT by bearingX so it lands at
+        // penX + bearingX (FinishMesh draws ink at penX - cellOriginX). Combined with
+        // layoutX = full advance above, adjacent ink is spaced by the true advance
+        // (Font::DrawString-style) instead of the crowded advance-bearingX. See the
+        // layoutX comment. CJK unaffected (bearingX ~= 0 => cellOriginX ~= 0).
+        out->cellOriginX = -(float)bg.bearingX * pxToWorld;
         out->cellOriginY = 0.0f;   // padT = 0
         // DIFFERS: BakedStringTTF::FinishMesh (v1.6.1 @0x002480a8, ASM-verified) culls
         // any glyph whose world m_QuadSize is < 1.0 in either axis -- the binary's floor
@@ -713,7 +728,11 @@ bool FontCacheObjectTTF::TryBakedEffectGlyph(uint32_t cp, float requestedSize,
     out->advanceX = (float)cov.advance  * pxToWorld;
     out->width    = fw * pxToWorld;
     out->height   = fh * pxToWorld;
-    out->layoutX  = (float)(cov.advance - cov.bearingX) * pxToWorld;
+    // Port specific: match TryBakedGlyph's tight-bbox layout (full advance pen step;
+    // ink shifted right by bearingX via cellOriginX below) so the EFFECT layer lands
+    // on the SAME pen positions as the BASE layer -- otherwise the two layers diverge
+    // (base shifted, effect not). See TryBakedGlyph's layoutX comment.
+    out->layoutX  = (float)cov.advance * pxToWorld;
     out->layoutY  = (float)(cov.bearingY - cov.h)       * pxToWorld;
 
     // Per-effect cell pad, in LOGICAL px (same rule + binary constants as the stb
@@ -800,7 +819,13 @@ bool FontCacheObjectTTF::TryBakedEffectGlyph(uint32_t cp, float requestedSize,
         // rounding-immune; this only bit the padded/effect side). Deriving
         // cellOrigin from padLT (the same integer the buffer/UV overscan use)
         // keeps ink position self-consistent regardless of the ssi rounding.
-        out->cellOriginX = (float)padLT * pxToWorld;
+        // Port specific: cellOrigin normally = padLT (effect pad) so the padded cell's
+        // ink registers at the pen. Additionally subtract bearingX (in world) so the
+        // ink lands at penX + bearingX, matching the base layer's tight-bbox shift
+        // (TryBakedGlyph cellOriginX = -bearingX). FinishMesh draws at penX - cellOriginX,
+        // so cellOriginX = padLT - bearingX places effect ink at penX + bearingX. Keeps
+        // base+effect layers coincident. CJK unaffected (bearingX ~= 0).
+        out->cellOriginX = (float)padLT * pxToWorld - (float)cov.bearingX * pxToWorld;
         out->cellOriginY = (float)padTT * pxToWorld;
         out->cellW       = (float)cellW * pxToWorld;  // supersampled texels -> logical world
         out->cellH       = (float)cellH * pxToWorld;
