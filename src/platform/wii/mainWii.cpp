@@ -24,6 +24,7 @@
 #include "platform/wii/WiiVideo.h"
 #include "platform/wii/InputTranslatorWii.h"
 #include "platform/wii/SplashBootScreen.h"
+#include "platform/wii/SoundManagerWii.h"
 #include "debug/Logger.h"
 
 // ---------------------------------------------------------------------------
@@ -226,6 +227,13 @@ int main(int argc, char* argv[]) {
         // this loop's own wall-clock elapsedMs (gettime()/ticks_to_millisecs
         // above), converted to seconds, rather than a second clock source.
         g_game.tickRealtimeUi((float)(elapsedMs / 1000.0));
+
+        // Port specific: no binary counterpart. Refills the ASND music
+        // double-buffer from disk -- MUST run on the main thread, never the
+        // audio interrupt (see SoundManagerWii.h / SoundManagerWii.cpp's
+        // "Music streaming" section for the full rationale). No-op when no
+        // music is currently playing.
+        fn::wii::AudioStreamPump();
 
         g_game.renderFrame((float)g_driver.alpha(), steps);
     }

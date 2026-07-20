@@ -39,7 +39,7 @@ confined to the shim. `MatrixManager` is pure math, reused as-is.
 | Input | `InputTranslatorWii.{h,cpp}` | **real**: WPAD IR pointer → `Mortar::Touch` finger (remote 0..3 → channel 1..4), shared `Layout::TouchToGame` transform |
 | Game glue | `../../GameWii.cpp` | real: SDL-free twin of `GameSDL.cpp` |
 | Licensing | `../../game/LicensingWii.cpp` | stub twin (defunct `OpenBrowser`) |
-| Audio | `SoundManagerWii.cpp` | **stub** — ASND/AESND not wired yet (no sound) |
+| Audio | `SoundManagerWii.{h,cpp}` | **real**: ASND backend. SFX RAM-cached (loop via a chained one-shot-intro + infinite-tail voice pair), music streamed via a double-buffered ASND voice refilled each frame by `fn::wii::AudioStreamPump()` (called from `mainWii.cpp`'s loop); both go through the engine `Mortar::File`/`FileManager` seam, not a hardcoded `sd:/` path. Unverified without hardware/Dolphin audio testing |
 | Filesystem | `FileSystemWii.{cpp,h}`, `FileWii.h` | libfat over the `FileSystem_Direct`/`IFile_Direct` bases |
 
 ## Endianness
@@ -120,5 +120,5 @@ mounted. Point with the Wii Remote to slice; HOME quits.
 - ⏳ **rendering unvalidated** — the GX draw math (matrix transpose, projection
   type, vertex emit order, color byte order) needs a Dolphin/hardware boot to
   confirm; risks are listed at the top of `gl_funcsWii.cpp`.
-- ⏳ **audio** — `SoundManagerWii` is a stub (ASND wiring pending).
+- ⏳ **audio** — ASND backend implemented (SFX + streamed music); unvalidated on hardware/Dolphin.
 - ⏳ Korean/Hangul renders degraded under stb (host/web unaffected).
