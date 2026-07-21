@@ -101,14 +101,29 @@
          EXCLUDES this padding, so the letterboxed canvas auto-fits the inset box
          with no JS change. Bottom is largest (home-bar / nav-bar lives there);
          tune --edge* to taste. */
-      --edge-x: 20px;
-      --edge-top: 12px;
-      --edge-bottom: 28px;
+      /* Default: no gesture margin. Desktop (mouse) has no OS edge-gestures and
+         safe-area-inset is 0 there, so the inset collapses to nothing. The
+         fixed margins are enabled only on touch devices via the media query
+         below. */
+      --edge-x: 0px;
+      --edge-top: 0px;
+      --edge-bottom: 0px;
       padding:
         calc(env(safe-area-inset-top)    + var(--edge-top))
         calc(env(safe-area-inset-right)  + var(--edge-x))
         calc(env(safe-area-inset-bottom) + var(--edge-bottom))
         calc(env(safe-area-inset-left)   + var(--edge-x));
+    }
+
+    /* Only touch devices have OS edge-gestures (iOS/Android swipe-back, home-bar)
+       worth dodging -- give them the fixed gesture margin. Desktop pointers get
+       none. */
+    @media (pointer: coarse) {
+      #viewport {
+        --edge-x: 20px;
+        --edge-top: 12px;
+        --edge-bottom: 28px;
+      }
     }
 
     /* Canvas backing size is fixed at 960x640 (set by SDL_CreateWindow).
