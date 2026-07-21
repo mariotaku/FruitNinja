@@ -99,7 +99,7 @@ def resolve_asset(out_dir, stem, ext):
             if os.path.isfile(hashed):
                 os.remove(canonical)          # identical content already hashed
             else:
-                os.rename(canonical, hashed)
+                os.replace(canonical, hashed)
         return digest, "fresh"
 
     existing = find_existing_hashed(out_dir, stem, ext)
@@ -183,7 +183,7 @@ def main():
                 print("[web-hash] js: rewrote {} stray bare fruit-ninja.data ref(s)".format(len(stray)))
         write_text(js_src, js)
         js_digest = sha8(js_src)
-        os.rename(js_src, p(hashed_name(STEM, js_digest, "js")))
+        os.replace(js_src, p(hashed_name(STEM, js_digest, "js")))
         print("[web-hash] js   fruit-ninja.js -> {}".format(hashed_name(STEM, js_digest, "js")))
     else:
         existing_js = find_existing_hashed(out_dir, STEM, "js")

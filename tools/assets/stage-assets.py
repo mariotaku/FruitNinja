@@ -312,20 +312,25 @@ def ensure_fonttools():
         return
     except ImportError:
         pass
+    import importlib
     if _can_apt_install():
+        # PEP 668 externally-managed container Python -> apt, not pip.
         _apt_install("fonttools")
-        import importlib
-        importlib.invalidate_caches()
-        try:
-            import fontTools  # noqa: F401
-            return
-        except ImportError:
-            pass
+    else:
+        # Bare host (native emsdk on Windows/MSYS2, not externally-managed) -> pip.
+        print("[stage-assets] fontTools not found, installing via pip")
+        proc = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "fonttools"])
+        if proc.returncode != 0:
+            raise RuntimeError("pip install fonttools failed")
+    importlib.invalidate_caches()
+    try:
+        import fontTools  # noqa: F401
+        return
+    except ImportError:
+        pass
     raise RuntimeError(
-        "fontTools not found and cannot auto-install (needs root + apt-get, i.e. "
-        "inside the emscripten/emsdk container). Install it: "
-        "apt-get install -y fonttools  (apt, not pip -- the image's Python is "
-        "PEP 668 externally-managed)")
+        "fontTools not found and could not be auto-installed. Install it: "
+        "apt-get install -y fonttools (container) or pip install fonttools (host).")
 
 
 def read_header(path):

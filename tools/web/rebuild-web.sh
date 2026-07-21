@@ -5,10 +5,24 @@
 #
 # Dispatcher (default): gate on src-change vs the existing wasm, then launch the
 #   worker DETACHED (nohup) so the agent turn never blocks on the ~30-60s build.
-# Worker (--worker): run the incremental Docker build via tools/web/build.sh --
-#   the same in-container entrypoint CI (.github/workflows/pages.yml) uses, so
-#   local and CI share one pipeline (pre-clean, race-safe two-step build,
-#   verify + link retry).
+# Worker (--worker): run the incremental NATIVE build via tools/web/build.sh --
+#   the same entrypoint CI (.github/workflows/pages.yml) uses (also native, via
+#   mymindstorm/setup-emsdk), so local and CI share one pipeline (pre-clean,
+#   race-safe two-step build, verify + link retry).
+#
+# NATIVE TOOLCHAIN (no Docker): the worker puts emcc/ninja/ffmpeg on PATH before
+#   calling build.sh.
+#   - emcc: if not already on PATH, sourced from $FN_EMSDK/emsdk_env.sh
+#     (default /c/tools/emsdk; override FN_EMSDK to point at another emsdk 6.0.0
+#     checkout -- see tools/web/config.sh for the pinned version).
+#   - ninja: must be on PATH, or set FN_NINJA_DIR to a directory containing it
+#     (e.g. a CLion-bundled ninja).
+#   - ffmpeg: must be on PATH, or set FN_FFMPEG_DIR to a directory containing it.
+#   - Do NOT export MSYS_NO_PATHCONV for this build -- that was only needed for
+#     the old Docker path's -v/-w mount argument; it breaks CMake's internal
+#     try_compile (libwebp config fails) under the native MSYS2 toolchain.
+#   - stage-assets.py / svg-to-webp.py self-provision their own deps (Pillow,
+#     fonttools, resvg-py) -- no action needed here.
 #
 # --profiling: forward to build.sh -> -DFN_WEB_PROFILING=ON (keeps C++ function
 #   names in the wasm for a Chrome/Firefox DevTools flame graph; forces a
@@ -43,10 +57,9 @@ LOG="$TMP/web-rebuild.log"
 # a file lock needs a non-atomic test-then-create that two racers can both pass.
 LOCKDIR="$TMP/web-rebuild.lock.d"
 LOCK_WAIT=300        # worker: max seconds to wait for an in-progress build before giving up
-# Emsdk image pin lives in tools/web/config.sh (single source of truth, shared
+# Emsdk version pin lives in tools/web/config.sh (single source of truth, shared
 # with .github/workflows/pages.yml). See that file for the pinning rationale.
 . "$(dirname "$0")/config.sh"
-IMAGE="$EMSDK_IMAGE"
 
 [ -d "$BUILD_WEB" ] || exit 0      # web build not configured -> nothing to do
 
@@ -94,20 +107,50 @@ if [ "${1:-}" = "--worker" ]; then
     # Release the lock on any exit path (normal, error, or kill) so a dead build
     # never wedges future ones.
     trap 'release_lock' EXIT INT TERM
-    # Windows/MSYS: keep /src and -w literal; hand Docker a native host path.
-    export MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'
-    if command -v cygpath >/dev/null 2>&1; then HOST="$(cygpath -m "$PROJ")"; else HOST="$PROJ"; fi
     # --profiling (second CLI arg to --worker): forwarded to build.sh verbatim.
     BUILD_SH_ARGS=()
     [ "${2:-}" = "--profiling" ] && BUILD_SH_ARGS+=(--profiling)
     {
-        echo "[$(date -Is 2>/dev/null || date)] rebuild start ($HOST -> /src)${BUILD_SH_ARGS:+ (${BUILD_SH_ARGS[*]})}"
-        # Single in-container pipeline shared with CI: build.sh owns the
-        # pre-clean of link outputs, the lib-first race workaround, and the
-        # verify + link-retry. No flags = respect the existing build/web
-        # configure (preserves a locally-configured FN_WEB_DEBUG build).
-        docker run --rm -v "${HOST}:/src" -w /src "$IMAGE" \
-            bash /src/tools/web/build.sh "${BUILD_SH_ARGS[@]}"
+        echo "[$(date -Is 2>/dev/null || date)] rebuild start (native)${BUILD_SH_ARGS:+ (${BUILD_SH_ARGS[*]})}"
+
+        # --- native toolchain setup (no Docker; do NOT set MSYS_NO_PATHCONV --
+        #     it breaks CMake's internal try_compile / libwebp config) ---
+        if ! command -v emcc >/dev/null 2>&1; then
+            EMSDK_DIR="${FN_EMSDK:-/c/tools/emsdk}"
+            if [ -f "$EMSDK_DIR/emsdk_env.sh" ]; then
+                # shellcheck disable=SC1090
+                . "$EMSDK_DIR/emsdk_env.sh"
+            fi
+        fi
+        if ! command -v emcc >/dev/null 2>&1; then
+            echo "ERROR: emcc not found on PATH and \$FN_EMSDK/emsdk_env.sh unavailable."
+            echo "  Install emsdk $EMSDK_VERSION and either put it on PATH or set"
+            echo "  FN_EMSDK=/path/to/emsdk (default: /c/tools/emsdk)."
+            exit 1
+        fi
+        if ! command -v ninja >/dev/null 2>&1; then
+            [ -n "${FN_NINJA_DIR:-}" ] && export PATH="$FN_NINJA_DIR:$PATH"
+        fi
+        if ! command -v ninja >/dev/null 2>&1; then
+            echo "ERROR: ninja not found on PATH."
+            echo "  Install ninja or set FN_NINJA_DIR to a directory containing it"
+            echo "  (e.g. CLion's bundled ninja)."
+            exit 1
+        fi
+        if ! command -v ffmpeg >/dev/null 2>&1; then
+            [ -n "${FN_FFMPEG_DIR:-}" ] && export PATH="$FN_FFMPEG_DIR:$PATH"
+        fi
+        if ! command -v ffmpeg >/dev/null 2>&1; then
+            echo "ERROR: ffmpeg not found on PATH."
+            echo "  Install ffmpeg or set FN_FFMPEG_DIR to a directory containing it."
+            exit 1
+        fi
+
+        # Single pipeline shared with CI: build.sh owns the pre-clean of link
+        # outputs, the lib-first race workaround, and the verify + link-retry.
+        # No flags = respect the existing build/web configure (preserves a
+        # locally-configured FN_WEB_DEBUG build).
+        bash "$PROJ/tools/web/build.sh" "${BUILD_SH_ARGS[@]}"
         code=$?
         if [ "$code" -eq 0 ]; then echo "[$(date -Is 2>/dev/null || date)] rebuild OK"
         else echo "[$(date -Is 2>/dev/null || date)] rebuild FAILED (exit $code)"; fi

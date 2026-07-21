@@ -52,6 +52,14 @@ set -euo pipefail
 
 if [ -f /src/CMakeLists.txt ]; then SRC=/src; else SRC="$(pwd)"; fi
 BUILD_DIR="$SRC/build/web"
+# Native Windows/MSYS (no container): the emcc/cmake/ninja tools are native
+# Windows exes that don't understand MSYS `/c/...` paths -- hand them mixed
+# `C:/...` form (cygpath -m), which MSYS bash file ops also accept. No-op in the
+# Linux container (cygpath absent), where /src stays a valid Linux path.
+if command -v cygpath >/dev/null 2>&1; then
+    SRC="$(cygpath -m "$SRC")"
+    BUILD_DIR="$(cygpath -m "$BUILD_DIR")"
+fi
 NPROC="$(nproc 2>/dev/null || echo 4)"
 
 # Asset-staging tools (ffmpeg / fonttools) are self-provisioned by
