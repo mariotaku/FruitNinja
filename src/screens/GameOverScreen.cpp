@@ -51,6 +51,11 @@
 #include "screens/FruitFactPage.h"
 #include "render/Layout.h"
 
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+#include "resource/ResBlock.h"
+#include "resource/BlockLoader.h"
+#endif
+
 using Mortar::TextureManager;
 
 // ---------------------------------------------------------------------------
@@ -73,6 +78,17 @@ static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_75f4;
 static Mortar::SmartPtr<Mortar::Texture> s_DeadTex_7a88;
 
 static bool g_LoadContentGuard = false;
+
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+// Task #36 Stage 4 -- port-specific (no binary counterpart). Set true only
+// by DoQuitToMenu() (the STATE_QUIT_WAIT-only path), consumed once in
+// ~GameOverScreen(). Distinguishes "player quit to menu" (INGAME assets no
+// longer needed) from "player retried" (STATE_RETRY_FADE -> SetTerminate()
+// also destroys this GameOverScreen, but a NEW game starts and still needs
+// them) -- both paths call SetTerminate(), so m_State alone can't tell them
+// apart once the destructor runs.
+static bool g_bQuitToMenuPending = false;
+#endif
 
 // File-static flag used by Update prologue per binary
 // Binary @ Update 0x00186c80: s_bounceValue static inside this TU
@@ -143,6 +159,14 @@ static void DoQuitToMenu() {
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);
     Game* game = Game::GetInstance();
     if (!game) return;
+
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #36 Stage 4 -- latch "this is a real quit", consumed by
+    // ~GameOverScreen() to gate the INGAME FreeBlock (see g_bQuitToMenuPending
+    // comment above). Only DoQuitToMenu (STATE_QUIT_WAIT) sets this; the
+    // retry path (STATE_RETRY_FADE) never calls DoQuitToMenu.
+    g_bQuitToMenuPending = true;
+#endif
 
     game_work.bM_bPaused = 1;
     // bM_Mode is NOT cleared here. The binary QuitToMenu @0x001cb6e4 never writes bM_Mode.
@@ -310,6 +334,22 @@ GameOverScreen::GameOverScreen(const char* modeName, int param2, float param3,
 
 GameOverScreen::~GameOverScreen() {
     Release();
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #36 Stage 4 -- memory reclaim, port-specific (no binary
+    // counterpart). Only free INGAME assets when this teardown was reached
+    // via DoQuitToMenu (real quit-to-menu) -- retry destroys and recreates a
+    // GameOverScreen too (STATE_RETRY_FADE -> SetTerminate()) but starts a
+    // NEW game that still needs the same INGAME manifest, so that path must
+    // NOT free it. Release() above has already torn down every GameOverScreen-
+    // owned control (fact pages, sensei sub-controls, retry/quit buttons), so
+    // by this point nothing in the HUD tree still references INGAME's held
+    // textures/mesh except MissControl/SuperFruitControl/Fruit's own members,
+    // which are themselves reloaded (cache hit) on next level start.
+    if (g_bQuitToMenuPending) {
+        g_bQuitToMenuPending = false;
+        fn::wii::BlockLoader::FreeBlock(fn::wii::RES_BLOCK_INGAME);
+    }
+#endif
 }
 
 // ---------------------------------------------------------------------------

@@ -14,6 +14,8 @@
 #include "screens/ShopScreen.h"
 #include "debug/Logger.h"
 #include <vector>
+#include <string>
+#include <cstdio>
 
 #if defined(FRUIT_PLATFORM_WII)
 #include "platform/wii/Mem2Alloc.h"  // Wii_MEM2FreeBytes (see LogHeapUsage)
@@ -131,7 +133,26 @@ const int kShopTexCount = sizeof(kShopTex) / sizeof(kShopTex[0]);
 void PreloadTexture(const char* name, std::vector<Mortar::SmartPtr<Mortar::Texture> >* held) {
     Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::LoadLocalisedTexture(name);
     if (tex.IsValid()) {
-        held->push_back(tex);
+        // Dedup by the underlying Texture* -- PreloadBlockBegin now rebuilds
+        // the queue on every re-entry (see PreloadBlockBegin below), so a
+        // resident block's textures get re-pushed here on every re-entry too.
+        // Without this check s_HeldIngame/s_HeldShop would grow one entry per
+        // re-entry forever even though every entry after the first refers to
+        // the SAME already-resident Texture (a cache hit returns the same
+        // object). Skipping the push keeps the vector at one ref per unique
+        // texture while the texture stays resident (held->clear() in
+        // FreeBlock still drops that single ref -> refcount 0 -> eviction).
+        bool alreadyHeld = false;
+        for (std::vector<Mortar::SmartPtr<Mortar::Texture> >::iterator it = held->begin();
+             it != held->end(); ++it) {
+            if (it->Get() == tex.Get()) {
+                alreadyHeld = true;
+                break;
+            }
+        }
+        if (!alreadyHeld) {
+            held->push_back(tex);
+        }
     } else {
         LOG_WARN("BlockLoader", "PreloadBlock: texture '%s' failed to load", name);
     }
@@ -145,15 +166,23 @@ void PreloadSfx(const char* name) {
     Mortar::SoundManager::GetInstance().PreLoadSound(name);
 }
 
-// --- Task #66 Phase 1: cooperative per-frame work-queue --------------------
+// --- Task #66 Phase 1/3: cooperative per-frame work-queue -------------------
 //
-// Each atomic PreloadBlock() step (one texture, one SFX, the coin mesh, or
-// one LoadContent-style wrapper) becomes a WorkItem. Wrappers (Fruit::
-// LoadHudTextures, MissControl/SuperFruitControl/GameOverScreen/DojoScreen/
-// ShopScreen::LoadContent) are ONE work item each -- per-LoadContont-call
-// granularity, matching the task's "treat each wrapper as one work item for
-// now" call (per-asset split inside a wrapper is Phase 3). WarmTTFGlyphCache
-// GameOver() is likewise one item (font-glyph wrapper, no natural sub-split).
+// Each atomic PreloadBlock() step (one texture, one SFX, the coin mesh, a
+// LoadContent-style wrapper, or a bare fn) becomes a WorkItem.
+//
+// Phase 1 treated each LoadContent wrapper as ONE work item. Phase 3 refined
+// the heavy wrappers (Fruit::LoadHudTextures, MissControl/GameOverScreen/
+// DojoScreen/ShopScreen::LoadContent) further: a granular WORK_TEX item is
+// pushed per texture the wrapper loads internally, immediately followed by
+// the wrapper's own WORK_LOADCONTENT item. This spreads what used to be N
+// file reads in a single frame across N frames (1 read/frame); the trailing
+// LOADCONTENT item then re-requests the same paths and gets guaranteed cache
+// hits (TextureManager::Load checks Find(hash) before touching disk -- see
+// TextureManager.cpp), so it does zero IO but still performs the wrapper's
+// non-texture setup (guard flags, non-preloadable fields). SuperFruitControl::
+// LoadContent (2 textures) and WarmTTFGlyphCacheGameOver (font-glyph wrapper)
+// have no natural per-asset split and stay one item each.
 //
 // std::vector<WorkItem> is port-only glue (queue book-keeping, not a binary
 // structure) -- fine per the "layout-faithful std:: is ok for port-only
@@ -168,16 +197,20 @@ enum WorkItemKind {
 
 struct WorkItem {
     WorkItemKind kind;
-    const char* name;                                          // TEX/SFX/MESH
+    // Phase 3: stored BY VALUE (not const char*) -- several call sites now
+    // push runtime-formatted names built in a stack buffer (e.g. "hud_%s.tex",
+    // "combo_%d.tex"); a raw pointer would dangle once that buffer goes out
+    // of scope. Literal-string call sites pay one extra copy; harmless.
+    std::string name;                                          // TEX/SFX/MESH
     std::vector<Mortar::SmartPtr<Mortar::Texture> >* held;      // TEX only
     void (*fn)();                                                // LOADCONTENT/FN
 
-    WorkItem(WorkItemKind k, const char* n,
+    WorkItem(WorkItemKind k, const std::string& n,
              std::vector<Mortar::SmartPtr<Mortar::Texture> >* h, void (*f)())
         : kind(k), name(n), held(h), fn(f) {}
 };
 
-WorkItem MakeTexItem(const char* name, std::vector<Mortar::SmartPtr<Mortar::Texture> >* held) {
+WorkItem MakeTexItem(const std::string& name, std::vector<Mortar::SmartPtr<Mortar::Texture> >* held) {
     return WorkItem(WORK_TEX, name, held, 0);
 }
 WorkItem MakeSfxItem(const char* name) {
@@ -187,23 +220,23 @@ WorkItem MakeMeshItem(const char* name) {
     return WorkItem(WORK_MESH, name, 0, 0);
 }
 WorkItem MakeFnItem(WorkItemKind kind, void (*fn)()) {
-    return WorkItem(kind, 0, 0, fn);
+    return WorkItem(kind, std::string(), 0, fn);
 }
 
 void RunWorkItem(const WorkItem& item) {
     switch (item.kind) {
     case WORK_TEX:
-        PreloadTexture(item.name, item.held);
+        PreloadTexture(item.name.c_str(), item.held);
         break;
     case WORK_SFX:
-        PreloadSfx(item.name);
+        PreloadSfx(item.name.c_str());
         break;
     case WORK_MESH: {
         Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
         if (mm) {
-            Mortar::SmartPtr<Mortar::Model> coin = mm->Load(item.name);
+            Mortar::SmartPtr<Mortar::Model> coin = mm->Load(item.name.c_str());
             if (!coin.IsValid()) {
-                LOG_WARN("BlockLoader", "PreloadBlockStep: mesh '%s' failed to load", item.name);
+                LOG_WARN("BlockLoader", "PreloadBlockStep: mesh '%s' failed to load", item.name.c_str());
             }
         }
         break;
@@ -243,10 +276,56 @@ void BuildIngameQueue(std::vector<WorkItem>* q) {
     for (int i = 0; i < kIngameSfxCount; i++) q->push_back(MakeSfxItem(kIngameSfx[i]));
     for (int i = 0; i < kIngameTexCount; i++) q->push_back(MakeTexItem(kIngameTex[i], &s_HeldIngame));
 
+    // Phase 3: warm Fruit::LoadHudTextures textures granularly (1 read/frame);
+    // the LOADCONTENT finalizer below then runs cache-hit-cheap. Keep in sync
+    // with FruitInfo.cpp FruitInfo_LoadHudTextures (hud_%s.tex/zen_%s.tex per
+    // fruit-info entry). Warmed into s_HeldIngame purely to keep them resident
+    // until the finalizer's own FruitInfo array members take over ownership --
+    // FruitInfo_LoadHudTextures reloads (cache hit) straight into
+    // fi.m_HudTexture/m_ZenTexture, which is the real strong-ref home.
+    for (int i = 0; i < FruitInfo_GetCount(); i++) {
+        const FruitInfo* fi = FruitInfo_Get(i);
+        if (!fi || !fi->m_Name[0]) continue;
+        char texName[64];
+        snprintf(texName, sizeof(texName), "hud_%s.tex", fi->m_Name);
+        q->push_back(MakeTexItem(texName, &s_HeldIngame));
+        snprintf(texName, sizeof(texName), "zen_%s.tex", fi->m_Name);
+        q->push_back(MakeTexItem(texName, &s_HeldIngame));
+    }
     q->push_back(MakeFnItem(WORK_LOADCONTENT, &Fruit::LoadHudTextures));
+
+    // Phase 3: warm MissControl::LoadContent textures granularly (1 read/frame);
+    // the LOADCONTENT finalizer below then runs cache-hit-cheap. Keep in sync
+    // with MissControl.cpp MissControl::LoadContent.
+    q->push_back(MakeTexItem("critical.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("ultra_rare_plus_50.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("hud_cross.tex", &s_HeldIngame));
+    for (int i = 3; i <= 10; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "combo_%d.tex", i);
+        q->push_back(MakeTexItem(name, &s_HeldIngame));
+    }
     q->push_back(MakeFnItem(WORK_LOADCONTENT, &MissControl::LoadContent));
+
     q->push_back(MakeFnItem(WORK_LOADCONTENT, &SuperFruitControl::LoadContent));
 
+    // Phase 3: warm GameOverScreen::LoadContent textures granularly (1 read/frame);
+    // the LOADCONTENT finalizer below then runs cache-hit-cheap. Keep in sync
+    // with GameOverScreen.cpp GameOverScreen::LoadContent (binary @ 0x00130bb0).
+    q->push_back(MakeTexItem("arcade_time_up.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("gameover.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("time_up.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("retry.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("quit.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("leaderboards.tex", &s_HeldIngame));
+    q->push_back(MakeTexItem("gc_leaderboards.tex", &s_HeldIngame));
+    for (int i = 1; i <= 3; i++) {
+        char name[32];
+        snprintf(name, sizeof(name), "sensei_head_0%d.tex", i);
+        q->push_back(MakeTexItem(name, &s_HeldIngame));
+        snprintf(name, sizeof(name), "sensei_body_0%d.tex", i);
+        q->push_back(MakeTexItem(name, &s_HeldIngame));
+    }
     q->push_back(MakeFnItem(WORK_LOADCONTENT, &GameOverScreen::LoadContent));
     for (int i = 0; i < kGameOverTexCount; i++) q->push_back(MakeTexItem(kGameOverTex[i], &s_HeldIngame));
     for (int i = 0; i < kGameOverSfxCount; i++) q->push_back(MakeSfxItem(kGameOverSfx[i]));
@@ -258,7 +337,34 @@ void BuildIngameQueue(std::vector<WorkItem>* q) {
 
 // Builds the SHOP work-queue, same ordering as PreloadBlock's SHOP branch.
 void BuildShopQueue(std::vector<WorkItem>* q) {
+    // Phase 3: warm DojoScreen::LoadContent textures granularly (1 read/frame);
+    // the LOADCONTENT finalizer below then runs cache-hit-cheap. Keep in sync
+    // with DojoScreen.cpp DojoScreen::LoadContent (v1.6.1 @ 0x0016a554), which
+    // also chains BaseScreen::LoadContent (sml_title.tex / blurry_backing.tex).
+    q->push_back(MakeTexItem("dojo.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("dojo_sensei.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("sml_title.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("blurry_backing.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("senseis_swag.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("about.tex", &s_HeldShop));
     q->push_back(MakeFnItem(WORK_LOADCONTENT, &DojoScreen::LoadContent));
+
+    // Phase 3: warm ShopScreen::LoadContent textures granularly (1 read/frame);
+    // the LOADCONTENT finalizer below then runs cache-hit-cheap. Keep in sync
+    // with ShopScreen.cpp ShopScreen::LoadContent (binary @ 0x001b2a20).
+    q->push_back(MakeTexItem("locked.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("select_item.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("loading.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("scratch_deviders.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("dialog_box_shop.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("selected.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("selected_sml.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("locked_stroke.tex", &s_HeldShop));
+    q->push_back(MakeTexItem("new_item_sml.tex", &s_HeldShop));
+    // ShopScreen::LoadContent's LowResBackgrounds() conditional is stubbed
+    // always-false in the port (see ShopScreen.cpp), so BG_store.tex is the
+    // only reachable path -- warm that one, matching the finalizer exactly.
+    q->push_back(MakeTexItem("BG_store.tex", &s_HeldShop));
     q->push_back(MakeFnItem(WORK_LOADCONTENT, &ShopScreen::LoadContent));
 
     for (int i = 0; i < kShopTexCount; i++) q->push_back(MakeTexItem(kShopTex[i], &s_HeldShop));
@@ -327,11 +433,26 @@ void BlockLoader::PreloadBlockBegin(ResBlockFlag block) {
     s_Queue.clear();
     s_QueueBlock = block;
 
+    // The queue is ALWAYS rebuilt here, regardless of s_IngamePreloaded/
+    // s_ShopPreloaded -- those latches are informational for FreeBlock only
+    // (see below), not a gate on whether Begin queues work. PreloadBlockBegin
+    // is called ONCE per block-entry transition (the caller arms the loading
+    // spinner on that same trigger frame, then calls PreloadBlockStep(1) once
+    // per Update thereafter -- see GameModeScreen.cpp/DojoScreen.cpp), so
+    // rebuilding here costs one rebuild per transition, not per frame.
+    //
+    // A resident block still benefits: every WORK_TEX item resolves via
+    // TextureManager's Find(hash) cache check before touching disk (see
+    // TextureManager.cpp), so re-running the full manifest on a preloaded
+    // block is cheap (no IO) but still steps 1 item/frame, giving the loading
+    // spinner its natural on-screen duration instead of draining in a single
+    // frame. Previously the two `if (s_*Preloaded) return;` early-outs left
+    // the queue empty here, so PreloadBlockStep saw an empty queue and
+    // reported "done" on its very first call -- the spinner (armed on the
+    // trigger frame) got torn down again one frame later, i.e. invisible.
     if (block == RES_BLOCK_INGAME) {
-        if (s_IngamePreloaded) return;
         BuildIngameQueue(&s_Queue);
     } else if (block == RES_BLOCK_SHOP) {
-        if (s_ShopPreloaded) return;
         BuildShopQueue(&s_Queue);
     }
     // MENU / GAMEOVER-alone / other masks: no V1 manifest (menu textures
@@ -363,6 +484,26 @@ bool BlockLoader::PreloadBlockDone() {
 
 void BlockLoader::Reset() {
     s_Queue.clear();
+}
+
+// Task #36 Stage 4 -- see BlockLoader.h. Cancels an in-flight load of `block`
+// first (queue cleared, mirroring Reset()) so nothing is freed under a load
+// in progress, then drops the held strong SmartPtr<Texture> refs and clears
+// the preloaded latch so the block re-preloads correctly next entry.
+void BlockLoader::FreeBlock(ResBlockFlag block) {
+    if (block == RES_BLOCK_INGAME) {
+        LogHeapUsage("before FreeBlock INGAME");
+        if (s_QueueBlock == RES_BLOCK_INGAME) s_Queue.clear();
+        s_HeldIngame.clear();
+        s_IngamePreloaded = false;
+        LogHeapUsage("after FreeBlock INGAME");
+    } else if (block == RES_BLOCK_SHOP) {
+        LogHeapUsage("before FreeBlock SHOP");
+        if (s_QueueBlock == RES_BLOCK_SHOP) s_Queue.clear();
+        s_HeldShop.clear();
+        s_ShopPreloaded = false;
+        LogHeapUsage("after FreeBlock SHOP");
+    }
 }
 
 void BlockLoader::PreloadBlock(ResBlockFlag block) {

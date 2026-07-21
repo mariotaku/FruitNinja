@@ -343,6 +343,16 @@ ShopScreen::~ShopScreen() {
     if (m_bLoading) fn::wii::BlockLoader::Reset();
 #endif
     Release();
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #36 Stage 4 -- memory reclaim, port-specific (no binary
+    // counterpart). Release() above has already dropped this screen's own
+    // refs (m_pShopList / buy/equip buttons); the shop-icon list items and
+    // chrome textures are the ONLY remaining owners of s_HeldShop's refs, so
+    // it's safe to drop them here. FreeBlock cancels any still-in-flight SHOP
+    // load first, then clears s_HeldShop + the preloaded latch -- re-entering
+    // the shop next time re-preloads from disk (see BlockLoader.h).
+    fn::wii::BlockLoader::FreeBlock(fn::wii::RES_BLOCK_SHOP);
+#endif
 }
 
 // ---------------------------------------------------------------------------

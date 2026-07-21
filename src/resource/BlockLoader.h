@@ -6,13 +6,30 @@
 // this V1 deliberately simplifies it:
 //   - SYNCHRONOUS only -- PreloadBlock() blocks the main thread while it
 //     loads. No LWP thread, no mutex queue, no spinner (blueprint Stage 3).
-//   - No eviction/FreeBlock -- everything preloaded here stays resident for
-//     the process lifetime (V1 "union fits budget" per the task; Stage 4
-//     would add FreeBlock()).
 //   - Idempotent -- every underlying Load call (TextureManager::
 //     LoadLocalisedTexture, SoundManager::PreLoadSound, MeshManager::Load)
 //     already cache-checks internally, so calling PreloadBlock twice for the
 //     same block is a cheap no-op the second time.
+//
+// Stage 4 -- FreeBlock(): port-specific memory reclaim (no binary
+// counterpart -- Bada never needed it; the whole game fits its address
+// space). Drops this block's s_Held* strong refs and clears its preloaded
+// latch. Because TextureManager's cache is weak-only (see the WHY note
+// below), dropping the last SmartPtr ref actually evicts the pixels via
+// TextureManager::OnTextureDestroyed -- so this is a REAL reclaim, not just
+// bookkeeping. A texture still referenced elsewhere (e.g. a screen's own
+// member SmartPtr) simply survives at a lower refcount; safe to call any
+// time. If a preload of the same block is still mid-Step, FreeBlock cancels
+// it first (Reset()-equivalent) so nothing is freed out from under an
+// in-flight load. Re-entering the block afterwards re-preloads correctly
+// (PreloadBlockBegin sees the cleared latch and rebuilds the queue).
+//
+// Scope: only the loose PreloadTexture() holders (s_HeldIngame/s_HeldShop)
+// and their latches. FruitInfo's hud_*/zen_* textures and the MeshManager-
+// resident coin mesh are NOT touched here -- they have their own strong-ref
+// homes (FruitInfo array members / MeshManager's own list) outside
+// BlockLoader's held vectors; freeing those would need FruitInfo/MeshManager
+// eviction APIs of their own (out of scope for this pass).
 //
 // WHY a per-block texture/model vector at all, given TextureManager's cache
 // is just a WeakPtr map (see ResBlock.h / loader-blueprint.md Risk R1)? The
@@ -55,9 +72,15 @@ public:
 
     // --- Task #66 Phase 1: cooperative (per-frame) preload stepper ---------
     // Builds the work-queue for `block` and returns immediately -- does NOT
-    // load anything itself. No-op (leaves the queue empty) if `block` is
-    // already preloaded (s_IngamePreloaded/s_ShopPreloaded), matching
-    // PreloadBlock's own idempotency guard. Call once per block-entry, then
+    // load anything itself. ALWAYS rebuilds the queue, even if `block` is
+    // already preloaded (s_IngamePreloaded/s_ShopPreloaded) -- those latches
+    // no longer gate the rebuild (see BlockLoader.cpp fix note at
+    // PreloadBlockBegin). On an already-resident block every WORK_TEX item
+    // is a TextureManager cache hit (no disk IO), so re-running the manifest
+    // is cheap, but it still steps 1 item/frame -- this is what makes the
+    // loading spinner visible for the manifest's natural duration on
+    // re-entry instead of the queue coming back empty and the spinner
+    // vanishing one frame after being armed. Call once per block-entry, then
     // drive the queue with PreloadBlockStep() from the caller's per-frame
     // Update (e.g. GameModeScreen's LOADING sub-state).
     static void PreloadBlockBegin(ResBlockFlag block);
@@ -75,8 +98,8 @@ public:
 
     // True if the work-queue for the block passed to the last
     // PreloadBlockBegin() call is empty (either drained by PreloadBlockStep,
-    // or PreloadBlockBegin found the block already preloaded and built no
-    // queue at all).
+    // or PreloadBlockBegin was called for a block with no V1 manifest --
+    // MENU/GAMEOVER-alone/other masks -- and built no queue at all).
     static bool PreloadBlockDone();
 
     // Clears the pending work-queue without executing it -- teardown safety
@@ -86,6 +109,28 @@ public:
     // called simply re-queues+re-hits-cache on the next PreloadBlockBegin,
     // same as re-entering a block twice today.
     static void Reset();
+
+    // --- Stage 4: memory reclaim (port-specific, no binary counterpart) ----
+    // Drops `block`'s held strong SmartPtr<Texture> refs (s_HeldIngame for
+    // RES_BLOCK_INGAME, s_HeldShop for RES_BLOCK_SHOP) and clears its
+    // preloaded latch, so the next PreloadBlockBegin(block) re-preloads from
+    // disk instead of no-op'ing. If `block` is currently mid-Step (this
+    // block's queue not yet drained), cancels that in-flight load first
+    // (queue cleared, same as Reset()) so nothing is freed out from under a
+    // load in progress. No-op for any other block value (RES_BLOCK_NONE,
+    // RES_BLOCK_MENU, or a mask BlockLoader has no manifest for).
+    //
+    // TextureManager's cache is weak-only (see file comment above) -- once
+    // the last strong ref here drops, a texture with no other owner is
+    // actually evicted (OnTextureDestroyed), reclaiming its pixel memory.
+    // Textures still held by another owner (a screen's own member SmartPtr)
+    // just lose one refcount and stay resident -- safe either way.
+    //
+    // Caller contract: call only after the screen/control tree that was
+    // using this block's assets has already dropped ITS refs (e.g. after
+    // ~ShopScreen has run, or once gameplay has genuinely returned to the
+    // menu) -- see the call sites in ShopScreen.cpp / GameOverScreen.cpp.
+    static void FreeBlock(ResBlockFlag block);
 };
 
 // Task #36/#59 diagnostic -- on Wii, logs libogc's MEM1/MEM2 arena free size
