@@ -245,6 +245,9 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
 #if !defined(__bada__)
     , m_pGame(&g)
     , m_bSetupLevelFired(false)
+#if defined(FN_BLOCK_PRELOAD)
+    , m_bLoading(false)
+#endif
     , m_pOnlineMpButton(nullptr)
 #endif
 {
@@ -326,6 +329,13 @@ GameModeScreen::~GameModeScreen() {
     // shrink-out lifecycle. Calling RemoveButtons() here was a port divergence
     // that caused a heap-use-after-free when a button had already been self-reaped
     // by HUD::Update() before GameModeScreen's own reap ran.
+#if defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 1 -- teardown safety: if this screen is destroyed while
+    // still draining the INGAME work-queue (e.g. torn down before its LOADING
+    // sub-state finished), drop the queue rather than leaving it to silently
+    // resume draining under whatever next screen calls PreloadBlockBegin.
+    if (m_bLoading) fn::wii::BlockLoader::Reset();
+#endif
     GameModeScreen::Release();
     delete m_pTitleBox; m_pTitleBox = nullptr;
     delete m_pDescBox;  m_pDescBox  = nullptr;
@@ -598,14 +608,30 @@ void GameModeScreen::Update(float dt) {
     case 5:
     case 6: {
 #if defined(FN_BLOCK_PRELOAD)
-        // #59: the INGAME preload is a synchronous ~1.4s stall. Fire it while the
-        // mode-select panel is still at full opacity (before the alpha decay) so the
-        // freeze is hidden behind the panel, not a half-revealed level. break skips
-        // this frame's decay so the panel doesn't drop before the block runs.
+        // Task #66 Phase 1 -- the INGAME preload was a synchronous ~1.4s stall
+        // (GAME-START freeze). Now cooperative: begin the work-queue behind
+        // the still-fully-opaque panel (same trigger point as the old
+        // one-shot SetupLevel() call), then drain it a few items per frame
+        // while holding the panel + gating input + spinning the picked
+        // button's loading symbol. `break` in both branches below skips this
+        // frame's shrink+drop decay so the panel doesn't drop mid-load.
         if (!m_bSetupLevelFired) {
-            SetupLevel();
+            fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_INGAME);
+            fn::wii::BlockLoader::PreloadBlockBegin(fn::wii::RES_BLOCK_INGAME);
+            if (game_work.mHud) game_work.mHud->SetInputModal(this);
+            if (MenuButton* btn = PickedModeButton()) btn->SetLoadingSymbol(true);
             m_bSetupLevelFired = true;
+            m_bLoading = true;
             break;
+        }
+        if (m_bLoading) {
+            if (!fn::wii::BlockLoader::PreloadBlockStep(1)) break;  // still loading -- hold + keep spinner
+
+            if (MenuButton* btn = PickedModeButton()) btn->SetLoadingSymbol(false);
+            if (game_work.mHud) game_work.mHud->SetInputModal(nullptr);
+            PrepareForLevelStart();  // SetupLevel's tail (non-preload part)
+            m_bLoading = false;
+            // fall through to the existing decay below -- this frame resumes normally.
         }
 #endif
 
@@ -952,6 +978,21 @@ void GameModeScreen::QuitCallback() {
     // cascade-release flung all menu fruits, re-firing MainScreen menu callbacks
     // and oscillating menu<->mode-select (task #16). Removed for fidelity.
 }
+
+#if defined(FN_BLOCK_PRELOAD)
+// Task #66 Phase 1 -- see header. game_work.gameMode is set by the picked
+// mode's *ModeCallback (ClassicModeCallback=0, ZenModeCallback=3,
+// ArcadeModeCallback=2) immediately before m_State enters 3-6, so it's
+// already valid by the time Update's case 3-6 body runs this same frame.
+MenuButton* GameModeScreen::PickedModeButton() {
+    switch (game_work.gameMode) {
+    case 0: return m_pClassicButton;
+    case 3: return m_pZenButton;
+    case 2: return m_pArcadeButton;
+    default: return nullptr;
+    }
+}
+#endif
 
 // vtable[18] @ 0x00181428
 void GameModeScreen::SetupLevel() {

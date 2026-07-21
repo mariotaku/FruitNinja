@@ -155,6 +155,13 @@ public:
     Game* m_pGame;
     // One-shot latch for SetupLevel call (port-only idempotency guard).
     bool m_bSetupLevelFired;
+#if defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 1 -- true while BlockLoader::PreloadBlockStep() is still
+    // draining the INGAME work-queue. Holds the mode-select panel at full
+    // opacity (skips the shrink+drop decay) and keeps HUD::SetInputModal(this)
+    // + the picked button's loading-symbol armed until the queue drains.
+    bool m_bLoading;
+#endif
     // Defunct online-MP button slot — kept so DeletedMenuButton can null it cleanly.
     MenuButton* m_pOnlineMpButton;
 #endif // !defined(__bada__)
@@ -167,6 +174,16 @@ public:
     // vtable[18] @ 0x0013e21c — prime the first wave once the camera fade
     // crosses -0.9. Calls PrepareForLevelStart().
     void SetupLevel();
+
+#if defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 1 -- port-only helper, maps game_work.gameMode (set by
+    // the picked mode's *ModeCallback just before m_State enters 3-6) to that
+    // mode's MenuButton, so the loading spinner arms on the button the player
+    // actually sliced. gameMode: 0=Classic, 2=Arcade, 3=Zen (see Classic/Zen/
+    // ArcadeModeCallback below). Returns nullptr if that button already
+    // self-removed (shrink-out race) -- caller null-checks.
+    MenuButton* PickedModeButton();
+#endif
 
     // Button callbacks (bound via Delegate).
     void QuitCallback();          // 0x0013F5E0 — back button, m_State = 0xF

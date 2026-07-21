@@ -145,6 +145,127 @@ void PreloadSfx(const char* name) {
     Mortar::SoundManager::GetInstance().PreLoadSound(name);
 }
 
+// --- Task #66 Phase 1: cooperative per-frame work-queue --------------------
+//
+// Each atomic PreloadBlock() step (one texture, one SFX, the coin mesh, or
+// one LoadContent-style wrapper) becomes a WorkItem. Wrappers (Fruit::
+// LoadHudTextures, MissControl/SuperFruitControl/GameOverScreen/DojoScreen/
+// ShopScreen::LoadContent) are ONE work item each -- per-LoadContont-call
+// granularity, matching the task's "treat each wrapper as one work item for
+// now" call (per-asset split inside a wrapper is Phase 3). WarmTTFGlyphCache
+// GameOver() is likewise one item (font-glyph wrapper, no natural sub-split).
+//
+// std::vector<WorkItem> is port-only glue (queue book-keeping, not a binary
+// structure) -- fine per the "layout-faithful std:: is ok for port-only
+// containers" carve-out.
+enum WorkItemKind {
+    WORK_TEX,          // PreloadTexture(name, held)
+    WORK_SFX,          // PreloadSfx(name)
+    WORK_MESH,         // MeshManager::Load(name)
+    WORK_LOADCONTENT,  // a LoadContent()-style wrapper, called with no args
+    WORK_FN,           // a bare void(*)() call (log/heap-usage tail steps)
+};
+
+struct WorkItem {
+    WorkItemKind kind;
+    const char* name;                                          // TEX/SFX/MESH
+    std::vector<Mortar::SmartPtr<Mortar::Texture> >* held;      // TEX only
+    void (*fn)();                                                // LOADCONTENT/FN
+
+    WorkItem(WorkItemKind k, const char* n,
+             std::vector<Mortar::SmartPtr<Mortar::Texture> >* h, void (*f)())
+        : kind(k), name(n), held(h), fn(f) {}
+};
+
+WorkItem MakeTexItem(const char* name, std::vector<Mortar::SmartPtr<Mortar::Texture> >* held) {
+    return WorkItem(WORK_TEX, name, held, 0);
+}
+WorkItem MakeSfxItem(const char* name) {
+    return WorkItem(WORK_SFX, name, 0, 0);
+}
+WorkItem MakeMeshItem(const char* name) {
+    return WorkItem(WORK_MESH, name, 0, 0);
+}
+WorkItem MakeFnItem(WorkItemKind kind, void (*fn)()) {
+    return WorkItem(kind, 0, 0, fn);
+}
+
+void RunWorkItem(const WorkItem& item) {
+    switch (item.kind) {
+    case WORK_TEX:
+        PreloadTexture(item.name, item.held);
+        break;
+    case WORK_SFX:
+        PreloadSfx(item.name);
+        break;
+    case WORK_MESH: {
+        Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
+        if (mm) {
+            Mortar::SmartPtr<Mortar::Model> coin = mm->Load(item.name);
+            if (!coin.IsValid()) {
+                LOG_WARN("BlockLoader", "PreloadBlockStep: mesh '%s' failed to load", item.name);
+            }
+        }
+        break;
+    }
+    case WORK_LOADCONTENT:
+    case WORK_FN:
+        item.fn();
+        break;
+    }
+}
+
+// Wrapper trampolines -- WorkItem::fn is a bare void(*)() (no captures allowed
+// per the cross-build's no-capture-lambda rule anyway), so anything needing
+// extra tail-logging (the two LOG_INFO/LogHeapUsage calls that used to run at
+// the very end of each PreloadBlock branch) becomes its own zero-arg function.
+void LogIngameGameoverDone() {
+    LOG_INFO("BlockLoader", "PreloadBlock: INGAME+GAMEOVER done "
+             "(%d sfx, %d tex, %d mesh, font sizes 30/50/56)",
+             kIngameSfxCount + kGameOverSfxCount,
+             kIngameTexCount + kGameOverTexCount, 1);
+    LogHeapUsage("INGAME+GAMEOVER");
+}
+
+void LogShopDone() {
+    LOG_INFO("BlockLoader", "PreloadBlock: SHOP done (%d tex)", kShopTexCount);
+    LogHeapUsage("SHOP");
+}
+
+std::vector<WorkItem> s_Queue;
+ResBlockFlag s_QueueBlock = RES_BLOCK_NONE;
+
+// Builds the INGAME+GAMEOVER work-queue in the SAME order PreloadBlock's
+// synchronous body executes it (see that function below) -- this is the
+// single source of truth for the manifest; PreloadBlock's sync path now just
+// drains this queue in one gulp instead of duplicating the sequence.
+void BuildIngameQueue(std::vector<WorkItem>* q) {
+    for (int i = 0; i < kIngameSfxCount; i++) q->push_back(MakeSfxItem(kIngameSfx[i]));
+    for (int i = 0; i < kIngameTexCount; i++) q->push_back(MakeTexItem(kIngameTex[i], &s_HeldIngame));
+
+    q->push_back(MakeFnItem(WORK_LOADCONTENT, &Fruit::LoadHudTextures));
+    q->push_back(MakeFnItem(WORK_LOADCONTENT, &MissControl::LoadContent));
+    q->push_back(MakeFnItem(WORK_LOADCONTENT, &SuperFruitControl::LoadContent));
+
+    q->push_back(MakeFnItem(WORK_LOADCONTENT, &GameOverScreen::LoadContent));
+    for (int i = 0; i < kGameOverTexCount; i++) q->push_back(MakeTexItem(kGameOverTex[i], &s_HeldIngame));
+    for (int i = 0; i < kGameOverSfxCount; i++) q->push_back(MakeSfxItem(kGameOverSfx[i]));
+    q->push_back(MakeMeshItem(kGameOverMesh));
+    q->push_back(MakeFnItem(WORK_LOADCONTENT, &WarmTTFGlyphCacheGameOver));
+
+    q->push_back(MakeFnItem(WORK_FN, &LogIngameGameoverDone));
+}
+
+// Builds the SHOP work-queue, same ordering as PreloadBlock's SHOP branch.
+void BuildShopQueue(std::vector<WorkItem>* q) {
+    q->push_back(MakeFnItem(WORK_LOADCONTENT, &DojoScreen::LoadContent));
+    q->push_back(MakeFnItem(WORK_LOADCONTENT, &ShopScreen::LoadContent));
+
+    for (int i = 0; i < kShopTexCount; i++) q->push_back(MakeTexItem(kShopTex[i], &s_HeldShop));
+
+    q->push_back(MakeFnItem(WORK_FN, &LogShopDone));
+}
+
 } // namespace
 
 // See BlockLoader.h. SYS_GetArena1Size/SYS_GetArena2Size return the bytes
@@ -169,100 +290,86 @@ void LogHeapUsage(const char* label) {
 #endif
 }
 
-void BlockLoader::PreloadBlock(ResBlockFlag block) {
+// Task #59 boot trim -- gameplay-only chunks deferred out of
+// GameInitialise() on Wii (see the FN_BLOCK_PRELOAD guards at each call
+// site). Core slicing assets (Fruit/Bomb/Slash/Splat models, particle
+// textures, SFX) are needed at menu time -- the menu ring buttons are real
+// Fruit/Bomb entities you slice -- so those stayed resident at boot; only
+// these genuinely gameplay-only combo/HUD pieces are deferred. Refs land in
+// each class's own SmartPtr/mesh members (their natural strong-ref home,
+// matching the binary's ownership) -- NOT s_HeldIngame, which is reserved
+// for loose PreloadTexture() calls (kIngameTex/kGameOverTex) that have no
+// owning member.
+//
+// GAMEOVER merged into INGAME's queue -- see BlockLoader.h / ResBlock.h file
+// comments: gameover pops instantly over the frozen game with no fade of its
+// own to cover a load, so its deltas must land during the pre-level fade
+// alongside INGAME's. GameOverScreen::LoadContent() is idempotent
+// (g_LoadContentGuard, GameOverScreen.cpp:178) and owns its own texture refs
+// (file-static SmartPtrs) -- no s_HeldIngame entry needed, same pattern as
+// Fruit/MissControl/SuperFruit above. Its texture set (arcade_time_up,
+// gameover, time_up, retry, quit, leaderboards, gc_leaderboards,
+// sensei_head_0N/sensei_body_0N) does NOT overlap kGameOverTex -- that
+// literal list covers a disjoint set (fact board, dialog boxes, sml_ap/pl,
+// combo_description, and the base sensei_head.tex which is a different
+// asset from the sensei_head_0N variants here) -- so both stay.
+//
+// SHOP: Task #59 boot trim -- Dojo/Shop screen chrome (BG_store, dojo bg,
+// etc, 16 tex total) deferred out of GameInitialise() on Wii (see the
+// FN_BLOCK_PRELOAD guard at the call site in GameInitialise.cpp). Port-only
+// #28 screens, no binary counterpart, only reachable via menu -> dojo ->
+// shop, so no fidelity constraint. Refs land in the screens' own members
+// (same pattern as GameOverScreen above) -- distinct from kShopTex[], which
+// is the scroll-in item-icon set (lazy-loaded per ShopListItem, not screen
+// chrome).
+
+void BlockLoader::PreloadBlockBegin(ResBlockFlag block) {
+    s_Queue.clear();
+    s_QueueBlock = block;
+
     if (block == RES_BLOCK_INGAME) {
         if (s_IngamePreloaded) return;
-        s_IngamePreloaded = true;
-
-        for (int i = 0; i < kIngameSfxCount; i++) {
-            PreloadSfx(kIngameSfx[i]);
-        }
-        for (int i = 0; i < kIngameTexCount; i++) {
-            PreloadTexture(kIngameTex[i], &s_HeldIngame);
-        }
-
-        // Task #59 boot trim -- gameplay-only chunks deferred out of
-        // GameInitialise() on Wii (see the FN_BLOCK_PRELOAD guards at each
-        // call site). Core slicing assets (Fruit/Bomb/Slash/Splat models,
-        // particle textures, SFX) are needed at menu time -- the menu ring
-        // buttons are real Fruit/Bomb entities you slice -- so those stayed
-        // resident at boot; only these genuinely gameplay-only combo/HUD
-        // pieces are deferred. Refs land in each class's own SmartPtr/mesh
-        // members (their natural strong-ref home, matching the binary's
-        // ownership) -- NOT s_HeldIngame, which is reserved for loose
-        // PreloadTexture() calls (kIngameTex/kGameOverTex above) that have
-        // no owning member.
-        Fruit::LoadHudTextures();
-        MissControl::LoadContent();
-        SuperFruitControl::LoadContent();
-
-        // GAMEOVER merged in here -- see BlockLoader.h / ResBlock.h file
-        // comments: gameover pops instantly over the frozen game with no
-        // fade of its own to cover a load, so its deltas must land during
-        // the pre-level fade alongside INGAME's.
-        //
-        // GameOverScreen::LoadContent() is idempotent (g_LoadContentGuard,
-        // GameOverScreen.cpp:178) and owns its own texture refs (file-static
-        // SmartPtrs) -- no s_HeldIngame entry needed, same pattern as
-        // Fruit/MissControl/SuperFruit above. Its texture set (arcade_time_up,
-        // gameover, time_up, retry, quit, leaderboards, gc_leaderboards,
-        // sensei_head_0N/sensei_body_0N) does NOT overlap kGameOverTex below --
-        // that literal list covers a disjoint set (fact board, dialog boxes,
-        // sml_ap/pl, combo_description, and the base sensei_head.tex which is
-        // a different asset from the sensei_head_0N variants here) -- so both
-        // stay.
-        GameOverScreen::LoadContent();
-        for (int i = 0; i < kGameOverTexCount; i++) {
-            PreloadTexture(kGameOverTex[i], &s_HeldIngame);
-        }
-        for (int i = 0; i < kGameOverSfxCount; i++) {
-            PreloadSfx(kGameOverSfx[i]);
-        }
-        Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
-        if (mm) {
-            Mortar::SmartPtr<Mortar::Model> coin = mm->Load(kGameOverMesh);
-            if (!coin.IsValid()) {
-                LOG_WARN("BlockLoader", "PreloadBlock: mesh '%s' failed to load", kGameOverMesh);
-            }
-        }
-        WarmTTFGlyphCacheGameOver();
-
-        LOG_INFO("BlockLoader", "PreloadBlock: INGAME+GAMEOVER done "
-                 "(%d sfx, %d tex, %d mesh, font sizes 30/50/56)",
-                 kIngameSfxCount + kGameOverSfxCount,
-                 kIngameTexCount + kGameOverTexCount, 1);
-        LogHeapUsage("INGAME+GAMEOVER");
-        return;
-    }
-
-    if (block == RES_BLOCK_SHOP) {
+        BuildIngameQueue(&s_Queue);
+    } else if (block == RES_BLOCK_SHOP) {
         if (s_ShopPreloaded) return;
-        s_ShopPreloaded = true;
-
-        // Task #59 boot trim -- Dojo/Shop screen chrome (BG_store, dojo bg,
-        // etc, 16 tex total) deferred out of GameInitialise() on Wii (see the
-        // FN_BLOCK_PRELOAD guard at the call site in GameInitialise.cpp).
-        // Port-only #28 screens, no binary counterpart, only reachable via
-        // menu -> dojo -> shop, so no fidelity constraint. Refs land in the
-        // screens' own members (same pattern as GameOverScreen above) --
-        // distinct from kShopTex[] below, which is the scroll-in item-icon
-        // set (lazy-loaded per ShopListItem, not screen chrome).
-        DojoScreen::LoadContent();
-        ShopScreen::LoadContent();
-
-        for (int i = 0; i < kShopTexCount; i++) {
-            PreloadTexture(kShopTex[i], &s_HeldShop);
-        }
-
-        LOG_INFO("BlockLoader", "PreloadBlock: SHOP done (%d tex)", kShopTexCount);
-        LogHeapUsage("SHOP");
-        return;
+        BuildShopQueue(&s_Queue);
     }
-
     // MENU / GAMEOVER-alone / other masks: no V1 manifest (menu textures
     // already eager-load at boot per the Stage 1 [BlockLoad] audit; GAMEOVER
     // is only ever entered additively over INGAME -- see ResBlock.h -- so it
-    // has no standalone preload point).
+    // has no standalone preload point). Queue stays empty -> PreloadBlockStep
+    // reports drained immediately.
+}
+
+bool BlockLoader::PreloadBlockStep(int maxItems) {
+    if (s_Queue.empty()) return true;
+
+    for (int i = 0; i < maxItems && !s_Queue.empty(); i++) {
+        RunWorkItem(s_Queue.front());
+        s_Queue.erase(s_Queue.begin());
+    }
+
+    if (s_Queue.empty()) {
+        if (s_QueueBlock == RES_BLOCK_INGAME) s_IngamePreloaded = true;
+        else if (s_QueueBlock == RES_BLOCK_SHOP) s_ShopPreloaded = true;
+        return true;
+    }
+    return false;
+}
+
+bool BlockLoader::PreloadBlockDone() {
+    return s_Queue.empty();
+}
+
+void BlockLoader::Reset() {
+    s_Queue.clear();
+}
+
+void BlockLoader::PreloadBlock(ResBlockFlag block) {
+    PreloadBlockBegin(block);
+    while (!PreloadBlockStep(999)) {
+        // drain synchronously -- see PreloadBlockBegin/PreloadBlockStep above.
+    }
 }
 
 } // namespace wii

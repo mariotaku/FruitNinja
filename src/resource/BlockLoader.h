@@ -46,7 +46,46 @@ public:
     //
     // Safe to call every time the block is entered -- idempotent (see file
     // comment above).
+    //
+    // Implemented as PreloadBlockBegin() + a drain loop over PreloadBlockStep()
+    // -- see those below (task #66 Phase 1). Callers that don't need the
+    // cooperative per-frame path (ShopScreen ctor, any non-Wii/non-loading-UI
+    // caller) keep calling this unchanged.
     static void PreloadBlock(ResBlockFlag block);
+
+    // --- Task #66 Phase 1: cooperative (per-frame) preload stepper ---------
+    // Builds the work-queue for `block` and returns immediately -- does NOT
+    // load anything itself. No-op (leaves the queue empty) if `block` is
+    // already preloaded (s_IngamePreloaded/s_ShopPreloaded), matching
+    // PreloadBlock's own idempotency guard. Call once per block-entry, then
+    // drive the queue with PreloadBlockStep() from the caller's per-frame
+    // Update (e.g. GameModeScreen's LOADING sub-state).
+    static void PreloadBlockBegin(ResBlockFlag block);
+
+    // Executes up to `maxItems` queued work items (one LoadContent wrapper,
+    // one texture, one SFX, or the coin mesh counts as one item each --
+    // see BlockLoader.cpp file comment for the manifest -> work-item mapping).
+    // Returns true once the queue is DRAINED (nothing left to do this call or
+    // already-preloaded) -- the caller's contract is "keep calling with
+    // !PreloadBlockStep(N) as the hold condition". Sets the per-block
+    // preloaded guard TRUE only when the last item is popped, mirroring
+    // PreloadBlock's own guard semantics. Item budget, not wall-clock --
+    // deterministic across platforms/frame-rates.
+    static bool PreloadBlockStep(int maxItems);
+
+    // True if the work-queue for the block passed to the last
+    // PreloadBlockBegin() call is empty (either drained by PreloadBlockStep,
+    // or PreloadBlockBegin found the block already preloaded and built no
+    // queue at all).
+    static bool PreloadBlockDone();
+
+    // Clears the pending work-queue without executing it -- teardown safety
+    // for a caller destroyed mid-load (e.g. GameModeScreen torn down before
+    // its LOADING sub-state finishes). Does NOT touch the per-block
+    // preloaded guards -- a block left partially-loaded when Reset() is
+    // called simply re-queues+re-hits-cache on the next PreloadBlockBegin,
+    // same as re-entering a block twice today.
+    static void Reset();
 };
 
 // Task #36/#59 diagnostic -- on Wii, logs libogc's MEM1/MEM2 arena free size
