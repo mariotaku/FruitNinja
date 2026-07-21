@@ -34,9 +34,22 @@
 // Version text: m_pVersionText (BakedStringBox) is created in the ctor and drawn
 // in Draw() at the DrawBorders-returned title anchor + Vec3(0,5,0).
 //
+// Task #66 Phase 2 refinement (FN_BLOCK_PRELOAD only): the state-2 (SHOP)
+// handoff no longer reveals the shop and then loads it -- it creates the
+// ShopScreen (cheap ctor, chrome LoadContent deferred to the async queue,
+// see ShopScreen.cpp) while the dojo is STILL fully covering the screen,
+// arms the sliced m_pShopButton's loading spinner (SetLoadingSymbol) +
+// HUD::SetInputModal, and holds m_TransitionAlpha (skips DS_DECAY_F) while
+// BlockLoader::PreloadBlockStep drains the RES_BLOCK_SHOP queue one item per
+// frame. Only once the queue drains does it null the buttons, zero the
+// alpha (dojo Draw's `alpha<=0` early-return uncovers it), AddControl/Init
+// the shop, and reveal. Mirrors GameModeScreen's m_bLoading INGAME hold
+// (Phase 1). See m_bShopLoading / m_pPendingShop below and DojoScreen::Update
+// case 2/3/4 in the .cpp. Sync path (flag off) is unchanged: reveal-then-
+// construct-then-sync-load, same as the original binary handoff.
+//
 // Port specific:
 //   - No sensei 3D animation (binary has an animated 3D model).
-//   - Shop button stub -- returns to MainScreen instead of opening ShopScreen.
 //
 
 #include "BaseScreen.h"
@@ -48,6 +61,7 @@ namespace Mortar { class BakedStringBox; }
 
 class MenuButton;
 class AboutScreen;
+class ShopScreen;
 
 // Free function (MenuButton.h): flings all live menu entities so the dojo
 // entity-count transition gate clears. Forward-declared for the FN_TEST inline
@@ -120,6 +134,20 @@ private:
     // Port-only tail (beyond binary 0xb8 boundary, does not shift binary fields):
     // Child AboutScreen when state==3 triggers. nullptr when not shown.
     AboutScreen* m_pAboutScreen;
+
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 2 refinement -- true while BlockLoader::PreloadBlockStep()
+    // is still draining the SHOP work-queue after the dojo state-2 handoff has
+    // created (but not yet AddControl/Init'd) the ShopScreen. Holds the dojo
+    // panel at its covering alpha (skips DS_DECAY_F) and keeps the sliced
+    // shop-ring button's loading-symbol + HUD input-modal armed until the
+    // queue drains, mirroring GameModeScreen::m_bLoading (Phase 1).
+    bool m_bShopLoading;
+    // The ShopScreen created at the start of the hold; AddControl/Init'd and
+    // handed off (reveal) only once BlockLoader::PreloadBlockStep drains.
+    // nullptr when not mid-hold.
+    ShopScreen* m_pPendingShop;
+#endif
 
     // Port specific: binary accesses Game via GOT; port stores a reference here.
     Game& game;

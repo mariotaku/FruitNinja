@@ -170,6 +170,19 @@ public:
     // +0x98: currently selected list item
     ShopListItem* m_pSelectedItem;
 
+    // Port-specific trailing field (not in the 0xBC-byte binary struct).
+    // Excluded on the __bada__ production build so sizeof stays at 0xbc.
+#if !defined(__bada__)
+#if defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 2 -- true while BlockLoader::PreloadBlockStep() is still
+    // draining the SHOP work-queue during state-0 transition-in. Holds the
+    // screen in state 0 (alpha stays at its current lerp value, no completion
+    // gate fires) and keeps HUD::SetInputModal(this) armed until the queue
+    // drains. Mirrors GameModeScreen::m_bLoading (Phase 1).
+    bool m_bLoading;
+#endif
+#endif // !defined(__bada__)
+
 public:
     // Read-only accessor used by ShopListItem::Move to ramp m_CostAlpha
     // toward 1 only on the centered row (description-text fade-in).
@@ -268,6 +281,14 @@ public:
     // Helper — remove buy/equip buttons from HUD.
     void RemoveBuyButton();
     void RemoveEquipButton();
+
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 2 -- port-only helper, draws a centered loading.tex quad
+    // while m_bLoading is set (m_pBuyButton doesn't exist yet during state-0
+    // load hold, so there's no button to arm a spinner symbol on -- see
+    // ShopScreen.cpp DrawOrder for why this is a static quad, not a spin).
+    void DrawLoadingOverlay();
+#endif
 
 #ifdef __bada__
     friend struct ShopScreenLayoutAssert;

@@ -43,6 +43,11 @@
 #include <cmath>
 #include "game/GameWork.h"
 
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/ResBlock.h"
+#include "resource/BlockLoader.h"
+#endif
+
 // --- Constants (resolved from binary via read_memory) ---
 
 // Transition alpha
@@ -110,6 +115,10 @@ DojoScreen::DojoScreen(Game& g)
     , m_TransitionDelay(0.0f)   // +0xb0
     , m_pVersionText(nullptr)   // +0xb4
     , m_pAboutScreen(nullptr)   // port-only tail
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    , m_bShopLoading(false)
+    , m_pPendingShop(nullptr)
+#endif
     , game(g)
 {
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "create", "DojoScreen::DojoScreen @ 0x0016bad8");
@@ -198,6 +207,13 @@ DojoScreen::DojoScreen(Game& g)
 // ===================================================================
 DojoScreen::~DojoScreen() {
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "destroy", "DojoScreen::~DojoScreen");
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 2 refinement -- teardown safety if the dojo is destroyed
+    // mid-hold (queue not drained yet). Mirrors GameModeScreen::~GameModeScreen
+    // (Phase 1) / ShopScreen::~ShopScreen (Phase 2).
+    if (m_bShopLoading) fn::wii::BlockLoader::Reset();
+    delete m_pPendingShop;
+#endif
     Release();
     // ~BaseScreen() called implicitly by ~HUDControl3d chain
 }
@@ -478,6 +494,36 @@ void DojoScreen::Update(float dt) {
     case 2:
     case 3:
     case 4: {
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+        // Task #66 Phase 2 refinement -- while the SHOP work-queue drains,
+        // hold the dojo panel at its covering alpha (skip DS_DECAY_F below)
+        // and keep the spinner on the sliced shop-ring button armed. Mirrors
+        // GameModeScreen's m_bLoading hold (Phase 1): `break` here skips this
+        // frame's decay entirely, same as GameModeScreen's `break` before its
+        // decay line.
+        if (m_bShopLoading) {
+            if (!fn::wii::BlockLoader::PreloadBlockStep(1)) break;  // still loading -- hold + keep spinner
+
+            if (m_pShopButton) m_pShopButton->SetLoadingSymbol(false);
+            if (game_work.mHud) game_work.mHud->SetInputModal(nullptr);
+
+            // Reveal: original state-2 completion, deferred until the queue
+            // drained. Binary: HUD::AddControl(hud, shop, false); shop->Init();
+            m_pBackButton  = nullptr;  // field_0x94
+            m_pShopButton  = nullptr;  // field_0x98
+            m_pAboutButton = nullptr;  // field_0x9c
+            m_TransitionAlpha = 0.0f;
+            m_bShopLoading = false;
+
+            ShopScreen* shop = m_pPendingShop;
+            m_pPendingShop = nullptr;
+            if (shop) {
+                game_work.mHud->AddControl(shop, false);
+                shop->Init();
+            }
+            return;
+        }
+#endif
 #ifdef __bada__
         DS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY);
 #endif
@@ -491,6 +537,25 @@ void DojoScreen::Update(float dt) {
             // (pointer dangles after the back button self-removes ~0.15s into the fade; never dereferenced here).
             if (cleared && m_pBackButton != nullptr && m_TransitionDelay <= 0.0f) {
                 int prevState = m_State;
+
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+                if (prevState == 2) {
+                    // State 2 (SHOP), preload build: create the ShopScreen now
+                    // (cheap ctor -- chrome LoadContent moved to the async
+                    // queue, see ShopScreen.cpp) but do NOT AddControl/Init or
+                    // reveal yet -- keep the dojo covering the screen (alpha
+                    // NOT zeroed, buttons NOT nulled) while the SHOP queue
+                    // drains above, same as game-mode holds its panel.
+                    if (game_work.m_SaveData) game_work.m_SaveData->CheckDatesHaveChanged();
+                    m_pPendingShop = new ShopScreen(this);
+                    fn::wii::BlockLoader::PreloadBlockBegin(fn::wii::RES_BLOCK_SHOP);
+                    if (game_work.mHud) game_work.mHud->SetInputModal(this);
+                    if (m_pShopButton) m_pShopButton->SetLoadingSymbol(true);
+                    m_bShopLoading = true;
+                    break;  // hold this frame -- skip decay, wait for drain above
+                }
+#endif
+
                 m_pBackButton  = nullptr;  // field_0x94
                 m_TransitionAlpha = 0.0f;
                 m_pShopButton  = nullptr;  // field_0x98
@@ -508,6 +573,7 @@ void DojoScreen::Update(float dt) {
                     return;
                 }
 
+#if !defined(FN_BLOCK_PRELOAD)
                 if (prevState == 2) {
                     // State 2: push ShopScreen.
                     // Binary: FruitSaveData::CheckDatesHaveChanged(game->save), then
@@ -519,6 +585,7 @@ void DojoScreen::Update(float dt) {
                     shop->Init();
                     return;
                 }
+#endif
 
                 if (prevState == 4) {
                     // Defunct: NetworkManager dashboard -- state 4 unreachable on Bada.

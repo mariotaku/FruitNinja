@@ -272,24 +272,42 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     , m_pSelectedItem(nullptr)
     , m_AnimFrame(0)
     , m_State(0)
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    , m_bLoading(false)
+#endif
 {
 #if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
-    // tmp/wii/loader-blueprint.md section 2/7). Set BEFORE LoadContent()
+    // tmp/wii/loader-blueprint.md section 2/7). Set BEFORE the preload call
     // below so the shop's own texture loads are tagged SHOP, not whatever
     // block was active before entry.
     fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_SHOP);
-    // Task #36 Stage 2 -- force-load the 17 item-icon textures synchronously
-    // here, during the shop-open transition, instead of letting each one
-    // lazy-load the first time its ShopListItem scrolls into view. See
-    // BlockLoader.h; idempotent across repeated shop entries.
-    fn::wii::BlockLoader::PreloadBlock(fn::wii::RES_BLOCK_SHOP);
+#endif
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 2 refinement -- DojoScreen now creates this ShopScreen
+    // (cheap ctor) WHILE still covering the screen, then drives
+    // PreloadBlockBegin/Step itself (see DojoScreen::Update case 2) so the
+    // dojo stays covering + spinning for the whole load instead of revealing
+    // the shop first. Do NOT sync-load the chrome here or Begin the queue --
+    // BuildShopQueue (BlockLoader.cpp) already includes ShopScreen::LoadContent
+    // as a work item, so the chrome loads async during the dojo's hold
+    // (DojoScreen owns the single PreloadBlockBegin call for RES_BLOCK_SHOP).
+#else
+    // Task #66 Phase 2 -- the synchronous PreloadBlock() here used to block
+    // the main thread for the shop's 17 item-icon textures in one frame
+    // during dojo->shop (the ctor has no per-frame hook to spread the load
+    // across). Build the work-queue only; ShopScreen::Update state 0 (which
+    // DOES run per-frame) drains it via PreloadBlockStep before letting the
+    // transition-in alpha gate fire. See ShopScreen::Update case 0 below.
+#if defined(FN_BLOCK_PRELOAD)
+    fn::wii::BlockLoader::PreloadBlockBegin(fn::wii::RES_BLOCK_SHOP);
 #endif
     // v1.6.1 ShopScreen::ShopScreen @0x001b3f94, 0x001b3fbc-0x001b3fd4: LoadContent is
     // gated at the ctor call site (`if (s_bContentLoaded=='\0') LoadContent();`), not
     // inside LoadContent() itself -- LoadContent has no internal guard, so calling it
     // unconditionally here reloaded/decoded all 10 textures on every shop entry.
     if (!s_bContentLoaded) LoadContent();
+#endif
 
     // Binary: field_0x34 (m_LayerFlags from HUDControl base) = 0x80
     m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
@@ -318,6 +336,12 @@ ShopScreen::ShopScreen(DojoScreen* parent)
 // ShopScreen::~ShopScreen @ 0x0015ce98
 // ---------------------------------------------------------------------------
 ShopScreen::~ShopScreen() {
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+    // Task #66 Phase 2 -- teardown safety if the shop is destroyed mid-load
+    // (e.g. user backs out of dojo before the SHOP queue drains). Mirrors
+    // GameModeScreen::~GameModeScreen (Phase 1).
+    if (m_bLoading) fn::wii::BlockLoader::Reset();
+#endif
     Release();
 }
 
@@ -923,6 +947,23 @@ void ShopScreen::Update(float dt) {
 
     // ---- STATE 0: Transition in ----
     case 0: {
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+        // Task #66 Phase 2 -- the SHOP work-queue was built (not drained) by
+        // the ctor's PreloadBlockBegin(). Drain it here, a few items per
+        // frame, before letting the alpha completion gate below fire --
+        // holds the transition-in alpha + gates input so the dojo->shop
+        // handoff no longer stalls the main thread for one giant frame.
+        if (!fn::wii::BlockLoader::PreloadBlockDone()) {
+            if (game_work.mHud) game_work.mHud->SetInputModal(this);
+            m_bLoading = true;
+            fn::wii::BlockLoader::PreloadBlockStep(1);
+            break;
+        }
+        if (m_bLoading) {
+            if (game_work.mHud) game_work.mHud->SetInputModal(nullptr);
+            m_bLoading = false;
+        }
+#endif
         // Binary: alpha += (1 - alpha) * 0.125
 #ifdef __bada__
         SS_APPROACH_F(m_TransitionAlpha, 1.0f, ALPHA_LERP_IN);
@@ -1344,6 +1385,30 @@ void ShopScreen::UpdateRealtime(float dtSeconds) {
 }
 #endif
 
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+// ---------------------------------------------------------------------------
+// ShopScreen::DrawLoadingOverlay -- port-only, no binary counterpart.
+// Draws a single centered loading.tex quad (native texel size) while the
+// state-0 SHOP preload queue drains. See DrawOrder / Update case 0.
+// ---------------------------------------------------------------------------
+void ShopScreen::DrawLoadingOverlay() {
+    if (!s_TexLoading.IsValid()) return;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    float texW = (float)(s_TexLoading->GetWidth());
+    float texH = (float)(s_TexLoading->GetHeight());
+
+    Matrix44 mat = Matrix44::MakeScale(texW, texH, 0.0f);
+    mm.GetWorldStack().Reset();
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    s_TexLoading->Set();
+    Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
+    s_TexLoading->UnSet();
+}
+#endif
+
 // ---------------------------------------------------------------------------
 // ShopScreen::DrawOrder(float*, int) @ 0x001b4e48
 //
@@ -1559,6 +1624,16 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             Mortar::Mesh::DrawQuadUnCached(colDialog, NULL);
             s_TexDialogBox->UnSet();
         }
+
+#if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
+        // Task #66 Phase 2 -- port-only: m_pBuyButton doesn't exist yet during
+        // the state-0 load hold (it's lazily created at completion, see
+        // Update case 0), so there's no button to arm a spinner symbol on.
+        // Draw a static centered loading.tex quad instead -- acceptable for
+        // Phase 2 (no rotation helper exists for a bare texture; MenuButton's
+        // sparkle-ring animation is button-specific, see MenuButton::AdvanceSparkle).
+        if (m_bLoading) DrawLoadingOverlay();
+#endif
 
         return;
     }
