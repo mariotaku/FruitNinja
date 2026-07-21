@@ -160,6 +160,11 @@ public:
     // draining the INGAME work-queue. Holds the mode-select panel at full
     // opacity (skips the shrink+drop decay) and keeps HUD::SetInputModal(this)
     // + the picked button's loading-symbol armed until the queue drains.
+    // Armed in the picked mode's *ModeCallback (ClassicModeCallback etc, see
+    // GameModeScreen.cpp's ArmModeLoading), NOT in Update state 3-6 -- arming
+    // a frame later there raced the button's own shrink-out reaping itself
+    // before the arm could resolve a valid button pointer (task #66 flaky
+    // spinner fix). Update state 3-6 only drains + disarms.
     bool m_bLoading;
 #endif
     // Defunct online-MP button slot — kept so DeletedMenuButton can null it cleanly.
@@ -178,10 +183,12 @@ public:
 #if defined(FN_BLOCK_PRELOAD)
     // Task #66 Phase 1 -- port-only helper, maps game_work.gameMode (set by
     // the picked mode's *ModeCallback just before m_State enters 3-6) to that
-    // mode's MenuButton, so the loading spinner arms on the button the player
-    // actually sliced. gameMode: 0=Classic, 2=Arcade, 3=Zen (see Classic/Zen/
-    // ArcadeModeCallback below). Returns nullptr if that button already
-    // self-removed (shrink-out race) -- caller null-checks.
+    // mode's MenuButton. Used only by the drain's disarm side (Update state
+    // 3-6, SetLoadingSymbol(false)) -- the arm side reads the button field
+    // directly inside the firing *ModeCallback instead (see .cpp), since by
+    // the time Update runs next frame the button may have already reaped.
+    // gameMode: 0=Classic, 2=Arcade, 3=Zen. Returns nullptr if the button
+    // already self-removed (shrink-out race) -- caller null-checks.
     MenuButton* PickedModeButton();
 #endif
 

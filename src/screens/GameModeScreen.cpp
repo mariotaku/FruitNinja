@@ -613,17 +613,17 @@ void GameModeScreen::Update(float dt) {
         // the still-fully-opaque panel (same trigger point as the old
         // one-shot SetupLevel() call), then drain it a few items per frame
         // while holding the panel + gating input + spinning the picked
-        // button's loading symbol. `break` in both branches below skips this
-        // frame's shrink+drop decay so the panel doesn't drop mid-load.
-        if (!m_bSetupLevelFired) {
-            fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_INGAME);
-            fn::wii::BlockLoader::PreloadBlockBegin(fn::wii::RES_BLOCK_INGAME);
-            if (game_work.mHud) game_work.mHud->SetInputModal(this);
-            if (MenuButton* btn = PickedModeButton()) btn->SetLoadingSymbol(true);
-            m_bSetupLevelFired = true;
-            m_bLoading = true;
-            break;
-        }
+        // button's loading symbol.
+        //
+        // The ARM (PreloadBlockBegin + SetInputModal + SetLoadingSymbol(true)
+        // + m_bLoading latch) happens in the picked mode's *ModeCallback
+        // (below), NOT here -- the callback runs inside the picked button's
+        // own Update, on the exact frame the slice fires, with a guaranteed-
+        // valid button pointer. Arming one frame later here raced the
+        // button's ungated post-pick shrink (MenuButton.cpp) reaping the
+        // button (DeletedMenuButton nulls the ptr) before PickedModeButton()
+        // could resolve it at large/spiky dt -- the spinner silently never
+        // armed. See m_bLoading's declaration comment.
         if (m_bLoading) {
             if (!fn::wii::BlockLoader::PreloadBlockStep(1)) break;  // still loading -- hold + keep spinner
 
@@ -984,6 +984,10 @@ void GameModeScreen::QuitCallback() {
 // mode's *ModeCallback (ClassicModeCallback=0, ZenModeCallback=3,
 // ArcadeModeCallback=2) immediately before m_State enters 3-6, so it's
 // already valid by the time Update's case 3-6 body runs this same frame.
+// Only used for the disarm side (SetLoadingSymbol(false) in the drain) --
+// the arm side now uses the callback's own button field directly (see
+// ClassicModeCallback/ZenModeCallback/ArcadeModeCallback) to avoid the
+// cross-frame reap race this used to hit when called from Update state 3-6.
 MenuButton* GameModeScreen::PickedModeButton() {
     switch (game_work.gameMode) {
     case 0: return m_pClassicButton;
@@ -991,6 +995,18 @@ MenuButton* GameModeScreen::PickedModeButton() {
     case 2: return m_pArcadeButton;
     default: return nullptr;
     }
+}
+
+// Task #66 -- shared arm helper: begin the INGAME preload work-queue and
+// gate input/spinner atomically on the trigger frame, using a button
+// pointer guaranteed valid because the caller is that button's own
+// *ModeCallback (running inside the button's own Update this frame).
+static void ArmModeLoading(GameModeScreen* self, MenuButton* pickedBtn) {
+    fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_INGAME);
+    fn::wii::BlockLoader::PreloadBlockBegin(fn::wii::RES_BLOCK_INGAME);
+    if (game_work.mHud) game_work.mHud->SetInputModal(self);
+    if (pickedBtn) pickedBtn->SetLoadingSymbol(true);
+    self->m_bLoading = true;
 }
 #endif
 
@@ -1018,6 +1034,11 @@ void GameModeScreen::ClassicModeCallback() {
 #endif
     m_State = 3;
     game_work.gameMode = 0;
+#if defined(FN_BLOCK_PRELOAD)
+    // Task #66 -- arm here (not Update state 3), while m_pClassicButton is
+    // guaranteed valid: this callback runs inside that button's own Update.
+    ArmModeLoading(this, m_pClassicButton);
+#endif
 }
 
 // Matches ZenModeCallback @ 0x0013dffc
@@ -1027,6 +1048,9 @@ void GameModeScreen::ZenModeCallback() {
 #endif
     m_State = 6;
     game_work.gameMode = 3;
+#if defined(FN_BLOCK_PRELOAD)
+    ArmModeLoading(this, m_pZenButton);
+#endif
 }
 
 // Matches ArcadeModeCallback @ 0x0013e19c
@@ -1037,6 +1061,9 @@ void GameModeScreen::ArcadeModeCallback() {
 #endif
     m_State = 5;
     game_work.gameMode = 2;
+#if defined(FN_BLOCK_PRELOAD)
+    ArmModeLoading(this, m_pArcadeButton);
+#endif
 }
 
 // Binary @ 0x0013df84 — sets m_bChallenge=true + stores id and data ptr
