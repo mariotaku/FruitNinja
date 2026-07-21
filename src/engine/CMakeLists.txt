@@ -39,7 +39,17 @@ if(NOT FN_ASM_VERIFY AND FRUIT_PLATFORM_WII)
     target_sources(mortar_engine PRIVATE
         render/gl_funcsWii.cpp
         render/DisplayManagerWii.cpp
-        render/BakedFontWii.cpp   # Port specific: prebaked FreeType IA8 glyph store (task #51)
+    )
+endif()
+if(NOT FN_ASM_VERIFY AND FN_PREBAKED_FONTS)
+    # Prebaked FreeType glyph atlas store (task #51/#52/#54; non-Wii support
+    # added under FN_PREBAKED_FONTS) -- the SOLE glyph + face-metric source
+    # whenever this option is ON (no FreeType/stb fallback, see
+    # FontCacheObjectTTF.h/.cpp). Wii: tiled-GX .gxtx pages. Non-Wii: linear
+    # WebP-in-.tex pages. Outer-gated on FN_PREBAKED_FONTS (was
+    # FRUIT_PLATFORM_WII-only) inside the file itself.
+    target_sources(mortar_engine PRIVATE
+        render/BakedFontWii.cpp
     )
 endif()
 # Renderer backend: link-time split (mirrors GameSDL.cpp/GameWii.cpp). The GL
@@ -151,20 +161,23 @@ target_sources(mortar_engine PRIVATE
 )
 # Dynamic TTF glyph rendering -- backend-neutral (see the Mortar::TtfFace
 # seam, src/engine/render/TtfBackend.h). These two TUs never call FreeType or
-# stb_truetype directly, so they compile for every platform including Wii.
-# Non-Wii: FN_TTF_BACKEND below selects exactly which backend .cpp implements
-# the TtfFace seam. Wii: no backend is selected at all (task #54, see below).
+# stb_truetype directly, so they compile for every platform/config including
+# FN_PREBAKED_FONTS builds. FN_TTF_BACKEND below selects exactly which backend
+# .cpp implements the TtfFace seam when FN_PREBAKED_FONTS is OFF; when it is
+# ON no backend is selected at all (task #54, see below).
 target_sources(mortar_engine PRIVATE
     render/FontCacheObjectTTF.cpp
     render/FontTTFRegistry.cpp
 )
-# Task #54: Wii has NO TtfFace backend at all -- FontCacheObjectTTF is guarded
-# FRUIT_PLATFORM_WII to never construct/call one (see that file's m_Face
-# guards); every glyph + face metric comes from the offline-baked FNT3 atlas
-# (BakedFontWii.cpp, added above under the Wii render/*.cpp block). Neither
-# TtfBackendStb.cpp (stb_truetype.h) nor TtfBackendFreetype.cpp is compiled or
-# linked for Wii, and FN_TTF_BACKEND is irrelevant there.
-if (NOT FRUIT_PLATFORM_WII)
+# Task #54: FN_PREBAKED_FONTS builds have NO TtfFace backend at all --
+# FontCacheObjectTTF is guarded FN_PREBAKED_FONTS to never construct/call one
+# (see that file's m_Face guards); every glyph + face metric comes from the
+# offline-baked FNT3 atlas (BakedFontWii.cpp, added above under the
+# FN_PREBAKED_FONTS block) with NO FreeType/stb fallback -- same shape on
+# host/web FN_PREBAKED_FONTS builds as on Wii (where the option is always ON).
+# Neither TtfBackendStb.cpp (stb_truetype.h) nor TtfBackendFreetype.cpp is
+# compiled or linked in that configuration, and FN_TTF_BACKEND is irrelevant.
+if (NOT FN_PREBAKED_FONTS)
     if (FN_TTF_BACKEND STREQUAL "stb")
         target_sources(mortar_engine PRIVATE render/TtfBackendStb.cpp)
         target_include_directories(mortar_engine PRIVATE ${CMAKE_SOURCE_DIR})
@@ -228,7 +241,7 @@ if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
         # No target_link_libraries call needed here.
     endif()
     target_link_libraries(mortar_engine PUBLIC SDL2::SDL2 tinyxml2::tinyxml2)
-    if (FN_TTF_BACKEND STREQUAL "freetype")
+    if (NOT FN_PREBAKED_FONTS AND FN_TTF_BACKEND STREQUAL "freetype")
         target_link_libraries(mortar_engine PUBLIC Freetype::Freetype)
     endif()
     # Port specific: web compressed textures (libwebp). Decoder linked into the

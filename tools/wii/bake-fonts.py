@@ -20,7 +20,7 @@ Usage:
     <bake_plan.json dir>   directory containing bake_plan.json + chars_<lang>.txt
                            (tmp/prebake/ during development)
     <fontstruetype dir>    FruitNinjaBada/Data/fontstruetype/ (gangofchinese.ttf, arabic.ttf)
-    <output dir>           where to write <lang>/<size>.idx + <lang>/<size>_pN.gxtx
+    <output dir>           where to write <lang>/<size>.idx + <lang>/<size>_pN.gxtx (or .tex, see --tex)
 
 Options:
     --lang LANG        bake only this language (repeatable). Default: all in the plan.
@@ -28,8 +28,13 @@ Options:
     --selftest LANG SIZE   dump one (lang,size) atlas to a PNG next to the .idx for
                             eye-verification, then exit (no full bake). Requires Pillow.
     --report PATH       write the coverage-gap + footprint report as JSON to PATH.
+    --tex               non-Wii (FN_PREBAKED_FONTS host/web) atlas encode: pages are
+                         written as "<size>_pN.tex" (lossless WebP-in-.tex, RGBA8888
+                         with R=G=B=255 and A=coverage) instead of Wii "<size>_pN.gxtx"
+                         (native IA8 GXTX). The .idx metrics sidecar is IDENTICAL either
+                         way -- only the page container format changes. Requires Pillow.
 
-Pure FreeType + stdlib; Pillow is optional (only for --selftest PNG dump).
+Pure FreeType + stdlib; Pillow is optional (only for --selftest PNG dump and --tex).
 """
 
 import argparse
@@ -37,6 +42,14 @@ import json
 import os
 import struct
 import sys
+
+# freetype-py loads libfreetype via ctypes.util.find_library, which searches
+# PATH (not the DLL-directory list). On Windows the mingw python that has
+# freetype-py sits next to libfreetype-6.dll in its own bin dir, so put that
+# dir on PATH (correct OS separator) before importing -- makes the bake
+# self-contained regardless of how it's invoked (no external PATH= hack).
+_exedir = os.path.dirname(os.path.abspath(sys.executable))
+os.environ["PATH"] = _exedir + os.pathsep + os.environ.get("PATH", "")
 
 try:
     import freetype
@@ -373,7 +386,32 @@ def build_idx_bytes(glyphs, placements, page_count, atlas_dim, face_metrics):
     return bytes(out)
 
 
-def bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report):
+def encode_tex_page(pixels_ia, dim, dst_path):
+    """Encode one atlas page's [I][A] pixel buffer (see Page.pixels) to a
+    lossless WebP-in-.tex file for the non-Wii FN_PREBAKED_FONTS runtime path
+    (BakedFontWii.cpp non-Wii arm). Coverage lives in the ALPHA channel
+    everywhere (bake writes A, runtime reads A) -- R=G=B=255 so GL_MODULATE
+    tinting works identically to the IA8/GXTX Wii path (which also encodes
+    I=255 always, coverage-only in A). Lossless (not the lossy WEBP_QUALITY
+    stage-assets.py uses for photographic art) so glyph edges stay crisp --
+    reuses the same Pillow WEBP writer stage-assets.py's encode_webp uses,
+    just inlined here so bake-fonts.py has no import dependency on
+    tools/assets/stage-assets.py (a separate CLI tool, not a library)."""
+    from PIL import Image
+    rgba = bytearray(dim * dim * 4)
+    for i in range(dim * dim):
+        a = pixels_ia[i * 2 + 1]
+        rgba[i * 4 + 0] = 255
+        rgba[i * 4 + 1] = 255
+        rgba[i * 4 + 2] = 255
+        rgba[i * 4 + 3] = a
+    img = Image.frombuffer("RGBA", (dim, dim), bytes(rgba), "raw", "RGBA", 0, 1)
+    tmp = dst_path + ".tmp.webp"
+    img.save(tmp, format="WEBP", lossless=True, quality=100)
+    os.replace(tmp, dst_path)
+
+
+def bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report, use_tex=False):
     codepoints = glyph_set_for(plan, plan_dir, lang, size)
     face_path = font_path_for(font_dir, lang)
 
@@ -387,17 +425,23 @@ def bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report):
     lang_dir = os.path.join(out_dir, lang)
     os.makedirs(lang_dir, exist_ok=True)
 
+    page_bytes = []
     for pi, page in enumerate(pages):
-        blob = gx_encoder.encode_gxtx(bytes(page.pixels), page.dim, page.dim, gx_encoder.GX_TF_IA8)
-        with open(os.path.join(lang_dir, "{}_p{}.gxtx".format(size, pi)), "wb") as f:
-            f.write(blob)
+        if use_tex:
+            dst = os.path.join(lang_dir, "{}_p{}.tex".format(size, pi))
+            encode_tex_page(page.pixels, page.dim, dst)
+            page_bytes.append(os.path.getsize(dst))
+        else:
+            blob = gx_encoder.encode_gxtx(bytes(page.pixels), page.dim, page.dim, gx_encoder.GX_TF_IA8)
+            with open(os.path.join(lang_dir, "{}_p{}.gxtx".format(size, pi)), "wb") as f:
+                f.write(blob)
+            page_bytes.append(12 + gx_encoder.tiled_size(page.dim, page.dim, gx_encoder.GX_TF_IA8))
 
     idx_bytes = build_idx_bytes(glyphs, placements, len(pages), pages[0].dim, face_metrics)
     with open(os.path.join(lang_dir, "{}.idx".format(size)), "wb") as f:
         f.write(idx_bytes)
 
-    total_bytes = len(idx_bytes) + sum(
-        12 + gx_encoder.tiled_size(p.dim, p.dim, gx_encoder.GX_TF_IA8) for p in pages)
+    total_bytes = len(idx_bytes) + sum(page_bytes)
 
     entry = {
         "requested": len(codepoints),
@@ -422,7 +466,7 @@ def bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report):
     return pages, glyphs, placements
 
 
-def selftest_dump(plan, plan_dir, font_dir, out_dir, lang, size):
+def selftest_dump(plan, plan_dir, font_dir, out_dir, lang, size, use_tex=False):
     try:
         from PIL import Image
     except ImportError:
@@ -431,7 +475,7 @@ def selftest_dump(plan, plan_dir, font_dir, out_dir, lang, size):
         return 1
 
     report = {}
-    pages, glyphs, placements = bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report)
+    pages, glyphs, placements = bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report, use_tex=use_tex)
 
     lang_dir = os.path.join(out_dir, lang)
     for pi, page in enumerate(pages):
@@ -456,13 +500,16 @@ def main():
     ap.add_argument("--selftest", nargs=2, metavar=("LANG", "SIZE"),
                      help="dump one (lang,size) atlas to a PNG and exit")
     ap.add_argument("--report", metavar="PATH", help="write coverage/footprint JSON report to PATH")
+    ap.add_argument("--tex", action="store_true",
+                     help="non-Wii FN_PREBAKED_FONTS: write pages as lossless WebP-in-.tex "
+                          "instead of Wii GXTX (.idx metrics are unchanged)")
     args = ap.parse_args()
 
     plan = load_bake_plan(args.plan_dir)
 
     if args.selftest:
         lang, size = args.selftest[0], int(args.selftest[1])
-        return selftest_dump(plan, args.plan_dir, args.font_dir, args.out_dir, lang, size)
+        return selftest_dump(plan, args.plan_dir, args.font_dir, args.out_dir, lang, size, use_tex=args.tex)
 
     langs = args.lang if args.lang else sorted(plan["plan"].keys())
     sizes = args.size if args.size else plan["canonical_sizes"]
@@ -471,7 +518,7 @@ def main():
     report = {}
     for lang in langs:
         for size in sizes:
-            bake_one(plan, args.plan_dir, args.font_dir, args.out_dir, lang, size, report)
+            bake_one(plan, args.plan_dir, args.font_dir, args.out_dir, lang, size, report, use_tex=args.tex)
 
     if args.report:
         with open(args.report, "w", encoding="utf-8") as f:

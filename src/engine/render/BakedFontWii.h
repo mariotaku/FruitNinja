@@ -1,18 +1,31 @@
 #ifndef FN_ENGINE_RENDER_BAKEDFONTWII_H
 #define FN_ENGINE_RENDER_BAKEDFONTWII_H
 
-// Mortar::BakedFontWii -- Wii-only runtime loader for the FreeType-prebaked
-// IA8 GXTX font atlases (task #51).
+// Mortar::BakedFontWii -- runtime loader for the FreeType-prebaked font
+// atlases (task #51; non-Wii support added under FN_PREBAKED_FONTS).
 //
-// Port specific: Wii-only. Guarded by FRUIT_PLATFORM_WII everywhere. On host/
-// web the dynamic FreeType/stb atlas (FontCacheObjectTTF + FontInterface) is
-// used unchanged; this store does not exist there.
+// Port specific: no binary counterpart. Guarded by FN_PREBAKED_FONTS
+// everywhere (was FRUIT_PLATFORM_WII-only). Two container formats, selected
+// by platform:
+//   Wii:      GX-tiled IA8 "<size>_pN.gxtx" pages.
+//   non-Wii:  linear RGBA8888 "<size>_pN.tex" pages (lossless WebP-in-.tex,
+//             R=G=B=255, A=coverage), loaded through TextureManager::Load
+//             like any other game texture.
+// Either way this store is the SOLE glyph + face-metric source whenever
+// FN_PREBAKED_FONTS is ON -- no TTF backend (FreeType/stb_truetype) is
+// compiled in alongside it (see src/engine/CMakeLists.txt); there is no
+// FreeType fallback on a baked miss, matching Wii's pre-existing behaviour
+// exactly (the baked glyph set is pruned, task #55, to cover every codepoint
+// the game actually renders, so misses are not expected in practice).
 //
 // WHY: stb_truetype (the Wii TTF backend) clips CJK glyphs and breaks Korean
 // jamo composition. The offline baker (tools/wii/bake-fonts.py) rasterises the
-// correct glyphs with FreeType at bake time into per-(language,size,page) IA8
-// GX-tiled atlas pages (.gxtx) + a metrics sidecar (.idx). This store looks
-// those up at runtime instead of rasterising, so CJK/Korean render correctly.
+// correct glyphs with FreeType at bake time into per-(language,size,page)
+// atlas pages + a metrics sidecar (.idx, IDENTICAL bytes regardless of the
+// page container format). This store looks those up at runtime instead of
+// rasterising, so CJK/Korean render correctly on Wii; on non-Wii it is an
+// opt-in (FN_PREBAKED_FONTS, default OFF) replacement for the dynamic
+// FreeType/stb path, still backed by FreeType at bake time so shapes match.
 //
 // LAYOUT ON DISK (see tools/wii/prebaked-font-format.md for the full spec):
 //   fonts/prebaked/<lang>/<size>.idx        -- 22B FNT3 header (task #54: glyph
@@ -20,8 +33,11 @@
 //                                               ascender/descender/lineHeight)
 //                                               + 20B*glyphCount records,
 //                                               BIG-ENDIAN, sorted by codepoint.
-//   fonts/prebaked/<lang>/<size>_pN.gxtx    -- GXT1 container, GX_TF_IA8, one
-//                                               per atlas page.
+//   fonts/prebaked/<lang>/<size>_pN.gxtx    -- Wii: GXT1 container, GX_TF_IA8,
+//                                               one per atlas page.
+//   fonts/prebaked/<lang>/<size>_pN.tex     -- non-Wii: lossless WebP-in-.tex,
+//                                               RGBA8888 (R=G=B=255, A=coverage),
+//                                               one per atlas page.
 // <lang> is the baker's dir key (english_us, japanese, korean,
 // traditional_chinese, ...). <size> is one of the 9 canonical sizes
 // {10,12,14,16,20,22,30,50,56}; a runtime size request is snapped to the
@@ -32,42 +48,56 @@
 // 480x320->640x480 EFB upscale. BakedGlyphInfo carries the BAKE_SS read from the
 // .idx header; the caller (FontCacheObjectTTF) divides the METRIC px by it to
 // recover LOGICAL layout while keeping the atlas RECT in supersampled texels --
-// the same crisp scheme the host uses with kFontSupersample.
+// the same crisp scheme the host uses with kFontSupersample. (BAKE_SS is baked
+// into the SAME .idx on non-Wii too -- the loader does not special-case it away;
+// it is simply a denser-than-1x atlas there as well.)
 //
 // STORE DESIGN (load / cache / evict):
 //   - Lazy per (size, page): a (lang,size) .idx is parsed on first Lookup for
-//     that size; a page's .gxtx is loaded + uploaded to a GL texture id on the
-//     first Lookup that lands on that page.
+//     that size; a page's on-disk container is loaded + uploaded to a GL
+//     texture id on the first Lookup that lands on that page.
 //   - Only the ACTIVE language is kept resident. SetLanguage(flag) drops the
 //     entire cache (idx + GL textures) when the flag changes, so worst-case
 //     footprint is one language's set (~5MB for Chinese, acceptable).
-//   - GL texture ids come from glGenTextures; pages are uploaded via
+//   - Wii: GL texture ids come from glGenTextures; pages are uploaded via
 //     Wii_UploadTiledGX(GX_TF_IA8) (the same native GX upload path game
 //     textures use). No FontInterface page allocation is involved -- the store
 //     owns its textures directly.
+//   - Non-Wii: pages are loaded via TextureManager::Load (the SmartPtr<Texture>
+//     is kept resident in SizeIndex::pageTexObj so the GL texture is not
+//     freed); the GL id is Texture::GetTexId(). The effect-coverage path
+//     additionally decodes the page's WebP bytes directly (WebPDecodeRGBA) to
+//     get CPU-side linear RGBA -- TextureManager does not retain decoded
+//     pixels after upload, so this store re-decodes the file itself rather
+//     than reading back GL state.
 //
 // LOOKUP CONTRACT: Lookup(cp, requestedSize, out) fills `out` (see
 // BakedGlyphInfo) on a hit and returns true; returns false on a miss (codepoint
-// not baked for the snapped size). The caller (FontCacheObjectTTF::GetGlyph on
-// Wii) maps a hit onto GlyphAtlasEntry; on a miss it renders no glyph at all
-// (task #54: there is no stb/FreeType rasterizer left to fall back to on
-// Wii). Misses are LOG_WARN'd so plan-coverage gaps are diagnosable.
+// not baked for the snapped size). The caller (FontCacheObjectTTF::GetGlyph)
+// maps a hit onto GlyphAtlasEntry; on a miss it renders no glyph at all
+// (task #54: there is no stb/FreeType rasterizer left to fall back to, on
+// Wii or on a non-Wii FN_PREBAKED_FONTS build). Misses are LOG_WARN'd so
+// plan-coverage gaps are diagnosable.
 //
 // FACE METRICS (task #54): the .idx header (FNT3) also carries FACE-LEVEL
 // ascender/descender/lineHeight (captured at bake time from freetype-py's
 // Face.size -- see tools/wii/bake-fonts.py face_metrics_at), in SUPERSAMPLED
 // px like every other metric field. GetAscender/GetDescender/GetLineHeight
 // expose them per (lang, snapped size). This lets FontCacheObjectTTF answer
-// face-metric queries (e.g. Font.cpp's DrawStringTTF ascent-based pen shift)
-// WITHOUT m_Face, which is what makes dropping the runtime TTF open (and
-// stb_truetype entirely) possible on Wii.
+// face-metric queries WITHOUT m_Face (which does not exist whenever
+// FN_PREBAKED_FONTS is ON).
 
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_PREBAKED_FONTS)
 
 #include "render/gl_funcs.h"
 #include <cstdint>
 #include <map>
 #include <vector>
+
+#if !defined(FRUIT_PLATFORM_WII)
+#include "util/SmartPtr.h"
+namespace Mortar { class Texture; }
+#endif
 
 namespace Mortar {
 
@@ -165,9 +195,9 @@ private:
     };
 
     // A parsed (lang,size) index: header fields + sorted glyph records + lazy
-    // per-page GL texture ids (0 until the page's .gxtx is uploaded). tried is
-    // set once a load has been attempted (present==false + tried==true means a
-    // confirmed miss -- do not retry the file every glyph).
+    // per-page GL texture ids (0 until the page's on-disk container is
+    // uploaded). tried is set once a load has been attempted (present==false +
+    // tried==true means a confirmed miss -- do not retry the file every glyph).
     struct SizeIndex {
         bool                  present;   // idx parsed OK
         bool                  tried;     // load attempted (avoid re-open on miss)
@@ -182,13 +212,22 @@ private:
         std::vector<GLuint>   pageTex;   // [pageCount], 0 until uploaded
         std::vector<bool>     pageTried; // [pageCount], upload attempted
 
-        // Lazy raw tiled .gxtx body per page (task #51 effect path only). The
-        // GL-upload path (EnsurePageTexture) frees its buffer after tiling to
-        // GX, so the effect-coverage un-tiler must re-read + keep the tiled
-        // body to sample individual glyph rects. Populated on first
-        // GetGlyphCoverage that lands on the page; NULL/empty until then.
-        // Kept only for pages that ever needed effect coverage.
-        std::vector<std::vector<uint8_t> > pageRaw;      // [pageCount], tiled body (post-header)
+#if !defined(FRUIT_PLATFORM_WII)
+        // Non-Wii: SmartPtr<Texture> holder per page, keeps the GL texture
+        // TextureManager::Load returned alive (pageTex[p] == that texture's
+        // GetTexId()). Parallel to pageTex/pageTried, [pageCount] each.
+        std::vector<Mortar::SmartPtr<Mortar::Texture> > pageTexObj;
+#endif
+
+        // Lazy raw decoded pixel body per page (task #51 effect path only).
+        // Wii: post-header TILED GX body (re-read because EnsurePageTexture's
+        // GL upload path frees its buffer after tiling to GX). Non-Wii: LINEAR
+        // decoded RGBA8888 body (WebPDecodeRGBA output; TextureManager does not
+        // retain decoded pixels after upload, so this store decodes the file
+        // itself). Populated on first GetGlyphCoverage that lands on the page;
+        // NULL/empty until then. Kept only for pages that ever needed effect
+        // coverage.
+        std::vector<std::vector<uint8_t> > pageRaw;      // [pageCount], see above per-platform layout
         std::vector<bool>                  pageRawTried; // [pageCount], read attempted
 
         SizeIndex() : present(false), tried(false), atlasDim(0), pageCount(0),
@@ -213,18 +252,21 @@ private:
     SizeIndex* LoadSizeIndex(int size);
 
     // Ensure page `p` of `si` (size `size`) is uploaded; returns its GL texture
-    // id (0 on failure). Caches the id.
+    // id (0 on failure). Caches the id. Wii: uploads the tiled GXT1 body via
+    // Wii_UploadTiledGX. Non-Wii: TextureManager::Load's the "*_pN.tex"
+    // WebP-in-.tex page and keeps the SmartPtr<Texture> in si->pageTexObj[page]
+    // so the GL texture is not freed.
     GLuint EnsurePageTexture(SizeIndex* si, int size, int page);
 
-    // Ensure page `page`'s raw tiled .gxtx body (past the 12-byte header) is
-    // resident in si->pageRaw for effect-coverage un-tiling. Returns a pointer
-    // to the tiled bytes (NULL on a read/format failure; cached either way).
-    // Also outputs the page's texel dimensions via *pageDim (== atlasDim).
+    // Ensure page `page`'s raw decoded pixel body (see SizeIndex::pageRaw doc)
+    // is resident for effect-coverage sampling. Returns a pointer to the bytes
+    // (NULL on a read/format failure; cached either way). Wii: tiled GXT1 body
+    // past the 12-byte header. Non-Wii: linear RGBA8888 (WebPDecodeRGBA).
     const std::vector<uint8_t>* EnsurePageRaw(SizeIndex* si, int size, int page);
 };
 
 } // namespace Mortar
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_PREBAKED_FONTS
 
 #endif // FN_ENGINE_RENDER_BAKEDFONTWII_H

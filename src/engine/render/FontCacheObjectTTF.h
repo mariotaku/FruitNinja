@@ -6,18 +6,21 @@
 // Port specific: not a binary struct. The binary's IFont / IGlyphCache API
 // (Samsung Bada framework) is replaced by this portable wrapper.
 //
-// Non-Wii (host/web): the actual rasterizer (FreeType or stb_truetype) is
-// selected at CMake configure time via FN_TTF_BACKEND and lives behind the
-// Mortar::TtfFace seam (TtfBackend.h) -- this class only ever calls TtfFace's
-// backend-neutral API, never FT/stb directly. m_Face owns the open .ttf face.
+// FN_PREBAKED_FONTS OFF (host/web default): the actual rasterizer (FreeType
+// or stb_truetype) is selected at CMake configure time via FN_TTF_BACKEND and
+// lives behind the Mortar::TtfFace seam (TtfBackend.h) -- this class only
+// ever calls TtfFace's backend-neutral API, never FT/stb directly. m_Face
+// owns the open .ttf face.
 //
-// Wii (task #51, extended task #54): NO TtfFace / m_Face exists on this
-// platform at all -- the constructor never opens a .ttf file, and neither
-// stb_truetype nor FreeType are linked into the Wii build. Every glyph AND
+// FN_PREBAKED_FONTS ON (Wii: always; host/web: opt-in, task #51/#52/#54):
+// NO TtfFace / m_Face exists at all -- the constructor never opens a .ttf
+// file, and neither stb_truetype nor FreeType are linked in. Every glyph AND
 // every face-level metric (ascender/descender/lineHeight) comes from the
-// offline-baked FNT3 atlas (BakedFontWii, tools/wii/bake-fonts.py) --
-// stb clipped CJK glyphs and broke Korean composition, so this is not merely
-// a fallback preference but the SOLE glyph source on Wii:
+// offline-baked FNT3 atlas (BakedFontWii, tools/wii/bake-fonts.py) -- stb
+// clipped CJK glyphs and broke Korean composition, so this is the SOLE glyph
+// source whenever the option is on, same on host/web as on Wii (the baked
+// glyph set is pruned -- #55 -- to cover every codepoint the game actually
+// renders, so there is no coverage gap to fall back for):
 //   - Plain (effect==NONE) glyphs: mapped straight onto a GlyphAtlasEntry
 //     (TryBakedGlyph).
 //   - Effect (BLUR/STROKE) glyphs: the effect filter (BuildBlur/BuildStrokes)
@@ -26,24 +29,29 @@
 //     baked (correct) size and aligns with the NONE base layer.
 //   - GetAscender/GetDescender/GetLineHeight read BakedFontWii's per-size FNT3
 //     face metrics instead of TtfFace::GetXxx_26_6.
-//   - GetKerningForPair always returns 0.0f (no live caller on Wii; the baked
-//     pen model doesn't consume pair-kerning -- see its body comment).
+//   - GetKerningForPair always returns 0.0f (no live caller; the baked pen
+//     model doesn't consume pair-kerning -- see its body comment).
 // A baked MISS (glyph not in the size's baked subset, or the raw page can't
 // be re-read) renders NO glyph (GetGlyph returns nullptr) -- there is no
-// rasterizer left to fall back to; BakedFontWii::Lookup/GetGlyphCoverage
-// LOG_WARN the coverage gap. The returned GlyphAtlasEntry shape is identical
-// to the non-Wii path either way, so BakedStringTTF / BakedStringBox /
-// Font.cpp are untouched. Host/web never take the baked path.
+// rasterizer left to fall back to (neither FreeType nor stb_truetype are
+// compiled in when FN_PREBAKED_FONTS is ON, see src/engine/CMakeLists.txt);
+// BakedFontWii::Lookup/GetGlyphCoverage LOG_WARN the coverage gap. The
+// returned GlyphAtlasEntry shape is identical to the dynamic path either way,
+// so BakedStringTTF / BakedStringBox / Font.cpp are untouched. The only
+// difference between Wii and a non-Wii FN_PREBAKED_FONTS build is the atlas
+// page container BakedFontWii loads (GX-tiled .gxtx vs. linear WebP-in-.tex)
+// -- that split lives entirely inside BakedFontWii.cpp.
 //
 // Lifecycle:
-//   1. Construct with a path to a .ttf file (ignored on Wii) and a pixel size.
+//   1. Construct with a path to a .ttf file (ignored when FN_PREBAKED_FONTS)
+//      and a pixel size.
 //   2. GetGlyph(cp, pixelSize) returns a GlyphAtlasEntry* (or nullptr if the
 //      codepoint is not in the font), lazily rendering the glyph and packing it
 //      into the shared FontInterface atlas.
 //   3. GetKerningForPair(a, b) returns the kerning advance in pixels (via
-//      TtfFace::GetKerning_26_6 on non-Wii). Always returns 0.0f when the font
-//      has no kern table -- matching the binary's GetKerning stub behaviour
-//      for .fnt fonts.
+//      TtfFace::GetKerning_26_6 when FN_PREBAKED_FONTS is OFF). Always returns
+//      0.0f when the font has no kern table -- matching the binary's
+//      GetKerning stub behaviour for .fnt fonts.
 //
 // Thread safety: not thread-safe; single-threaded game loop is assumed.
 
@@ -53,10 +61,10 @@
 
 namespace Mortar {
 
-#if defined(FRUIT_PLATFORM_WII)
-class BakedFontWii;   // Port specific: Wii prebaked-atlas glyph store (task #51)
+#if defined(FN_PREBAKED_FONTS)
+class BakedFontWii;   // Port specific: prebaked-atlas glyph store (task #51); SOLE glyph source when ON
 #else
-class TtfFace;        // dynamic FreeType/stb backend seam (TtfBackend.h) -- non-Wii only (task #54)
+class TtfFace;        // dynamic FreeType/stb backend seam (TtfBackend.h) -- only when FN_PREBAKED_FONTS is OFF
 #endif
 
 // Port specific: HD font supersampling (binary bakes glyphs at device res; we oversample Nx for crisp upscaling).
@@ -120,11 +128,12 @@ public:
         // 4..11: BEVEL variants -- not ported, no port-side enumerator yet.
     };
 
-    // Loads the TTF face from a file path (non-Wii). pixelSize is the default
-    // pixel height; GetGlyph accepts per-call sizes. Backend (FreeType or
-    // stb_truetype) is chosen at CMake configure time via FN_TTF_BACKEND --
-    // see TtfBackend.h. On Wii, `path` is ignored (task #54): no runtime .ttf
-    // is ever opened; see the class-level comment above.
+    // Loads the TTF face from a file path (when FN_PREBAKED_FONTS is OFF).
+    // pixelSize is the default pixel height; GetGlyph accepts per-call sizes.
+    // Backend (FreeType or stb_truetype) is chosen at CMake configure time via
+    // FN_TTF_BACKEND -- see TtfBackend.h. When FN_PREBAKED_FONTS is ON, `path`
+    // is ignored (task #54): no runtime .ttf is ever opened; see the
+    // class-level comment above.
     FontCacheObjectTTF(const char* path, int defaultPixelSize);
     ~FontCacheObjectTTF();
 
@@ -192,8 +201,8 @@ public:
 #endif
 
 private:
-#if !defined(FRUIT_PLATFORM_WII)
-    TtfFace*    m_Face;            // owned; backend chosen at compile time (TtfBackend.h). Non-Wii only (task #54): Wii never opens a runtime .ttf.
+#if !defined(FN_PREBAKED_FONTS)
+    TtfFace*    m_Face;            // owned; backend chosen at compile time (TtfBackend.h). Only when FN_PREBAKED_FONTS is OFF.
     long        m_CurrentCharHeight; // last charHeight_26_6 passed to m_Face->SetPixelSize
 #endif
     int         m_DefaultPixelSize;
@@ -203,13 +212,14 @@ private:
     // Glyph cache: GlyphCacheKey -> GlyphAtlasEntry (metrics in world units)
     std::map<GlyphCacheKey, GlyphAtlasEntry> m_Cache;
 
-#if defined(FRUIT_PLATFORM_WII)
-    // Port specific (task #51, extended #54): prebaked FreeType IA8 atlas
-    // store -- the SOLE glyph + face-metric source on Wii (no stb/FreeType
-    // linked). Owns one FontAtlasPage per (size,page) so the baked GL texture
-    // flows through the same GlyphAtlasEntry::page / pageTextureID binding
-    // the dynamic atlas uses. Lazily allocated on first Wii GetGlyph/
-    // GetAscender/etc call; active-language-only.
+#if defined(FN_PREBAKED_FONTS)
+    // Port specific (task #51, extended #54): prebaked FreeType atlas store --
+    // the SOLE glyph + face-metric source whenever this option is ON (Wii
+    // always; host/web opt-in). No FreeType/stb fallback -- see GetGlyph.
+    // Owns one FontAtlasPage per (size,page) so the baked GL texture flows
+    // through the same GlyphAtlasEntry::page / pageTextureID binding the
+    // dynamic atlas uses. Lazily allocated on first GetGlyph/GetAscender/etc
+    // call; active-language-only.
     BakedFontWii* m_BakedWii;
     // Stable FontAtlasPage wrappers for baked GL textures, keyed by GL id, so
     // repeated lookups of the same page return the SAME page pointer (surface
@@ -231,13 +241,14 @@ private:
     bool TryBakedEffectGlyph(uint32_t cp, float requestedSize,
                              FONT_EFFECT_ENUM effect, int radius,
                              GlyphAtlasEntry* out);
-#endif
+#endif // FN_PREBAKED_FONTS
 
-#if !defined(FRUIT_PLATFORM_WII)
+#if !defined(FN_PREBAKED_FONTS)
     // Apply TtfFace::SetPixelSize for the given charHeight_26_6 value.
     // charHeight_26_6 = trunc(requestedSize * globalSizeScale * fontScale * 64.0).
-    // Tracks m_CurrentCharHeight to avoid redundant backend calls. Non-Wii
-    // only (task #54): Wii has no TtfFace to set a pixel size on.
+    // Tracks m_CurrentCharHeight to avoid redundant backend calls. Only when
+    // FN_PREBAKED_FONTS is OFF: with it ON there is no TtfFace to set a pixel
+    // size on.
     bool SetCharSize(long charHeight_26_6);
 #endif
 };

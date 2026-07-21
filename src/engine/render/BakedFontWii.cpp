@@ -1,15 +1,23 @@
-// Mortar::BakedFontWii -- Wii prebaked IA8 font atlas loader (task #51).
-// Port specific: Wii-only. See BakedFontWii.h for the store design + on-disk
-// format. Not a binary struct; the binary rasterises glyphs at runtime.
+// Mortar::BakedFontWii -- prebaked font atlas loader (task #51; non-Wii
+// support added under FN_PREBAKED_FONTS). Port specific: no binary
+// counterpart. See BakedFontWii.h for the store design + on-disk format
+// (Wii: GX-tiled IA8 .gxtx pages; non-Wii: linear RGBA8888 WebP-in-.tex
+// pages). Not a binary struct; the binary rasterises glyphs at runtime.
 
 #include "render/BakedFontWii.h"
 
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_PREBAKED_FONTS)
 
+#if defined(FRUIT_PLATFORM_WII)
 #include <gccore.h>               // GX_TF_IA8; must precede gl_funcsWii.h (GXTexObj)
+#include "render/gl_funcsWii.h"   // Wii_UploadTiledGX
+#else
+#include "asset/Texture.h"
+#include "asset/TextureManager.h"
+#include "webp/decode.h"          // WebPGetInfo/WebPDecodeRGBA/WebPFree -- effect-coverage re-decode
+#endif
 
 #include "render/gl_funcs.h"
-#include "render/gl_funcsWii.h"   // Wii_UploadTiledGX
 #include "asset/File.h"
 #include "debug/Logger.h"
 #if defined(FN_BLOCK_PRELOAD)
@@ -30,11 +38,13 @@ namespace Mortar {
 static const int kCanonicalSizes[] = { 10, 12, 14, 16, 20, 22, 30, 50, 56 };
 static const int kCanonicalCount   = 9;
 
+#if defined(FRUIT_PLATFORM_WII)
 // GXT1 container header (BIG-ENDIAN, Wii native), 12 bytes -- same layout the
 // game-texture GXTX reader (TextureFileFormat::ReadGxtx) parses. Fields read
 // via explicit byte assembly so no runtime byte-swap is needed (the file is
 // already Wii-native big-endian).
 static const int kGxtxHeaderSize = 12;
+#endif
 
 // .idx header: 22 bytes (FNT3, task #54 -- FNT2's 16-byte header + 3 s16 face
 // metrics), BIG-ENDIAN.
@@ -118,6 +128,9 @@ void BakedFontWii::Clear() {
     for (std::map<int, SizeIndex>::iterator it = m_Sizes.begin();
          it != m_Sizes.end(); ++it) {
         SizeIndex& si = it->second;
+#if defined(FRUIT_PLATFORM_WII)
+        // Wii: this store owns the GL texture directly (glGenTextures in
+        // EnsurePageTexture) -- delete it here.
         for (size_t p = 0; p < si.pageTex.size(); ++p) {
             if (si.pageTex[p]) {
                 GLuint id = si.pageTex[p];
@@ -125,6 +138,16 @@ void BakedFontWii::Clear() {
                 si.pageTex[p] = 0;
             }
         }
+#else
+        // Non-Wii: the GL texture is owned by the Texture object
+        // (TextureManager::Load), which deletes it in its own destructor --
+        // just drop our SmartPtr refs, never glDeleteTextures it ourselves
+        // (that would race/double-delete against Texture::~Texture).
+        si.pageTexObj.clear();
+        for (size_t p = 0; p < si.pageTex.size(); ++p) {
+            si.pageTex[p] = 0;
+        }
+#endif
     }
     m_Sizes.clear();
 }
@@ -201,6 +224,9 @@ BakedFontWii::SizeIndex* BakedFontWii::LoadSizeIndex(int size) {
     si.lineHeight  = lineHeight;
     si.pageTex.assign((size_t)pageCount, 0);
     si.pageTried.assign((size_t)pageCount, false);
+#if !defined(FRUIT_PLATFORM_WII)
+    si.pageTexObj.assign((size_t)pageCount, Mortar::SmartPtr<Mortar::Texture>());
+#endif
     si.pageRaw.assign((size_t)pageCount, std::vector<uint8_t>());
     si.pageRawTried.assign((size_t)pageCount, false);
     si.glyphs.reserve(glyphCount);
@@ -245,6 +271,7 @@ GLuint BakedFontWii::EnsurePageTexture(SizeIndex* si, int size, int page) {
     if (si->pageTried[page]) return 0;
     si->pageTried[page] = true;
 
+#if defined(FRUIT_PLATFORM_WII)
     char path[256];
     snprintf(path, sizeof(path), "fonts/prebaked/%s/%d_p%d.gxtx",
              m_LangDir, size, page);
@@ -298,6 +325,31 @@ GLuint BakedFontWii::EnsurePageTexture(SizeIndex* si, int size, int page) {
 
     si->pageTex[page] = tex;
     return tex;
+#else
+    // Non-Wii: page is an ordinary lossless-WebP-in-.tex game texture --
+    // TextureManager::Load handles the decode + GL upload (via the existing
+    // ReadWebP reader, TextureFileFormat.cpp) exactly like any other .tex.
+    // Keep the SmartPtr resident (si->pageTexObj) so the GL texture is not
+    // freed once TextureManager's own cache entry would otherwise expire.
+    char path[256];
+    snprintf(path, sizeof(path), "fonts/prebaked/%s/%d_p%d.tex",
+             m_LangDir, size, page);
+
+    Mortar::SmartPtr<Mortar::Texture> tex = Mortar::TextureManager::GetInstance().Load(path);
+    if (!tex.IsValid()) {
+        LOG_WARN("BakedFontWii", "no prebaked page '%s'", path);
+        return 0;
+    }
+    GLuint id = tex->GetTexId();
+    if (!id) {
+        LOG_WARN("BakedFontWii", "page '%s' loaded but has no GL texture id", path);
+        return 0;
+    }
+
+    si->pageTexObj[(size_t)page] = tex;
+    si->pageTex[page] = id;
+    return id;
+#endif
 }
 
 bool BakedFontWii::Lookup(uint32_t cp, float requestedSize, BakedGlyphInfo* out) {
@@ -413,6 +465,7 @@ const std::vector<uint8_t>* BakedFontWii::EnsurePageRaw(SizeIndex* si, int size,
     if (si->pageRawTried[page]) return NULL;
     si->pageRawTried[page] = true;
 
+#if defined(FRUIT_PLATFORM_WII)
     char path[256];
     snprintf(path, sizeof(path), "fonts/prebaked/%s/%d_p%d.gxtx",
              m_LangDir, size, page);
@@ -444,6 +497,52 @@ const std::vector<uint8_t>* BakedFontWii::EnsurePageRaw(SizeIndex* si, int size,
     si->pageRaw[page].assign(buf + kGxtxHeaderSize, buf + fileSize);
     free(buf);
     return &si->pageRaw[page];
+#else
+    // Non-Wii: re-decode the page's WebP-in-.tex bytes directly (WebPDecodeRGBA)
+    // to get CPU-side LINEAR RGBA8888 -- TextureManager doesn't retain decoded
+    // pixels after the GL upload (see Texture.cpp's UploadTex1ToGL), so this
+    // store reads the file itself rather than reading back GL state. Coverage
+    // is the ALPHA channel (byte 3 of each 4-byte texel) -- same convention the
+    // bake writes (encode_tex_page: R=G=B=255, A=coverage).
+    char path[256];
+    snprintf(path, sizeof(path), "fonts/prebaked/%s/%d_p%d.tex",
+             m_LangDir, size, page);
+
+    File file(path, 0, 0);
+    if (!file.Open()) {
+        LOG_WARN("BakedFontWii", "no prebaked page '%s' (effect coverage)", path);
+        return NULL;
+    }
+    unsigned long fileSize = file.Size();
+    if (fileSize == 0) {
+        LOG_WARN("BakedFontWii", "page '%s' empty (effect coverage)", path);
+        return NULL;
+    }
+    uint8_t* buf = (uint8_t*)malloc(fileSize);
+    if (!buf) return NULL;
+    if (!file.Read(buf, fileSize)) {
+        free(buf);
+        LOG_WARN("BakedFontWii", "page '%s' read failed (effect coverage)", path);
+        return NULL;
+    }
+
+    int w = 0, h = 0;
+    if (WebPGetInfo(buf, (size_t)fileSize, &w, &h) == 0) {
+        free(buf);
+        LOG_WARN("BakedFontWii", "page '%s' bad WebP header (coverage)", path);
+        return NULL;
+    }
+    uint8_t* rgba = WebPDecodeRGBA(buf, (size_t)fileSize, &w, &h);
+    free(buf);
+    if (!rgba) {
+        LOG_WARN("BakedFontWii", "page '%s' WebP decode failed (coverage)", path);
+        return NULL;
+    }
+
+    si->pageRaw[page].assign(rgba, rgba + (size_t)w * (size_t)h * 4);
+    WebPFree(rgba);
+    return &si->pageRaw[page];
+#endif
 }
 
 // Un-tile the glyph's ink rect from the IA8 GXTX page into a linear 8-bit
@@ -494,14 +593,15 @@ bool BakedFontWii::GetGlyphCoverage(uint32_t cp, float requestedSize,
     const std::vector<uint8_t>* raw = EnsurePageRaw(si, size, (int)r.page);
     if (!raw) return false;
 
+    const int gw = (int)r.w, gh = (int)r.h;
+    const int gx = (int)r.x, gy = (int)r.y;
+    out->alpha.assign((size_t)gw * (size_t)gh, 0);
+
+#if defined(FRUIT_PLATFORM_WII)
     const int atlasDim    = si->atlasDim;
     const int tilesPerRow = (atlasDim + 3) / 4;
     const uint8_t* body   = &(*raw)[0];
     const size_t   bodyN  = raw->size();
-
-    const int gw = (int)r.w, gh = (int)r.h;
-    const int gx = (int)r.x, gy = (int)r.y;
-    out->alpha.assign((size_t)gw * (size_t)gh, 0);
 
     for (int ry = 0; ry < gh; ++ry) {
         const int py = gy + ry;
@@ -516,9 +616,28 @@ bool BakedFontWii::GetGlyphCoverage(uint32_t cp, float requestedSize,
             }
         }
     }
+#else
+    // Non-Wii: raw is LINEAR decoded RGBA8888 (EnsurePageRaw), atlasDim texels
+    // per row -- no detiling needed, just read the ALPHA (coverage) channel of
+    // each texel in the glyph's rect.
+    const int atlasDim   = si->atlasDim;
+    const uint8_t* body  = &(*raw)[0];
+    const size_t   bodyN = raw->size();
+
+    for (int ry = 0; ry < gh; ++ry) {
+        const int py = gy + ry;
+        for (int rx = 0; rx < gw; ++rx) {
+            const int px = gx + rx;
+            const size_t off = ((size_t)py * (size_t)atlasDim + (size_t)px) * 4 + 3;
+            if (off < bodyN) {
+                out->alpha[(size_t)ry * gw + rx] = body[off];
+            }
+        }
+    }
+#endif
     return true;
 }
 
 } // namespace Mortar
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_PREBAKED_FONTS

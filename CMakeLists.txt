@@ -64,6 +64,22 @@ if(FRUIT_PLATFORM_WII)
     set(FN_ENABLE_HD_ASSETS OFF)
 endif()
 
+# --- Prebaked bitmap font atlases (FreeType-baked, offline) ---
+# Wii (task #51/#52/#54): the SOLE glyph source -- stb_truetype clips CJK
+# glyphs and breaks Korean composition, and no TTF backend links on Wii at
+# all. Default ON there (existing behaviour, unconditional).
+#
+# Non-Wii (host/web): same shape, opt-in. When ON, the prebaked atlas is
+# likewise the SOLE glyph source -- FontCacheObjectTTF's TtfFace path (both
+# FreeType and stb_truetype) is excluded from the build entirely (see
+# src/engine/CMakeLists.txt), no fallback on a baked miss. The baked glyph
+# set is pruned (task #55) to cover every codepoint the game actually
+# renders, so this is safe. Default OFF: zero behaviour change on host/web
+# unless a dev opts in with -DFN_PREBAKED_FONTS=ON (and has baked
+# tools/wii/bake-fonts.py --tex output staged under fonts/prebaked -- see
+# the fn_prebaked_fonts target below).
+option(FN_PREBAKED_FONTS "Prebaked bitmap font atlases (FreeType-baked offline)" ${FRUIT_PLATFORM_WII})
+
 # --- Block-preload resource loader (task #36) ---
 # Force-loads a screen/mode's texture/SFX/mesh/font manifest synchronously at
 # a block-entry hook (GameModeScreen::SetupLevel, ShopScreen ctor, etc)
@@ -103,6 +119,14 @@ endif()
 # by TextureManager::Load. Defined engine-wide so the asset layer sees it.
 if (FN_ENABLE_HD_ASSETS)
     add_compile_definitions(FN_ENABLE_HD_ASSETS=1)
+endif()
+
+# Prebaked font atlas gate (see the FN_PREBAKED_FONTS option above). Consumed
+# by src/engine/render/BakedFontWii.{h,cpp} (outer guard, was FRUIT_PLATFORM_WII
+# only) and the prebaked-atlas branches in FontCacheObjectTTF.{h,cpp} /
+# BakedStringTTF.cpp.
+if (FN_PREBAKED_FONTS)
+    add_compile_definitions(FN_PREBAKED_FONTS=1)
 endif()
 
 # Block-preload loader gate (see the FN_BLOCK_PRELOAD option above). Consumed
@@ -770,11 +794,77 @@ if(NOT FN_ASM_VERIFY)
         COMMENT "Staging assets (svg->webp via resvg-py; textures->WebP; web:+ogg+font)"
         VERBATIM
     )
+
+    # --- Prebaked font bake, non-Wii (FN_PREBAKED_FONTS) ---
+    # Host/web counterpart of the Wii fn_wii_fonts target below (see that
+    # target's comment for the full rationale) -- runs tools/wii/bake-fonts.py
+    # with --tex so pages land as lossless WebP-in-.tex instead of Wii GXTX
+    # (the .idx metrics sidecar is identical either way; see BakedFontWii.cpp's
+    # non-Wii arm). Same graceful-skip shape as fn_wii_fonts: no
+    # tmp/prebake/bake_plan.json, or no freetype-py on the bake interpreter,
+    # just means fonts/prebaked stays empty -- BUT NOTE this configuration has
+    # NO FreeType/stb fallback (same as Wii; see FontCacheObjectTTF's
+    # FN_PREBAKED_FONTS guards + src/engine/CMakeLists.txt's TU exclusion), so
+    # a skipped bake means text renders nothing on an FN_PREBAKED_FONTS=ON
+    # build. Only opt in once a bake is actually staged.
+    if (FN_PREBAKED_FONTS AND NOT FRUIT_PLATFORM_WII)
+        # Windows-form path (NOT the MSYS "/mingw64/..." form) so the native
+        # host/emscripten cmake can resolve it; overridable via -D on other
+        # setups. bake-fonts.py self-provisions its libfreetype DLL search.
+        set(FN_PREBAKED_FONTS_PYTHON "C:/msys64/mingw64/bin/python.exe" CACHE FILEPATH
+            "Python interpreter (with freetype-py) used to bake non-Wii prebaked fonts")
+
+        set(_fn_prebaked_bake_plan "${CMAKE_SOURCE_DIR}/tmp/prebake/bake_plan.json")
+        set(_fn_prebaked_bake_ok FALSE)
+        if (EXISTS "${_fn_prebaked_bake_plan}")
+            # Mirror bake-fonts.py's self-contained DLL search (prepend the
+            # interpreter's own dir to PATH so freetype-py finds libfreetype),
+            # rather than a hardcoded PATH=/mingw64/bin which is malformed on a
+            # native Windows cmake (wrong separator/path form).
+            execute_process(
+                COMMAND "${FN_PREBAKED_FONTS_PYTHON}" -c "import os,sys; os.environ['PATH']=os.path.dirname(os.path.abspath(sys.executable))+os.pathsep+os.environ.get('PATH',''); import freetype"
+                RESULT_VARIABLE _fn_prebaked_bake_python_rc
+                OUTPUT_QUIET ERROR_QUIET
+            )
+            if (_fn_prebaked_bake_python_rc EQUAL 0)
+                set(_fn_prebaked_bake_ok TRUE)
+            endif()
+        endif()
+
+        if (_fn_prebaked_bake_ok)
+            message(STATUS "Prebaked fonts: bake enabled (${FN_PREBAKED_FONTS_PYTHON})")
+            add_custom_target(fn_prebaked_fonts
+                # bake-fonts.py self-provisions its libfreetype DLL search (adds
+                # the interpreter's own dir to PATH), so no external PATH= hack.
+                COMMAND "${FN_PREBAKED_FONTS_PYTHON}" "${CMAKE_SOURCE_DIR}/tools/wii/bake-fonts.py"
+                        "${CMAKE_SOURCE_DIR}/tmp/prebake"
+                        "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data/fontstruetype"
+                        "${FN_STAGING_DATA_DIR}/fonts/prebaked"
+                        --tex
+                COMMENT "Baking non-Wii prebaked font atlases (freetype-py, WebP-in-.tex)"
+                VERBATIM
+            )
+            add_dependencies(fn_prebaked_fonts fn_asset_staging)
+            # fruit-ninja does not exist yet at this point in the file (it is
+            # created per-platform further below) -- each add_executable(fruit-ninja)
+            # branch adds this dependency itself, guarded the same way.
+        else()
+            message(WARNING
+                "Prebaked fonts: bake SKIPPED (no tmp/prebake/bake_plan.json, "
+                "or ${FN_PREBAKED_FONTS_PYTHON} lacks freetype-py) -- fonts/prebaked "
+                "will be empty and FN_PREBAKED_FONTS builds have NO FreeType/stb "
+                "fallback, so text will render nothing until a bake is staged")
+        endif()
+    endif()
+
 if (EMSCRIPTEN)
     # Port specific: Emscripten entry point uses emscripten_set_main_loop_arg
     # instead of the blocking Game::run() loop.
     add_executable(fruit-ninja src/mainEmscripten.cpp)
     add_dependencies(fruit-ninja fn_asset_staging)
+    if (TARGET fn_prebaked_fonts)
+        add_dependencies(fruit-ninja fn_prebaked_fonts)
+    endif()
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
     target_link_options(fruit-ninja PRIVATE
         "SHELL:-sUSE_SDL=2"
@@ -1026,6 +1116,9 @@ else()
     endif()
     add_executable(fruit-ninja ${_fn_native_sources})
     add_dependencies(fruit-ninja fn_asset_staging)
+    if (TARGET fn_prebaked_fonts)
+        add_dependencies(fruit-ninja fn_prebaked_fonts)
+    endif()
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
 
     # Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds
