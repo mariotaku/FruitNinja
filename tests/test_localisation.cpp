@@ -15,8 +15,9 @@
 #include <cstdlib>
 #include <cstring>
 
-static const char* DATA_DIR_DEFAULT =
-    "C:/Users/Mariotaku/Projects/webosbrew/fruit-ninja/FruitNinjaBada/Data";
+// FN_BADA_DATA_DIR is injected by tests/CMakeLists.txt as
+// "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data" -- portable across machines/checkouts.
+static const char* DATA_DIR_DEFAULT = FN_BADA_DATA_DIR;
 
 struct TestKey {
     const char* key;

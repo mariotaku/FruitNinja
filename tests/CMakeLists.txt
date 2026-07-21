@@ -301,6 +301,11 @@ target_link_libraries(test_localisation PRIVATE fruit-ninja-game mortar_engine)
 target_include_directories(test_localisation PRIVATE
     ${CMAKE_SOURCE_DIR}/src/engine
 )
+# Portable default data dir (was a hardcoded C:/Users/Mariotaku/... machine path).
+# Points at the raw Bada asset tree (not FN_STAGING_DATA_DIR) -- StringTable::Load
+# reads translations_*.str directly and doesn't need the WebP-transcoded staging copy.
+target_compile_definitions(test_localisation PRIVATE
+    FN_BADA_DATA_DIR="${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data")
 add_test(NAME localisation COMMAND test_localisation)
 
 # MatrixManager singleton + matrix math correctness.

@@ -15,15 +15,7 @@ IMAGE="${ASM_VERIFY_IMAGE:-fnverify-bada}"
 # Normalise project root to a docker-friendly path. On Git Bash / MSYS the
 # CWD looks like /c/Users/..., but docker (Rancher Desktop / Docker Desktop
 # on Windows) wants C:/Users/... or //c/Users/... for bind-mounts.
-to_docker_path() {
-    local p="$1"
-    if [[ "$p" =~ ^/([A-Za-z])/(.*)$ ]]; then
-        local d="${BASH_REMATCH[1]^^}"
-        printf '%s:/%s' "$d" "${BASH_REMATCH[2]}"
-        return
-    fi
-    printf '%s' "$p"
-}
+source "$SCRIPT_DIR/../lib/docker-paths.sh"
 PROJECT_ROOT_DOCKER="$(to_docker_path "$PROJECT_ROOT")"
 
 if ! command -v docker > /dev/null; then
