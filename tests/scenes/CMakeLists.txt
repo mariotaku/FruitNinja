@@ -45,22 +45,16 @@ macro(add_scene_test _target _source)
 
     # Copy SDL2.dll next to the exe on Windows so it can be run in-place.
     if (WIN32 AND TARGET SDL2::SDL2)
-        set(_sdl2_real SDL2::SDL2)
-        get_target_property(_alias ${_sdl2_real} ALIASED_TARGET)
-        if (_alias)
-            set(_sdl2_real ${_alias})
-        endif()
-        get_target_property(_sdl2_type ${_sdl2_real} TYPE)
-        if (_sdl2_type STREQUAL "SHARED_LIBRARY")
-            add_custom_command(TARGET ${_target} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_FILE:SDL2::SDL2>
-                    $<TARGET_FILE_DIR:${_target}>)
-        endif()
+        fn_copy_dll_dependency(${_target} SDL2::SDL2)
     endif()
 
     # Copy SDL2_image.dll (and any bundled format DLLs) next to the exe.
     if (WIN32 AND TARGET SDL2_image::SDL2_image)
+        fn_copy_dll_dependency(${_target} SDL2_image::SDL2_image)
+
+        # Also copy any sibling DLLs from the same directory (optional codec
+        # DLLs such as libpng16-16.dll, libjpeg-9.dll, etc.) -- not part of the
+        # shared helper since it's specific to this multi-DLL zip layout.
         set(_sdl2img_real SDL2_image::SDL2_image)
         get_target_property(_sdl2img_alias ${_sdl2img_real} ALIASED_TARGET)
         if (_sdl2img_alias)
@@ -68,10 +62,6 @@ macro(add_scene_test _target _source)
         endif()
         get_target_property(_sdl2img_type ${_sdl2img_real} TYPE)
         if (_sdl2img_type STREQUAL "SHARED_LIBRARY")
-            add_custom_command(TARGET ${_target} POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_FILE:SDL2_image::SDL2_image>
-                    $<TARGET_FILE_DIR:${_target}>)
             get_target_property(_sdl2img_loc ${_sdl2img_real} IMPORTED_LOCATION)
             get_filename_component(_sdl2img_dir "${_sdl2img_loc}" DIRECTORY)
             file(GLOB _sdl2img_extra_dlls "${_sdl2img_dir}/*.dll")

@@ -63,12 +63,7 @@ target_sources(fruit-ninja-game PRIVATE
 # browser app-control to hand off to), LicensingSDL.cpp everywhere else
 # (SDL_OpenURL) -- mirrors the GameSDL.cpp/GameWii.cpp swap in the root
 # CMakeLists.txt.
-if(FRUIT_PLATFORM_WII)
-    target_sources(fruit-ninja-game PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/LicensingWii.cpp
-    )
-else()
-    target_sources(fruit-ninja-game PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/LicensingSDL.cpp
-    )
-endif()
+fn_add_platform_source(_fn_licensing_platform_src
+    ${CMAKE_CURRENT_SOURCE_DIR}/LicensingWii.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/LicensingSDL.cpp)
+target_sources(fruit-ninja-game PRIVATE ${_fn_licensing_platform_src})

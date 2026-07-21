@@ -80,6 +80,99 @@ if (FN_ENABLE_HD_ASSETS)
     add_compile_definitions(FN_ENABLE_HD_ASSETS=1)
 endif()
 
+# --- fn_add_platform_source (task #63 item #8 dedup) ---
+# Picks WII_SRC when FRUIT_PLATFORM_WII is ON, else DEFAULT_SRC, and writes the
+# chosen path into OUT_VAR. Factors the `if(FRUIT_PLATFORM_WII) ... else() ...`
+# platform-source twins that recur across this file, src/game/CMakeLists.txt,
+# and src/engine/CMakeLists.txt (Game/GameWii, Licensing/LicensingWii,
+# Renderer GL/GX) -- those pick exactly one file, nothing else differs.
+macro(fn_add_platform_source OUT_VAR WII_SRC DEFAULT_SRC)
+    if (FRUIT_PLATFORM_WII)
+        set(${OUT_VAR} ${WII_SRC})
+    else()
+        set(${OUT_VAR} ${DEFAULT_SRC})
+    endif()
+endmacro()
+
+# --- fn_copy_dll_dependency (task #63 item #4 dedup) ---
+# Copies a dependency's runtime DLL next to a target's output directory on
+# Windows, POST_BUILD. Resolves DEP_TARGET through ALIASED_TARGET first (the
+# SDL2::SDL2 / SDL2_image::SDL2_image aliases point at different underlying
+# targets depending on which acquisition tier provided them -- system,
+# IMPORTED SHARED prebuilt zip, or a FetchContent source build) and only
+# copies when the resolved target's TYPE is SHARED_LIBRARY (a system/
+# interface target has no importable file location, so the generator
+# expression would be empty -- skipping avoids a hard configure error).
+#
+# Mirrors the shape shared by tests/CMakeLists.txt's fn_add_game_test and
+# tests/scenes/CMakeLists.txt's add_scene_test (SDL2 + SDL2_image copies).
+# NOT used at the root fruit-ninja.exe site: that one intentionally uses an
+# OUTPUT-form stamp file instead of POST_BUILD (see the copy_sdl2_dll comment
+# there) so the COMMENT only prints on an actual copy, not every build; the
+# WIN32-vs-non-WIN32 + TARGET-existence guards must still be applied by the
+# caller (this macro assumes both are already true).
+#
+# Params:
+#   TGT            target to attach the POST_BUILD copy to
+#   DEP_TARGET     dependency target to resolve + copy (e.g. SDL2::SDL2)
+macro(fn_copy_dll_dependency TGT DEP_TARGET)
+    set(_fn_dll_real_target ${DEP_TARGET})
+    get_target_property(_fn_dll_alias ${_fn_dll_real_target} ALIASED_TARGET)
+    if (_fn_dll_alias)
+        set(_fn_dll_real_target ${_fn_dll_alias})
+    endif()
+    get_target_property(_fn_dll_type ${_fn_dll_real_target} TYPE)
+    if (_fn_dll_type STREQUAL "SHARED_LIBRARY")
+        add_custom_command(TARGET ${TGT} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                $<TARGET_FILE:${DEP_TARGET}>
+                $<TARGET_FILE_DIR:${TGT}>)
+    endif()
+endmacro()
+
+# --- fn_fetch_prebuilt_msvc_zip (task #63 item #5 dedup) ---
+# Shared sub-part of the SDL2 / SDL2_image "3-tier" dependency acquisition
+# (system/find_package -> prebuilt-zip FetchContent -> source FetchContent):
+# the MSVC-only prebuilt-zip tier. Declares + fetches a libsdl-org release
+# zip, then wires an IMPORTED SHARED <NS>::<NAME> target from its lib/x64
+# layout (both SDL2-devel-*-VC.zip and SDL2_image-devel-*-VC.zip share this
+# layout). URL_HASH is optional (SDL2_image's zip release doesn't pin one).
+#
+# The two callers diverge beyond this tier -- SDL2 additionally has an
+# Emscripten branch and a non-MSVC GIT_REPOSITORY source-build fallback;
+# SDL2_image has neither (it's test-only, never built for web, and MSVC-only
+# for the zip path with just a warning elsewhere) -- so those tiers stay
+# inline at each call site rather than forcing a single mega-macro.
+#
+# Params:
+#   FC_NAME       FetchContent_Declare name (e.g. SDL2_prebuilt_msvc)
+#   URL           zip URL
+#   URL_HASH      SHA256=... or "" to omit
+#   NS_TARGET     the IMPORTED SHARED target to define (e.g. SDL2::SDL2)
+#   DLL_BASENAME  DLL/lib basename without extension (e.g. SDL2, SDL2_image)
+#   OUT_FOUND     variable set to TRUE on success (mirrors *_FOUND)
+function(fn_fetch_prebuilt_msvc_zip FC_NAME URL URL_HASH NS_TARGET DLL_BASENAME OUT_FOUND)
+    if (URL_HASH)
+        FetchContent_Declare(${FC_NAME} URL ${URL} URL_HASH ${URL_HASH})
+    else()
+        FetchContent_Declare(${FC_NAME} URL ${URL})
+    endif()
+    FetchContent_MakeAvailable(${FC_NAME})
+
+    string(TOLOWER ${FC_NAME} _fn_fc_name_lower)
+    set(_fn_zip_root "${${_fn_fc_name_lower}_SOURCE_DIR}")
+    set(_fn_zip_arch "x64")  # FN binary is 64-bit MSVC
+    set(_fn_zip_lib_dir "${_fn_zip_root}/lib/${_fn_zip_arch}")
+
+    add_library(${NS_TARGET} SHARED IMPORTED)
+    set_target_properties(${NS_TARGET} PROPERTIES
+        IMPORTED_LOCATION             "${_fn_zip_lib_dir}/${DLL_BASENAME}.dll"
+        IMPORTED_IMPLIB               "${_fn_zip_lib_dir}/${DLL_BASENAME}.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${_fn_zip_root}/include")
+
+    set(${OUT_FOUND} TRUE PARENT_SCOPE)
+endfunction()
+
 # Used to invoke tools/assets/stage-assets.py (asset staging: textures ->
 # WebP for both host + web) and tools/web/web-hash-assets.py (web cache
 # busting) portably -- avoids relying on a `python3` shim being on PATH
@@ -295,28 +388,17 @@ else()
     find_package(SDL2 QUIET)
     if (NOT SDL2_FOUND AND MSVC)
         message(STATUS "System SDL2 not found -- fetching prebuilt MSVC zip ${_SDL2_VER}")
-        FetchContent_Declare(
+        fn_fetch_prebuilt_msvc_zip(
             SDL2_prebuilt_msvc
-            URL      https://github.com/libsdl-org/SDL/releases/download/release-${_SDL2_VER}/SDL2-devel-${_SDL2_VER}-VC.zip
-            URL_HASH SHA256=6e524b5f0e3ecd9fe3b439336b5e7c3fe597e8823e8e62c8e3074d335e9ca7d9
-        )
-        FetchContent_MakeAvailable(SDL2_prebuilt_msvc)
+            "https://github.com/libsdl-org/SDL/releases/download/release-${_SDL2_VER}/SDL2-devel-${_SDL2_VER}-VC.zip"
+            "SHA256=6e524b5f0e3ecd9fe3b439336b5e7c3fe597e8823e8e62c8e3074d335e9ca7d9"
+            SDL2::SDL2 SDL2 SDL2_FOUND)
 
-        set(_sdl2_root "${sdl2_prebuilt_msvc_SOURCE_DIR}")
-        set(_sdl2_arch "x64")  # FN binary is 64-bit MSVC
-        set(_sdl2_lib_dir "${_sdl2_root}/lib/${_sdl2_arch}")
-
-        add_library(SDL2::SDL2 SHARED IMPORTED)
-        set_target_properties(SDL2::SDL2 PROPERTIES
-            IMPORTED_LOCATION             "${_sdl2_lib_dir}/SDL2.dll"
-            IMPORTED_IMPLIB               "${_sdl2_lib_dir}/SDL2.lib"
-            INTERFACE_INCLUDE_DIRECTORIES "${_sdl2_root}/include")
-
+        # SDL2main has no counterpart in the shared zip-fetch helper (SDL2_image
+        # ships no *main target) -- wire it directly from the same lib dir.
         add_library(SDL2::SDL2main STATIC IMPORTED)
         set_target_properties(SDL2::SDL2main PROPERTIES
-            IMPORTED_LOCATION "${_sdl2_lib_dir}/SDL2main.lib")
-
-        set(SDL2_FOUND TRUE)
+            IMPORTED_LOCATION "${sdl2_prebuilt_msvc_SOURCE_DIR}/lib/x64/SDL2main.lib")
     endif()
 
     if (NOT SDL2_FOUND)
@@ -358,23 +440,11 @@ if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
 find_package(SDL2_image QUIET)
 if (NOT SDL2_image_FOUND AND MSVC)
     message(STATUS "System SDL2_image not found -- fetching prebuilt MSVC zip ${_SDL2_IMAGE_VER}")
-    FetchContent_Declare(
+    fn_fetch_prebuilt_msvc_zip(
         SDL2_image_prebuilt_msvc
-        URL https://github.com/libsdl-org/SDL_image/releases/download/release-${_SDL2_IMAGE_VER}/SDL2_image-devel-${_SDL2_IMAGE_VER}-VC.zip
-    )
-    FetchContent_MakeAvailable(SDL2_image_prebuilt_msvc)
-
-    set(_sdl2img_root "${sdl2_image_prebuilt_msvc_SOURCE_DIR}")
-    set(_sdl2img_arch "x64")
-    set(_sdl2img_lib_dir "${_sdl2img_root}/lib/${_sdl2img_arch}")
-
-    add_library(SDL2_image::SDL2_image SHARED IMPORTED)
-    set_target_properties(SDL2_image::SDL2_image PROPERTIES
-        IMPORTED_LOCATION             "${_sdl2img_lib_dir}/SDL2_image.dll"
-        IMPORTED_IMPLIB               "${_sdl2img_lib_dir}/SDL2_image.lib"
-        INTERFACE_INCLUDE_DIRECTORIES "${_sdl2img_root}/include")
-
-    set(SDL2_image_FOUND TRUE)
+        "https://github.com/libsdl-org/SDL_image/releases/download/release-${_SDL2_IMAGE_VER}/SDL2_image-devel-${_SDL2_IMAGE_VER}-VC.zip"
+        ""
+        SDL2_image::SDL2_image SDL2_image SDL2_image_FOUND)
 endif()
 
 if (NOT SDL2_image_FOUND AND NOT MSVC)
@@ -558,11 +628,8 @@ endif()
 if(NOT FN_ASM_VERIFY)
     # Platform twin for the Game:: methods (init/pollInput/step/render/run):
     # GameWii.cpp on Wii (GX, no SDL), GameSDL.cpp everywhere else.
-    if(FRUIT_PLATFORM_WII)
-        add_library(fruit-ninja-game STATIC src/Game.cpp src/GameWii.cpp)
-    else()
-        add_library(fruit-ninja-game STATIC src/Game.cpp src/GameSDL.cpp)
-    endif()
+    fn_add_platform_source(_fn_game_platform_src src/GameWii.cpp src/GameSDL.cpp)
+    add_library(fruit-ninja-game STATIC src/Game.cpp ${_fn_game_platform_src})
     target_include_directories(fruit-ninja-game PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_BINARY_DIR}

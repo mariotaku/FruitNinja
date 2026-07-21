@@ -46,11 +46,8 @@ endif()
 # backend (RendererGL.cpp) drives every platform whose gl* is real GL or the
 # GX shim's baseline; the Wii native path swaps in RendererGX.cpp, which issues
 # GX draws directly (separate proj + modelview -> correct 3D perspective).
-if(FRUIT_PLATFORM_WII)
-    target_sources(mortar_engine PRIVATE render/RendererGX.cpp)
-else()
-    target_sources(mortar_engine PRIVATE render/RendererGL.cpp)
-endif()
+fn_add_platform_source(_fn_renderer_platform_src render/RendererGX.cpp render/RendererGL.cpp)
+target_sources(mortar_engine PRIVATE ${_fn_renderer_platform_src})
 if(NOT FN_ASM_VERIFY)
     target_sources(mortar_engine PRIVATE
         render/NineSlice.cpp        # Port specific: 9-slice panel draw (no binary counterpart)
