@@ -55,6 +55,7 @@ Idempotent: an output .tex newer than its source .svg is skipped.
 
 import io
 import os
+import shutil
 import struct
 import subprocess
 import sys
@@ -80,6 +81,23 @@ MANIFEST = {
 }
 
 
+def _can_apt_install():
+    """True if we can apt-get install: running as root with apt-get on PATH
+    (i.e. inside the emscripten/emsdk container). Mirrors stage-assets.py."""
+    if shutil.which("apt-get") is None:
+        return False
+    geteuid = getattr(os, "geteuid", None)
+    return geteuid is not None and geteuid() == 0
+
+
+def _apt_install(pkg):
+    print("[svg-to-webp] installing {} via apt-get".format(pkg))
+    if subprocess.run(["apt-get", "update", "-qq"]).returncode != 0:
+        raise RuntimeError("apt-get update failed while installing {}".format(pkg))
+    if subprocess.run(["apt-get", "install", "-y", "-qq", pkg]).returncode != 0:
+        raise RuntimeError("apt-get install {} failed".format(pkg))
+
+
 def _ensure_deps():
     global resvg_py, Image
     try:
@@ -88,21 +106,40 @@ def _ensure_deps():
         return
     except ImportError:
         pass
-    print("[svg-to-webp] resvg_py or Pillow not found, running pip install")
-    pip_cmd = [sys.executable, "-m", "pip", "install"]
-    pkgs = ["resvg-py", "Pillow"]
+
+    # Pillow: use the SYSTEM package (apt python3-pil) inside the PEP 668
+    # externally-managed emsdk/CI container; plain pip on a bare host. Mirrors
+    # stage-assets.py's _ensure_pillow -- avoids --break-system-packages.
     try:
-        subprocess.check_call(pip_cmd + pkgs)
-    except subprocess.CalledProcessError:
-        # PEP 668 externally-managed environments (e.g. the emsdk CI Docker
-        # image's system python) refuse a plain `pip install`; retry with
-        # --break-system-packages (pip >= 23.0.1). stage-assets.py handles the
-        # same case for its deps.
-        print("[svg-to-webp] pip refused (PEP 668 externally-managed?); "
-              "retrying with --break-system-packages")
-        subprocess.check_call(pip_cmd + ["--break-system-packages"] + pkgs)
-    import resvg_py  # noqa: F401
+        from PIL import Image  # noqa: F401
+    except ImportError:
+        print("[svg-to-webp] Pillow not found")
+        if _can_apt_install():
+            _apt_install("python3-pil")
+        else:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
+
+    # resvg-py has NO system package (apt only ships librsvg, a different
+    # engine), so it must come from pip -- but install it into a --target dir
+    # rather than the environment. That is PEP 668-clean (no
+    # --break-system-packages) and works both in the container and on a bare
+    # host. Cached under build/ so it's fetched once.
+    try:
+        import resvg_py  # noqa: F401
+    except ImportError:
+        print("[svg-to-webp] resvg_py not found, pip install --target")
+        repo_root = os.path.abspath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+        target = os.path.join(repo_root, "build", ".pydeps")
+        os.makedirs(target, exist_ok=True)
+        subprocess.check_call([sys.executable, "-m", "pip", "install",
+                               "--target", target, "resvg-py"])
+        if target not in sys.path:
+            sys.path.insert(0, target)
+        import resvg_py  # noqa: F401
+
     from PIL import Image  # noqa: F401
+    import resvg_py  # noqa: F401
 
 
 _ensure_deps()
