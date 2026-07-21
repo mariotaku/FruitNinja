@@ -511,6 +511,10 @@ if(FRUIT_PLATFORM_WII AND NOT TARGET tinyxml2::tinyxml2)
         tinyxml2
         GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
         GIT_TAG        10.0.0
+        # EXCLUDE_FROM_ALL (CMake 3.28+): keep tinyxml2's own install() rules out
+        # of our install/CPack package -- otherwise its header + static lib +
+        # cmake/pkgconfig files leak into the shippable apps/ zip (include/, lib/).
+        EXCLUDE_FROM_ALL
     )
     FetchContent_MakeAvailable(tinyxml2)
 endif()
@@ -793,7 +797,110 @@ elseif (FRUIT_PLATFORM_WII)
     target_link_libraries(fruit-ninja PRIVATE
         fruit-ninja-game
         -lfat -lwiiuse -lbte -lasnd -logc -lm)
-    # TODO(wii): elf2dol POST_BUILD step to produce fruit-ninja.dol.
+
+    # --- elf2dol (POST_BUILD) ---
+    # cmake --build alone only produces fruit-ninja.elf; the Homebrew Channel
+    # loads a .dol. Previously tools/wii/build.sh manually re-ran elf2dol with
+    # an mtime guard after every `cmake --build`; folding it into the target's
+    # own POST_BUILD means `cmake --build build/wii` alone always regenerates
+    # boot.dol from the just-linked .elf -- no separate script/step needed, and
+    # no possibility of shipping a stale .dol (the mtime-guard trap build.sh
+    # used to work around no longer exists because there's nothing to guard).
+    find_program(FN_ELF2DOL elf2dol HINTS "$ENV{DEVKITPRO}/tools/bin")
+    if (NOT FN_ELF2DOL)
+        message(FATAL_ERROR
+            "elf2dol not found (looked on PATH and in $DEVKITPRO/tools/bin). "
+            "Install devkitPro's general-tools package.")
+    endif()
+    add_custom_command(TARGET fruit-ninja POST_BUILD
+        COMMAND ${FN_ELF2DOL} $<TARGET_FILE:fruit-ninja> ${CMAKE_BINARY_DIR}/boot.dol
+        BYPRODUCTS ${CMAKE_BINARY_DIR}/boot.dol
+        COMMENT "elf2dol -> boot.dol"
+        VERBATIM
+    )
+
+    # --- Prebaked font bake (task #51/#52) ---
+    # Bakes FreeType-rendered glyph atlases (see tools/wii/bake-fonts.py) into
+    # staging/Data/fonts/prebaked, from tmp/prebake/bake_plan.json (a gitignored
+    # dev artifact -- NOT every checkout has one). stage-assets.py's own
+    # font-bake hook uses Python3_EXECUTABLE (usually MSYS2 /usr/bin/python3),
+    # which has no freetype-py; the working interpreter is the MinGW toolchain
+    # python (has freetype-py + libfreetype-6.dll reachable via ctypes once
+    # /mingw64/bin is on PATH). FN_WII_BAKE_PYTHON lets a dev override the
+    # interpreter path if they keep freetype-py elsewhere.
+    #
+    # Graceful skip (not a build failure) when either prerequisite is missing,
+    # so a checkout without tmp/prebake/ or without the mingw64 freetype-py
+    # package still configures and builds -- just without prebaked fonts
+    # (BakedFontWii falls back to whatever the runtime does with no atlas).
+    set(FN_WII_BAKE_PYTHON "/mingw64/bin/python.exe" CACHE FILEPATH
+        "Python interpreter (with freetype-py) used to bake Wii prebaked fonts")
+
+    set(_fn_wii_bake_plan "${CMAKE_SOURCE_DIR}/tmp/prebake/bake_plan.json")
+    set(_fn_wii_bake_ok FALSE)
+    if (EXISTS "${_fn_wii_bake_plan}")
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E env "PATH=/mingw64/bin:$ENV{PATH}"
+                    "${FN_WII_BAKE_PYTHON}" -c "import freetype"
+            RESULT_VARIABLE _fn_wii_bake_python_rc
+            OUTPUT_QUIET ERROR_QUIET
+        )
+        if (_fn_wii_bake_python_rc EQUAL 0)
+            set(_fn_wii_bake_ok TRUE)
+        endif()
+    endif()
+
+    if (_fn_wii_bake_ok)
+        message(STATUS "Wii: prebaked font bake enabled (${FN_WII_BAKE_PYTHON})")
+        add_custom_target(fn_wii_fonts
+            COMMAND ${CMAKE_COMMAND} -E env "PATH=/mingw64/bin:$ENV{PATH}"
+                    "${FN_WII_BAKE_PYTHON}" "${CMAKE_SOURCE_DIR}/tools/wii/bake-fonts.py"
+                    "${CMAKE_SOURCE_DIR}/tmp/prebake"
+                    "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data/fontstruetype"
+                    "${FN_STAGING_DATA_DIR}/fonts/prebaked"
+            COMMENT "Baking Wii prebaked font atlases (freetype-py)"
+            VERBATIM
+        )
+        add_dependencies(fn_wii_fonts fn_asset_staging)
+        add_dependencies(fruit-ninja fn_wii_fonts)
+    else()
+        message(STATUS
+            "Wii: prebaked font bake SKIPPED (no tmp/prebake/bake_plan.json, "
+            "or ${FN_WII_BAKE_PYTHON} lacks freetype-py) -- fonts/prebaked will be empty")
+    endif()
+
+    # --- Shippable homebrew package (install + CPack) ---
+    # `cmake --install build/wii --prefix <dir>` assembles the standard HBC
+    # apps/<name>/ layout; `cpack -G ZIP` from build/wii wraps that same layout
+    # into fruit-ninja-wii.zip with apps/ at the archive root, ready to unzip
+    # onto an SD/USB root. This replaces build.sh's old direct-to-AppData
+    # mtools deploy as the build's output -- deploying to a Dolphin SD image is
+    # now a separate, explicit opt-in step (tools/wii/deploy-dolphin.sh).
+    install(FILES ${CMAKE_BINARY_DIR}/boot.dol
+        DESTINATION apps/fruitninja)
+    # Trailing slash on the source dir: copy CONTENTS of staging/Data into
+    # apps/fruitninja/Data (not staging/Data itself nested one level deeper).
+    # Includes fonts/prebaked when the bake above ran.
+    install(DIRECTORY ${FN_STAGING_DATA_DIR}/
+        DESTINATION apps/fruitninja/Data
+        PATTERN "*.bak" EXCLUDE)   # don't ship editor/backup cruft from source Data
+    install(FILES
+            ${CMAKE_SOURCE_DIR}/tools/wii/hbc/icon.png
+            ${CMAKE_SOURCE_DIR}/tools/wii/hbc/meta.xml
+        DESTINATION apps/fruitninja)
+
+    set(CPACK_GENERATOR "ZIP")
+    set(CPACK_PACKAGE_FILE_NAME "fruit-ninja-wii")
+    # "/" so the install() DESTINATION apps/fruitninja paths above land at the
+    # archive root (apps/fruitninja/...), not nested under an extra
+    # package-name/version prefix dir -- i.e. unzip-to-SD-root works directly.
+    set(CPACK_PACKAGING_INSTALL_PREFIX "/")
+    # Drop the default "<pkgname>/" top-level wrapper dir the ZIP generator adds,
+    # so the archive root is literally apps/fruitninja/... (unzip onto the SD/USB
+    # root gives /apps/fruitninja directly, no intermediate folder to flatten).
+    set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+    set(CPACK_PACKAGE_DIRECTORY ${CMAKE_BINARY_DIR})
+    include(CPack)
 else()
     # Native desktop/webOS entry point.
     # Port specific: on Windows, compile the .rc resource script into the exe
