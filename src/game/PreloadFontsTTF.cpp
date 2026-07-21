@@ -107,7 +107,7 @@ void WarmTTFGlyphCache() {
     font->GetAtlas()->BuildPendingTextures();
 }
 
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
 // Task #36 Stage 2 -- see PreloadFontsTTF.h for the full rationale. Sizes
 // pulled from the actual GAMEOVER-path call sites (not guessed):
 //   GameOverScreen::Initialise @0x00187c90 (title):     56.0f
@@ -154,4 +154,4 @@ void WarmTTFGlyphCacheGameOver() {
 
     font->GetAtlas()->BuildPendingTextures();
 }
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_BLOCK_PRELOAD

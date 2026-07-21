@@ -229,9 +229,9 @@ public:
     // MeshManager. Called once from GameInitialise.
     static void LoadFruitModels();
 
-#if defined(FRUIT_PLATFORM_WII)
-    // Wii-only -- task #59 boot trim. Re-runs the per-fruit texture loads
-    // that FruitInfo_Load's boot pass skips on Wii (hud_%s.tex/zen_%s.tex --
+#if defined(FN_BLOCK_PRELOAD)
+    // Boot trim (task #59). Re-runs the per-fruit texture loads
+    // that FruitInfo_Load's boot pass skips (hud_%s.tex/zen_%s.tex --
     // gameplay HUD only, never shown at menu; fruit_shadow.tex loads at
     // boot unconditionally), assigning straight into the FruitInfo array's
     // m_HudTexture/m_ZenTexture members (their natural strong-ref home --

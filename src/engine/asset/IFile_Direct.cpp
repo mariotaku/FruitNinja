@@ -3,6 +3,7 @@
 // FILE* semantics are identical on POSIX and Win32; no platform split needed.
 #include "asset/IFile_Direct.h"
 #include "asset/IFileSystem.h"
+#include "util/SlowIo.h"
 
 #include <cstdio>
 #include <cstring>
@@ -43,7 +44,11 @@ void IFile_Direct::Close() {
 // Binary @ IFile vtbl+0x10 (IFile_Direct slot 4)
 bool IFile_Direct::Read(void* dst, unsigned long n) {
     if (!m_fp || !dst) return false;
-    return fread(dst, 1, (size_t)n, m_fp) == n;
+    bool ok = fread(dst, 1, (size_t)n, m_fp) == n;
+    if (ok) {
+        fn_simulate_slow_io((size_t)n);
+    }
+    return ok;
 }
 
 // Binary @ IFile vtbl+0x14 (IFile_Direct slot 5) — encryption path; defunct, delegate to Write

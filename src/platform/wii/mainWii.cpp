@@ -29,7 +29,9 @@
 #include "platform/wii/InputTranslatorWii.h"
 #include "platform/wii/SplashBootScreen.h"
 #include "platform/wii/SoundManagerWii.h"
-#include "platform/wii/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
+#endif
 #include "platform/wii/Mem2Alloc.h"    // Wii_MEM2Init (task #61 MEM1->MEM2 texture offload)
 #include "game/SettingsSave.h"
 #include "debug/Logger.h"
@@ -178,7 +180,9 @@ int main(int argc, char* argv[]) {
 
     LOG_INFO("mainWii", "VIDEO/GX/WPAD/fat initialised (%dx%d)",
              (int)s_rmode->fbWidth, (int)s_rmode->efbHeight);
+#if defined(FN_BLOCK_PRELOAD)
     fn::wii::LogHeapUsage("pre-init");
+#endif
 
     if (!g_game.init(NULL, NULL)) {
         LOG_ERROR("mainWii", "Failed to init game");

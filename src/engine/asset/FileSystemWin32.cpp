@@ -6,6 +6,7 @@
 #include "asset/FileSystem_Direct.h"
 #include "asset/IFile_Direct.h"
 #include "util/PathCI.h"
+#include "util/SlowIo.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -104,6 +105,7 @@ bool FileSystem_Direct::GetFileData(const char* name, void** outBuf,
         return false;
     }
     fclose(fp);
+    fn_simulate_slow_io((size_t)sz);
 
     *outBuf  = data;
     *outSize = (unsigned long)sz;

@@ -20,14 +20,14 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/FileSystemWii.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SplashBootScreen.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/puff.cpp
-    # Task #36 Stage 1 -- block-preload loader groundwork (log-only instrumentation).
-    ${CMAKE_CURRENT_SOURCE_DIR}/ResBlock.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/IResourceSource.cpp
-    # Task #36 Stage 2 -- synchronous block-scoped resource preload (V1).
-    ${CMAKE_CURRENT_SOURCE_DIR}/BlockLoader.cpp
     # Task #61 phase 1 -- MEM2 free-list allocator (texture pixel buffers).
     ${CMAKE_CURRENT_SOURCE_DIR}/Mem2Alloc.cpp
 )
+# Block-preload loader (task #36) -- relocated to src/resource/ (platform-
+# neutral, gated by FN_BLOCK_PRELOAD, see src/resource/CMakeLists.txt) since
+# it's ~95% platform-agnostic. Wii still gets it by default (FN_BLOCK_PRELOAD
+# defaults ON when FRUIT_PLATFORM_WII, see root CMakeLists.txt); nothing to
+# add here anymore.
 # mainWii.cpp is the Wii entry point (fruit-ninja-game excludes main*.cpp
 # files, same as mainSDL.cpp/mainEmscripten.cpp) -- added directly to the
 # fruit-ninja executable target by the top-level CMakeLists.txt's

@@ -204,8 +204,8 @@ void FruitInfo_Load(const char* xmlPath)
         }
 
         // --- Textures: hud_%s.tex -> +0x300, zen_%s.tex -> +0x304 ---
-#if defined(FRUIT_PLATFORM_WII)
-        // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+#if defined(FN_BLOCK_PRELOAD)
+        // Deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
         // (see FruitInfo_LoadHudTextures() below)
 #else
         {
@@ -468,8 +468,8 @@ Mortar::Texture* FruitInfo_GetShadowTex()
     return g_FruitShadowTex.IsValid() ? g_FruitShadowTex.Get() : nullptr;
 }
 
-#if defined(FRUIT_PLATFORM_WII)
-// Wii-only -- task #59 boot trim. See FruitInfo.h contract comment.
+#if defined(FN_BLOCK_PRELOAD)
+// Boot trim (task #59). See FruitInfo.h contract comment.
 // fruit_shadow.tex loads at boot (FruitInfo_Load Step 0, un-deferred --
 // task #59 Stage A scope correction); only the per-fruit hud_%s/zen_%s
 // icons (gameplay HUD only, never shown at menu) stay deferred here.

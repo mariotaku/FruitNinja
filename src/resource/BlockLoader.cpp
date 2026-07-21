@@ -1,6 +1,6 @@
-#ifdef FRUIT_PLATFORM_WII
+#ifdef FN_BLOCK_PRELOAD
 
-#include "platform/wii/BlockLoader.h"
+#include "resource/BlockLoader.h"
 #include "asset/TextureManager.h"
 #include "asset/Model.h"
 #include "asset/MeshManager.h"
@@ -13,9 +13,12 @@
 #include "screens/DojoScreen.h"
 #include "screens/ShopScreen.h"
 #include "debug/Logger.h"
-#include "platform/wii/Mem2Alloc.h"  // Wii_MEM2FreeBytes (see LogHeapUsage)
 #include <vector>
+
+#if defined(FRUIT_PLATFORM_WII)
+#include "platform/wii/Mem2Alloc.h"  // Wii_MEM2FreeBytes (see LogHeapUsage)
 #include <gccore.h>  // SYS_GetArena1Size / SYS_GetArena2Size (see LogHeapUsage)
+#endif
 
 namespace fn {
 namespace wii {
@@ -146,8 +149,10 @@ void PreloadSfx(const char* name) {
 
 // See BlockLoader.h. SYS_GetArena1Size/SYS_GetArena2Size return the bytes
 // still free in each arena (not the total heap) -- exactly the "how much
-// headroom is left before OOM" figure #36/#59 need.
+// headroom is left before OOM" figure #36/#59 need. Only meaningful on Wii
+// (libogc arena concept); a no-op elsewhere.
 void LogHeapUsage(const char* label) {
+#if defined(FRUIT_PLATFORM_WII)
     u32 mem1Free = SYS_GetArena1Size();
     u32 mem2Free = SYS_GetArena2Size();
     // Task #61: SYS_GetArena2Size() now reads low once Wii_MEM2Init() has
@@ -158,6 +163,10 @@ void LogHeapUsage(const char* label) {
     LOG_INFO("HeapUsage", "%s: MEM1 free=%u KB, MEM2 arena free=%u KB, MEM2 alloc free=%u KB",
              label, (unsigned)(mem1Free / 1024), (unsigned)(mem2Free / 1024),
              (unsigned)(mem2AllocFree / 1024));
+#else
+    // Defunct: heap-usage logging -- no libogc arena concept off Wii; no-op stub.
+    (void)label;
+#endif
 }
 
 void BlockLoader::PreloadBlock(ResBlockFlag block) {
@@ -173,7 +182,7 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
         }
 
         // Task #59 boot trim -- gameplay-only chunks deferred out of
-        // GameInitialise() on Wii (see the FRUIT_PLATFORM_WII guards at each
+        // GameInitialise() on Wii (see the FN_BLOCK_PRELOAD guards at each
         // call site). Core slicing assets (Fruit/Bomb/Slash/Splat models,
         // particle textures, SFX) are needed at menu time -- the menu ring
         // buttons are real Fruit/Bomb entities you slice -- so those stayed
@@ -232,7 +241,7 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
 
         // Task #59 boot trim -- Dojo/Shop screen chrome (BG_store, dojo bg,
         // etc, 16 tex total) deferred out of GameInitialise() on Wii (see the
-        // FRUIT_PLATFORM_WII guard at the call site in GameInitialise.cpp).
+        // FN_BLOCK_PRELOAD guard at the call site in GameInitialise.cpp).
         // Port-only #28 screens, no binary counterpart, only reachable via
         // menu -> dojo -> shop, so no fidelity constraint. Refs land in the
         // screens' own members (same pattern as GameOverScreen above) --
@@ -259,4 +268,4 @@ void BlockLoader::PreloadBlock(ResBlockFlag block) {
 } // namespace wii
 } // namespace fn
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_BLOCK_PRELOAD

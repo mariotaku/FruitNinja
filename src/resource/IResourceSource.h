@@ -1,16 +1,16 @@
-#ifndef FN_PLATFORM_WII_IRESOURCESOURCE_H
-#define FN_PLATFORM_WII_IRESOURCESOURCE_H
+#ifndef FN_RESOURCE_IRESOURCESOURCE_H
+#define FN_RESOURCE_IRESOURCESOURCE_H
 
 // Task #36 Stage 1 -- file-source seam (tmp/wii/loader-blueprint.md section 3).
 //
-// A single abstract read-whole-file operation that a future block-preload
-// loader (task #36 Stage 2+) will route through instead of calling
+// A single abstract read-whole-file operation that the block-preload loader
+// (task #36 Stage 2+) routes through instead of calling
 // FileManager::GetFileData directly. The point is to keep exactly ONE place
 // in the port that knows "how to get bytes for a logical resource path" --
-// today that's loose files under the mounted sd:/usb:/ root via
-// FileManager's IFileSystem chain (ResourceSourceLooseSD below); task #57's
-// DVD-bundle reader becomes a second IResourceSource implementation behind
-// this same interface, with no caller-side changes.
+// today that's loose files under the mounted root via FileManager's
+// IFileSystem chain (ResourceSourceLooseSD below); a future DVD-bundle
+// reader (Wii task #57) becomes a second IResourceSource implementation
+// behind this same interface, with no caller-side changes.
 //
 // Stage 1 does NOT wire this into any caller yet -- File::Load /
 // FileManager::GetFileData continue to be called directly everywhere (see
@@ -19,8 +19,10 @@
 // the Stage 2/3 BlockLoader has a stable seam to read through from the start,
 // per the blueprint's "do NOT thread File/FileManager directly" instruction.
 //
-// Only compiled when FRUIT_PLATFORM_WII is set.
-#ifdef FRUIT_PLATFORM_WII
+// Originally Wii-only; relocated out of src/platform/wii so any target can
+// build+enable it via FN_BLOCK_PRELOAD (see root CMakeLists.txt). Only
+// compiled when FN_BLOCK_PRELOAD is set.
+#ifdef FN_BLOCK_PRELOAD
 
 #include <cstddef>
 
@@ -63,6 +65,6 @@ public:
 } // namespace wii
 } // namespace fn
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_BLOCK_PRELOAD
 
-#endif // FN_PLATFORM_WII_IRESOURCESOURCE_H
+#endif // FN_RESOURCE_IRESOURCESOURCE_H

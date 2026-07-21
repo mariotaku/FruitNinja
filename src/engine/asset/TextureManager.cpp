@@ -6,8 +6,8 @@
 #include <cstdio>
 #include <cstring>
 
-#if defined(FRUIT_PLATFORM_WII)
-#include "platform/wii/ResBlock.h"
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/ResBlock.h"
 #include <set>
 #endif
 
@@ -95,7 +95,7 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     }
 
     // Cache miss -- load from disk.
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
     // see tmp/wii/loader-blueprint.md section 6/7). Fires once per unique
     // resolved path so a Dolphin run's log enumerates the per-block texture

@@ -35,9 +35,9 @@
 #include <cstdio>
 #include "game/GameWork.h"
 
-#if defined(FRUIT_PLATFORM_WII)
-#include "platform/wii/ResBlock.h"
-#include "platform/wii/BlockLoader.h"
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/ResBlock.h"
+#include "resource/BlockLoader.h"
 #endif
 
 // Helper functor: captures {screen*, btn*} to call DeletedMenuButton(btn) with no args.
@@ -597,7 +597,7 @@ void GameModeScreen::Update(float dt) {
     case 4:
     case 5:
     case 6: {
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
         // #59: the INGAME preload is a synchronous ~1.4s stall. Fire it while the
         // mode-select panel is still at full opacity (before the alpha decay) so the
         // freeze is hidden behind the panel, not a half-revealed level. break skips
@@ -624,7 +624,7 @@ void GameModeScreen::Update(float dt) {
             // toward 0 from -1 (main menu zoom-in), so the actual gate is
             // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
             // Latch keeps it one-shot per mode-pick.
-#if !defined(__bada__) && !defined(FRUIT_PLATFORM_WII)
+#if !defined(__bada__) && !defined(FN_BLOCK_PRELOAD)
             if (!m_bSetupLevelFired && camT > -0.9f) {
                 SetupLevel();
                 m_bSetupLevelFired = true;
@@ -916,7 +916,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
 // Plays "menu-bomb" SFX, sets m_State = 0xF (back-out), detaches back
 // button's fruit piece and flings it up-right, then resets tutorial arrow.
 void GameModeScreen::QuitCallback() {
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
     // tmp/wii/loader-blueprint.md section 2/7). Mode-select "back to menu".
     fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_MENU);
@@ -955,7 +955,7 @@ void GameModeScreen::QuitCallback() {
 
 // vtable[18] @ 0x00181428
 void GameModeScreen::SetupLevel() {
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
     // tmp/wii/loader-blueprint.md section 2/7). Camera-fade-triggered latch
     // (see m_bSetupLevelFired above) -- the predictive IN-GAME preload point.

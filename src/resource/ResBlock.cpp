@@ -1,6 +1,6 @@
-#ifdef FRUIT_PLATFORM_WII
+#ifdef FN_BLOCK_PRELOAD
 
-#include "platform/wii/ResBlock.h"
+#include "resource/ResBlock.h"
 #include <cstdio>
 #include <cstring>
 
@@ -52,4 +52,4 @@ const char* GetCurrentBlockName() {
 } // namespace wii
 } // namespace fn
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_BLOCK_PRELOAD

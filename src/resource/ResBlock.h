@@ -1,5 +1,5 @@
-#ifndef FN_PLATFORM_WII_RESBLOCK_H
-#define FN_PLATFORM_WII_RESBLOCK_H
+#ifndef FN_RESOURCE_RESBLOCK_H
+#define FN_RESOURCE_RESBLOCK_H
 
 // Task #36 Stage 1 -- current-block tracking (log-only, no preload/eviction
 // yet). See tmp/wii/loader-blueprint.md sections 2 and 7 (Stage 1).
@@ -11,11 +11,13 @@
 // GAMEOVER). GAMEOVER is ADDITIVE: it does NOT clear INGAME (blueprint Risk
 // R4 -- the game-over screen draws over the frozen, still-resident gameplay
 // state). Nothing here allocates, frees, or preloads; it only labels the
-// [BlockLoad] log lines emitted by the resource Load funnels so a Dolphin run
-// can be grepped into a per-block resource manifest.
+// [BlockLoad] log lines emitted by the resource Load funnels so a Dolphin
+// run can be grepped into a per-block resource manifest.
 //
-// Only compiled when FRUIT_PLATFORM_WII is set.
-#ifdef FRUIT_PLATFORM_WII
+// Originally Wii-only; relocated out of src/platform/wii so any target can
+// build+enable it via FN_BLOCK_PRELOAD (see root CMakeLists.txt). Only
+// compiled when FN_BLOCK_PRELOAD is set.
+#ifdef FN_BLOCK_PRELOAD
 
 namespace fn {
 namespace wii {
@@ -53,6 +55,6 @@ const char* GetCurrentBlockName();
 } // namespace wii
 } // namespace fn
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_BLOCK_PRELOAD
 
-#endif // FN_PLATFORM_WII_RESBLOCK_H
+#endif // FN_RESOURCE_RESBLOCK_H

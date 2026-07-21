@@ -2439,8 +2439,8 @@ void Fruit::LoadFruitModels() {
     g_fruitData.s_fruitModelsLoaded = true;
 }
 
-#if defined(FRUIT_PLATFORM_WII)
-// Wii-only -- task #59 boot trim. Thin forward to FruitInfo_LoadHudTextures
+#if defined(FN_BLOCK_PRELOAD)
+// Boot trim (task #59). Thin forward to FruitInfo_LoadHudTextures
 // (FruitInfo.cpp), which owns the deferred hud_%s/zen_%s texture-load seam.
 // See FruitInfo.h for the contract.
 void Fruit::LoadHudTextures() {

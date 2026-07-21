@@ -1,6 +1,6 @@
-#ifdef FRUIT_PLATFORM_WII
+#ifdef FN_BLOCK_PRELOAD
 
-#include "platform/wii/IResourceSource.h"
+#include "resource/IResourceSource.h"
 #include "asset/FileManager.h"
 
 namespace fn {
@@ -10,9 +10,8 @@ namespace wii {
 // File::Load() makes today (src/engine/asset/File.cpp:125). idFilter=0 means
 // "any registered IFileSystem", matching File::Load's default systemID.
 // outOwned is always true for the FileSystem_Direct backend (see
-// FileSystemPosix.cpp::GetFileData, which libfat's POSIX-compatible fopen/
-// fread surface serves on Wii) -- ReleaseWhole() below assumes new[]
-// ownership on that basis.
+// FileSystemPosix.cpp/FileSystemWin32.cpp::GetFileData) -- ReleaseWhole()
+// below assumes new[] ownership on that basis.
 bool ResourceSourceLooseSD::ReadWhole(const char* logicalPath, void** outBuf, unsigned long* outSize) {
     bool owned = false;
     bool ok = FileManager::GetInstance().GetFileData(
@@ -29,4 +28,4 @@ void ResourceSourceLooseSD::ReleaseWhole(void* buf) {
 } // namespace wii
 } // namespace fn
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_BLOCK_PRELOAD

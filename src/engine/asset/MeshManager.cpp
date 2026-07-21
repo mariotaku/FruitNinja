@@ -14,8 +14,8 @@
 #include <map>
 #include <vector>
 
-#if defined(FRUIT_PLATFORM_WII)
-#include "platform/wii/ResBlock.h"
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/ResBlock.h"
 #include <set>
 #endif
 
@@ -696,7 +696,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const AsciiString& path) {
     ResourceLoader::RegisterLoader<Mesh>(
         Delegate1<SmartPtr<Mesh>, ResourceLoader&>::MakeFree(&LoadMesh));
 
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
     // see tmp/wii/loader-blueprint.md section 6/7). Fires once per unique
     // path so a Dolphin run's log enumerates the per-block mesh set without

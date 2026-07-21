@@ -37,9 +37,9 @@
 #include <cmath>
 #include "game/GameWork.h"
 
-#if defined(FRUIT_PLATFORM_WII)
-#include "platform/wii/ResBlock.h"
-#include "platform/wii/BlockLoader.h"
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/ResBlock.h"
+#include "resource/BlockLoader.h"
 #endif
 
 // ---------------------------------------------------------------------------
@@ -273,7 +273,7 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     , m_AnimFrame(0)
     , m_State(0)
 {
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
     // tmp/wii/loader-blueprint.md section 2/7). Set BEFORE LoadContent()
     // below so the shop's own texture loads are tagged SHOP, not whatever

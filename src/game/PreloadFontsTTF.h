@@ -36,8 +36,8 @@ void PreloadFontsTTF();
 // No-op if game_work.m_pTTFFontMain is null (font failed to load).
 void WarmTTFGlyphCache();
 
-#if defined(FRUIT_PLATFORM_WII)
-// Task #36 Stage 2 -- Wii-only block-preload of the GAMEOVER-screen TTF
+#if defined(FN_BLOCK_PRELOAD)
+// Task #36 Stage 2 -- block-preload of the GAMEOVER-screen TTF
 // glyph sizes (30, 56) that WarmTTFGlyphCache() above does NOT cover (its
 // s_WarmSizes list is 9.9/10/12/14/22, all menu sizes). Without this, the
 // first GameOverScreen/ScoreControl BakedStringBox at these sizes rasterizes

@@ -64,7 +64,9 @@
 
 #if defined(FRUIT_PLATFORM_WII)
 #include <ogc/conf.h>
-#include "platform/wii/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
+#endif
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/BlockLoader.h"  // LogHeapUsage (task #36/#59 residency diagnostic)
 #endif
 
 // Port specific: Wii has no in-game language chooser (SettingsScreen hides
@@ -459,24 +461,24 @@ void GameInitialise(void* window, const char* config) {
     SlashEntity::LoadContent();     // TODO: blade trail textures
     Bomb::LoadContent();            // loads bomb models + textures
     MenuButton::LoadContent();      // loads new_item.tex (star indicator)
-#if defined(FRUIT_PLATFORM_WII)
-    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+#if defined(FN_BLOCK_PRELOAD)
+    // Deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
     // (gameplay-only: combo/critical/rare overlays, never shown at menu time)
 #else
     MissControl::LoadContent();     // load critical / rare / cross overlays -- fidelity: host/web/binary load at boot
 #endif
     // Pool allocation + HUD registration happens in GameInit (which
     // runs AFTER the HUD is created).
-#if defined(FRUIT_PLATFORM_WII)
-    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+#if defined(FN_BLOCK_PRELOAD)
+    // Deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
     // (game-over UI is never drawn from the menu or during play)
 #else
     GameOverScreen::LoadContent();  // TODO: game-over UI textures -- fidelity: host/web/binary load at boot
 #endif
     PowerUpShop::LoadContent();     // binary @ 0x00155b50 — empty body
     // v1.6.1 GameInitialise @0x0011daa8: after PowerUpShop::LoadContent
-#if defined(FRUIT_PLATFORM_WII)
-    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
+#if defined(FN_BLOCK_PRELOAD)
+    // Deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
     // (gameplay-only: super-fruit lightning overlay, never shown at menu time)
 #else
     SuperFruitControl::LoadContent();   // fidelity: host/web/binary load at boot
@@ -487,8 +489,8 @@ void GameInitialise(void* window, const char* config) {
     // Idempotent: TextureManager::Load caches by StringHash(path), so the later
     // ctor-triggered LoadContent() call (DojoScreen ctor / ShopScreen ctor guard) is a
     // cache hit, not a re-decode. No binary counterpart -- v1.6.1 loads these lazily.
-#if defined(FRUIT_PLATFORM_WII)
-    // Wii: deferred to BlockLoader::PreloadBlock(RES_BLOCK_SHOP) -- task #59
+#if defined(FN_BLOCK_PRELOAD)
+    // Deferred to BlockLoader::PreloadBlock(RES_BLOCK_SHOP) -- task #59
     // (dojo/shop screen chrome, only reachable via menu -> dojo -> shop)
 #else
     DojoScreen::LoadContent();
@@ -501,7 +503,7 @@ void GameInitialise(void* window, const char* config) {
     PreloadRings();
 
     LOG_INFO("GAMEINIT", "GameInitialise: done");
-#if defined(FRUIT_PLATFORM_WII)
+#if defined(FN_BLOCK_PRELOAD)
     fn::wii::LogHeapUsage("boot-done");
 #endif
 }

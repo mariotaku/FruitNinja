@@ -54,7 +54,9 @@
 #include "util/Endian.h"
 #include "debug/Logger.h"
 #include "platform/wii/SoundManagerWii.h"
-#include "platform/wii/ResBlock.h"
+#if defined(FN_BLOCK_PRELOAD)
+#include "resource/ResBlock.h"
+#endif
 
 #include <asndlib.h>
 #include <gccore.h>   // DCFlushRange -- DSP-visible buffer requirement, see "DMA buffer rules" below
@@ -385,6 +387,7 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
 SoundBuffer* SoundManager::LoadSound(const char* name) {
     std::string path = std::string("sfx/") + name + ".wav.pcm";
 
+#if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
     // see tmp/wii/loader-blueprint.md section 6/7). Fires once per unique name
     // so a Dolphin run's log enumerates the per-block SFX set without
@@ -397,6 +400,7 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
                      fn::wii::GetCurrentBlockName(), name);
         }
     }
+#endif
 
     Mortar::File f(path.c_str(), /*openMode=*/0, /*systemID=*/0);
     if (!f.Open()) {
@@ -725,6 +729,7 @@ void SoundManager::SongPlay(const char* name) {
     int loopStart   = (int)FN_READ_U32(hdrBytes + 16);
     (void)sampleCount;
 
+#if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- fail-loud instrumentation (log-only; no preload yet,
     // see tmp/wii/loader-blueprint.md section 6/7). BGM is streamed (not
     // resident, see file-header "BGM" note in the blueprint), so this logs
@@ -737,6 +742,7 @@ void SoundManager::SongPlay(const char* name) {
                      fn::wii::GetCurrentBlockName(), lower.c_str());
         }
     }
+#endif
 
     ASND_StopVoice(MUSIC_ASND_VOICE);
 

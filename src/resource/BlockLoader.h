@@ -1,5 +1,5 @@
-#ifndef FN_PLATFORM_WII_BLOCKLOADER_H
-#define FN_PLATFORM_WII_BLOCKLOADER_H
+#ifndef FN_RESOURCE_BLOCKLOADER_H
+#define FN_RESOURCE_BLOCKLOADER_H
 
 // Task #36 Stage 2 -- synchronous block-scoped resource preload (V1).
 // See tmp/wii/loader-blueprint.md sections 6/7 (Stage 2) for the design;
@@ -23,10 +23,13 @@
 // inserts the strong SmartPtr<Model> into its own m_Models list (see
 // MeshManager.cpp:70-73), so the manager itself keeps it resident.
 //
-// Only compiled when FRUIT_PLATFORM_WII is set.
-#ifdef FRUIT_PLATFORM_WII
+// Originally Wii-only (MEM1/MEM2 budget forced eager boot-load off);
+// relocated out of src/platform/wii so any target can build+enable it via
+// FN_BLOCK_PRELOAD (see root CMakeLists.txt) for testing the preload/loading
+// UX path. Only compiled when FN_BLOCK_PRELOAD is set.
+#ifdef FN_BLOCK_PRELOAD
 
-#include "platform/wii/ResBlock.h"
+#include "resource/ResBlock.h"
 
 namespace fn {
 namespace wii {
@@ -46,18 +49,19 @@ public:
     static void PreloadBlock(ResBlockFlag block);
 };
 
-// Task #36/#59 diagnostic -- logs libogc's MEM1/MEM2 arena free size (bytes
-// still allocatable, via SYS_GetArena1Size/SYS_GetArena2Size) as
+// Task #36/#59 diagnostic -- on Wii, logs libogc's MEM1/MEM2 arena free size
+// (bytes still allocatable, via SYS_GetArena1Size/SYS_GetArena2Size) as
 // "[HeapUsage] <label>: MEM1 free=<n> KB, MEM2 free=<n> KB" at LOG_INFO.
-// Cheap (a couple of reads) -- call at low-frequency points only (boot,
-// block-preload transitions), never per-frame. `label` identifies the call
-// site (e.g. "boot-done", "INGAME+GAMEOVER", "SHOP") so a Dolphin log can be
-// grepped into a before/after residency timeline.
+// On non-Wii targets this is a no-op (no arena concept to report) -- see
+// BlockLoader.cpp. Cheap on Wii (a couple of reads) -- call at low-frequency
+// points only (boot, block-preload transitions), never per-frame. `label`
+// identifies the call site (e.g. "boot-done", "INGAME+GAMEOVER", "SHOP") so a
+// Dolphin log can be grepped into a before/after residency timeline.
 void LogHeapUsage(const char* label);
 
 } // namespace wii
 } // namespace fn
 
-#endif // FRUIT_PLATFORM_WII
+#endif // FN_BLOCK_PRELOAD
 
-#endif // FN_PLATFORM_WII_BLOCKLOADER_H
+#endif // FN_RESOURCE_BLOCKLOADER_H

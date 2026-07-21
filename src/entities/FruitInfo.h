@@ -207,8 +207,8 @@ static const int FRUIT_INFO_MAX = 32;  // 22 in Bada XML, room for extras
 // Full loader (called by Fruit::LoadInfo)
 void FruitInfo_Load(const char* xmlPath);
 
-#if defined(FRUIT_PLATFORM_WII)
-// Wii-only -- task #59 boot trim. fruit_shadow.tex loads at boot (menu
+#if defined(FN_BLOCK_PRELOAD)
+// Boot trim (task #59). fruit_shadow.tex loads at boot (menu
 // fruit may cast shadows); only the per-fruit hud_%s.tex/zen_%s.tex icons
 // are gameplay-only (never shown at menu) and stay deferred here. Assigns
 // straight into the FruitInfo array's own m_HudTexture/m_ZenTexture members

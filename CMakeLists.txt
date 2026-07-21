@@ -64,6 +64,31 @@ if(FRUIT_PLATFORM_WII)
     set(FN_ENABLE_HD_ASSETS OFF)
 endif()
 
+# --- Block-preload resource loader (task #36) ---
+# Force-loads a screen/mode's texture/SFX/mesh/font manifest synchronously at
+# a block-entry hook (GameModeScreen::SetupLevel, ShopScreen ctor, etc)
+# instead of letting each asset lazy-load the first time it's touched.
+# Originally Wii-only (MEM1/MEM2 budget forced eager boot-load off); the
+# loader itself (src/resource/{BlockLoader,ResBlock,IResourceSource}.*) is
+# ~95% platform-agnostic, so this option lets any target build+enable it for
+# testing. Default ON when FRUIT_PLATFORM_WII (unchanged existing Wii
+# behaviour), else OFF (zero behaviour change for host/web by default).
+if(FRUIT_PLATFORM_WII)
+    set(_fn_block_preload_default ON)
+else()
+    set(_fn_block_preload_default OFF)
+endif()
+option(FN_BLOCK_PRELOAD "Block-preload resource loader" ${_fn_block_preload_default})
+
+# --- Simulated slow SD IO (dev/test enhancement) ---
+# Injects an artificial delay (proportional to bytes read, plus a fixed
+# per-read latency) into both file-read funnels (FileSystem_Direct::
+# GetFileData, IFile_Direct::Read) so the loading UX can be exercised on fast
+# host/web storage. Default OFF -- zero behaviour change unless enabled.
+option(FN_SIMULATE_SLOW_IO "Inject artificial delay into file reads (simulate slow SD)" OFF)
+set(FN_SLOW_IO_KBPS "2048" CACHE STRING "Simulated read throughput in KB/s")
+set(FN_SLOW_IO_LATENCY_US "0" CACHE STRING "Fixed per-read latency in microseconds")
+
 project(FruitNinja LANGUAGES CXX)
 
 # Propagate FRUIT_PLATFORM_WII as a compile definition so the #ifdef
@@ -78,6 +103,26 @@ endif()
 # by TextureManager::Load. Defined engine-wide so the asset layer sees it.
 if (FN_ENABLE_HD_ASSETS)
     add_compile_definitions(FN_ENABLE_HD_ASSETS=1)
+endif()
+
+# Block-preload loader gate (see the FN_BLOCK_PRELOAD option above). Consumed
+# by src/resource/{BlockLoader,ResBlock,IResourceSource}.* and every hook call
+# site (GameInit.cpp, GameInitialise.cpp, MainScreen.cpp, GameModeScreen.cpp,
+# ShopScreen.cpp, GameOver.cpp, FruitInfo.cpp, Fruit.h, TextureManager.cpp,
+# MeshManager.cpp, PreloadFontsTTF.*, BakedFontWii.cpp).
+if (FN_BLOCK_PRELOAD)
+    add_compile_definitions(FN_BLOCK_PRELOAD=1)
+endif()
+
+# Simulated slow-IO gate (see the FN_SIMULATE_SLOW_IO option above). Consumed
+# by src/engine/util/SlowIo.h, called from the two read funnels
+# (FileSystem_Direct::GetFileData, IFile_Direct::Read).
+if (FN_SIMULATE_SLOW_IO)
+    add_compile_definitions(
+        FN_SIMULATE_SLOW_IO=1
+        FN_SLOW_IO_KBPS=${FN_SLOW_IO_KBPS}
+        FN_SLOW_IO_LATENCY_US=${FN_SLOW_IO_LATENCY_US}
+    )
 endif()
 
 # --- fn_add_platform_source (task #63 item #8 dedup) ---
@@ -650,6 +695,7 @@ if(NOT FN_ASM_VERIFY)
     add_subdirectory(src/entities)
     add_subdirectory(src/game)
     add_subdirectory(src/debug)
+    add_subdirectory(src/resource)
 
     if (FRUIT_PLATFORM_WII)
         # No SDL2 on Wii -- GX/ASND/libfat/WPAD replace it entirely (see
