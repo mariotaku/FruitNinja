@@ -25,7 +25,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Fruit Ninja</title>
   <!-- PWA: manifest + icons + install metas.  The referenced files are staged
        as siblings of the built index.html (CMake POST_BUILD copies
@@ -91,6 +91,24 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      /* Safe inset: keep the play area away from the physical screen edges so a
+         slice that runs off the edge doesn't trigger an OS system gesture
+         (iOS edge-swipe back / home-bar, Android back-gesture / nav-bar). These
+         edge gestures are OS-level and can't be blocked by touch-action, so we
+         simply don't let the canvas reach the edge. Padding = the device's own
+         safe-area (notch / home indicator, via viewport-fit=cover) PLUS a fixed
+         gesture margin (--edge). resize() reads clientWidth/Height which
+         EXCLUDES this padding, so the letterboxed canvas auto-fits the inset box
+         with no JS change. Bottom is largest (home-bar / nav-bar lives there);
+         tune --edge* to taste. */
+      --edge-x: 20px;
+      --edge-top: 12px;
+      --edge-bottom: 28px;
+      padding:
+        calc(env(safe-area-inset-top)    + var(--edge-top))
+        calc(env(safe-area-inset-right)  + var(--edge-x))
+        calc(env(safe-area-inset-bottom) + var(--edge-bottom))
+        calc(env(safe-area-inset-left)   + var(--edge-x));
     }
 
     /* Canvas backing size is fixed at 960x640 (set by SDL_CreateWindow).
@@ -546,7 +564,15 @@
          absolutely-positioned descendants). */
       var gameW = canvas.width  || DEFAULT_GAME_W;
       var gameH = canvas.height || DEFAULT_GAME_H;
-      var ww = viewportEl.clientWidth, wh = viewportEl.clientHeight;
+      /* clientWidth/Height INCLUDE padding (they exclude only border/scrollbar),
+         so subtract the safe-inset padding to get the true content box.
+         Otherwise the canvas is sized to the full viewport and overflows --
+         covering the padding and defeating the edge inset entirely. */
+      var vpcs = getComputedStyle(viewportEl);
+      var padL = parseFloat(vpcs.paddingLeft)  || 0, padR = parseFloat(vpcs.paddingRight)  || 0;
+      var padT = parseFloat(vpcs.paddingTop)   || 0, padB = parseFloat(vpcs.paddingBottom) || 0;
+      var ww = viewportEl.clientWidth  - padL - padR;
+      var wh = viewportEl.clientHeight - padT - padB;
       var scale = Math.min(ww / gameW, wh / gameH);
       var cw = Math.floor(gameW * scale);
       var ch = Math.floor(gameH * scale);
@@ -557,8 +583,8 @@
       canvas.style.width  = cw + 'px';
       canvas.style.height = ch + 'px';
 
-      var canvasLeft = Math.floor((ww - cw) / 2);
-      var canvasTop  = Math.floor((wh - ch) / 2);
+      var canvasLeft = padL + Math.floor((ww - cw) / 2);
+      var canvasTop  = padT + Math.floor((wh - ch) / 2);
 
       /* Progress bar: scales linearly with the 480x320 base resolution.
          uiScale maps the letterboxed canvas width back to the 480-wide base
