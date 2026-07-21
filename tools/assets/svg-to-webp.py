@@ -89,7 +89,18 @@ def _ensure_deps():
     except ImportError:
         pass
     print("[svg-to-webp] resvg_py or Pillow not found, running pip install")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "resvg-py", "Pillow"])
+    pip_cmd = [sys.executable, "-m", "pip", "install"]
+    pkgs = ["resvg-py", "Pillow"]
+    try:
+        subprocess.check_call(pip_cmd + pkgs)
+    except subprocess.CalledProcessError:
+        # PEP 668 externally-managed environments (e.g. the emsdk CI Docker
+        # image's system python) refuse a plain `pip install`; retry with
+        # --break-system-packages (pip >= 23.0.1). stage-assets.py handles the
+        # same case for its deps.
+        print("[svg-to-webp] pip refused (PEP 668 externally-managed?); "
+              "retrying with --break-system-packages")
+        subprocess.check_call(pip_cmd + ["--break-system-packages"] + pkgs)
     import resvg_py  # noqa: F401
     from PIL import Image  # noqa: F401
 
