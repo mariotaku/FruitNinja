@@ -56,6 +56,12 @@ void SaveSettings() {
     // widescreen toggle needs an app restart to apply (see Layout.h); the
     // active value only re-syncs to the pref at the next LoadSettings/boot.
     root.SetAttribute("widescreen", Layout::IsWideLayoutPref() ? "true" : "false");
+    // Port specific: Wii-only in the UI (see SettingsScreen.h m_LetterboxCb),
+    // but saved/loaded unconditionally like every other attribute here --
+    // applies LIVE (no restart, unlike widescreen), so this saves the ACTUAL
+    // current value, not a separate pref. Harmless on host/web: there is no
+    // UI path to change it there, so it always round-trips the default true.
+    root.SetAttribute("letterbox", Layout::IsLetterbox() ? "true" : "false");
     root.SetAttribute("motionSpeedThreshold", FN::g_MotionSpeedThreshold);
 
     doc.InsertEndChild(root);
@@ -117,6 +123,25 @@ void LoadSettings() {
     const char* ws = root.Attribute("widescreen");
     if (ws) {
         Layout::SetWideLayout(strcmp(ws, "true") == 0);
+    }
+
+    const char* letterbox = root.Attribute("letterbox");
+    if (letterbox) {
+        Layout::SetLetterbox(strcmp(letterbox, "true") == 0);
+    } else {
+#if defined(FRUIT_PLATFORM_WII)
+        // Port specific: no saved preference (first run, or a save file
+        // predating this attribute) -- Wii defaults to OFF (stretch-to-fill,
+        // today's look) so a user who never opens Settings sees no bars.
+        // A previously-saved letterbox="true" is handled by the branch
+        // above and is never reached here, so it's never clobbered.
+        Layout::SetLetterbox(false);
+#else
+        // Host/web: no saved preference -- keep Layout::g_Letterbox's
+        // compile-time default (true) so behaviour is unchanged from
+        // before this platform default existed.
+        Layout::SetLetterbox(true);
+#endif
     }
 
     float motionSpeedThreshold = 0.0f;

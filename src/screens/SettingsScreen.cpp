@@ -315,13 +315,31 @@ static const float kDividerY1b = (kSensY - kSensTrackH * 0.5f) - kDividerPad - k
 static const float kWideScreenLabelY = (kDividerY1b - kDividerHeight * 0.5f) - kRowLineGap;
 static const float kWideScreenCbX    = kRightEdge - kCheckboxSide * 0.5f, kWideScreenCbY = kWideScreenLabelY;
 
+#if defined(FRUIT_PLATFORM_WII)
+// Port specific: LETTERBOX -- Wii-only row, immediately below WIDESCREEN
+// (same single-row/no-description shape), gated FRUIT_PLATFORM_WII because
+// host/web fit-viewport behaviour is unconditional (Layout::g_Letterbox
+// defaults true there with no UI to change it -- see Layout.h). Same full
+// kRowLineGap clearance off WIDESCREEN's own bottom edge that WIDESCREEN
+// itself uses off Divider 1b.
+static const float kLetterboxLabelY = (kWideScreenCbY - kCheckboxSide * 0.5f) - kRowLineGap;
+static const float kLetterboxCbX    = kRightEdge - kCheckboxSide * 0.5f, kLetterboxCbY = kLetterboxLabelY;
+#endif
+
 // Divider 2: a full kRowLineGap below the WIDESCREEN checkbox's own BOTTOM
 // edge (a real widget-box edge, not the label baseline) -- same wider
 // clearance WIDESCREEN's own top gap uses (see kWideScreenLabelY), so the
 // row is evenly padded on both sides rather than cramped against Divider 2
 // while airy against Divider 1b. Previously measured off SENSITIVITY
 // directly; now off WIDESCREEN since it sits between them.
+// Port specific: on FRUIT_PLATFORM_WII, Divider 2 instead measures off the
+// LETTERBOX row (which sits between WIDESCREEN and Divider 2 there) -- same
+// "full kRowLineGap below the preceding row's own bottom edge" formula.
+#if !defined(FRUIT_PLATFORM_WII)
 static const float kDividerY2 = (kWideScreenCbY - kCheckboxSide * 0.5f) - kRowLineGap - kDividerHeight * 0.5f;
+#else
+static const float kDividerY2 = (kLetterboxCbY - kCheckboxSide * 0.5f) - kRowLineGap - kDividerHeight * 0.5f;
+#endif
 
 #if !defined(FRUIT_PLATFORM_WII)
 // NATIVE FRAME RATE: a FULL kRowLineGap below Divider 2's own bottom edge
@@ -594,6 +612,9 @@ SettingsScreen::SettingsScreen()
     , m_FpsCb(0)
     , m_NativeFpsCb(0)
     , m_WideScreenCb(0)
+#if defined(FRUIT_PLATFORM_WII)
+    , m_LetterboxCb(0)
+#endif
     , m_pCloseButton(0)
     , m_LangBaseY(0.0f)
     , m_MotionCbBaseY(0.0f)
@@ -601,6 +622,9 @@ SettingsScreen::SettingsScreen()
     , m_FpsCbBaseY(0.0f)
     , m_NativeFpsCbBaseY(0.0f)
     , m_WideScreenBaseY(0.0f)
+#if defined(FRUIT_PLATFORM_WII)
+    , m_LetterboxBaseY(0.0f)
+#endif
     , m_ScrollY(0.0f)
     , m_ScrollVel(0.0f)
     , m_MaxScroll(0.0f)
@@ -746,6 +770,16 @@ void SettingsScreen::Init() {
     m_WideScreenCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnWideScreenToggle));
     m_WideScreenCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
 
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: live toggle -- seeded from the CURRENT value (not a
+    // pref/active split like WIDESCREEN, see m_LetterboxCb's header comment).
+    m_LetterboxCb = new UiCheckbox(_Vector3<float>(kLetterboxCbX, kLetterboxCbY, 0.0f), kCheckboxSide, Layout::IsLetterbox());
+    m_LetterboxCb->SetBoxTexture(m_TexBox);
+    m_LetterboxCb->SetCheckGlyph(m_TexCheck);
+    m_LetterboxCb->SetOnChange(Mortar::Delegate0<void>::Make(this, &SettingsScreen::OnLetterboxToggle));
+    m_LetterboxCb->m_LayerFlags = Mortar::HUD_LAYER_TOP_MOST;
+#endif
+
     int sens0 = ThresholdToSlider(FN::g_MotionSpeedThreshold);
     m_SensSlider = new UiSlider(_Vector3<float>(kSensX, kSensY, 0.0f), kSensMin, kSensMax, sens0);
     m_SensSlider->SetBoxTexture(m_TexBox);
@@ -823,6 +857,9 @@ void SettingsScreen::Init() {
     m_NativeFpsCbBaseY = kNativeFpsCbY;
 #endif
     m_WideScreenBaseY  = kWideScreenCbY;
+#if defined(FRUIT_PLATFORM_WII)
+    m_LetterboxBaseY   = kLetterboxCbY;
+#endif
 
     // ---- scroll extents ----
     m_MaxScroll = kContentH - kViewportH;
@@ -857,6 +894,9 @@ void SettingsScreen::Release() {
     delete m_FpsCb;       m_FpsCb       = 0;
     delete m_NativeFpsCb; m_NativeFpsCb = 0;
     delete m_WideScreenCb; m_WideScreenCb = 0;
+#if defined(FRUIT_PLATFORM_WII)
+    delete m_LetterboxCb; m_LetterboxCb = 0;
+#endif
     if (m_pCloseButton) { m_pCloseButton->SetPendingRemoval(); m_pCloseButton = 0; }
 
     m_TexBox.SetNull();
@@ -910,6 +950,9 @@ void SettingsScreen::Update(float dt) {
         if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
         if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
         if (m_WideScreenCb) m_WideScreenCb->pos.y = m_WideScreenBaseY + off;
+#if defined(FRUIT_PLATFORM_WII)
+        if (m_LetterboxCb) m_LetterboxCb->pos.y = m_LetterboxBaseY + off;
+#endif
     }
 
     // ---- kinetic scroll (owns/tracks the touch that drives it) + widget
@@ -935,6 +978,9 @@ void SettingsScreen::Update(float dt) {
         if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
         if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
         if (m_WideScreenCb) m_WideScreenCb->pos.y = m_WideScreenBaseY + off;
+#if defined(FRUIT_PLATFORM_WII)
+        if (m_LetterboxCb) m_LetterboxCb->pos.y = m_LetterboxBaseY + off;
+#endif
     }
 
     // Port specific: while the dropdown panel is open, gate out the other
@@ -957,6 +1003,9 @@ void SettingsScreen::Update(float dt) {
             if (m_FpsCb)      m_FpsCb->Update(dt);
             if (m_NativeFpsCb) m_NativeFpsCb->Update(dt);
             if (m_WideScreenCb) m_WideScreenCb->Update(dt);
+#if defined(FRUIT_PLATFORM_WII)
+            if (m_LetterboxCb) m_LetterboxCb->Update(dt);
+#endif
         }
     }
     if (m_LangDrop) m_LangDrop->Update(dt);
@@ -1240,6 +1289,9 @@ void SettingsScreen::UpdateRealtime(float dtSeconds) {
         if (m_FpsCb)       m_FpsCb->pos.y       = m_FpsCbBaseY       + off;
         if (m_NativeFpsCb) m_NativeFpsCb->pos.y = m_NativeFpsCbBaseY + off;
         if (m_WideScreenCb) m_WideScreenCb->pos.y = m_WideScreenBaseY + off;
+#if defined(FRUIT_PLATFORM_WII)
+        if (m_LetterboxCb) m_LetterboxCb->pos.y = m_LetterboxBaseY + off;
+#endif
         return;
     }
     if (m_LangDrop && m_LangDrop->IsOpen()) {
@@ -1546,6 +1598,9 @@ void SettingsScreen::Draw(float* hudScale) {
                       kLabelX, kMotionDescY1 + 7.0f + off);
     DrawSettingsLabel(labelFont, "SENSITIVITY", kSensLabelX, kSensLabelY + 7.0f + off);
     DrawSettingsLabel(labelFont, "WIDESCREEN", kLabelX, kWideScreenLabelY + 7.0f + off);
+#if defined(FRUIT_PLATFORM_WII)
+    DrawSettingsLabel(labelFont, "LETTERBOX", kLabelX, kLetterboxLabelY + 7.0f + off);
+#endif
 #if !defined(FRUIT_PLATFORM_WII)
     // Port specific: NATIVE FRAME RATE label+description hidden on
     // FRUIT_PLATFORM_WII along with the checkbox itself (see Init()'s
@@ -1565,6 +1620,9 @@ void SettingsScreen::Draw(float* hudScale) {
     if (m_MotionCb)   m_MotionCb->Draw(hudScale);
     if (m_SensSlider) m_SensSlider->Draw(hudScale);
     if (m_WideScreenCb) m_WideScreenCb->Draw(hudScale);
+#if defined(FRUIT_PLATFORM_WII)
+    if (m_LetterboxCb) m_LetterboxCb->Draw(hudScale);
+#endif
 #if !defined(FRUIT_PLATFORM_WII)
     if (m_NativeFpsCb) m_NativeFpsCb->Draw(hudScale);
 #endif
@@ -1677,6 +1735,17 @@ void SettingsScreen::OnWideScreenToggle() {
     Layout::SetWideLayoutPref(m_WideScreenCb->IsChecked());
     UpdateCloseButtonLabel();
 }
+
+#if defined(FRUIT_PLATFORM_WII)
+void SettingsScreen::OnLetterboxToggle() {
+    // Port specific: applies LIVE -- unlike OnWideScreenToggle(), there is no
+    // pref/active split (GameWii.cpp's renderFrame() reads Layout::
+    // IsLetterbox() fresh every frame; no already-built screen positions
+    // depend on it), so this writes straight through with no restart warning
+    // and no UpdateCloseButtonLabel() call.
+    Layout::SetLetterbox(m_LetterboxCb->IsChecked());
+}
+#endif
 
 void SettingsScreen::OnSensChanged() {
     FN::g_MotionSpeedThreshold = SliderToThreshold(m_SensSlider->GetValue());

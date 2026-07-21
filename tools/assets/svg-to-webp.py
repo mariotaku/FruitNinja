@@ -78,6 +78,7 @@ MANIFEST = {
     "vslider": (32, 64),
     "arrow": (32, 32),
     "settings_button": (64, 64),
+    "crosshair": (64, 64),
 }
 
 

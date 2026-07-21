@@ -11,6 +11,8 @@
 // Only meaningful when FRUIT_PLATFORM_WII is set.
 #ifdef FRUIT_PLATFORM_WII
 
+class InputTranslatorWii;
+
 namespace fn {
 namespace wii {
 
@@ -36,6 +38,12 @@ void* VideoMode();
 // black EFB); once true it stops and releases the transient splash buffer.
 void NotifyGameSplashDrew();
 bool GameSplashDrew();
+
+// Port specific: the single InputTranslatorWii instance mainWii.cpp owns
+// (drives WPAD IR/A into it every frame). GameWii.cpp's renderFrame() reads
+// current pointer state from it via WiiPointer::Draw -- see
+// InputTranslatorWii::GetPointer(). No binary equivalent.
+InputTranslatorWii& GetInputTranslator();
 
 } // namespace wii
 } // namespace fn

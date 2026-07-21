@@ -406,11 +406,16 @@ void Renderer::shutdown() {
 }
 
 // Port specific: GX equivalents of RendererGL::InitGL's one-time GL state
-// (viewport, blend mode, depth). GX's viewport origin is already handled by
-// mainWii's boot setup (see gl_funcsWii.cpp's glViewport TODO note); this
-// call additionally seeds the scissor to full-EFB and the default Z-mode.
-// Depth-test default matches the GL path (enabled, LEQUAL -- see
-// DrawMesh3D's per-draw toggle note below for why 2D vs 3D differ).
+// (viewport, blend mode, depth). Calls GX_SetViewport/GX_SetScissor directly
+// (not through the glViewport shim, which now also drives real per-frame GX
+// state -- see gl_funcsWii.cpp) since this is boot-time setup that predates
+// the shim's g_ShimViewport bookkeeping being meaningful; both this call and
+// mainWii's own boot-time GX_SetViewport/GX_SetScissor use the full-EFB rect,
+// so the shim's first per-frame glViewport call (GameWii.cpp's renderFrame)
+// simply re-asserts (or narrows, if letterboxed) the same state. This call
+// additionally seeds the default Z-mode. Depth-test default matches the GL
+// path (enabled, LEQUAL -- see DrawMesh3D's per-draw toggle note below for
+// why 2D vs 3D differ).
 void Renderer::InitGL(int width, int height) {
     GX_SetViewport(0.0f, 0.0f, (f32)width, (f32)height, 0.0f, 1.0f);
     GX_SetScissor(0, 0, (u32)width, (u32)height);

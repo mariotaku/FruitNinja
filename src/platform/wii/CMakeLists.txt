@@ -16,6 +16,7 @@
 # and compiled as C++ rather than requiring toolchain surgery.
 target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/InputTranslatorWii.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/WiiPointer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SoundManagerWii.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FileSystemWii.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SplashBootScreen.cpp

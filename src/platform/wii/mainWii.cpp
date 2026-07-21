@@ -65,6 +65,15 @@ bool GameSplashDrew()       { return s_gameSplashDrew; }
 
 static Game g_game;
 static fn::FixedStepDriver g_driver;
+static InputTranslatorWii g_inputTranslator;
+
+namespace fn {
+namespace wii {
+// See WiiVideo.h -- lets GameWii.cpp's renderFrame() reach the same
+// translator instance this file drives from WPAD every frame.
+InputTranslatorWii& GetInputTranslator() { return g_inputTranslator; }
+} // namespace wii
+} // namespace fn
 
 // Port specific: power/reset callbacks fire in system/interrupt context where
 // file IO is unsafe (SaveOnExit/SaveSettings do tinyxml2 disk writes). So the
@@ -189,8 +198,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    static InputTranslatorWii inputTranslator;
-    inputTranslator.Init();
+    g_inputTranslator.Init();
 
     // Monotonic clock: gettime() ticks -> ms via ticks_to_millisecs.
     u64 lastTicks = gettime();
@@ -220,9 +228,21 @@ int main(int argc, char* argv[]) {
         // the 640x480 basis below, shrinks the pointer to the top-left 87.5% of
         // the screen (offset) and drives IR toward the FOV edge (roll-skew).
         // Re-issuing here (cheap, idempotent) makes ir.x/ir.y report in the
-        // (fbWidth, xfbHeight) space the normalization below assumes, the moment
+        // (fbWidth, efbHeight) space the normalization below assumes, the moment
         // each remote is up. MUST match the nx/ny denominators used below.
-        WPAD_SetVRes(WPAD_CHAN_ALL, s_rmode->fbWidth, s_rmode->xfbHeight);
+        //
+        // Port specific: uses efbHeight, NOT xfbHeight -- GameWii.cpp's
+        // renderFrame() feeds Layout::ComputeViewport/SetActiveViewport the
+        // EFB dims (s_efbW/s_efbH, the same space GX_SetViewport/GX_SetScissor
+        // render into), so the letterboxed viewport rect Layout::TouchToGame
+        // inverts lives in EFB-pixel space. Normalizing IR by xfbHeight (the
+        // separate post-Y-scale display/output height, which differs from
+        // efbHeight on some PAL modes) would silently mismatch the two spaces
+        // and misalign the pointer against the letterbox bars whenever
+        // efbHeight != xfbHeight. Both numbers equal fbWidth/efbHeight/
+        // xfbHeight on the common NTSC-progressive mode (efbHeight==xfbHeight
+        // there), so this is a no-op change for that mode.
+        WPAD_SetVRes(WPAD_CHAN_ALL, s_rmode->fbWidth, s_rmode->efbHeight);
 
         // HOME on any remote quits (host-only affordance; no binary equiv).
         //
@@ -245,21 +265,23 @@ int main(int argc, char* argv[]) {
             if (down & WPAD_BUTTON_HOME) {
                 g_game.running = false;
             }
-            // WPAD_SetVRes(WPAD_CHAN_ALL, fbWidth, xfbHeight) above makes
+            // WPAD_SetVRes(WPAD_CHAN_ALL, fbWidth, efbHeight) above makes
             // ir.x/ir.y report in that same fb pixel space; normalize here
             // to [0,1] top-left/y-down (the same convention SDL's normalized
             // touch coords use) before handing off to DrainWiimoteIR, which
             // forwards to Layout::TouchToGame for the actual game-coord
-            // transform (see InputTranslatorWii.cpp).
+            // transform (see InputTranslatorWii.cpp). MUST match the
+            // WPAD_SetVRes denominators above -- see that call's comment for
+            // why this is efbHeight, not xfbHeight.
             ir_t ir;
             WPAD_IR(chan, &ir);
             float nx = 0.0f, ny = 0.0f;
-            if (ir.valid && s_rmode->fbWidth > 0 && s_rmode->xfbHeight > 0) {
+            if (ir.valid && s_rmode->fbWidth > 0 && s_rmode->efbHeight > 0) {
                 nx = ir.x / (float)s_rmode->fbWidth;
-                ny = ir.y / (float)s_rmode->xfbHeight;
+                ny = ir.y / (float)s_rmode->efbHeight;
             }
             bool aHeld = (WPAD_ButtonsHeld(chan) & WPAD_BUTTON_A) != 0;
-            inputTranslator.DrainWiimoteIR(chan, ir.valid != 0, aHeld, nx, ny);
+            g_inputTranslator.DrainWiimoteIR(chan, ir.valid != 0, aHeld, nx, ny);
         }
 
         g_game.pollInput();
@@ -274,7 +296,7 @@ int main(int argc, char* argv[]) {
         int steps = g_driver.advance(elapsedMs);
 
         for (int i = 0; i < steps && g_game.running; ++i) {
-            inputTranslator.DispatchForSimTick();
+            g_inputTranslator.DispatchForSimTick();
             g_game.stepUpdate();
         }
 

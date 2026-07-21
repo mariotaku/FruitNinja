@@ -134,6 +134,16 @@ public:
     // InputTranslatorSDL::ReleaseAllFingers() on SDL focus-loss.
     void ReleaseAllFingers();
 
+    // Port specific: on-screen hand-pointer state for remote `remote`
+    // (0..MAX_REMOTES-1). No binary equivalent -- feeds WiiPointer::Draw
+    // (src/platform/wii/WiiPointer.cpp), the Wii-only IR cursor overlay.
+    // Returns false (and leaves the outs untouched) when that remote's last
+    // DrainWiimoteIR() call reported irValid==false. gx/gy are centred-ortho
+    // game coords (same space Layout::TouchToGame produces); speed is the
+    // per-sim-tick smoothed pointer speed (see DispatchForSimTick), in the
+    // same units as SlashEntity::m_SmoothedSpeed.
+    bool GetPointer(int remote, float* gx, float* gy, bool* aHeld, float* speed) const;
+
 private:
     // Pre-computed action hashes, indexed by CHANNEL (0-15) like the SDL
     // translator (Role 1 uses 0-3, Role 2 uses 12-15).
@@ -168,6 +178,18 @@ private:
     // validity edge).
     bool  prevButtonDown[MAX_REMOTES];
     bool  prevIRValid[MAX_REMOTES];
+
+    // Port specific: on-screen hand-pointer state, per remote. No binary
+    // equivalent -- feeds GetPointer()/WiiPointer::Draw. Independent of the
+    // press/hover channel roles above (this is "where to draw the hand",
+    // not an input-dispatch signal).
+    float m_PtrGX[MAX_REMOTES];
+    float m_PtrGY[MAX_REMOTES];
+    bool  m_PtrValid[MAX_REMOTES];
+    bool  m_PtrAHeld[MAX_REMOTES];
+    float m_PtrSmoothedSpeed[MAX_REMOTES];
+    float m_PtrPrevGX[MAX_REMOTES];
+    float m_PtrPrevGY[MAX_REMOTES];
 
     // Transform normalized IR-pointer coords (nx, ny in [0,1], top-left
     // origin, y-down -- same convention WPAD_SetVRes/ir.x,ir.y normalize to)

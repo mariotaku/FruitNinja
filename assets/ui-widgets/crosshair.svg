@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- crosshair.tex : Wii Wiimote IR pointer (style C: thin cross + center
+       ring). Geometric center of the texture (32,32) is the aim hotspot,
+       drawn centered on the IR point, no anchor offset. Dark under-stroke
+       for contrast on bright backgrounds, white on top, small red ring
+       dead-center. -->
+  <!-- dark backing strokes (contrast underlay) -->
+  <g stroke="#1a1a1a" stroke-width="4.5" stroke-linecap="round">
+    <line x1="32" y1="4"  x2="32" y2="22"/>
+    <line x1="32" y1="42" x2="32" y2="60"/>
+    <line x1="4"  y1="32" x2="22" y2="32"/>
+    <line x1="42" y1="32" x2="60" y2="32"/>
+  </g>
+  <!-- white cross arms (gap near center) -->
+  <g stroke="#ffffff" stroke-width="2.4" stroke-linecap="round">
+    <line x1="32" y1="4"  x2="32" y2="22"/>
+    <line x1="32" y1="42" x2="32" y2="60"/>
+    <line x1="4"  y1="32" x2="22" y2="32"/>
+    <line x1="42" y1="32" x2="60" y2="32"/>
+  </g>
+  <!-- center ring -->
+  <circle cx="32" cy="32" r="5" fill="none" stroke="#1a1a1a" stroke-width="3"/>
+  <circle cx="32" cy="32" r="5" fill="none" stroke="#e62828" stroke-width="1.6"/>
+</svg>

@@ -247,6 +247,17 @@ private:
     // on relaunch, same as a language change.
     UiCheckbox* m_WideScreenCb;
 
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: "LETTERBOX" -- Wii-only row, right after WIDESCREEN (see
+    // kLetterboxLabelY in the .cpp). Live toggle (unlike WIDESCREEN): applies
+    // immediately via Layout::SetLetterbox(), no restart/pref-vs-active split
+    // -- ComputeViewport reads it every renderFrame. Host/web have no row for
+    // this (Layout::g_Letterbox defaults true = current fit-viewport
+    // behaviour, unconditionally, so they stay visually unchanged). Persisted
+    // like the other checkboxes via SaveSettings() on modal close.
+    UiCheckbox* m_LetterboxCb;
+#endif
+
     // Port specific: modal close button, bottom-right of the plate. Built the
     // same way PauseScreen builds m_QuitButton (see PauseScreen::Update
     // @0x001a5ebc) -- a BSButton showing quit_title.tex (bomb-with-X icon)
@@ -299,6 +310,9 @@ private:
     float m_FpsCbBaseY;
     float m_NativeFpsCbBaseY;
     float m_WideScreenBaseY;
+#if defined(FRUIT_PLATFORM_WII)
+    float m_LetterboxBaseY;
+#endif
 
     // Port specific: kinetic scroll state for the plate's content viewport --
     // same drag/fling/spring-back model as UiDropdown's open-panel scroll
@@ -397,6 +411,11 @@ public:
     void OnSensChanged();
     void OnLangChanged();
     void OnWideScreenToggle();
+#if defined(FRUIT_PLATFORM_WII)
+    // Port specific: live toggle -- applies immediately (no restart), unlike
+    // OnWideScreenToggle(). See m_LetterboxCb's field comment.
+    void OnLetterboxToggle();
+#endif
 
     // Port specific: m_pCloseButton's click callback. Calls Toggle() so
     // tapping Close runs the exact same close path (including the

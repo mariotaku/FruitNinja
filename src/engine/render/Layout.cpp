@@ -13,6 +13,10 @@ namespace {
 bool g_WideLayout = false;      // ACTIVE (live, boot-latched) value
 bool g_WideLayoutPref = false;  // PREF (user's saved choice, editable live)
 float g_RawWindowAspect = 1.5f;
+// Default TRUE = current fit-into-window-preserving-aspect behaviour,
+// unconditionally, so host/web are unaffected by this flag's existence
+// unless something explicitly calls SetLetterbox(false).
+bool g_Letterbox = true;
 
 // Last-applied viewport rect + the window size it was computed from.
 // Defaults describe a not-yet-rendered frame's full window; TouchToGame
@@ -146,6 +150,14 @@ bool WideLayoutRestartPending() {
     return g_WideLayoutPref != g_WideLayout;
 }
 
+bool IsLetterbox() {
+    return g_Letterbox;
+}
+
+void SetLetterbox(bool letterbox) {
+    g_Letterbox = letterbox;
+}
+
 void SetWindowAspect(float drawableW, float drawableH) {
     if (drawableH <= 0.0f) return;
     g_RawWindowAspect = drawableW / drawableH;
@@ -182,15 +194,15 @@ float MapX_impl(float x, const char* key) {
     return x * (halfWidth / 240.0f);   // proportional default (near-center / spread)
 }
 
-// Pass 3: centred pillarbox/letterbox viewport rect, shared by render and
-// input. Mirrors the pillarbox/letterbox math that used to live inline in
-// Game::renderFrame (GameSDL.cpp) -- moved here so InputTranslatorSDL can
-// invert the exact same rect instead of re-deriving it (two independent
-// copies of this math would drift on the widescreen edges).
-void ComputeViewport(int winW, int winH, int* outX, int* outY, int* outW, int* outH) {
+// Port specific: pure aspect-fit geometry, factored out of ComputeViewport so
+// Wii's ComputeViewportFitAlways (below) can reuse the exact same math
+// without a second hand-copy that could drift. Centres the largest
+// targetAspect-shaped rect that fits inside winW x winH. No gating of any
+// kind -- callers decide whether/when to invoke this.
+static void FitAspect(int winW, int winH, float targetAspect,
+                      int* outX, int* outY, int* outW, int* outH) {
     int vpX = 0, vpY = 0, vpW = winW, vpH = winH;
-    if (g_WideLayout && winW > 0 && winH > 0) {
-        float targetAspect = EffectiveAspect();
+    if (winW > 0 && winH > 0) {
         float windowAspect = (float)winW / (float)winH;
         if (windowAspect > targetAspect) {
             // Window wider than target -- pillarbox (side bars).
@@ -206,6 +218,50 @@ void ComputeViewport(int winW, int winH, int* outX, int* outY, int* outW, int* o
     *outY = vpY;
     *outW = vpW;
     *outH = vpH;
+}
+
+// Pass 3: centred pillarbox/letterbox viewport rect, shared by render and
+// input. Mirrors the pillarbox/letterbox math that used to live inline in
+// Game::renderFrame (GameSDL.cpp) -- moved here so InputTranslatorSDL can
+// invert the exact same rect instead of re-deriving it (two independent
+// copies of this math would drift on the widescreen edges).
+void ComputeViewport(int winW, int winH, int* outX, int* outY, int* outW, int* outH) {
+    // g_Letterbox gates the fit-vs-stretch behaviour: false returns the full
+    // window/EFB rect unconditionally (content stretches, no bars) --
+    // default true preserves the pre-existing fit behaviour below. Also
+    // gated on g_WideLayout -- host/web's non-wide default window is
+    // pre-sized to exactly EffectiveAspect() (3:2, see mainSDL.cpp), so
+    // fit-vs-stretch is unobservable there by construction; requiring
+    // g_WideLayout here keeps that assumption explicit rather than relying
+    // on window-size coincidence, and is what keeps a non-wide host build
+    // byte-identical to pre-Pass-3 behaviour even if a user resizes the
+    // window (see ComputeViewportFitAlways below for the Wii path, which
+    // legitimately needs to fit without g_WideLayout since its "window" --
+    // the TV -- is never pre-shaped to match).
+    if (g_Letterbox && g_WideLayout) {
+        FitAspect(winW, winH, EffectiveAspect(), outX, outY, outW, outH);
+    } else {
+        *outX = 0; *outY = 0; *outW = winW; *outH = winH;
+    }
+}
+
+// Port specific: Wii-only variant of ComputeViewport -- fits whenever
+// g_Letterbox is on, REGARDLESS of g_WideLayout. Unlike host/web (whose
+// window is pre-sized to match EffectiveAspect() when not wide, see
+// ComputeViewport's own comment), the Wii's "window" is the TV's physical
+// display shape (an independent CONF_GetAspectRatio() reading, see
+// GameWii.cpp's s_displayAspect) -- it is never pre-shaped to match the
+// content aspect, so a non-widescreen 3:2 game on a 16:9 TV still needs
+// fitting (pillarboxed) when the user has the Wii-only LETTERBOX checkbox
+// on, not just when widescreen is also on. Not reachable from host/web (only
+// GameWii.cpp calls this), so it cannot affect their byte-identical-by-
+// default guarantee.
+void ComputeViewportFitAlways(int winW, int winH, int* outX, int* outY, int* outW, int* outH) {
+    if (g_Letterbox) {
+        FitAspect(winW, winH, EffectiveAspect(), outX, outY, outW, outH);
+    } else {
+        *outX = 0; *outY = 0; *outW = winW; *outH = winH;
+    }
 }
 
 void SetActiveViewport(int x, int y, int w, int h, int winW, int winH) {

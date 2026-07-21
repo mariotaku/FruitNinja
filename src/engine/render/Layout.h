@@ -66,6 +66,11 @@ inline bool IsWideLayoutPref() { return false; }
 inline void SetWideLayoutPref(bool /*wide*/) {}
 inline bool WideLayoutRestartPending() { return false; }
 
+// Faithful-build no-ops: SettingsSave calls these unguarded too (real
+// letterbox state lives only in the non-__bada__ branch below).
+inline bool IsLetterbox() { return true; }
+inline void SetLetterbox(bool /*letterbox*/) {}
+
 } // namespace Layout
 
 #else
@@ -92,6 +97,19 @@ bool IsWideLayoutPref();
 void SetWideLayoutPref(bool wide);
 bool WideLayoutRestartPending();
 
+// Port specific: letterbox/pillarbox toggle -- gates ComputeViewport's fit
+// behaviour. Default TRUE (= current fit-into-window-preserving-aspect
+// behaviour, unchanged from before this flag existed) so host/web stay
+// byte-identical unless something explicitly flips it off. Unlike
+// IsWideLayout()/SetWideLayout(), there is no ACTIVE/PREF split: this applies
+// LIVE, the next ComputeViewport call (no already-built-screen MapX()
+// positions depend on it, only the viewport rect), so a UI toggle can call
+// SetLetterbox() directly. When false, ComputeViewport returns the full
+// window/EFB rect unconditionally (content stretches to fill, no bars) --
+// see ComputeViewport's own comment.
+bool IsLetterbox();
+void SetLetterbox(bool letterbox);
+
 // Raw drawable aspect (w/h) most recently reported by the render/viewport
 // code. Feeds EffectiveAspect()'s clamp; a no-op call site is safe (keeps
 // the previous value / defaults to 1.5f before the first frame).
@@ -115,8 +133,19 @@ float MapX_impl(float x, const char* key);
 // largest EffectiveAspect()-shaped rect that fits inside winW x winH,
 // centred. When !IsWideLayout(), returns the full window unchanged
 // (0, 0, winW, winH) -- this is what keeps the non-widescreen path
-// byte-identical to pre-widescreen behaviour.
+// byte-identical to pre-widescreen behaviour. Also returns the full window
+// unchanged when !IsLetterbox() (content stretches to fill instead of being
+// aspect-fit with bars) -- default IsLetterbox()==true preserves the fit
+// behaviour above, so this is a no-op unless something calls
+// SetLetterbox(false).
 void ComputeViewport(int winW, int winH, int* outX, int* outY, int* outW, int* outH);
+
+// Port specific: Wii-only variant -- fits whenever IsLetterbox() is on,
+// regardless of IsWideLayout(). See Layout.cpp's comment for why Wii needs
+// this (its "window" is the TV's own physical aspect, never pre-shaped to
+// match the content aspect the way host/web's default window is). Not called
+// from any non-Wii TU.
+void ComputeViewportFitAlways(int winW, int winH, int* outX, int* outY, int* outW, int* outH);
 
 // Stores the most recently applied viewport rect + the window size it was
 // computed from. Call once per frame right after ComputeViewport/glViewport

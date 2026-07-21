@@ -13,10 +13,12 @@
 // for both 2D-ortho and 3D-perspective), and a single GX_MODULATE / GX_PASSCLR
 // TEV stage reproduces GL_MODULATE. Textures are uploaded/converted to
 // GX_TF_RGBA8 tiled. Shader objects remain no-op stubs (GX uses fixed TEV
-// stages, not GLSL). Remaining deferred pieces (glTexSubImage2D, per-frame
-// viewport/scissor Y-flip, compressed textures) carry a
-// // TODO(wii Pass 2): marker. (glReadPixels is intentionally absent -- its
-// only caller is SDL/GL-only; see the note near glFinish.)
+// stages, not GLSL). glViewport/glScissor now drive real per-frame
+// GX_SetViewport/GX_SetScissor (widescreen/letterbox support -- see their own
+// comments for the GL->GX Y-flip convention). Remaining deferred pieces
+// (glTexSubImage2D, compressed textures) carry a // TODO(wii Pass 2): marker.
+// (glReadPixels is intentionally absent -- its only caller is SDL/GL-only;
+// see the note near glFinish.)
 //
 // Only compiled when FRUIT_PLATFORM_WII is set (see src/engine/CMakeLists.txt).
 #ifdef FRUIT_PLATFORM_WII
@@ -33,6 +35,7 @@
 
 #include "render/gl_funcsWii.h"
 #include "platform/wii/Mem2Alloc.h"  // Task #61: texture pixel buffers -> MEM2
+#include "platform/wii/WiiVideo.h"   // fn::wii::VideoMode() -- real EFB height for the GL->GX Y flip
 
 // ---------------------------------------------------------------------------
 // Shared shim state (read by DisplayManagerWii.cpp + Pass 2's GX draw).
@@ -642,17 +645,46 @@ extern "C" {
 // callers (GL-renderer logging in mainSDL/mainEmscripten/gl_funcsSDL, GL error
 // checks) are SDL/GL-only and never compiled on Wii.
 
+// Port specific: the real EFB height (fn::wii::VideoMode()'s efbHeight),
+// needed as the GL->GX Y-flip basis for BOTH glViewport and glScissor below.
+// Shared here (rather than each function calling fn::wii::VideoMode()
+// separately) because it's the single source of truth for "how tall is the
+// actual render target" -- glScissor's flip previously (wrongly, see its own
+// comment) used g_ShimViewport[3] (the last-set viewport's OWN height) as a
+// stand-in for this, which only happened to be correct while glViewport was
+// always called with the full-EFB rect (h == efbHeight) pre-Stage-2.
+static int Wii_GetEfbHeight() {
+    GXRModeObj* rm = (GXRModeObj*)fn::wii::VideoMode();
+    return rm ? (int)rm->efbHeight : g_ShimViewport[3];
+}
+
 void glViewport(GLint x, GLint y, GLsizei w, GLsizei h) {
     g_ShimViewport[0] = x;
     g_ShimViewport[1] = y;
     g_ShimViewport[2] = w;
     g_ShimViewport[3] = h;
-    // GX viewport origin is top-left; GL's is bottom-left. The stored xfb
-    // height is needed to flip, which DisplayManagerWii owns -- for the boot
-    // pass we set the GX viewport in mainWii's one-time setup and leave the
-    // per-frame GL viewport as bookkeeping only.
-    // TODO(wii Pass 2): GX_SetViewport(x, xfbHeight-y-h, w, h, 0, 1) with the
-    // GL->GX Y flip once per-frame viewport changes need to take effect.
+    // GX viewport origin is top-left; GL's is bottom-left, measured from the
+    // full render target (not from this viewport's own extent) -- so the
+    // flip basis is the true EFB height, not h itself. GX_SetViewport takes
+    // (x, y, w, h, nearZ, farZ) in GX's own top-left-origin space; near/far Z
+    // stay the GL default [0,1] (matches RendererGX's own depth range, no
+    // separate glDepthRangef call anywhere in this port).
+    int efbH = Wii_GetEfbHeight();
+    GX_SetViewport((f32)x, (f32)(efbH - y - h), (f32)w, (f32)h, 0.0f, 1.0f);
+    // Port specific: GX has no separate "viewport" vs "scissor" test-enable
+    // concept the way GL does (GL_SCISSOR_TEST can be disabled while the
+    // viewport stays put, showing content beyond the scissor rect but still
+    // clipped to the viewport) -- GX_SetScissor is the only clip rect GX
+    // offers, so it doubles as this port's viewport clip too. Every
+    // glViewport call re-applies the scissor to the FULL new viewport rect
+    // (mirroring GL's own implicit viewport clip); glScissor (below) then
+    // narrows it further for the GL_SCISSOR_TEST-enabled case, and
+    // glDisable(GL_SCISSOR_TEST) already restores exactly this same full-
+    // viewport rect (see its own comment) -- kept in sync here so a
+    // glViewport call with no intervening glScissor/glDisable still clips
+    // draws to the new (possibly letterboxed/pillarboxed) rect instead of the
+    // previous frame's leftover scissor.
+    GX_SetScissor((u32)x, (u32)(efbH - y - h), (u32)w, (u32)h);
 }
 
 void glGetIntegerv(GLenum pname, GLint* params) {
@@ -712,15 +744,26 @@ void glDisable(GLenum cap) {
             g_ZMode.enable = false;
             ApplyZMode();
             break;
-        case GL_SCISSOR_TEST:
+        case GL_SCISSOR_TEST: {
             // GX scissor is always active (no test-enable toggle), so a prior
             // glScissor rect would leak into every subsequent draw. Restore the
             // full viewport rect here so glDisable(GL_SCISSOR_TEST) matches GL
             // semantics -- without this the AboutScreen credits' clip rect
             // stayed active and clipped the whole rest of the frame.
-            GX_SetScissor((u32)g_ShimViewport[0], (u32)g_ShimViewport[1],
+            //
+            // Must apply the SAME GL->GX Y flip glViewport/glScissor use (see
+            // their comments) -- g_ShimViewport[1] is GL bottom-left-origin,
+            // GX_SetScissor is top-left-origin. Previously passed through
+            // unflipped, which only coincidentally matched while the viewport
+            // was always full-EFB (y==0, so both origins agree); with
+            // Stage-2 letterbox/pillarbox viewports (y can be nonzero) this
+            // must flip like every other GX_SetScissor call site here.
+            int efbH = Wii_GetEfbHeight();
+            GX_SetScissor((u32)g_ShimViewport[0],
+                          (u32)(efbH - g_ShimViewport[1] - g_ShimViewport[3]),
                           (u32)g_ShimViewport[2], (u32)g_ShimViewport[3]);
             break;
+        }
         default:
             break;
     }

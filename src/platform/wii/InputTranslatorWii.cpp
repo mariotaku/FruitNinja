@@ -19,6 +19,7 @@
 #include "hud/HUD.h"
 #include <cstdio>
 #include <cstring>
+#include <cmath>
 
 InputTranslatorWii::InputTranslatorWii()
     : hashTouchScreen(0)
@@ -37,6 +38,14 @@ InputTranslatorWii::InputTranslatorWii()
     memset(motionSinceDown, 0, sizeof(motionSinceDown));
     memset(prevButtonDown, 0, sizeof(prevButtonDown));
     memset(prevIRValid, 0, sizeof(prevIRValid));
+
+    memset(m_PtrGX, 0, sizeof(m_PtrGX));
+    memset(m_PtrGY, 0, sizeof(m_PtrGY));
+    memset(m_PtrValid, 0, sizeof(m_PtrValid));
+    memset(m_PtrAHeld, 0, sizeof(m_PtrAHeld));
+    memset(m_PtrSmoothedSpeed, 0, sizeof(m_PtrSmoothedSpeed));
+    memset(m_PtrPrevGX, 0, sizeof(m_PtrPrevGX));
+    memset(m_PtrPrevGY, 0, sizeof(m_PtrPrevGY));
 }
 
 // Mirrors InputTranslatorSDL::Init -- same "TouchDown_N"/"TouchMove_XN"/
@@ -121,6 +130,18 @@ void InputTranslatorWii::DrainWiimoteIR(int chan, bool irValid, bool aPressed, f
     float gx = 0.0f, gy = 0.0f;
     if (irValid) {
         TransformIRNormalized(x, y, gx, gy);
+    }
+
+    // Port specific: on-screen hand-pointer state (WiiPointer overlay). No
+    // binary equivalent. Stored every frame regardless of press/hover role --
+    // this is purely "where is remote `chan` currently pointing", independent
+    // of whether A is held. Smoothed speed is advanced once per sim tick in
+    // DispatchForSimTick, not here (this runs once per display frame).
+    m_PtrValid[chan] = irValid;
+    m_PtrAHeld[chan] = aPressed;
+    if (irValid) {
+        m_PtrGX[chan] = gx;
+        m_PtrGY[chan] = gy;
     }
 
     // ---- Role 1: A-press finger on channel `chan` (0-3), both modes ----
@@ -421,6 +442,37 @@ void InputTranslatorWii::DispatchForSimTick() {
             mgr->DispatchEvent(&ie);
         }
     }
+
+    // Port specific: advance the hand-pointer smoothed speed once per sim
+    // tick (matching SlashEntity::m_SmoothedSpeed's cadence/units --
+    // SlashEntity.cpp's EMA also runs once per sim tick, k=0.4). No binary
+    // equivalent. Invalid remotes reset to 0 so a lost/regained IR dot
+    // doesn't read a stale high speed from before the loss.
+    for (int remote = 0; remote < MAX_REMOTES; ++remote) {
+        if (m_PtrValid[remote]) {
+            float dx = m_PtrGX[remote] - m_PtrPrevGX[remote];
+            float dy = m_PtrGY[remote] - m_PtrPrevGY[remote];
+            float spd = sqrtf(dx * dx + dy * dy);
+            m_PtrSmoothedSpeed[remote] += (spd - m_PtrSmoothedSpeed[remote]) * 0.4f;
+        } else {
+            m_PtrSmoothedSpeed[remote] = 0.0f;
+        }
+        m_PtrPrevGX[remote] = m_PtrGX[remote];
+        m_PtrPrevGY[remote] = m_PtrGY[remote];
+    }
+}
+
+// Port specific: on-screen hand-pointer accessor (WiiPointer overlay). No
+// binary equivalent.
+bool InputTranslatorWii::GetPointer(int remote, float* gx, float* gy, bool* aHeld, float* speed) const {
+    if (remote < 0 || remote >= MAX_REMOTES) return false;
+    if (!m_PtrValid[remote]) return false;
+
+    *gx = m_PtrGX[remote];
+    *gy = m_PtrGY[remote];
+    *aHeld = m_PtrAHeld[remote];
+    *speed = m_PtrSmoothedSpeed[remote];
+    return true;
 }
 
 // Mirrors InputTranslatorSDL::ReleaseAllFingers -- synthesize TouchUp for

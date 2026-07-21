@@ -26,9 +26,12 @@
 #include "config.h"
 #include "render/gl_funcs.h"
 #include "render/Layout.h"
+#include "game/SettingsSave.h"
 #include "platform/wii/WiiVideo.h"
+#include "platform/wii/WiiPointer.h"
 
 #include <gccore.h>
+#include <ogc/conf.h>
 
 // Port specific: FPS value shown by DebugFps_Draw (fed by mainWii's loop if it
 // ever computes FPS; unused for the boot pass).
@@ -46,6 +49,19 @@ static int s_efbW  = 640;
 static int s_efbH  = 480;
 static int s_xfbH  = 480;
 
+// Port specific: the Wii console's own TV Aspect Ratio setting (System
+// Settings > Screen), read once at boot via CONF_GetAspectRatio() in
+// Game::init(). The EFB is ALWAYS a 4:3-shaped pixel grid (s_efbW/s_efbH
+// above) regardless of this setting -- VIDEO's scan-out anamorphically
+// stretches the WHOLE EFB horizontally to fill a 16:9 panel when the console
+// is so configured. Independent of Layout::IsWideLayout() (the game-content
+// widescreen CHECKBOX, a manual user choice on every platform) -- this is
+// "what physical shape is the TV", not "how wide a field does the game
+// render". Feeds the PAR (pixel-aspect-ratio) correction in renderFrame()'s
+// ComputeViewport call so widescreen/letterbox content isn't anamorphically
+// distorted on a 16:9-configured console. 4:3 (1.333) until Game::init() runs.
+static float s_displayAspect = 4.0f / 3.0f;
+
 // Matches GameSDL.cpp's Game::init flow (FruitNinja::OnAppInitializing) minus
 // the SDL window/context handling -- GX has no window/context concept.
 bool Game::init(void* win, void* gl) {
@@ -60,6 +76,17 @@ bool Game::init(void* win, void* gl) {
     // tree above (see Game.h save_dir comment). mainWii.cpp mkdir()s this
     // path at boot, before Game::init() runs.
     save_dir = FN_SAVE_DIR;
+
+    // Port specific: load persisted settings (widescreen pref, motion mode,
+    // sensitivity, FPS counter) -- mirrors mainSDL.cpp's LoadSettings() call.
+    // No binary equivalent; must run after save_dir is set immediately above
+    // (GetSettingsSavePath() reads Game::GetInstance()->save_dir on
+    // FRUIT_PLATFORM_WII, see SettingsSave.cpp) and before GameInitialise
+    // below so it sees the saved languageFlag rather than the zero-
+    // initialised default. Previously never called on Wii at all -- the
+    // widescreen pref, motion mode etc. were silently dropped every boot even
+    // though SaveSettings() (mainWii.cpp's power/reset handler) wrote them.
+    LoadSettings();
 
     // DisplayManager holds game-space dimensions (480x320), not EFB pixels.
     Mortar::DisplayManager::GetInstance().SetWindowSize(0, FN_SCREEN_H, 0, FN_SCREEN_W);
@@ -90,12 +117,27 @@ bool Game::init(void* win, void* gl) {
     SetHardware("BADA", true);
     GameInitialise(nullptr, nullptr);
 
-    // Wii is a fixed 4:3 display: force the native 3:2 layout (widescreen is a
-    // host/web-only enhancement) so the UI uses HalfWidth==240 positions and
-    // Layout::ComputeViewport returns the FULL viewport -- the native 3:2 frame
-    // then stretches to fill the real EFB (no letterbox bars) rather than being
-    // aspect-fit. Overrides whatever the loaded save's widescreen pref was.
-    Layout::SetWideLayout(false);
+    // Port specific: widescreen on Wii is a MANUAL user choice (the in-game
+    // WIDESCREEN checkbox, SettingsScreen.cpp), same as every other platform
+    // -- NOT auto-derived from the console's TV Aspect Ratio setting. Those
+    // are two independent questions: "does the game render a wider FIELD"
+    // (widescreen pref/active, Layout::SetWideLayout) vs "what physical shape
+    // is the TV" (s_displayAspect below, read via CONF_GetAspectRatio() --
+    // feeds the anamorphic PAR correction in renderFrame(), not this flag).
+    // LoadSettings() (above) already seeded g_WideLayout/g_WideLayoutPref
+    // from the save file (or left the zero-initialised default, false, on
+    // first run) -- nothing to override here.
+    //
+    // Port specific: read the console's TV Aspect Ratio setting once here
+    // (CONF_GetAspectRatio(), <ogc/conf.h> -- no binary equivalent, no NAND
+    // config on Bada) into s_displayAspect. The Wii's EFB is ALWAYS a 4:3-
+    // shaped pixel grid regardless of this setting -- VIDEO's scan-out
+    // stretches the WHOLE EFB anamorphically (horizontally) to fill a 16:9
+    // panel when the console is configured that way. renderFrame() uses
+    // s_displayAspect to correct ComputeViewport's fit math for that
+    // stretch (see PAR there) so widescreen/letterbox content isn't
+    // horizontally distorted on a 16:9-configured console.
+    s_displayAspect = (CONF_GetAspectRatio() == CONF_ASPECT_16_9) ? (16.0f / 9.0f) : (4.0f / 3.0f);
 
     // Port specific: pre-load pSplashTex here (same call GameInit.cpp's
     // GameUpdate makes lazily on first splashFadeTimer>0 tick) so it's already
@@ -111,6 +153,11 @@ bool Game::init(void* win, void* gl) {
     if (!pSplashTex) {
         pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
     }
+
+    // Port specific: pre-load the IR hand-pointer texture (see WiiPointer.h)
+    // now, alongside the other boot-common loads above, so the first
+    // renderFrame's overlay draw doesn't stall on a lazy load.
+    FN::wii::WiiPointer_Init();
 
     game_work.taskStateIndex = 0;
     running = true;
@@ -148,9 +195,77 @@ void Game::setCurrentFps(float fps) {
 // DisplayManager::SwapBuffers (DisplayManagerWii.cpp) for the GX_CopyDisp/
 // VIDEO present.
 void Game::renderFrame(float /*alpha*/, int /*steps*/) {
-    Layout::SetWindowAspect((float)s_efbW, (float)s_efbH);
+    // Port specific: Layout::EffectiveAspect() -- the CONTENT aspect (1.5
+    // when !IsWideLayout(), else clamped-to-[1.5,16/9] g_RawWindowAspect) --
+    // must come out to EXACTLY 1.5 or EXACTLY 16/9 on Wii, a pure function of
+    // the WIDESCREEN checkbox alone, decoupled from the console's physical TV
+    // shape (s_displayAspect, read via CONF_GetAspectRatio() in Game::init()
+    // -- a SEPARATE, independent input, see its own comment). Feeding literal
+    // 16.0f/9.0f here (not s_displayAspect) makes EffectiveAspect()'s clamp a
+    // no-op in both directions -- unlike host/web, where SetWindowAspect's
+    // argument doubles as both "what to clamp EffectiveAspect() to" AND "what
+    // ComputeViewport fits against" (the same real window there), those two
+    // roles are DIFFERENT numbers on Wii and must not be conflated: the fit
+    // target below uses s_displayAspect directly, independent of this call.
+    Layout::SetWindowAspect(16.0f, 9.0f);
+
+    // Port specific: fit targetAspect against the TV's TRUE physical aspect
+    // (s_displayAspect) rather than the EFB's own pixel aspect -- then apply
+    // an anamorphic PAR correction so the fit rect's width, expressed back in
+    // real EFB pixel columns, produces that same physical aspect once
+    // VIDEO's horizontal stretch is applied to it.
+    //
+    // Why: the EFB is ALWAYS a 4:3-ISH pixel grid (s_efbW/s_efbH -- not
+    // exactly 4/3 on every mode, e.g. PAL non-interlace 640x528 is 1.212);
+    // VIDEO's scan-out stretches the WHOLE EFB horizontally (anamorphically,
+    // uniformly across every column) to fill a 16:9 panel when the console is
+    // so configured. A full-EFB viewport's on-screen PHYSICAL aspect is
+    // therefore (s_efbW*PAR)/s_efbH, which by construction equals
+    // s_displayAspect exactly -- solving that for PAR gives the formula
+    // below. A plain "EFB pixel aspect" fit (the SDL/web assumption, where
+    // window dims ARE the true display shape) would fit against the WRONG
+    // target and come out horizontally squashed/stretched whenever
+    // s_displayAspect doesn't already equal s_efbW/s_efbH.
+    //
+    // par == 1.0 exactly when s_displayAspect == s_efbW/s_efbH (the console's
+    // own EFB shape, reported as its own "native" CONF aspect) -- there is no
+    // stretch to correct for, and this whole block reduces to fitting
+    // directly against the EFB's real pixel dims (unchanged from before this
+    // feature). Uses the real s_efbW/s_efbH ratio, NOT a hardcoded 4/3 --
+    // generalises the confirmed "PAR = displayAspect/(4/3)" spec (which
+    // assumes the common NTSC-progressive 640x480 EFB, exactly 4:3) to also
+    // hold on PAL's non-4:3 EFB shapes (e.g. 640x528); the two formulas are
+    // numerically identical on NTSC.
+    const float efbAspect = (float)s_efbW / (float)s_efbH;
+    const float par = s_displayAspect / efbAspect;
+
     int vpX, vpY, vpW, vpH;
-    Layout::ComputeViewport(s_efbW, s_efbH, &vpX, &vpY, &vpW, &vpH);
+    // ComputeViewportFitAlways (Wii-only -- see Layout.h/.cpp) fits whenever
+    // IsLetterbox() is on, regardless of IsWideLayout() -- unlike the shared
+    // ComputeViewport (used by host/web), which additionally requires
+    // IsWideLayout() because host/web's non-wide default window is already
+    // pre-sized to exactly 3:2. Wii's "window" is the TV, never pre-shaped to
+    // match the content aspect, so a 3:2 game on a 16:9 TV still needs
+    // fitting when LETTERBOX is on even with WIDESCREEN off.
+    //
+    // Feed a synthetic winW (not s_efbW) so the window-aspect ratio
+    // ComputeViewportFitAlways computes internally (synthWinW/s_efbH) equals
+    // s_displayAspect exactly: synthWinW = s_displayAspect * s_efbH. winH
+    // stays the real s_efbH so vpH/vpY come out in true EFB pixel units
+    // directly, needing no further correction (PAR is horizontal-only).
+    //
+    // vpW/vpX come out in "synthWinW pixel" units -- a DIFFERENT horizontal
+    // scale than real EFB columns whenever par != 1 (synthWinW == s_efbW*par
+    // by construction, so synthWinW > s_efbW when par>1). Converting a
+    // synthWinW-space X measurement back to real EFB columns is a plain
+    // proportional rescale by (s_efbW/synthWinW) = (s_efbW/(s_efbW*par)) =
+    // 1/par -- so vpX/vpW are DIVIDED by par below. par == 1 (console's CONF
+    // aspect matches its own EFB shape) makes synthWinW == s_efbW exactly, so
+    // this whole block -- including this division -- is a no-op.
+    const float synthWinW = s_displayAspect * (float)s_efbH;
+    Layout::ComputeViewportFitAlways((int)(synthWinW + 0.5f), s_efbH, &vpX, &vpY, &vpW, &vpH);
+    vpX = (int)((float)vpX / par + 0.5f);
+    vpW = (int)((float)vpW / par + 0.5f);
     glViewport(vpX, vpY, vpW, vpH);
     Layout::SetActiveViewport(vpX, vpY, vpW, vpH, s_efbW, s_efbH);
 
@@ -163,6 +278,10 @@ void Game::renderFrame(float /*alpha*/, int /*steps*/) {
     FN::DebugFps_Draw(s_currentFps);
     OSD_Update(0.0f);
     OSD_Draw();
+
+    // Port specific: Wiimote IR hand-pointer overlay, drawn topmost on every
+    // screen (see WiiPointer.h). No binary equivalent.
+    FN::wii::WiiPointer_Draw(fn::wii::GetInputTranslator());
 
     Mortar::DisplayManager::GetInstance().SwapBuffers(window);
 }
