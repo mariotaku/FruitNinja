@@ -28,10 +28,12 @@ std::string GetSettingsSavePath() {
     // Port specific: on the web build, saves go to the IDBFS-backed /save
     // mount rather than the read-only MEMFS asset bundle.
     return std::string("/save/SettingsSave.xml");
-#elif defined(FRUIT_PLATFORM_WII)
+#elif defined(FRUIT_PLATFORM_WII) || defined(FRUIT_PLATFORM_WEBOS)
     // Port specific: Wii's data_dir (FN_DATA_DIR) is mounted read-only
     // (FileSystem_Direct writable=false); saves go to the separate writable
-    // save_dir (FN_SAVE_DIR) instead -- see Game.h save_dir comment.
+    // save_dir instead -- see Game.h save_dir comment. webOS reuses the same
+    // split: save_dir is the app install dir (see Game::init, GameSDL.cpp),
+    // kept separate from data_dir (<approot>/Data) for the same reason.
     Game* g = Game::GetInstance();
     if (!g) return std::string("SettingsSave.xml");
     return g->save_dir + "/SettingsSave.xml";

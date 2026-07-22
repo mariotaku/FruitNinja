@@ -317,16 +317,25 @@
     extern "C" {
         void glClearDepthf(GLclampf depth);
     }
+#elif defined(FRUIT_GL_API_ES2)
+    // webOS TV. libGLESv2 + libEGL. Real ES2 headers declare all the
+    // shader entry points (glCreateShader etc.) natively, unlike the ES1
+    // branch below -- no hand-written extern "C" stub block needed here.
+    #include <GLES2/gl2.h>
+    #include <GLES2/gl2ext.h>
+    #include <EGL/egl.h>
 #elif defined(FRUIT_GL_API_ES1)
-    // webOS / embedded Linux. libGLESv1_CM + libEGL.
+    // Embedded Linux fixed-function (ES 1.1). libGLESv1_CM + libEGL.
+    // webOS TV uses FRUIT_GL_API_ES2 instead (see below) -- this branch is
+    // kept for any future ES1-only embedded target.
     #include <GLES/gl.h>
     #include <GLES/glext.h>
     // Port specific: GL 2.0 shader entry points used by the Renderer 2D
     // shader path (ShaderProgram.cpp / Renderer.cpp). <GLES/gl.h> is ES 1.1
     // only, so declare them here to keep the TUs compiling. NOTE:
     // libGLESv1_CM does NOT export these -- the ES1 backend cannot run the
-    // GLES2 2D path; it must move to an ES2 context (+libGLESv2) as part of
-    // the GLES2 migration, and will fail at LINK time until it does.
+    // GLES2 2D path at all; this stub block only keeps ES1 TUs compiling,
+    // not linking. Use FRUIT_GL_API_ES2 for any target needing the 2D path.
     #ifndef GL_FRAGMENT_SHADER
     #define GL_FRAGMENT_SHADER 0x8B30
     #define GL_VERTEX_SHADER 0x8B31

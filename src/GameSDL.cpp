@@ -22,6 +22,7 @@
 #include "config.h"
 #include "render/gl_funcs.h"
 #include "render/Layout.h"
+#include "platform/AppDirSDL.h"
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -31,6 +32,19 @@
 #else
     #include <sys/stat.h>    // mkdir on POSIX / Emscripten
 #endif
+
+// Port specific: SDL_GL_GetDrawableSize isn't present on some older webOS TVs'
+// system SDL2 (webosbrew-elf-verify flagged it as an unresolved import). On
+// webOS, drawable size == window size (no HiDPI on a TV panel), so
+// SDL_GetWindowSize is equivalent there. Host/web keep the real drawable size
+// (HiDPI-aware) via SDL_GL_GetDrawableSize, unchanged.
+static inline void fn_gl_drawable_size(SDL_Window* w, int* pw, int* ph) {
+#if defined(FRUIT_PLATFORM_WEBOS)
+    SDL_GetWindowSize(w, pw, ph);
+#else
+    SDL_GL_GetDrawableSize(w, pw, ph);
+#endif
+}
 
 // Port specific: screenshot capture flag. Set from the F12 key handler and
 // read+cleared in frameTick before SDL_GL_SwapWindow (same thread, no signal).
@@ -52,12 +66,16 @@ static Uint64 s_osdLastCounter = 0;
 
 // Port specific: perform glReadPixels + SDL_SaveBMP when g_takeScreenshot is set.
 // Called just before SDL_GL_SwapWindow so GL_BACK holds the finished frame.
+// webOS: no-op -- SDL_CreateRGBSurfaceWithFormatFrom isn't available on some
+// older TVs' system SDL2 (webosbrew-elf-verify flagged it as an unresolved
+// import), and a TV build has no F12/dev-screenshot use case anyway.
+#if !defined(FRUIT_PLATFORM_WEBOS)
 static void do_screenshot_if_requested(SDL_Window* window) {
     if (!g_takeScreenshot) return;
     g_takeScreenshot = false;
 
     int w = 0, h = 0;
-    SDL_GL_GetDrawableSize(window, &w, &h);
+    fn_gl_drawable_size(window, &w, &h);
     if (w <= 0 || h <= 0) return;
 
     // Read pixels bottom-up (GL convention).
@@ -121,6 +139,12 @@ static void do_screenshot_if_requested(SDL_Window* window) {
 
     SDL_FreeSurface(surf);
 }
+#else
+static void do_screenshot_if_requested(SDL_Window* window) {
+    (void)window;
+    g_takeScreenshot = false;
+}
+#endif // !FRUIT_PLATFORM_WEBOS
 
 // Matches: FruitNinja::OnAppInitializing flow
 bool Game::init(void* win, void* gl) {
@@ -130,7 +154,20 @@ bool Game::init(void* win, void* gl) {
         inputTranslator = new InputTranslatorSDL();
         inputTranslator->Init();   // pre-compute action hashes; safe before GameInitialise
     }
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: ignore the compile-time FN_DATA_DIR on webOS -- resolve
+    // both the read-only asset dir and the writable save dir relative to the
+    // app's own install directory instead (see fn_webos_app_dir above). Data/
+    // sits directly under the app root (install() rules in CMakeLists.txt);
+    // save_dir reuses that same root -- webOS dev-mode apps can write under
+    // their own install dir, and mirrors the Wii save_dir split without
+    // needing a separate writable partition (see Game.h save_dir comment).
+    std::string appDir = fn_webos_app_dir();
+    data_dir = appDir + "/Data";
+    save_dir = appDir;
+#else
     data_dir = FN_DATA_DIR;
+#endif
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
 
     // DisplayManager holds game-space dimensions (480×320), not SDL pixel dimensions.
@@ -145,7 +182,7 @@ bool Game::init(void* win, void* gl) {
 
     // One-shot GL state init — matches FruitNinja::InitGL @ 0x00181e54.
     int initW, initH;
-    SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &initW, &initH);
+    fn_gl_drawable_size(static_cast<SDL_Window*>(window), &initW, &initH);
     renderer.InitGL(initW, initH);
 
     // Matches original lifecycle:
@@ -331,7 +368,7 @@ void Game::setCurrentFps(float fps) {
 // second render with no new sim tick).
 void Game::renderFrame(float alpha, int steps) {
     int ww, wh;
-    SDL_GL_GetDrawableSize(static_cast<SDL_Window*>(window), &ww, &wh);
+    fn_gl_drawable_size(static_cast<SDL_Window*>(window), &ww, &wh);
     // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful full-window viewport
     // when the layout isn't wide (Layout::SetWideLayout(false), the default). When
     // wide, letterbox/pillarbox the drawable to Layout::EffectiveAspect() (clamped to

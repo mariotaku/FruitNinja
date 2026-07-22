@@ -60,10 +60,16 @@ target_sources(fruit-ninja-game PRIVATE
 )
 
 # Platform twin for Licensing.h's OpenBrowser: LicensingWii.cpp on Wii (no
-# browser app-control to hand off to), LicensingSDL.cpp everywhere else
-# (SDL_OpenURL) -- mirrors the GameSDL.cpp/GameWii.cpp swap in the root
-# CMakeLists.txt.
-fn_add_platform_source(_fn_licensing_platform_src
-    ${CMAKE_CURRENT_SOURCE_DIR}/LicensingWii.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/LicensingSDL.cpp)
+# browser app-control to hand off to), LicensingWebOS.cpp on webOS (old TVs'
+# system SDL2 lacks SDL_OpenURL -- no-op stub pending a luna app-control),
+# LicensingSDL.cpp everywhere else (SDL_OpenURL) -- mirrors the
+# GameSDL.cpp/GameWii.cpp swap in the root CMakeLists.txt. Three-way pick, so
+# this doesn't use the 2-way fn_add_platform_source macro.
+if (FRUIT_PLATFORM_WII)
+    set(_fn_licensing_platform_src ${CMAKE_CURRENT_SOURCE_DIR}/LicensingWii.cpp)
+elseif (FRUIT_PLATFORM_WEBOS)
+    set(_fn_licensing_platform_src ${CMAKE_CURRENT_SOURCE_DIR}/LicensingWebOS.cpp)
+else()
+    set(_fn_licensing_platform_src ${CMAKE_CURRENT_SOURCE_DIR}/LicensingSDL.cpp)
+endif()
 target_sources(fruit-ninja-game PRIVATE ${_fn_licensing_platform_src})

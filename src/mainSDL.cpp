@@ -8,6 +8,7 @@
 #include "debug/DebugFlags.h"
 #include "game/SettingsSave.h"
 #include "render/Layout.h"
+#include "platform/AppDirSDL.h"
 #include <cstdio>
 #include <cstring>
 
@@ -44,7 +45,16 @@ int main(int argc, char* argv[]) {
     // would return nullptr, and settings would silently load from (and only
     // ever save to) two different paths -- i.e. never actually load.
     Game game;
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: see the matching FRUIT_PLATFORM_WEBOS branch in
+    // Game::init (GameSDL.cpp) -- must match exactly so GetSettingsSavePath()
+    // resolves the same save_dir both here (pre-init LoadSettings) and later.
+    std::string appDir = fn_webos_app_dir();
+    game.data_dir = appDir + "/Data";
+    game.save_dir = appDir;
+#else
     game.data_dir = FN_DATA_DIR;
+#endif
 
     // Port specific: load persisted settings. Language, motion mode,
     // sensitivity, and the FPS counter are user-settable via the in-game
@@ -138,6 +148,11 @@ int main(int argc, char* argv[]) {
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+#elif defined(FRUIT_GL_API_ES2)
+    // webOS TV: real GLES2 context (see gl_compat.h / engine CMakeLists.txt).
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #else  // FRUIT_GL_API_GL_COMPAT
     // Desktop compatibility profile — ES 1.x fixed-function superset.
     // Mesa llvmpipe provides software fallback (LIBGL_ALWAYS_SOFTWARE=1

@@ -172,10 +172,14 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     }
 
     // Read 20-byte header (5 x int32 LE)
+    // Port specific: rw->read/rw->close (SDL_RWops member calls) instead of the
+    // SDL_RWread/SDL_RWclose function-call macros -- identical behavior, but the
+    // member form doesn't pull in the newer SDL_RWread/SDL_RWclose symbol names
+    // some older device SDL2 builds lack (webosbrew-elf-verify flagged these).
     int32_t hdr[5];
-    if (SDL_RWread(rw, hdr, sizeof(int32_t), 5) != 5) {
+    if (rw->read(rw, hdr, sizeof(int32_t), 5) != 5) {
         LOG_ERROR("SoundManager", "LoadSound: short header in '%s'", path.c_str());
-        SDL_RWclose(rw);
+        rw->close(rw);
         return nullptr;
     }
 
@@ -192,13 +196,13 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     if (sampleCount <= 0 || sampleCount > 4 * 1024 * 1024) {
         LOG_ERROR("SoundManager", "LoadSound: bad sampleCount %d in '%s'",
                   sampleCount, path.c_str());
-        SDL_RWclose(rw);
+        rw->close(rw);
         return nullptr;
     }
 
     int16_t* raw = new int16_t[sampleCount];
-    int read = (int)SDL_RWread(rw, raw, sizeof(int16_t), (size_t)sampleCount);
-    SDL_RWclose(rw);
+    int read = (int)rw->read(rw, raw, sizeof(int16_t), (size_t)sampleCount);
+    rw->close(rw);
 
     if (read <= 0) {
         LOG_ERROR("SoundManager", "LoadSound: no sample data in '%s'", path.c_str());

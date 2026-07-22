@@ -228,13 +228,18 @@ if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
         find_package(OpenGL REQUIRED)
         target_link_libraries(mortar_engine PUBLIC OpenGL::GL)
     elseif (FRUIT_GL_API STREQUAL "ES1")
-        # webOS / embedded Linux. libGLESv1_CM + libEGL.
-        # TODO: GLES2 2D shader path (Renderer::DrawShaded2D) needs GL2.0 entry
+        # Embedded Linux fixed-function. libGLESv1_CM + libEGL.
+        # NOTE: GLES2 2D shader path (Renderer::DrawShaded2D) needs GL2.0 entry
         # points (glCreateShader etc.) that libGLESv1_CM does not export -- this
-        # target will fail to link until ES1 moves to libGLESv2 or gains a
-        # runtime-loaded GLES2 subset. Out of scope for the GLES2 2D migration
-        # (host/Emscripten only); revisit before building for webOS.
+        # target fails to link on this backend. webOS uses FRUIT_GL_API_ES2
+        # below instead, which links the real libGLESv2.
         target_link_libraries(mortar_engine PUBLIC GLESv1_CM EGL)
+    elseif (FRUIT_GL_API STREQUAL "ES2")
+        # webOS TV / modern embedded Linux. Real GLES2 (libGLESv2) + libEGL --
+        # unlike ES1, this exports the shader entry points the 2D path needs,
+        # so no hand-declared stub block is required (see gl_compat.h).
+        # Plain library names resolve via the buildroot cross sysroot.
+        target_link_libraries(mortar_engine PUBLIC GLESv2 EGL)
     elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
         # Port specific: WebGL is provided by emcc link flags (root CMakeLists.txt,
         # fruit-ninja executable target). No system GL library to link here.

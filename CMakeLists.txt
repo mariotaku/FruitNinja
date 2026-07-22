@@ -16,6 +16,24 @@ option(FN_ASM_VERIFY "Cross-compile for asm-verify (ARM Thumb-2, object files on
 # can opt in; it has zero effect on the host/web/asm-verify configures below.
 option(FRUIT_PLATFORM_WII "Build the Wii (GX/libogc2) platform target -- requires devkitPPC" OFF)
 
+# --- webOS TV port scaffolding ---
+# Reuses the existing SDL2 backend (mainSDL.cpp, GameSDL.cpp,
+# InputTranslatorSDL, gl_funcsSDL, DisplayManagerSDL, SoundManagerSDL,
+# FileSystemPosix) built with the webOS buildroot cross-toolchain, linking
+# the SDK's SYSTEM SDL2 + GLESv2 + EGL via pkg-config -- no vendoring.
+# Auto-enabled when cross-compiling with the arm-webos-linux-gnueabi
+# toolchain (see the CMAKE_CXX_COMPILER_TARGET check further below, after
+# project() -- CMAKE_CXX_COMPILER_TARGET/CMAKE_SYSROOT aren't populated from
+# the toolchain file until the first project() call); can also be forced
+# explicitly with -DFRUIT_PLATFORM_WEBOS=ON.
+option(FRUIT_PLATFORM_WEBOS "Build for webOS TV (SDL2 + GLES2)" OFF)
+
+# App version string, substituted into deploy/webos/appinfo.json (@FN_APPINFO_VERSION@)
+# and matching tools/wii/hbc/meta.xml's <version>. No PROJECT_VERSION is set on
+# the project() call below (this isn't versioned via CMake's own mechanism), so
+# this is the single source of truth for the shipped webOS package version.
+set(FN_APP_VERSION "1.6.1" CACHE STRING "App version string (webOS appinfo.json, etc.)")
+
 # --- Dynamic-TTF rasterizer backend (compile-time swappable) ---
 # FontCacheObjectTTF (src/engine/render/FontCacheObjectTTF.cpp) rasterizes
 # CJK/Arabic TTF glyphs through the Mortar::TtfFace seam
@@ -113,6 +131,21 @@ project(FruitNinja LANGUAGES CXX)
 # this add_compile_definitions call is a no-op for every other configure.
 if (FRUIT_PLATFORM_WII)
     add_compile_definitions(FRUIT_PLATFORM_WII=1)
+endif()
+
+# Auto-enable FRUIT_PLATFORM_WEBOS when cross-compiling with the webOS
+# buildroot toolchain (CMAKE_CXX_COMPILER_TARGET / CMAKE_SYSROOT are only
+# populated after project() processes CMAKE_TOOLCHAIN_FILE, hence this runs
+# here rather than next to the option() declaration above). Explicit
+# -DFRUIT_PLATFORM_WEBOS=ON always works regardless of toolchain detection.
+if (NOT FRUIT_PLATFORM_WEBOS AND
+    (CMAKE_CXX_COMPILER_TARGET MATCHES "arm-webos-linux-gnueabi" OR
+     CMAKE_SYSROOT MATCHES "webos"))
+    message(STATUS "webOS buildroot toolchain detected -- auto-enabling FRUIT_PLATFORM_WEBOS")
+    set(FRUIT_PLATFORM_WEBOS ON)
+endif()
+if (FRUIT_PLATFORM_WEBOS)
+    add_compile_definitions(FRUIT_PLATFORM_WEBOS=1)
 endif()
 
 # HD texture fallback gate (see the FN_ENABLE_HD_ASSETS option above). Consumed
@@ -402,13 +435,23 @@ option(FN_WEB_PROFILING "Emscripten: keep C++ function names in the wasm (--prof
 # FRUIT_GL_API selects which OS header to include:
 #   GL_COMPAT  - Desktop GL compatibility profile (<GL/gl.h>).
 #                Windows/macOS/Linux dev; Mesa llvmpipe for swrast.
-#   ES1        - OpenGL ES 1.1 (<GLES/gl.h>) for webOS / embedded.
+#   ES1        - OpenGL ES 1.1 (<GLES/gl.h>) for embedded fixed-function.
+#   ES2        - OpenGL ES 2.0 (<GLES2/gl2.h>) for webOS TV -- real shader
+#                entry points (the ES1 path lacks them; libGLESv1_CM does
+#                not export glCreateShader et al.).
 if (EMSCRIPTEN)
     # Force FRUIT_GL_API to the new EMSCRIPTEN path; skip the user-visible cache entry.
     set(FRUIT_GL_API "EMSCRIPTEN")
 else()
-    set(FRUIT_GL_API "GL_COMPAT" CACHE STRING "GL backend: GL_COMPAT or ES1")
-    set_property(CACHE FRUIT_GL_API PROPERTY STRINGS GL_COMPAT ES1)
+    # webOS defaults to ES2 (the only backend with real GLES2 shader
+    # entry points) unless the user explicitly set FRUIT_GL_API themselves.
+    if (FRUIT_PLATFORM_WEBOS AND NOT DEFINED CACHE{FRUIT_GL_API})
+        set(FRUIT_GL_API_DEFAULT "ES2")
+    else()
+        set(FRUIT_GL_API_DEFAULT "GL_COMPAT")
+    endif()
+    set(FRUIT_GL_API "${FRUIT_GL_API_DEFAULT}" CACHE STRING "GL backend: GL_COMPAT, ES1, or ES2")
+    set_property(CACHE FRUIT_GL_API PROPERTY STRINGS GL_COMPAT ES1 ES2)
 endif()
 message(STATUS "FRUIT_GL_API = ${FRUIT_GL_API}")
 
@@ -416,6 +459,8 @@ if (FRUIT_GL_API STREQUAL "GL_COMPAT")
     add_compile_definitions(FRUIT_GL_API_GL_COMPAT=1)
 elseif (FRUIT_GL_API STREQUAL "ES1")
     add_compile_definitions(FRUIT_GL_API_ES1=1)
+elseif (FRUIT_GL_API STREQUAL "ES2")
+    add_compile_definitions(FRUIT_GL_API_ES2=1)
 elseif (FRUIT_GL_API STREQUAL "EMSCRIPTEN")
     add_compile_definitions(FRUIT_GL_API_EMSCRIPTEN=1)
 else()
@@ -433,7 +478,24 @@ set(_SDL2_VER 2.30.11)
 # src/platform/wii links against them (see src/platform/wii/README.md).
 if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
 
-if (EMSCRIPTEN)
+if (FRUIT_PLATFORM_WEBOS)
+    # webOS TV: use the SDK sysroot's SYSTEM SDL2 via pkg-config -- confirmed
+    # present as the "sdl2" pkg-config module in the buildroot sysroot. No
+    # FetchContent/vendored SDL2 path runs for this platform.
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+    if (NOT TARGET SDL2::SDL2)
+        add_library(SDL2::SDL2 ALIAS PkgConfig::SDL2)
+    endif()
+    # webOS has no separate SDL2main static lib in the sysroot (that's a
+    # Windows/MSVC-only shim to redirect WinMain -> main); the executable
+    # target below still links against SDL2::SDL2main, so provide it as an
+    # empty INTERFACE alias -- main() is the real entry point on Linux/webOS.
+    if (NOT TARGET SDL2::SDL2main)
+        add_library(SDL2main_webos_iface INTERFACE)
+        add_library(SDL2::SDL2main ALIAS SDL2main_webos_iface)
+    endif()
+elseif (EMSCRIPTEN)
     # Port specific: Emscripten ships SDL2 as a port; -sUSE_SDL=2 at compile+link
     # time activates it. Create INTERFACE targets that carry the flag so the rest
     # of the build links as usual against SDL2::SDL2 / SDL2::SDL2main.
@@ -1105,7 +1167,10 @@ elseif (FRUIT_PLATFORM_WII)
     set(CPACK_PACKAGE_DIRECTORY ${CMAKE_BINARY_DIR})
     include(CPack)
 else()
-    # Native desktop/webOS entry point.
+    # Native desktop/webOS entry point. FRUIT_PLATFORM_WEBOS reuses this
+    # exact branch (it is neither EMSCRIPTEN nor FRUIT_PLATFORM_WII) --
+    # mainSDL.cpp + fruit-ninja-game + SDL2::SDL2main, all guarded WIN32
+    # blocks below are simply false when cross-compiling for webOS/ARM Linux.
     # Port specific: on Windows, compile the .rc resource script into the exe
     # so it carries an application icon (Explorer / taskbar). Both MSVC (rc.exe)
     # and MinGW (windres) handle a .rc listed as a source automatically.
@@ -1120,6 +1185,50 @@ else()
         add_dependencies(fruit-ninja fn_prebaked_fonts)
     endif()
     target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
+
+    # webOS TV: statically link libstdc++/libgcc so the shipped ELF embeds
+    # the toolchain's newer GLIBCXX/CXXABI symbol versions instead of
+    # depending on whatever (older) libstdc++ the device ships -- older
+    # webOS TVs' system libstdc++ predates symbols this build emits.
+    # Host/web/Wii are unaffected (this block is webOS-only).
+    if (FRUIT_PLATFORM_WEBOS)
+        target_link_options(fruit-ninja PRIVATE -static-libstdc++ -static-libgcc)
+        # LicensingWebOS.cpp resolves SDL_OpenURL at runtime via dlsym (keeps the
+        # symbol out of the import table so it loads on old TVs that lack it).
+        target_link_libraries(fruit-ninja PRIVATE ${CMAKE_DL_LIBS})
+
+        # --- webOS .ipk app root (install + CPack) ---
+        # Mirrors the Wii apps/fruitninja layout (see the FRUIT_PLATFORM_WII
+        # install()/CPack block above): `cmake --install build/webos --prefix
+        # <dir>` assembles a flat webOS app root -- binary + Data/ + appinfo.json
+        # + icons all directly under <dir>, exactly what `ares-package <dir>`
+        # expects (a webOS app root has no "apps/<name>/" nesting, unlike HBC).
+        # tools/webos/build.sh drives install + ares-package; this CMake stage
+        # stops at the assembled app root (no CPack "External" generator here --
+        # ares-package isn't a CPack-integrated tool the way elf2dol/ZIP are for
+        # Wii, so the packaging step lives in the build.sh wrapper instead).
+        configure_file(${CMAKE_SOURCE_DIR}/deploy/webos/appinfo.json
+            ${CMAKE_CURRENT_BINARY_DIR}/webos-appinfo/appinfo.json @ONLY)
+
+        # COMPONENT fruitninja on every rule below: `cmake --install
+        # --component fruitninja` then installs ONLY these files and skips the
+        # default (uncomponented) install() rules that FetchContent deps
+        # (tinyxml2, libwebp) register for themselves -- notably libwebp's,
+        # which errors ("file INSTALL cannot find ...") because we only build
+        # its decoder, not the full lib set its install() rule expects.
+        install(TARGETS fruit-ninja RUNTIME DESTINATION . COMPONENT fruitninja)
+        # Trailing slash: copy CONTENTS of staging/Data into <approot>/Data.
+        install(DIRECTORY ${FN_STAGING_DATA_DIR}/
+            DESTINATION Data
+            COMPONENT fruitninja
+            PATTERN "*.bak" EXCLUDE)
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/webos-appinfo/appinfo.json
+            DESTINATION . COMPONENT fruitninja)
+        install(FILES
+                ${CMAKE_SOURCE_DIR}/deploy/webos/icon.png
+                ${CMAKE_SOURCE_DIR}/deploy/webos/icon_large.png
+            DESTINATION . COMPONENT fruitninja)
+    endif()
 
     # Copy SDL2.dll next to fruit-ninja.exe on Windows so the launcher finds
     # it without having to add an external dir to PATH. Covers both fetch
@@ -1194,10 +1303,12 @@ if (FN_DEBUG_TOUCH)
     message(STATUS "FN_DEBUG_TOUCH = ON")
 endif()
 
-if (NOT EMSCRIPTEN AND NOT FRUIT_PLATFORM_WII)
+if (NOT EMSCRIPTEN AND NOT FRUIT_PLATFORM_WII AND NOT FRUIT_PLATFORM_WEBOS)
     # --- ctest ---
-    # Wii: cross-compiled PPC binaries can't run on the host anyway, and the
-    # test executables link SDL2_image/host GL which are unavailable here.
+    # Wii/webOS: cross-compiled ARM/PPC binaries can't run on the host anyway,
+    # and the test executables link SDL2_image/desktop GL (find_package(OpenGL
+    # REQUIRED) in tests/CMakeLists.txt + tests/scenes/CMakeLists.txt) which
+    # the arm-webos-linux-gnueabi buildroot sysroot doesn't provide (no GLX/X11).
     enable_testing()
     add_subdirectory(tests)
 endif()

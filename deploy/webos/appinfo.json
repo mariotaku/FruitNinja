@@ -1,0 +1,14 @@
+{
+    "id": "com.halfbrick.fruitninja",
+    "version": "@FN_APP_VERSION@",
+    "vendor": "Halfbrick Studios",
+    "type": "native",
+    "main": "fruit-ninja",
+    "title": "Fruit Ninja",
+    "appDescription": "",
+    "icon": "icon.png",
+    "largeIcon": "icon_large.png",
+    "iconColor": "#ffffff",
+    "bgColor": "#000000",
+    "supportTouchMode": "full"
+}

@@ -1,0 +1,89 @@
+name: Build webOS
+
+# Manual trigger, plus automatic on pushes that touch webOS-relevant paths
+# (mirrors moonlight-tv's build-test.yml build-webos job, adapted to this
+# repo's dispatch-first convention -- see pages.yml).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'deploy/webos/**'
+      - 'tools/webos/**'
+      - 'tools/assets/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/webos.yml'
+
+env:
+  WEBOS_SDK: /opt/arm-webos-linux-gnueabi_sdk-buildroot
+  FN_WEBOS_VENV: /opt/fn-webos-venv
+
+jobs:
+  build-webos:
+    name: Build (webOS)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install Build Tools
+        run: sudo apt-get -yq update && sudo apt-get -y -qq install cmake ninja-build
+
+      - name: Download webOS NDK
+        uses: robinraju/release-downloader@v1.9
+        with:
+          repository: "openlgtv/buildroot-nc4"
+          latest: true
+          fileName: "arm-webos-linux-gnueabi_sdk-buildroot.tar.gz"
+          out-file-path: "/tmp"
+
+      - name: Extract + Relocate webOS NDK
+        shell: bash
+        run: |
+          sudo mkdir -p "$(dirname "$WEBOS_SDK")"
+          sudo tar xzf /tmp/arm-webos-linux-gnueabi_sdk-buildroot.tar.gz -C "$(dirname "$WEBOS_SDK")"
+          sudo "$WEBOS_SDK/relocate-sdk.sh"
+
+      - name: Create Python venv (asset staging deps)
+        shell: bash
+        run: |
+          sudo python3 -m venv --system-site-packages "$FN_WEBOS_VENV"
+          sudo "$FN_WEBOS_VENV/bin/pip" install --upgrade pip
+          sudo "$FN_WEBOS_VENV/bin/pip" install Pillow resvg-py fonttools
+
+      - name: Download ares-cli-rs (ares-package)
+        uses: robinraju/release-downloader@v1.9
+        with:
+          repository: "webosbrew/ares-cli-rs"
+          latest: true
+          fileName: "ares-package_*.deb"
+          out-file-path: "temp"
+
+      - name: Download Homebrew Toolbox (webosbrew-ipk-verify)
+        uses: robinraju/release-downloader@v1.9
+        with:
+          repository: "webosbrew/dev-toolbox-cli"
+          latest: true
+          fileName: "webosbrew-toolbox-*.deb"
+          out-file-path: "temp"
+
+      - name: Install webOS Packaging Tools
+        run: sudo apt-get install ./temp/*.deb
+
+      - name: Build + Package
+        shell: bash
+        run: bash tools/webos/build.sh
+
+      - name: Compatibility Check
+        shell: bash
+        run: webosbrew-ipk-verify -f markdown dist/*.ipk >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload .ipk
+        uses: actions/upload-artifact@v4
+        with:
+          name: webos-ipk
+          path: dist/*.ipk

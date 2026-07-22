@@ -214,7 +214,9 @@ void Renderer::BindTexture2D(uint32_t texId) {
 }
 
 void Renderer::SetWireframe(bool enabled) {
-#if !defined(__bada__) && !defined(__EMSCRIPTEN__)
+#if defined(FRUIT_GL_API_GL_COMPAT)
+    // glPolygonMode is desktop-GL-only -- not in the GLES2 (ES2/webOS,
+    // Emscripten/WebGL) API. Wireframe debug is a no-op everywhere else.
     if (glPolygonMode != nullptr) {
         glPolygonMode(GL_FRONT_AND_BACK, enabled ? GL_LINE : GL_FILL);
     }
