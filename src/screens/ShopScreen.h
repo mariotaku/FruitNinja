@@ -207,7 +207,6 @@ public:
 
     // --- Static textures (GOT-relative globals in binary) ---
     // Corrected slot layout verified from LoadContent @ 0x0015cb08 disasm + string reads.
-    // See docs/screens/shop.md "Corrected Static Block Slot Table" for authoritative mapping.
 public:
     // ShopListItem::Draw accesses these via the same GOT static block.
     // Making them public so ShopListItem::Draw can reference them without a friend.

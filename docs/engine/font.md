@@ -558,4 +558,3 @@ binary's centered-rectangle layout. This was fixed in a prior session.
 ## See Also
 
 - `docs/engine/formats/fonts.md` — BMFont .fnt file format
-- `docs/engine/rendering-detail.md` — Font::Load, DrawString, QUADCUSTOMVERTEX

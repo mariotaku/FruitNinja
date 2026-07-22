@@ -373,8 +373,7 @@ constructs equivalently in `TimeKeeper::GetInstance()` Meyers-singleton.
 
 Constructs the global `SystemManager` singleton via
 `SystemManager::SystemManager(*DAT_0018b018)`. Same pattern as
-TimeKeeper. Port has `SystemManager` per
-`docs/engine/system-manager.md`.
+TimeKeeper.
 
 ### 5.10 `_GLOBAL__I_WorkGroup.cpp` (`0x001a6fb8`)
 
@@ -420,9 +419,8 @@ port has `Game` constructed in `GameInitialise` not pre-`main`, but the
 **StringTable should be empty and ready before `OnAppInitializing`**.
 
 The static-init `Game` global lives in BSS — `GamePreInitialise`
-zero-fills the whole 0x608 byte struct (per
-`docs/engine/initialisation-asm-audit.md` already), so the port's
-`Game` ctor runs with same effective state.
+zero-fills the whole 0x608 byte struct at startup, so the port's
+`Game` ctor runs with the same effective state.
 
 ---
 
@@ -440,7 +438,7 @@ The candidates that **may be missing** in the port and need attention:
 | Identity Matrix44 global                 | `src/engine/math/Matrix44.h` | Likely fine — port computes identity inline; no static instance needed | LOW |
 | `Vec3::Zero` / `Vec3::One` globals       | `src/engine/math/Vec3.h:74-75` | Meyers-singleton — OK | LOW |
 | `Math::Random` global PRNG seeded at startup | `src/engine/math/?`     | Needs verification — does port seed before first `MainScreen` rand?  | **MEDIUM** — first-frame randomness fidelity |
-| `SystemManager` singleton                | `src/engine/SystemManager.cpp` (per `docs/engine/system-manager.md`) | Implemented   | LOW |
+| `SystemManager` singleton                | `src/engine/SystemManager.cpp` | Implemented   | LOW |
 | `TimeKeeper` singleton                   | `src/engine/TimeKeeper.cpp` | Implemented              | LOW |
 | `Mortar::CriticalSection` resource lock  | (unported)                | Skipped — port single-threaded | LOW                                                                       |
 | `ProcessorInfo` (WorkGroup)              | (unported)                | Skipped — port single-threaded | LOW                                                                       |
@@ -511,9 +509,8 @@ Priority-ordered, for the implementer:
 
 8. **`Game` `StringTable` and `Delegate1` slot.** Verify port's `Game`
    ctor constructs a `StringTable` at the equivalent struct offset and
-   wires the `Delegate1` properly. Per
-   `docs/engine/initialisation-asm-audit.md`, the Game struct is
-   zero-filled by `GamePreInitialise`, so any non-zero default needs
+   wires the `Delegate1` properly. The Game struct is zero-filled by
+   `GamePreInitialise` at startup, so any non-zero default needs
    explicit assignment.
 
 9. **`FruitNinja.cpp` 32 file-scope strings.** Diff against port's
@@ -653,8 +650,8 @@ verdict stands.
 - Constants resolved:
   - `DAT_001722d8 = 0x00000000` (= 0.0f) — generic "zero literal" used by all `_Vector3<float>(zero)` constructions.
   - `DAT_0016d3e8/3ec/3f0/3f4 = 0.0/1.7/0.3/0.1` — GameTask spawn defaults.
-- Existing related docs:
-  - `docs/engine/initialisation-asm-audit.md` — `OspMain` / `GamePreInitialise` bootstrap (BSS zero-fill, runs between `_GLOBAL__I_*` chain and `OnAppInitializing`).
+- Known facts from binary analysis:
+  - `OspMain` / `GamePreInitialise` bootstrap: BSS zero-fill runs between `_GLOBAL__I_*` chain and `OnAppInitializing`.
   - `SystemManager` singleton design and initialization.
   - Random-number subsystem internals (verify seeding moment).
   - Entity / GameTask struct layouts, especially `+0x68..+0xb0` field names and physics/spawn parameters.
