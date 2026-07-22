@@ -202,6 +202,14 @@ jobs:
           test -f pages/.nojekyll
           ls pages/fruit-ninja-*.js pages/fruit-ninja-*.wasm pages/fruit-ninja-*.data
 
+      # ---- Build asset gallery (<site>/gallery) ----------------------------
+      # Run AFTER build_pages.py -- it shutil.rmtree()s pages/ first, so the
+      # gallery must land after that or it gets wiped. Not committed: this
+      # regenerates it from the FruitNinjaBada dump downloaded above (same
+      # python3-pil installed in "Install native build deps").
+      - name: Build asset gallery
+        run: bash tools/web/build-gallery.sh pages/gallery
+
       # ---- Upload artifact ------------------------------------------------
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6

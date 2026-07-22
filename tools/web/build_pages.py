@@ -6,7 +6,10 @@ Usage:
     python tools/web/build_pages.py [--out <dir>]
 
 The deployed site is just the game at the root -- no landing page, no
-galleries.  Output layout (default: pages/):
+galleries here. (A separate asset gallery is written to pages/gallery/ by
+tools/web/build-gallery.sh, run as its own CI step AFTER this script --
+see .github/workflows/pages.yml -- since this script removes and recreates
+pages/ from scratch.) Output layout (default: pages/):
 
     pages/
       .nojekyll
