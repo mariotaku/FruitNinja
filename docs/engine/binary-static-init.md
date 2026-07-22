@@ -246,6 +246,8 @@ Cat key:
 
 ## 5. Notable per-file findings
 
+**Section 5.1 vs Section 8.2 note:** Section 8.2 contains the settled conclusions on init order; disregard any contradictions in 5.1 and use 8.2's final version.
+
 ### 5.1 `_GLOBAL__I_FruitNinja.cpp` (`0x001826b4`)
 
 Constructs **32 file-scope `Osp::Base::String`** objects from
@@ -278,10 +280,7 @@ DAT_00183858`. These are the Bada `Application` framework's
 
 ### 5.3 `_GLOBAL__I_PathFunctions.cpp` (`0x001b3b9c`)
 
-Two `Mortar::AsciiString` ctors at `+DAT_001b3c00` and `+DAT_001b3c00
-+ 0x28`. Likely the asset-path root prefixes (`"/Home/share/"` and
-`"/Res/"` or similar). Port has its own `ResolveAssetPath` constants —
-verify these match what the binary's `PathFunctions` emit.
+Two `Mortar::AsciiString` ctors at `+DAT_001b3c00` and `+DAT_001b3c00 + 0x28`. These are asset-path root prefixes. Port has its own `ResolveAssetPath` constants — verify they match the binary's output.
 
 ### 5.4 `_GLOBAL__I_EngineMathBada.cpp` (`0x001952bc`)
 

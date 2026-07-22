@@ -40,60 +40,13 @@ FruitNinjaBada/
 
 ## Binary File Formats
 
-### .tex — Halfbrick Texture
+Detailed asset format specifications (byte layouts, headers, pixel encodings, HBR0 structures, string encoding) are documented in:
 
-Header (4 bytes):
-```
-+0x00: byte  format (0x06 = RGBA4444?)
-+0x01: byte  flags  (0x06)
-+0x02: short width  (e.g. 0x0040 = 64px, little-endian)
-+0x04: short height (e.g. 0x0040 = 64px)
-```
-Followed by raw pixel data. Format byte likely indicates colour depth/encoding.
-
-### .mad — Halfbrick Model Animation Data
-
-Magic: `HBR0` (Halfbrick Resource v0)
-```
-+0x00: char[4]  magic ("HBR0")
-+0x04: int      version? (0)
-+0x08: int      flags? (0)
-+0x0c: int      data_offset
-+0x10: int      count (1)
-+0x12: short    path_length
-+0x14: char[]   original_path (e.g. "D:\Projects\iPhoneDev\FruitNinja\Asset_wor...")
-```
-Contains original Windows build paths — confirms iPhone origin cross-compiled for Bada.
-
-### .mmd — Halfbrick Mesh Model Data
-
-Magic: `HBR0` (nested)
-```
-+0x00: "HBR0"  outer container
-+0x04: version, sub-count
-+0x08: "HBR0"  inner mesh data
-...
-Contains texture references (e.g. "textures\fruit_big_sheet_1"), map names ("Map #1")
-```
-
-### .wav.pcm — Raw PCM Audio
-
-```
-+0x00: int      unknown (1)
-+0x04: int      sample_rate? (0x3E80 = 16000)
-+0x08: int      channels? (16)
-+0x0c: int      data_size
-+0x10: int      unknown (0)
-+0x14: raw PCM  sample data (16-bit signed, little-endian)
-```
-
-### .fnt — Bitmap Font
-
-Binary format. References .tex texture atlas files. Each font has a corresponding `*_0.tex` atlas.
-
-### .str — String Table
-
-Binary format for localised strings. 10 files suggest 10 language variants.
+- `docs/engine/formats/textures.md` — .tex texture format (12-byte header, pixel data)
+- `docs/engine/formats/audio.md` — .wav.pcm audio format
+- `docs/engine/formats/models.md` — .mad / .mmd HBR0 mesh formats
+- `docs/engine/formats/fonts.md` — .fnt bitmap-font binary format
+- `docs/engine/localisation.md` — .str string-table binary format
 
 ## XML Data Files
 

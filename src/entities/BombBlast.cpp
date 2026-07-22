@@ -1,6 +1,6 @@
 //
 // BombBlast — shockwave ring. Ported from binary 0x171170..0x171aa0.
-// See docs/entities/bomb-blast.md and the RE findings reconciled here.
+// RE findings are reconciled inline below.
 //
 // Analysed: 2026-04-13T23:45
 //

@@ -253,5 +253,3 @@ that consumer's context.
 ## See also
 
 * `docs/engine/font.md` -- Font class, glyph layout, normalised CharTemplate
-* `docs/engine/menubutton-backdrop.md` -- the menu button's Phase A backdrop
-* `docs/engine/rendering-pipeline.md` -- DrawTriStrip / MatrixStack lifecycle

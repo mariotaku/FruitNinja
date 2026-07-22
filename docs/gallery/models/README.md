@@ -7,7 +7,7 @@ and outlines. One model at a time, drag to orbit.
 ## Use
 
 ```bash
-cd docs/model_gallery
+cd docs/gallery/models
 python -m http.server 8080
 # open http://127.0.0.1:8080/
 ```
@@ -31,14 +31,14 @@ python -m http.server 8080
 ## Regenerating `models.json`
 
 ```bash
-python docs/model_gallery/dump_meshes.py
+python docs/gallery/models/dump_meshes.py
 ```
 
 The script walks `FruitNinjaBada/Data/models/Fruit/*.mmd` and writes
 `models.json` next to itself. It's a straight port of the format
 documented in
-[`src/engine/asset/ResourceLoader.cpp`](../../src/engine/asset/ResourceLoader.cpp)
-+ [`MeshManager.cpp`](../../src/engine/asset/MeshManager.cpp) — same
+[`src/engine/asset/ResourceLoader.cpp`](../../../src/engine/asset/ResourceLoader.cpp)
++ [`MeshManager.cpp`](../../../src/engine/asset/MeshManager.cpp) — same
 HBR0 chunk tree, same PSP GE vertex-declaration bitfield, same index
 stream flag byte.
 
@@ -53,5 +53,4 @@ stream flag byte.
   applies in `Mesh::Draw`. Leave it on to see fruits "upright" the way
   the port shows them; turn it off to see the raw mesh-authored
   orientation (every mesh has +Z as the "up" axis on disk).
-- The atlas is sampled with `GL_CLAMP_TO_EDGE`, matching
-  `DisplayManager::GetPlatformWrapS/T` in the port.
+- The atlas is sampled with `GL_CLAMP_TO_EDGE`, matching `DisplayManager::GetPlatformWrapS/T` in the port.

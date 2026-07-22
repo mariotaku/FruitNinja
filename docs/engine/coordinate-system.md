@@ -34,9 +34,7 @@ Resulting bounds after the ortho transform alone:
 
 ## The 90° screen-rotation matrix
 
-<!-- Updated: 2026-04-15T18:30 — matches display-manager.md (90° CCW) -->
-
-The Bada physical device is 480×800 portrait. The game runs in landscape (rotated 90°). The binary multiplies the projection by a static rotation matrix set **once** per run by `BeginFrame` at `DisplayManager + 0x54`. Per `display-manager.md`, the matrix is:
+The Bada physical device is 480×800 portrait. The game runs in landscape (rotated 90°). The binary multiplies the projection by a static rotation matrix set **once** per run by `BeginFrame` at `DisplayManager + 0x54`. The matrix is:
 
 ```
 R = [  0  -1   0   0 ]
@@ -129,16 +127,7 @@ This is why MenuButton positions in the range `(|X| ≤ 240, |Y| ≤ 160)` work 
 
 > **Caveat — applies to positions only, NOT rotation axes.** See the [Rotation-axis discrepancy](#rotation-axis-discrepancy-2026-04-27) section below.
 
-<!-- Analysed: 2026-04-27T13:50, REVISED 2026-04-27T19:30 -->
-
-## Rotation-axis discrepancy (2026-04-27, revised)
-
-> **Revision note 2026-04-27T19:30**: an earlier draft of this section claimed the binary's `RotX44` / `RotZ44` post-multiply by `Rot_std(−α)` and that the bomb's "wrong axis" was caused by the missing `m_ScreenRotationMatrix` (Bug 3). Both claims were wrong:
->
-> 1. **Direct disassembly of `_Matrix44::RotX44/Y44/Z44` shows they all PRE-multiply** the matrix by the standard CCW rotation `Rot_std(+α)`. The earlier re-analyst confused row-iteration with column-iteration in the Ghidra decomp (`data[col][row]` vs `data[row][col]`).
-> 2. **`m_ScreenRotationMatrix` is real but irrelevant for the port.** The binary's full pipeline is `R_screen · P_ortho · V · M` rendered into a portrait framebuffer, then displayed via 90° device rotation; the net world-axis-to-user-screen mapping is **identical** to the port's `P_ortho · V · M` rendered directly to a landscape window. So R_screen does not need to be applied in the port.
->
-> The remaining real bug is that the port's `RotX44/Y44/Z44` are **post-multiplications**, while the binary's are **pre-multiplications**. For the bomb's `Rx · Ry · Rz` chain this produces a different composed rotation, swapping the visible roles of `m_RotX` and `m_RotY`. Bug 2 (`OrthoW` cell swap) remains valid as documented below; Bug 1 has been re-stated correctly.
+## Rotation-axis discrepancy (resolved)
 
 ### Bug 1 (FIXED) — `RotX44/Y44/Z44` pre-multiply
 

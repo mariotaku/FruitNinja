@@ -2,7 +2,6 @@
 //
 // PauseScreen — Tier-1 implementation.
 // Binary: PauseScreen::PauseScreen @ 0x001a7204 (ctor), Update @ 0x001a5ebc.
-// See docs/engine/pausescreen-deep-re.md for full spec.
 //
 // Tier-1 scope: SP-only path, states 0/2/3/4/5/6, three P1 buttons.
 //

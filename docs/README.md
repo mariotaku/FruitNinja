@@ -6,9 +6,9 @@ The port treats **source code as the canonical record of what the binary does an
 
 - Struct layouts live in headers (`src/**/*.h`).
 - Function logic lives in `.cpp`.
-- Each unimplemented sub-block carries `// TODO: <binary addr> — <what's missing>` — that comment is the spec for that gap.
-- `// ASM-verified: <ISO-time> binary @ 0x<addr> (asm-inspector)` lists functions ASM-checked against the binary. Inventory: `grep -rn 'ASM-verified:' src/`.
-- `// DIFFERS: original = X from DAT_addr, using Y because <reason>` flags any deliberate deviation.
+- Each unimplemented sub-block carries `// TODO: v1.6.1 0x<addr> (<Symbol>) — <gap>` — that comment is the canonical spec for that gap.
+- `// ASM-verified: <ISO-time UTC> v1.6.1 <Symbol> @ 0x<addr> (asm-inspector)` lists functions ASM-checked against the binary. Inventory: `grep -rn 'ASM-verified:' src/`.
+- `// DIFFERS: original = X from DAT_addr (v1.6.1 <Symbol> @0x<addr>), using Y because <reason>` flags any deliberate deviation.
 
 This `docs/` tree previously held large per-class / per-screen / per-function RE narratives (`docs/structs/`, `docs/entities/`, `docs/screens/`, `docs/functions/`, plus `*-deep-re.md` / `*-asm-audit.md` / `*-asm-verify.md` files under `docs/engine/`). **All of those have been removed** in favour of source-side comments. If you find a dangling `// See docs/<deleted>.md` reference in `src/`, the spec it pointed to now lives in or near the surrounding source — the reference is a stale pointer pending opportunistic cleanup.
 
@@ -43,7 +43,7 @@ The remaining docs cover information that **isn't derivable from `src/`**:
 
 ### Asset gallery
 - [`gallery/models/README.md`](gallery/models/README.md) — interactive `.mmd` viewer.
-- [`gallery/textures/`](gallery/textures/) — extracted PNGs (alphabetical reference).
+- [`gallery/README.md`](gallery/README.md) — gallery build process (models via `dump_meshes.py`, textures streamed at runtime).
 
 ## When to add a new doc
 
