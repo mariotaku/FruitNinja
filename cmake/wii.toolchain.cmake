@@ -35,17 +35,18 @@ include("$ENV{DEVKITPRO}/cmake/Wii.cmake")
 # wrapper instead of the raw exe. Linux/macOS hosts don't hit this and skip
 # the block entirely.
 if(CMAKE_HOST_WIN32)
-    # Overridable via $MSYS2_ROOT (e.g. a non-default MSYS2 install location)
-    # or $TEMP, falling back to the C:/msys64/tmp literal that works on the
-    # current dev machine's default MSYS2 install. Any of these just needs to
-    # be a writable path the devkitPPC gcc.exe can see -- it's not
+    # Overridable via $MSYS2_ROOT (e.g. a non-default MSYS2 install location),
+    # else $TEMP/$TMP, else a build-tree-local tmp dir. Any of these just needs
+    # to be a writable path the devkitPPC gcc.exe can see -- it's not
     # fidelity-relevant, purely a build-environment workaround (see above).
     if(DEFINED ENV{MSYS2_ROOT})
         set(_fn_wii_tmp_dir "$ENV{MSYS2_ROOT}/tmp")
     elseif(DEFINED ENV{TEMP})
         file(TO_CMAKE_PATH "$ENV{TEMP}" _fn_wii_tmp_dir)
+    elseif(DEFINED ENV{TMP})
+        file(TO_CMAKE_PATH "$ENV{TMP}" _fn_wii_tmp_dir)
     else()
-        set(_fn_wii_tmp_dir "C:/msys64/tmp")
+        set(_fn_wii_tmp_dir "${CMAKE_BINARY_DIR}/tmp")
     endif()
     file(MAKE_DIRECTORY "${_fn_wii_tmp_dir}")
 

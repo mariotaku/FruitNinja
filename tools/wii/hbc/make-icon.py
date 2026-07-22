@@ -1,21 +1,31 @@
 #!/usr/bin/env python3
 """Generate the Homebrew Channel icon (apps/fruitninja/icon.png), 128x48.
 
-Composes the game's FRUIT + NINJA logo lettering (from the decoded gallery
-webps -- no network, no .tex decode needed) in a diagonal cascade over a dark
-maroon vertical gradient. Reproducible: run with a Python that has Pillow.
+Composes the game's FRUIT + NINJA logo lettering in a diagonal cascade over a
+dark maroon vertical gradient. Decodes the source textures directly from the
+LOCAL FruitNinjaBada game dump (FruitNinjaBada/Data/textures/hd_fruit_text.tex,
+hd_ninja_text.tex) via tools/lib/tex_decoder.py -- the dump is gitignored and
+not distributed (Halfbrick copyright; see docs/gallery/README.md), and this
+script's own output (icon.png) is likewise gitignored, so nothing copyrighted
+is ever committed. Bring your own dump to regenerate the icon.
 
     python tools/wii/hbc/make-icon.py
 
-Output: tools/wii/hbc/icon.png (deployed to sd:/apps/fruitninja/icon.png by the
-Wii build/deploy so the Homebrew Channel shows a proper entry).
+Output: tools/wii/hbc/icon.png (gitignored, generated -- deployed to
+sd:/apps/fruitninja/icon.png by the Wii build/deploy so the Homebrew Channel
+shows a proper entry).
 """
 import os
+import sys
+
 from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
-GAL = os.path.join(ROOT, "docs", "gallery", "textures", "Data", "textures")
+BADA_TEXTURES = os.path.join(ROOT, "FruitNinjaBada", "Data", "textures")
+
+sys.path.insert(0, os.path.join(ROOT, "tools", "lib"))
+import tex_decoder
 
 W, H = 1024, 384          # compose at 8x, downscale to 128x48 for crisp edges
 TOP, BOT = (60, 12, 12), (12, 4, 4)   # maroon gradient
@@ -26,7 +36,18 @@ OVERLAP = 58              # vertical overlap between FRUIT and NINJA
 
 
 def load(name):
-    im = Image.open(os.path.join(GAL, name + ".webp")).convert("RGBA")
+    tex_path = os.path.join(BADA_TEXTURES, name + ".tex")
+    if not os.path.exists(tex_path):
+        sys.exit(
+            "Wii icon requires the local FruitNinjaBada game dump at "
+            "FruitNinjaBada/Data/textures/ (missing: " + tex_path + "); "
+            "not distributed -- see docs/gallery/README.md"
+        )
+    decoded = tex_decoder.decode_tex(tex_path)
+    if decoded is None:
+        sys.exit("Wii icon: " + tex_path + " did not decode as a known Tex1 format")
+    width, height, rgba = decoded
+    im = Image.frombytes("RGBA", (width, height), bytes(rgba))
     return im.crop(im.getbbox())
 
 

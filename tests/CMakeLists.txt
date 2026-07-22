@@ -281,20 +281,27 @@ target_include_directories(test_effectproperties PRIVATE
 )
 add_test(NAME effectproperties COMMAND test_effectproperties)
 
-add_executable(test_localisation test_localisation.cpp)
-# Links fruit-ninja-game (not just mortar_engine) because StringTableUtilLoadStringsTable
-# reads game_work.languageFlag (v1.6.1 @0x0014ca5c -- the binary's StringTableUtil* live in
-# the game code range and read game state), so the engine StringTable TU references game_work.
-target_link_libraries(test_localisation PRIVATE fruit-ninja-game mortar_engine)
-target_include_directories(test_localisation PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/engine
-)
-# Portable default data dir (was a hardcoded C:/Users/Mariotaku/... machine path).
-# Points at the raw Bada asset tree (not FN_STAGING_DATA_DIR) -- StringTable::Load
-# reads translations_*.str directly and doesn't need the WebP-transcoded staging copy.
-target_compile_definitions(test_localisation PRIVATE
-    FN_BADA_DATA_DIR="${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data")
-add_test(NAME localisation COMMAND test_localisation)
+# Requires the (gitignored, not distributed -- Halfbrick copyright) raw Bada
+# asset dump at FruitNinjaBada/Data; absent on a fresh public clone. Skip
+# registration rather than failing when the user hasn't brought their own dump.
+if (EXISTS "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data")
+    add_executable(test_localisation test_localisation.cpp)
+    # Links fruit-ninja-game (not just mortar_engine) because StringTableUtilLoadStringsTable
+    # reads game_work.languageFlag (v1.6.1 @0x0014ca5c -- the binary's StringTableUtil* live in
+    # the game code range and read game state), so the engine StringTable TU references game_work.
+    target_link_libraries(test_localisation PRIVATE fruit-ninja-game mortar_engine)
+    target_include_directories(test_localisation PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/engine
+    )
+    # Portable default data dir (was a hardcoded C:/Users/Mariotaku/... machine path).
+    # Points at the raw Bada asset tree (not FN_STAGING_DATA_DIR) -- StringTable::Load
+    # reads translations_*.str directly and doesn't need the WebP-transcoded staging copy.
+    target_compile_definitions(test_localisation PRIVATE
+        FN_BADA_DATA_DIR="${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data")
+    add_test(NAME localisation COMMAND test_localisation)
+else()
+    message(STATUS "test_localisation skipped: FruitNinjaBada/Data not present (bring your own game dump)")
+endif()
 
 # MatrixManager singleton + matrix math correctness.
 # Pure math: no GPU, no SDL, no audio. Catches singleton pattern regressions.

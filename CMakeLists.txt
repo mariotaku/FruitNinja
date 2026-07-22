@@ -870,10 +870,16 @@ if(NOT FN_ASM_VERIFY)
     # a skipped bake means text renders nothing on an FN_PREBAKED_FONTS=ON
     # build. Only opt in once a bake is actually staged.
     if (FN_PREBAKED_FONTS AND NOT FRUIT_PLATFORM_WII)
-        # Windows-form path (NOT the MSYS "/mingw64/..." form) so the native
-        # host/emscripten cmake can resolve it; overridable via -D on other
-        # setups. bake-fonts.py self-provisions its libfreetype DLL search.
-        set(FN_PREBAKED_FONTS_PYTHON "C:/msys64/mingw64/bin/python.exe" CACHE FILEPATH
+        # Discover a default interpreter (Windows-form path, NOT the MSYS
+        # "/mingw64/..." form, so the native host/emscripten cmake can resolve
+        # it); overridable via -D on other setups. bake-fonts.py self-provisions
+        # its libfreetype DLL search.
+        # On MSYS2/Windows the discovered python (e.g. plain "python") likely
+        # lacks freetype-py -- point FN_PREBAKED_FONTS_PYTHON at the mingw64
+        # python that has it installed (pacman -S mingw-w64-x86_64-python-freetype-py),
+        # e.g. -DFN_PREBAKED_FONTS_PYTHON=C:/msys64/mingw64/bin/python.exe.
+        find_program(_fn_prebaked_fonts_python_default NAMES python3 python)
+        set(FN_PREBAKED_FONTS_PYTHON "${_fn_prebaked_fonts_python_default}" CACHE FILEPATH
             "Python interpreter (with freetype-py) used to bake non-Wii prebaked fonts")
 
         set(_fn_prebaked_bake_plan "${CMAKE_SOURCE_DIR}/tmp/prebake/bake_plan.json")
