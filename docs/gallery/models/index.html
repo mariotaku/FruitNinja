@@ -341,12 +341,17 @@ function render() {
   gl.viewport(0, 0, cvs.width, cvs.height);
   gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // Matches Mortar::Geometry::Render (src/engine/asset/Geometry.cpp:99-122,
+  // v1.6.1 Geometry::Render @0x00264468): the 3D-mesh pass forces BLEND off
+  // and CULL_FACE on (back-face, GL-default CCW front winding -- no
+  // glFrontFace call in the binary). Depth test/func is frame-level state
+  // (GlClientStates::Reset @0x00258000), not touched per-geometry.
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LESS);
   gl.enable(gl.CULL_FACE);
   gl.cullFace(gl.BACK);
-  gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.frontFace(gl.CCW);
+  gl.disable(gl.BLEND);
 
   if (!current) return;
 
@@ -362,22 +367,13 @@ function render() {
   const cz = (b.min[2] + b.max[2]) / 2;
   const half = Math.max(b.max[0]-b.min[0], b.max[1]-b.min[1], b.max[2]-b.min[2]) * 0.65;
 
-  // Y<->Z axis swap (reflection, det=-1) -- restored from commit 30a0874.
-  // The Mortar mesh files store +Y as their "up" and +Z as our screen-up;
-  // a pure -90 deg X rotation would map mesh Y to render -Z which inverts
-  // the depth ordering between body and outline shells in effect-meshes
-  // like banana_speed_b_piece_2.mmd (outline ends up closer to camera and
-  // overdraws the textured body). The Y<->Z swap (mesh y -> render z,
-  // mesh z -> render y) keeps body in front of outline as the binary
-  // intends. Winding flips (det=-1); cull is off so it doesn't matter.
-  const yzSwap = new Float32Array([
-    1, 0, 0, 0,
-    0, 0, 1, 0,
-    0, 1, 0, 0,
-    0, 0, 0, 1,
-  ]);
+  // Mesh files store +Y as "up"; rotate -90 deg about X so mesh +Y renders
+  // up on screen. Proper rotation matrix (det=+1, no reflection) -- draw
+  // order now comes from per-submesh draws[] in file order (matching
+  // Mesh::Draw, src/engine/asset/Mesh.cpp:196-200), so painter's order
+  // between body/outline shells no longer depends on a winding trick here.
   let world = M.translate(-cx, -cy, -cz);
-  world = M.mul(yzSwap, world);
+  world = M.mul(M.rotX(-Math.PI / 2), world);
   world = M.mul(M.rotX(rot.x), world);
   world = M.mul(M.rotY(rot.y), world);
   const aspect = cvs.width / cvs.height;
@@ -399,7 +395,6 @@ function render() {
   gl.uniform1f(uniforms.uTextured, 1.0);
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, current.ibo);
-  const count = current.totalIdx;
 
   let mode;
   switch (drawMode) {
@@ -409,7 +404,14 @@ function render() {
     case "strip":
     default:       mode = gl.TRIANGLES;      break;   // every shipped .mmd is tris
   }
-  gl.drawElements(mode, count, current.indexType, 0);
+  // One drawElements per submesh, in file order -- matches Mesh::Draw
+  // (src/engine/asset/Mesh.cpp:196-200): each Geometry is its own draw call,
+  // and the array order IS the intended painter's order (e.g. textured body
+  // before outline shell). A single merged drawElements over the whole
+  // index buffer loses that ordering under depth-test + alpha-blend.
+  for (const d of current.draws) {
+    gl.drawElements(mode, d.count, current.indexType, d.first * current.idxBytes);
+  }
 }
 
 function frame() { render(); requestAnimationFrame(frame); }
