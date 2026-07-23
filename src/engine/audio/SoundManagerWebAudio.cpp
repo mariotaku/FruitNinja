@@ -1,5 +1,5 @@
-// Port specific: web Web Audio backend (DIFFERS: browser Ogg decode + float
-// mixing replaces the SDL int software mixer).
+// Web Audio backend: browser Ogg decode + float mixing replaces the SDL int
+// software mixer. Platform-only file (no binary counterpart, not asm-compared).
 //
 // Compiled INSTEAD of SoundManagerSDL.cpp when EMSCRIPTEN (see
 // src/engine/CMakeLists.txt). Implements the SAME Mortar::SoundManager public
@@ -16,23 +16,21 @@
 //   - SFX handles stay a monotonic uint32 + JS-side active[] map for API
 //     compatibility with MortarSound / GameSound (which are unchanged).
 //
-// DIFFERS: the SDL loader applies a >>4 (div-16) amplitude shift for 16-voice
-// int-mixer headroom (MAMAudioController::LoadSound @0x0022f46c). The browser
-// mixes in float and the .ogg is transcoded from the SAME pre-shift .wav.pcm
-// bytes (tools/assets/stage-assets.py encode_ogg -- full-scale, no shift), so
-// MASTER_SFX_GAIN must reproduce the >>4 scale itself: 1/16 = 0.0625. This
-// makes web single-SFX amplitude == SDL single-SFX amplitude (sample/16 *
-// voiceVol) instead of ~14.4x louder (0.9 vs 1/16).
-// DIFFERS: no fixed 16-voice cap -- the browser allows unlimited concurrent
+// Both backends play SFX/music at full scale (unity gain). Bada's own SFX path
+// (MAMAudioController::LoadSound @0x0022f46c) applied a >>4 shift, but that was
+// only its internal 16-voice mix headroom -- the real output stage was
+// Osp::Media::AudioOut::SetVolume (device media-volume slider), which the port
+// has no equivalent of, so any pre-attenuation just plays quieter. The SDL
+// loader plays full-scale (kSfxHeadroomShift=0), the .ogg here is transcoded
+// full-scale from the same .wav.pcm, so MASTER_SFX_GAIN = 1.0 to match.
+// No fixed 16-voice cap -- the browser allows unlimited concurrent
 // sources; the monotonic-handle + active[] map is kept only for API compat.
 //
-// DIFFERS: music (sfx/music-*.ogg, sfx/background.ogg) is transcoded by the
-// SAME stage-assets.py encode_ogg path as SFX (tools/assets/stage-assets.py
-// stage_tree treats every sfx/*.wav.pcm identically, is_sfx_dir has no
-// music/sfx split) -- full-scale, no >>4. SDL music loops through the
-// identical MAMAudioController::LoadSound >>4 shift as SFX (SongPlay ->
-// SFXPlayInternal -> PlaySound, see SongPlay below), so MASTER_MUSIC_GAIN
-// applies the same 1/16 to the music gain node, symmetric to MASTER_SFX_GAIN.
+// Music (sfx/music-*.ogg, sfx/background.ogg) is transcoded by the SAME
+// stage-assets.py encode_ogg path as SFX (stage_tree treats every
+// sfx/*.wav.pcm identically, is_sfx_dir has no music/sfx split) -- full-scale.
+// SDL music shares the same full-scale load path, so MASTER_MUSIC_GAIN = 1.0
+// too, symmetric to MASTER_SFX_GAIN.
 //
 // Case-folding: game code passes Title-Case names ("Clean-Slice-1", "Pause",
 // "Bomb-Fuse"); on-disk assets are lowercase. The desktop path resolves this
@@ -49,17 +47,15 @@
 #include <cstdio>
 #include <string>
 
-// MASTER_SFX_GAIN: master gain on masterSfxGain reproducing SDL's >>4
-// (1/16) int-headroom shift, since the web .ogg is transcoded full-scale
-// from the same pre-shift .wav.pcm (see DIFFERS note above). Defined in the
-// JS init below (the single place it is used); this constant documents the
-// value for C++-side reference.
-static const double MASTER_SFX_GAIN = 0.0625;
+// MASTER_SFX_GAIN: unity (full scale). The web .ogg is transcoded full-scale
+// from the .wav.pcm and the SDL loader plays full-scale too (kSfxHeadroomShift
+// =0), so no make-up gain is needed here. Defined in the JS init below (the
+// single place it is used); this constant documents the value for C++ side.
+static const double MASTER_SFX_GAIN = 1.0;
 
-// MASTER_MUSIC_GAIN: same 1/16 int-headroom correction as MASTER_SFX_GAIN,
-// applied to the music gain node (see DIFFERS note above). Music amplitude
-// on web must equal SDL music amplitude: sample * (1/16) * s_MusicVolume.
-static const double MASTER_MUSIC_GAIN = 0.0625;
+// MASTER_MUSIC_GAIN: unity, matching MASTER_SFX_GAIN and the SDL full-scale
+// load path (music shares LoadSound).
+static const double MASTER_MUSIC_GAIN = 1.0;
 
 // ---------------------------------------------------------------------------
 // JS module: window.FNAudio. Defined once by fnaudio_init(); every other EM_JS

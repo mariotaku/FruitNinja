@@ -7,7 +7,8 @@
 //
 // PCM format: S16LE, 16kHz mono (MAMAudioThread sampleRate = 16000).
 // .wav.pcm header: 5 x int32 = 20 bytes (type, sampleRate, bitDepth, sampleCount, loop).
-// Sample shift: all samples >>4 after loading (MAMAudioController::LoadSound).
+// Sample level: full scale / unity, no pre-attenuation (kSfxHeadroomShift=0 in
+// LoadSound; binary's MAMAudioController::LoadSound used >>4 -- see comment there).
 // Voices: 16 entries (MAMAudioThread voice limit).
 // Music: TODO -- stub, mp3 streaming not implemented.
 // DIFFERS: music is stubbed (no Osp::Media::Player equivalent yet).
@@ -212,13 +213,21 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     // Clamp if file was shorter than header claimed
     if (read < sampleCount) sampleCount = read;
 
-    // Apply >>4 sample shift (MAMAudioController::LoadSound behaviour).
-    // ASM-verified: v1.6.1 @0x0022f46c. Keeps the binary's 16-voice headroom
-    // (32767>>4=2047, 16*2047=32752 <= 32767) so summed voices never clip.
-    // (Tried >>2 for +12dB louder -- it audibly cracked/clipped in busy play,
-    // reverted; the faithful >>4 default is the right level.)
-    for (int i = 0; i < sampleCount; i++) {
-        raw[i] = raw[i] >> 4;
+    // Bada played SFX through Osp::Media::AudioOut (raw PCM, software-mixed).
+    // The binary's >>4 shift here (MAMAudioController::LoadSound @0x0022f46c)
+    // was only its internal 16-voice mix headroom -- NOT the final output
+    // level; AudioOut::SetVolume (device media-volume slider) was the real
+    // output stage, applied after this shift. The port has no equivalent
+    // make-up stage, so any pre-attenuation just plays quieter than the
+    // original felt on-device. Play samples at full scale (unity, 1.0x --
+    // matching the Wii backend, which also omits the cut); the saturating
+    // clamp below handles the rare 16-voice pile-up, same role ASND/hardware
+    // plays on Wii.
+    static const int kSfxHeadroomShift = 0;  // unity: no pre-attenuation (full scale)
+    if (kSfxHeadroomShift > 0) {
+        for (int i = 0; i < sampleCount; i++) {
+            raw[i] = raw[i] >> kSfxHeadroomShift;
+        }
     }
 
     SoundBuffer* buf = new SoundBuffer();
