@@ -26,6 +26,7 @@
 #include "entities/Coin.h"
 #include "game/FruitCamera.h"
 #include "hud/ScoreControl.h"
+#include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <algorithm>
@@ -518,10 +519,20 @@ void BonusScreen::Update(float dt) {
             if (localT < dt) {
                 // TODO: PSPParticleManager::AddEmitter x3 for award[i]
                 // TODO: FruitCamera::CreateCameraShake(...)
-                // TODO: play SFX "BonusStar<i+1>" (BonusStar1/BonusStar2/BonusStar3)
                 // ASM-spec v1.6.1 BonusScreen::Update @0x00164534: memory-verified
                 // literals s0=0.1f (@0x1642bc), s1=10.0f (@0x41200000).
                 Shake(0.1f, 10.0f);
+
+                // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: per-award reveal plays
+                // "Bonus-Explosion-%i" (i=2n+1 -> 1,3,5), SFXPlay(name,0.0f,1.0f,delegate,0.0f),
+                // once per award. vol 0.0f literal @0x1642c0 (matches Bonus-drum-roll shape).
+                if (game_work.mGameSound) {
+                    char sfxName[32];
+                    snprintf(sfxName, sizeof(sfxName), "Bonus-Explosion-%i", 2 * i + 1);
+                    game_work.mGameSound->SFXPlay(
+                        sfxName, 0.0f, 1.0f,
+                        Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
+                }
             }
 
             // Alpha pulse on reveal -- TODO: resolve exact formula from binary v1.6.1 BonusScreen::Update @0x00163dd0
