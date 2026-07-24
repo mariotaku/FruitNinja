@@ -45,8 +45,10 @@ static_assert(sizeof(BonusAwardHud) == 0x60, "BonusAwardHud size mismatch");
 class BonusScreen : public HUDControl3d {
 public:
     // Binary layout from +0x7C (immediately after HUDControl3d's +0x78 SmartPtr pair):
-    int                               m_TotalScore;           // +0x7C  (accumulator; AddAward sums tier into this)
-    int                               m_DisplayedScore;       // +0x80  (animated toward total)
+    // v1.6.1 BonusScreen::AddAward @0x00163284 `str r6,[r4,#0x80]` confirms m_TotalScore
+    // at +0x80; m_DisplayedScore (Draw's %d, per-award/finale animated value) is +0x7C.
+    int                               m_DisplayedScore;       // +0x7C  (animated toward total)
+    int                               m_TotalScore;           // +0x80  (accumulator; AddAward sums tier into this)
     std::vector<BonusAwardHud>        m_Awards;               // +0x84  (cap 3 in binary)
     float                             m_ShakeAmplitude;       // +0x90
     float                             m_ShakeTimer;           // +0x94
@@ -123,7 +125,8 @@ private:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(offsetof(BonusScreen, m_TotalScore)        == 0x7C,  "BonusScreen::m_TotalScore offset");
+static_assert(offsetof(BonusScreen, m_DisplayedScore)    == 0x7C,  "BonusScreen::m_DisplayedScore offset");
+static_assert(offsetof(BonusScreen, m_TotalScore)        == 0x80,  "BonusScreen::m_TotalScore offset");
 static_assert(offsetof(BonusScreen, m_Awards)            == 0x84,  "BonusScreen::m_Awards offset");
 static_assert(offsetof(BonusScreen, m_ShakeAmplitude)    == 0x90,  "BonusScreen::m_ShakeAmplitude offset");
 static_assert(offsetof(BonusScreen, m_RushLoopSFX)       == 0xB4,  "BonusScreen::m_RushLoopSFX offset");

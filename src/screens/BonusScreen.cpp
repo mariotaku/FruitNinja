@@ -84,8 +84,8 @@ static void SET_DEFINES() {
 
 BonusScreen::BonusScreen()
     : HUDControl3d(),
-      m_TotalScore(0),
       m_DisplayedScore(0),
+      m_TotalScore(0),
       m_ShakeAmplitude(0.0f),
       m_ShakeTimer(0.0f),
       m_ShakeDuration(1.0f),
@@ -701,31 +701,26 @@ void BonusScreen::Update(float dt) {
     // Total-number reveal + pop pulse (binary tail @0x001646b8, after the
     // per-award loop, before BuildBonusText).
     // -----------------------------------------------------------------------
-    // ASM-spec v1.6.1 BonusScreen::Update @0x001646b8: total-number reveal + pop
-    // pulse. During the reveal phase the total is hidden (0); when the finale
-    // starts (m_Timer > revealEnd) it pops in with a 0.2s sine ease (slight
-    // overshoot >1 then settles to 1.0). m_NamePulseScale scales the total-number
-    // font in Draw. Overwrites the per-award loop's m_DisplayedScore accumulation
-    // while still in the reveal window.
+    // ASM-spec v1.6.1 BonusScreen::Update @0x001646b8-0x00164724: total-number reveal,
+    // pop pulse, and finale count-up. During the reveal phase the total is hidden (0);
+    // when the finale starts (m_Timer > revealEnd) m_NamePulseScale pops in with a 0.2s
+    // sine ease (slight overshoot >1 then settles to 1.0) and m_DisplayedScore
+    // (field +0x7C) simultaneously tallies from 0.5*m_TotalScore up to 1.0*m_TotalScore
+    // over the same 0.2s window (int truncation, not round; @0x0016470c-0x00164724).
+    // Overwrites the per-award loop's m_DisplayedScore accumulation while still in the
+    // reveal window, and overrides the Phase C finale-fired snapshot once past it.
     if (m_Timer <= revealEnd) {
         m_DisplayedScore = 0;
         m_NamePulseScale = 0.0f;
     } else {
-        float ratio = (m_Timer - revealEnd) / 0.2f;  // 0.2f @0x0016490c
+        float ratio = (m_Timer - revealEnd) / 0.2f;  // 0.2f @0x001646e4
         if (ratio < 0.0f) ratio = 0.0f;
         if (ratio > 1.0f) ratio = 1.0f;
+        m_DisplayedScore = (int)((float)m_TotalScore * (0.5f + ratio * 0.5f));
         // 115deg arc in SinIdx units; 182 = 65536/360, 20930 = 115*182 = sin(115deg) denom.
         uint16_t angleIdx = (uint16_t)(ratio * 115.0f * 182.0f);
         m_NamePulseScale = Math::SinIdx(angleIdx) / Math::SinIdx((uint16_t)20930);
     }
-
-    // TODO: v1.6.1 0x0016470c-0x00164724 (BonusScreen::Update) -- finale star-count
-    // int-blend animation, blends field_0x80 by the same ratio computed above.
-    // Separate animation, not yet RE'd.
-
-    // TODO: v1.6.1 0x00163284 (BonusScreen::AddAward) -- m_TotalScore/m_DisplayedScore
-    // +0x7C/+0x80 offset swap vs the port's current field layout; needs its own
-    // pass + asm-inspector before relying on offset-level fidelity.
 
     // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: tail @0x001648f0 calls
     // BuildBonusText unconditionally every tick (create-once latch is inside
