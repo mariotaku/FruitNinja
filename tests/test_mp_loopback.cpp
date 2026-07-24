@@ -15,8 +15,11 @@
 //                      seed = same type WaveManager::m_Random uses) produce
 //                      identical sequences -- the core parity guarantee behind
 //                      StartGamePacket::m_GameSeed.
-//   5. BARRIER     -- WaveManager::UpdateNetworking's per-wave gate: closed
-//                      with no peer sync, opens once RecievedSync arrives.
+//   5. HANDSHAKE   -- WaveManager's iOS-1.5 soft handshake: SendWaveSyncPacket
+//                      sets the local-sent/remote-pending flags and bumps
+//                      m_SyncCounter (no hard barrier -- see WaveManager.h);
+//                      RecievedSync records the peer's report and clears the
+//                      retry timer/counter.
 //
 // Pure in-process: no GPU, no audio, no SDL/window. Links fruit-ninja-game
 // directly (same pattern as test_scrollingmenu_updaterealtime.cpp) since
@@ -257,7 +260,15 @@ static void test_seam_dispatch() {
         CHECK(nm->GetOpponentScore() == 1234);
     }
 
-    // -- FruitSlicedPacket -> SetLastPeerSlice --
+    // -- FruitSlicedPacket -> SetLastPeerSlice (record path) --
+    // NOTE: GlobalP2PMessageHandler's case 101 also looks up the referenced
+    // fruit via ET_GetEntity and calls Fruit::CollisionResponse on it (the
+    // iOS 1.5 "actually apply the slice" behavior) -- that needs a live Fruit
+    // entity registered in EntityTracker, which needs a booted game
+    // (ActorManager/EntityTracker spun up). Out of reach for this pure-logic
+    // test; asserting only the record path (SetLastPeerSlice), which still
+    // runs unconditionally before the entity lookup and is a real, currently
+    // undeleted NetworkManager API (see NetworkManager.h).
     {
         FruitSlicedPacket pkt(42, 100, 200, 0.75f, 1);
         SendFromPeer(b, pkt);
@@ -289,13 +300,20 @@ static void test_seam_dispatch() {
         CHECK(wm->m_SyncWaveIdx == 5);
     }
 
-    // -- PlayerDisconnectGamePacket -> OnP2PGameOver --
+    // -- PlayerDisconnectGamePacket (type 104) -- NO LONGER DISPATCHED.
+    // iOS 1.5 has no disconnect *packet* (a peer drop is a transport-level
+    // event handled via DisconnectP2P -> HandleDisconnection, not a data
+    // case); GlobalP2PMessageHandler's switch has no case 104 anymore (see
+    // P2PMessageHandling.cpp). Assert it's silently ignored: the packet
+    // drains off the wire (Update() doesn't hang/crash) and produces no
+    // side effect (opponent score from the prior sub-case is untouched).
     {
+        int scoreBefore = nm->GetOpponentScore();
         PlayerDisconnectGamePacket pkt;
         pkt.SetMessageText("bye");
         SendFromPeer(b, pkt);
         nm->Update(1.0f / 60.0f);
-        CHECK(nm->OnMultiplayerDisconnect());
+        CHECK(nm->GetOpponentScore() == scoreBefore);
     }
 
     // Uninstall so other tests / the process default state aren't affected.
@@ -348,26 +366,21 @@ static void test_seed_determinism() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. WAVE BARRIER logic -- WaveManager::UpdateNetworking's per-wave gate.
+// 5. SOFT HANDSHAKE -- WaveManager's iOS-1.5 wave-sync exchange.
 //
-// Scripted setup: WaveManager::Reset() is a no-op without a booted Game
-// instance (Game::GetInstance() null-guard at its top -- see WaveManager.cpp),
-// so this test scripts the sync fields directly instead of calling Reset().
-// It uses m_SyncLocalReady=0 (the pre-first-boundary state -- see the
-// in-function comment below for why this differs from Reset()'s own
-// baseline). It also scripts m_WaveBoundaryPending directly
-// (the port-only edge trigger WaveManager::GetNextWave() would normally set)
-// since GetNextWave needs a live wave/spawner state we can't cheaply build
-// here (see WaveManager::Reset/SetupWaveQue's XML+ActorManager dependencies).
-// The gate math itself (m_SyncLocalReady/m_SyncRemotePending/m_SyncReceived
-// and the +0x00 HUDControl3d* suppression slot) is organic: driven through
-// the real UpdateNetworking()/RecievedSync() calls, not hand-poked. Also note
+// There is no hard barrier in the real design (WaveManager::UpdateNetworking
+// was deleted along with m_WaveBoundaryPending -- see WaveManager.h/.cpp):
+// GetNextWave's tail fires SendWaveSyncPacket fire-and-forget at each local
+// wave boundary and spawning is never stalled waiting on the peer.
+// SendWaveSyncPacket/RecievedSync only touch bookkeeping fields directly, so
+// this test calls them directly rather than scripting fields by hand.
+//
 // WaveManager::GetInstance() is a single process-wide singleton shared with
-// test_seam_dispatch() above (which exercises the same sync fields via the
-// real dispatch path) -- resetting the baseline here keeps this test
+// test_seam_dispatch() above (which exercises RecievedSync via the real
+// dispatch path for case 102) -- baseline the fields here so this test is
 // order-independent of what ran before it in the same process.
 // ---------------------------------------------------------------------------
-static void test_wave_barrier() {
+static void test_wave_sync_handshake() {
     Mortar::LoopbackTransport* a = 0;
     Mortar::LoopbackTransport* b = 0;
     Mortar::LoopbackTransport::CreatePair(a, b);
@@ -376,47 +389,35 @@ static void test_wave_barrier() {
     Mortar::SetMpTransport(a);
 
     WaveManager* wm = WaveManager::GetInstance();
-    // Baseline the sync fields so the boundary-pending edge below actually
-    // triggers UpdateNetworking's send-and-close branch (guarded by
-    // `m_WaveBoundaryPending && !m_SyncLocalReady`). Reset() itself would
-    // set m_SyncLocalReady=1 (see WaveManager.h's ctor TODO -- the binary
-    // ctor BSS-zeroes it and only Reset() sets it to 1), which is the
-    // POST-first-round steady state, not the pre-first-boundary state this
-    // case needs; 0 here reproduces "local side has not yet sent its sync
-    // for the upcoming wave boundary".
-    wm->m_SyncLocalReady = 0;
+    wm->m_SyncLocalReady = 1;
     wm->m_SyncRemotePending = 0;
     wm->m_SyncReceived = 0;
     wm->m_SyncWaveIdx = -1;
+    wm->m_NetTimerA = 0.0f;
+    wm->m_SyncCounter = 0;
 
-    // Simulate the local-wave-boundary edge that GetNextWave() sets.
-    // m_WaveBoundaryPending is a public port-only field (no binary counterpart --
-    // see WaveManager.h); poking it directly is not a test-only hook.
-    wm->m_WaveBoundaryPending = true;
-
-    // First poll: local side sends its sync packet (via SendP2PPacket -> our
-    // loopback transport) and the gate closes (no peer sync yet).
-    int gate1 = wm->UpdateNetworking(1.0f / 60.0f, 0);
-    CHECK(gate1 != 0); // gate closed -- spawn suppressed
+    // Local wave boundary reached: SendWaveSyncPacket sends the packet (via
+    // SendP2PPacket -> our loopback transport), advances the shared global
+    // RNG, and marks "sent, awaiting peer".
+    wm->SendWaveSyncPacket(3, 10.0f);
+    CHECK(wm->m_SyncLocalReady == 0);
+    CHECK(wm->m_SyncRemotePending == 1);
+    CHECK(wm->m_SyncCounter == 1);
+    CHECK(wm->m_NetTimerB == 0.0f);
 
     // Drain the sync packet WaveManager just sent to the peer end (b), so the
-    // loopback queue doesn't leak into other tests. We don't need its
-    // contents here -- SendWaveSyncPacket's own wire format is covered by
-    // the packet round-trip test above.
+    // loopback queue doesn't leak into other tests. Its wire format is
+    // covered by the packet round-trip test above.
     uint8_t drain[512];
     b->Poll(drain, sizeof drain);
-
-    // No peer sync delivered yet -- gate stays closed on a second poll.
-    int gate2 = wm->UpdateNetworking(1.0f / 60.0f, 0);
-    CHECK(gate2 != 0);
 
     // Peer's sync arrives (RecievedSync is what GlobalP2PMessageHandler calls
     // for an inbound WaveSyncPacket -- see case 3 above for the full wire path).
     wm->RecievedSync(5, 42.0f);
-
-    // Both sides now ready -- gate opens.
-    int gate3 = wm->UpdateNetworking(1.0f / 60.0f, 0);
-    CHECK(gate3 == 0);
+    CHECK(wm->m_SyncReceived != 0);
+    CHECK(wm->m_SyncWaveIdx == 5);
+    CHECK(wm->m_NetTimerA == 0.0f);
+    CHECK(wm->m_SyncCounter == 0);
 
     Mortar::SetMpTransport(0);
     delete a;
@@ -442,8 +443,8 @@ int main() {
     std::printf("  [4] seed determinism (RNG stream parity): %s\n", g_failures == before4 ? "OK" : "FAIL");
 
     int before5 = g_failures;
-    test_wave_barrier();
-    std::printf("  [5] wave barrier gate transition: %s\n", g_failures == before5 ? "OK" : "FAIL");
+    test_wave_sync_handshake();
+    std::printf("  [5] wave-sync soft handshake: %s\n", g_failures == before5 ? "OK" : "FAIL");
 
     if (g_failures != 0) {
         std::printf("test_mp_loopback: FAIL (%d assertion(s) failed)\n", g_failures);

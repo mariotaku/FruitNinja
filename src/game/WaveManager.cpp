@@ -179,7 +179,7 @@ WaveManager::WaveManager()
     , m_SavedWaveDelay(0)
     , m_pWaveQue(nullptr), m_pWaveQueItem(nullptr)
     , m_OnlineSeed(0), m_HaveOnlineSeed(false)
-    , m_WaveBoundaryPending(false)
+    , m_SyncCounter(0)
 {
     m_ComboTimer = 0.0f;
     m_ComboSpeed = 0.0f; m_TargetComboSpeed = 0.0f;
@@ -656,15 +656,17 @@ void WaveManager::Reset(bool fullReset) {
     // ASM-spec v1.6.1 WaveManager::Reset @ 0x0012ba78: when not online-multiplayer,
     // unconditionally reseeds this WaveManager's own RNG from a fresh
     // Math::g_random.Rand32(0) draw, before the arcade-texture-load block below.
-    // MP-revival: when online AND a StartGamePacket seed has arrived, seed from
-    // that shared value instead so every peer's m_Random stream (and therefore
-    // every fruit/bomb spawn draw at lines ~708,1348,1359,1406,1424,1464,1769,
-    // 1973,1978,1985,2020,2111,2118,2121,2145,2484,2558) is identical across
-    // peers. DIFFERS: revived -- no binary body, retail stub @0x00123108
-    // (UpdateNetworking) / @0x00123110 (SendWaveSyncPacket) -- this online branch
+    // MP-revival (iOS 1.5 StartGamePacket case-4 sub-2): only the GUEST
+    // (NetworkManager::GetLocalPlayerNumber()==2) reseeds from the host-supplied
+    // seed so every peer's m_Random stream (and therefore every fruit/bomb spawn
+    // draw at lines ~708,1348,1359,1406,1424,1464,1769,1973,1978,1985,2020,
+    // 2111,2118,2121,2145,2484,2558) is identical across peers. The HOST keeps
+    // its own seed (does not reseed here at all). DIFFERS: revived -- no binary
+    // body, retail stub @0x00123108 (UpdateNetworking) -- this online branch
     // itself has no binary counterpart since online MP never shipped a working
     // seed-sync path; offline behavior (else branch) is unchanged.
-    if (IsOnlineMultiplayer() && m_HaveOnlineSeed) {
+    if (IsOnlineMultiplayer() && m_HaveOnlineSeed
+        && Mortar::NetworkManager::GetInstance()->GetLocalPlayerNumber() == 2) {
         m_Random.Seed(m_OnlineSeed);
     } else if (!IsOnlineMultiplayer()) {
         m_Random.Seed(Math::g_Random.Rand32(0));
@@ -1318,13 +1320,14 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
 
     UpdateComboSpeed(dt);
 
-    // v1.6.1 binary @ 0x00125dbc-0x00125de4: MP retry timer increment (stub).
-    // game_work.m_bMPRetryPending -> m_NetTimerA += dt; m_NetTimerB += dt.
-    // Defunct: P2P MP timers unused in port.
+    // ASM-spec iOS1.5 WaveManager::SendWaveSyncPacket @0x000d1178: m_NetTimerA
+    // accumulates per-frame while IsMultiplayer(); RecievedSync/SendWaveSyncPacket
+    // reset it. Drives the 15s peer-stall disconnect in SendWaveSyncPacket.
+    // v1.6.1 binary @ 0x00125dbc-0x00125de4 (MP retry timer increment, dead in
+    // retail since UpdateNetworking's body was stripped).
+    if (IsMultiplayer()) m_NetTimerA += dt;
 
-    // v1.6.1 binary @ 0x00125de8-0x00125df8: UpdateNetworking gate.
-    // If non-zero (network busy), skip spawn — fall through to wave-end check.
-    if (UpdateNetworking(dt, playerIdx) == 0 && pCurrentWave != 0) {
+    if (pCurrentWave != 0) {
 
         // v1.6.1 binary @ 0x00126710-0x00126728: two-way branch on delay slot.
         if (delay <= 0.0f) {
@@ -1866,12 +1869,14 @@ void WaveManager::GetNextWave(int playerIdx) {
         }
     }
 
-    // MP-revival: mark the local-wave-boundary edge; UpdateNetworking's barrier
-    // (next poll) sends the sync packet and stalls spawning until the peer
-    // reports the same boundary. DIFFERS: revived -- no binary body, retail
-    // stub @0x00123108 (UpdateNetworking) / @0x00123110 (SendWaveSyncPacket);
-    // offline (!IsOnlineMultiplayer()) behavior is unaffected.
-    if (IsOnlineMultiplayer()) m_WaveBoundaryPending = true;
+    // ASM-spec iOS1.5 WaveManager::GetNextWave-tail @0x000d6474: fire-and-forget
+    // wave-sync broadcast on every wave advance while multiplayer -- no barrier,
+    // spawning proceeds locally regardless of the peer. Offsets/sizes follow
+    // Bada v1.6.1 (WaveSyncPacket type 102); the algorithm follows iOS 1.5.
+    if (IsMultiplayer()) {
+        SendWaveSyncPacket(m_WaveCount[0], (float)GetCurrentScore(playerIdx));
+        m_NetTimerA = 0.0f;
+    }
 }
 
 // ----------------------------------------------------------------------------
@@ -2470,12 +2475,15 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     }
 }
 
-// v1.6.1 WaveManager::RecievedSync @0x00123444: inbound wave-sync packet handler.
-// MP-revival: the network dispatch (network agent's lane) calls this when a
-// WaveSyncPacket arrives from the peer. Stamps the surviving sync fields
-// (WaveManager.h +0x37/+0x38/+0x40) so UpdateNetworking's barrier can advance.
+// ASM-spec iOS1.5 WaveManager::RecievedSync @0x000d0f6c: inbound wave-sync
+// packet handler (Bada v1.6.1 retail body @0x00123444 is a bare stub). The
+// network dispatcher (GlobalP2PMessageHandler, WaveSyncPacket case 102) calls
+// this when a WaveSyncPacket arrives from the peer. Offsets/sizes follow Bada
+// v1.6.1 (WaveManager.h +0x37/+0x38/+0x40/+0x44); the algorithm follows iOS 1.5.
 void WaveManager::RecievedSync(int waveIdx, float score) {
     m_SyncReceived = 1;
+    m_NetTimerA = 0.0f;
+    m_SyncCounter = 0;
     m_SyncWaveIdx = waveIdx;
     if (score < 999.0f) m_SyncScore = score;
 }
@@ -2490,48 +2498,42 @@ void WaveManager::FruitMultiplyer(float mult)    { m_FruitChance   *= mult; }   
 void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }  // +0x74
 
 // ----------------------------------------------------------------------------
-// Networking -- MP-revival per-wave barrier
+// Networking -- MP-revival iOS 1.5 soft-handshake
 // ----------------------------------------------------------------------------
-
-// v1.6.1 WaveManager::UpdateNetworking @0x00123108: retail body is a bare
-// `return 0;` (offline: gate always open, spawning never stalls).
-// DIFFERS: revived -- no binary body, retail stub @0x00123108. Online: closes
-// the +0x00 spawn-suppression gate (m_SpeedControl[0]; see UpdateWave's
-// ldrb-gate read) while waiting for the peer to reach the same wave boundary,
-// so both peers' m_Random streams advance through identical spawn draws.
-int WaveManager::UpdateNetworking(float /*dt*/, int playerIdx) {
-    if (!IsOnlineMultiplayer()) return 0;   // offline unchanged
-
-    if (m_WaveBoundaryPending && !m_SyncLocalReady) {
-        m_SyncLocalReady = 1;
-        SendWaveSyncPacket(m_WaveCount[0], (float)GetCurrentScore(playerIdx));
-        m_SyncRemotePending = 1;
-    }
-    m_WaveBoundaryPending = false;
-
-    bool gateClosed = (m_SyncRemotePending != 0 && m_SyncReceived == 0);
-    // +0x00 gate: reinterpret_cast<HUDControl3d*>(1) closes (LSB!=0 on __bada__,
-    // non-null on host); nullptr opens. Matches SuperFruitControl's existing
-    // use of this same slot as a spawn-suppression gate.
-    m_SpeedControl[0] = gateClosed ? reinterpret_cast<HUDControl3d*>(1) : nullptr;
-
-    if (m_SyncReceived != 0 && m_SyncRemotePending != 0) {
-        // Both sides ready -- advance.
-        m_SyncRemotePending = 0;
-        m_SyncReceived = 0;
-        m_SyncLocalReady = 0;
-        return 0;
-    }
-    return gateClosed ? 1 : 0;
-}
-
-// v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110: retail body is a bare
-// `return;`. DIFFERS: revived -- no binary body, retail stub @0x00123110.
-// Builds a WaveSyncPacket(waveIdx, 0, score) and hands it to SendP2PPacket
-// (m_WaveData18 has no known binary purpose -- see WaveSyncPacket.h -- send 0).
+//
+// There is no wave-sync BARRIER in the real design: GetNextWave's tail fires
+// this fire-and-forget when a local wave boundary is reached, and RecievedSync
+// just records the peer's report. Spawning is never stalled waiting on the
+// peer -- only the SHARED global RNG draw here keeps both peers' independent
+// m_Random-seeded-once-then-diverging streams roughly aligned at wave
+// boundaries, since Fruit::FruitType/RandomFruit etc. also draw from
+// Math::g_Random in some paths.
+//
+// ASM-spec iOS1.5 WaveManager::SendWaveSyncPacket @0x000d1178 (Bada v1.6.1
+// retail body @0x00123110 is a bare `return;`). Offsets/sizes follow Bada
+// v1.6.1 (WaveSyncPacket type 102, m_NetTimerA/B @ WaveManager.h +0x44/+0x48);
+// the algorithm follows iOS 1.5. Called ONLY from GetNextWave's tail, gated on
+// IsMultiplayer().
 void WaveManager::SendWaveSyncPacket(int waveIdx, float score) {
+    // Advance the SHARED global RNG so peers' global draws stay in lockstep.
+    Math::g_Random.Rand32(0);
+
     WaveSyncPacket packet(waveIdx, 0, score);
     SendP2PPacket(packet, true);
+
+    m_SyncLocalReady = 0;
+    m_SyncRemotePending = 1;
+    m_SyncCounter++;
+    m_NetTimerB = 0.0f;
+
+    if (m_NetTimerA > 15.0f) {
+        // Peer hasn't replied in 15s -- presumed stalled/dropped.
+        // TODO: v1.6.1 0x0018d6f4 (NetworkManager::DisconnectP2P) -- currently a
+        // no-op stub (returns false, doesn't touch IMpTransport). Wire it to
+        // IMpTransport::Disconnect() so this timeout actually tears down the
+        // session; out of WaveManager's lane.
+        Mortar::NetworkManager::GetInstance()->DisconnectP2P(1);
+    }
 }
 
 bool WaveManager::ShouldDisplayNetworkWaitIndicator()               { return false; }

@@ -80,4 +80,13 @@ void AcceptCallback(int sessionId);
 // Defunct: P2P invite accept/reject -- real v1.6.1 impl stripped (no symbol); stub kept for call-graph shape.
 void RejectCallback(int sessionId);
 
+// MP-revival: real body -- iOS 1.5's transport-level disconnect handler.
+// Clears game_work's MP session flags, then (if a game was actually in
+// progress online) tears down back to the main menu and pops an alert with a
+// reason string keyed by `code`. Called from DisconnectP2P (a transport drop
+// or explicit local hangup) rather than from any data packet -- iOS has no
+// disconnect *packet*, unlike the Bada port's now-removed data-case 104.
+// ASM-spec iOS1.5 HandleDisconnection @0x00039524
+void HandleDisconnection(int code);
+
 #endif // FN_ENGINE_NETWORK_P2P_MESSAGE_HANDLING_H

@@ -82,11 +82,17 @@ public:
     // +0x40: DEFUNCT MP received score (float). RecievedSync stores the inbound score param
     // here when score < 999.0. No SP reader. v1.6.1 WaveManager::RecievedSync @0x00123444
     float m_SyncScore;         // +0x40
-    // +0x44: DEFUNCT net timer A (binary m_NetTimerA @0x44; MP retry timer; dead code in SP).
-    // RecievedSync zeroes it; UpdateWave bumps it when game_work.fM_bMPRetryPending.
-    // v1.6.1 WaveManager::RecievedSync @0x00123444 / UpdateWave @0x00125d7c
+    // +0x44: MP wave-sync retry timer A (binary m_NetTimerA @0x44; dead code in
+    // Bada SP since UpdateNetworking's body was stripped). ASM-spec iOS1.5
+    // WaveManager::SendWaveSyncPacket @0x000d1178 / RecievedSync @0x000d0f6c:
+    // accumulates dt every frame while IsMultiplayer(); RecievedSync zeroes it
+    // on each inbound sync; SendWaveSyncPacket force-disconnects
+    // (NetworkManager::DisconnectP2P) if it exceeds 15.0s -- the peer is
+    // presumed stalled. v1.6.1 WaveManager::RecievedSync @0x00123444
     float m_NetTimerA;         // +0x44
-    // +0x48: defunct net timer B (binary: multiplayer retry timer B; dead code in SP)
+    // +0x48: MP wave-sync timer B (binary m_NetTimerB @0x48). ASM-spec iOS1.5
+    // WaveManager::SendWaveSyncPacket @0x000d1178: zeroed on every send;
+    // distinct from m_NetTimerA (only RecievedSync resets that one).
     float m_NetTimerB;        // +0x48
     // +0x4c: unnamed binary padding (4 bytes between net timers and combo timer)
     uint8_t _pad4c[4];        // +0x4c
@@ -252,19 +258,19 @@ public:
     // --- Binary region END: +0x2f0 (752 bytes) --------------------------
 
     // --- MP-revival: online seed sync (port-only, not in binary layout) -----
-    // DIFFERS: revived -- no binary body, retail stub @0x00123108 (UpdateNetworking)
-    // / @0x00123110 (SendWaveSyncPacket). These fields do not exist in the 0x2f0
-    // binary struct; appended past the layout-asserted tail so __bada__ offsets
-    // above are unaffected.
+    // DIFFERS: revived -- no binary body, iOS1.5 soft-handshake ported onto the
+    // Bada v1.6.1 struct/packet layout (SendWaveSyncPacket @0x000d1178,
+    // RecievedSync @0x000d0f6c, GetNextWave tail @0x000d6474 -- iOS 1.5
+    // addresses; the Bada v1.6.1 binary's own bodies at these symbols are bare
+    // stubs). These fields do not exist in the 0x2f0 binary struct; appended
+    // past the layout-asserted tail so __bada__ offsets above are unaffected.
     uint32_t m_OnlineSeed;      // seed received from StartGamePacket::m_GameSeed
     bool     m_HaveOnlineSeed;  // true once SetOnlineSeed() has been called
 
-    // MP-revival: transient "local wave just ended" edge, set by GetNextWave()
-    // and consumed+cleared by the next UpdateNetworking() poll. Bridges the two
-    // functions since the barrier (m_SyncLocalReady/m_SyncRemotePending) is
-    // per-wave sticky state while this is a one-frame edge trigger. No binary
-    // counterpart -- port-only plumbing, not part of the 0x2f0 struct.
-    bool     m_WaveBoundaryPending;
+    // ASM-spec iOS1.5 WaveManager::SendWaveSyncPacket @0x000d1178: counts
+    // consecutive sends since the last RecievedSync; RecievedSync zeroes it.
+    // Port-only -- no binary counterpart at any offset (iOS or Bada).
+    int      m_SyncCounter;
 
     // --- Construction / singleton --------------------------------------
 
@@ -381,13 +387,19 @@ public:
     // 0x00123510: add to combo speed; triggers blitz SFX/score.
     void AddSpeed(float amount, int playerIdx);
 
-    // 0x00122af8: network sync receive (multiplayer).
+    // ASM-spec iOS1.5 WaveManager::RecievedSync @0x000d0f6c: inbound wave-sync
+    // packet handler (Bada v1.6.1 retail body @0x00122af8 is a bare stub).
+    // Called by the network dispatcher (GlobalP2PMessageHandler, WaveSyncPacket
+    // case 102) when the peer's wave-boundary packet arrives.
     void RecievedSync(int waveIdx, float score);
 
     // MP-revival: install the seed shared by the P2P host (from StartGamePacket::m_GameSeed)
     // so both peers draw fruit/bomb spawns from the same m_Random stream. Call before the
     // first Reset() of the online game (network dispatch does this when a StartGamePacket
-    // arrives). DIFFERS: revived -- no binary body, retail stub @0x00123108 (UpdateNetworking).
+    // arrives). Only the GUEST (NetworkManager::GetLocalPlayerNumber()==2) actually
+    // reseeds from this in Reset() -- the host keeps its own seed (iOS 1.5
+    // StartGamePacket case-4 sub-2 semantic). DIFFERS: revived -- no binary body,
+    // retail stub @0x00123108 (UpdateNetworking).
     void SetOnlineSeed(uint32_t seed) { m_OnlineSeed = seed; m_HaveOnlineSeed = true; }
 
     // --- Power-up modifiers (PowerUpManager::Update calls these) ------
@@ -404,20 +416,20 @@ public:
     // 0x0012872c: m_CritChanceMult *= mult
     void CriticalChanceMod(float mult);
 
-    // --- Networking (MP-revival: online per-wave barrier) ------------
+    // --- Networking (MP-revival: iOS 1.5 soft-handshake) --------------
+    // NOTE: there is no wave-sync BARRIER -- the real design never stalls the
+    // spawn loop on the peer. GetNextWave's tail fires SendWaveSyncPacket
+    // fire-and-forget; RecievedSync just records the peer's reported wave/score
+    // for bookkeeping (m_SyncScoreSnapshot et al). Spawning always proceeds
+    // locally at full speed; only Math::g_Random.Rand32(0) advancing on every
+    // send keeps peers' *shared/global* RNG draws roughly in lockstep.
 
-    // v1.6.1 WaveManager::UpdateNetworking @0x00123108: retail body is a bare
-    // `return 0;` (always spawn, gate never closes). MP-revival reconstructs the
-    // per-wave barrier from the surviving sync fields (m_SyncLocalReady/
-    // m_SyncRemotePending/m_SyncReceived): stalls UpdateWave's spawn loop via the
-    // +0x00 gate until both peers report the same wave boundary.
-    // DIFFERS: revived -- no binary body, retail stub @0x00123108 (UpdateNetworking).
-    int  UpdateNetworking(float dt, int playerIdx);
-
-    // v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110: retail body is a bare
-    // `return;`. MP-revival builds a WaveSyncPacket(waveIdx, 0, score) and sends
-    // it via SendP2PPacket. DIFFERS: revived -- no binary body, retail stub
-    // @0x00123110 (SendWaveSyncPacket).
+    // ASM-spec iOS1.5 WaveManager::SendWaveSyncPacket @0x000d1178 (Bada v1.6.1
+    // retail body @0x00123110 is a bare `return;`). Called ONLY from
+    // GetNextWave's tail when IsMultiplayer(). Advances the shared global RNG
+    // (Math::g_Random.Rand32(0)), builds a WaveSyncPacket(waveIdx, 0, score),
+    // sends it via SendP2PPacket, and force-disconnects the P2P session if
+    // m_NetTimerA has exceeded 15s since the last send (peer presumed stalled).
     void SendWaveSyncPacket(int waveIdx, float score);
 
     // 0x00121980: always false.
@@ -495,10 +507,13 @@ static_assert(offsetof(WaveManager, m_NextWaveDelay_P0)          == 0x23c, "");
 static_assert(offsetof(WaveManager, m_FruitQueue)                == 0x24c, "");
 static_assert(offsetof(WaveManager, m_GlobalProbabilityOverride) == 0x2e4, "");
 // Binary-faithful region ends at 0x2f0 (752 bytes); m_OnlineSeed/m_HaveOnlineSeed/
-// m_WaveBoundaryPending are MP-revival-only fields appended past it (feat/mp-revival
+// m_SyncCounter are MP-revival-only fields appended past it (feat/mp-revival
 // branch) -- sizeof grows beyond retail's 0x2f0 by design. DIFFERS: revived -- no
 // binary body, retail stub @0x00123108 (UpdateNetworking) / @0x00123110
-// (SendWaveSyncPacket); the extra tail bytes have no retail counterpart at all.
+// (SendWaveSyncPacket, Bada); the extra tail bytes have no retail counterpart at
+// all (the iOS 1.5 soft-handshake this ports reuses the surviving Bada sync
+// fields -- m_SyncLocalReady/m_SyncRemotePending/m_SyncReceived/m_SyncWaveIdx/
+// m_SyncScore/m_NetTimerA/m_NetTimerB -- and adds only m_SyncCounter here).
 static_assert(offsetof(WaveManager, m_OnlineSeed) == 0x2f0, "");
 static_assert(sizeof(WaveManager) > 0x2f0, "");
 #endif
