@@ -615,9 +615,13 @@ void BonusScreen::Update(float dt) {
                 // spawned at accumPos = pos + m_AnimPos + m_ShakeOffset +
                 // FIRST_NAME_OFFSET(-105,+40,0) + (0.5,0,0), z-alternating red/blue by
                 // (i&1) so successive awards' bursts don't z-fight.
+                // ASM-spec v1.6.1 BonusScreen::Update @0x00164664: the emitter Y is a
+                // running accumulator stepped by AWARD_Y_DIF(-42) per award i (sp+0x108
+                // += -42 at the loop tail), so each award's burst lands on ITS row --
+                // base + i*(-42). Base X/Z + FIRST_NAME_OFFSET(-105,+40,0) + (0.5,0,0).
                 _Vector3<float> accumPos(
                     pos.x + m_AnimPos.x + m_ShakeOffset.x - 105.0f + 0.5f,
-                    pos.y + m_AnimPos.y + m_ShakeOffset.y + 40.0f,
+                    pos.y + m_AnimPos.y + m_ShakeOffset.y + 40.0f + (float)i * AWARD_Y_DIF,
                     pos.z + m_AnimPos.z + m_ShakeOffset.z);
 
                 PSPParticleManager& ppm = PSPParticleManager::GetInstance();
