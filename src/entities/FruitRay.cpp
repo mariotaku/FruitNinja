@@ -74,7 +74,8 @@ void FruitRay::Update(float dt) {
 
 Mortar::SmartPtr<Mortar::Texture> FruitRay::RayTexture;
 
-// ASM-spec v1.6.1 FruitRay::DrawRay @0x001e48b8
+// ASM-verified: 2026-07-24T00:00Z v1.6.1 FruitRay::DrawRay @0x001e48b8 (asm-inspector)
+// (scale-fold m_Life*-2+3, Scale*Start*World*translate order, alpha clamp all MATCH)
 //
 // Builds a 3-vertex QUADCUSTOMVERTEX strip (a thin ray "fan" -- one wide
 // vertex + two narrow ones) and draws it with the ray's world matrix.

@@ -80,22 +80,16 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     };
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
-    // Defensive check: if no texture has been Set() recently, GL falls back
-    // to default texture 0, which samples white -- modulating the tint then
-    // produces a stray white quad. Tracked via Mortar::Texture::s_LastBound.
-    // Once-warn + skip-draw so callers can identify the bug from logs.
-#if !defined(__bada__)
+    // tex=0 (no Texture::Set since the last bind) is the binary's untextured
+    // flat-colour quad: fixed-function "texturing off" -> fragment = tint.
+    // DrawCritHit's super-fruit crit-flash draws exactly this way (Mesh::
+    // DrawQuadUnCached with texturing disabled). Route it through the same
+    // 1x1 white texture DrawColorQuad uses so texel(1)*tint == tint --
+    // matches the FF output instead of dropping the draw.
+    GLuint quadTex = 0;
     if (Mortar::Texture::s_LastBoundTexId == 0) {
-        static bool s_warned = false;
-        if (!s_warned) {
-            LOG_WARN("RENDERER/DrawQuad",
-                "no texture bound; tint=(%u,%u,%u,%u) uv=(%g,%g..%g,%g) -- caller missing Texture::Set?",
-                tint.r, tint.g, tint.b, tint.a, uMin, vMin, uMax, vMax);
-            s_warned = true;
-        }
-        return;
+        quadTex = m_WhiteTex;
     }
-#endif
 
     // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: 2D quad sets cull off +
     // per-draw blend -- OFF only if tint.a==255 && (no texture || texture has no alpha),
@@ -111,13 +105,14 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     }
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // tex=0: sample whatever the caller bound on unit 0 (Texture::Set, or
-    // draw_sprite's raw glBindTexture) -- same contract as the FF path.
+    // quadTex != 0 (i.e. no texture bound): m_WhiteTex forces flat colour.
+    // quadTex == 0: sample whatever the caller bound on unit 0 (Texture::Set,
+    // or draw_sprite's raw glBindTexture) -- same contract as the FF path.
     DrawShaded2D(verts, 4, (int)sizeof(Shaded2DVertex),
                  (int)offsetof(Shaded2DVertex, x),
                  (int)offsetof(Shaded2DVertex, u),
                  (int)offsetof(Shaded2DVertex, color),
-                 GL_TRIANGLE_STRIP, 0, mvp);
+                 GL_TRIANGLE_STRIP, quadTex, mvp);
 }
 
 void Renderer::DrawColorQuad(const Colour& tint) {

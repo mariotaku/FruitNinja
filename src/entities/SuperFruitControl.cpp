@@ -1503,7 +1503,8 @@ void SuperFruitControl::StopRays()
     }
 }
 
-// ASM-spec v1.6.1 SuperFruitControl::SpawnRay @0x001ba810. Spawns one
+// ASM-verified: 2026-07-24T00:00Z v1.6.1 SuperFruitControl::SpawnRay @0x001ba810 (asm-inspector)
+// (Z/Y/X axis assignment, deg*182 brad conversion, qz*qy*qx order all MATCH). Spawns one
 // type-6 FruitRay entity, oriented by a pseudo-random quaternion built from
 // three axis-aligned rotations: the file-static `rayNum` counter cycles the
 // elevation band (8-way, low/high split at rayNum&7 < 4) and the quadrant
