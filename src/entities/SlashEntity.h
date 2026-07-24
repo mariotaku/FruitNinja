@@ -363,6 +363,11 @@ public:
     // cross-build can reach it.
     void ClearHeadPosX() { m_HeadPos.x = 0.0f; }
 
+    // v1.6.1 SuperFruitHitControl::RemoveQuickly @0x001bee10: floors m_TailPos.z
+    // (SlashEntity+0x78) to 0.8f. (The binary's RemoveQuickly operates on a
+    // SlashEntity* reinterpret-cast to a phantom SuperFruitHitControl*.)
+    void ClampTailPosZ() { if (m_TailPos.z <= 0.8f) m_TailPos.z = 0.8f; }
+
 private:
 
     // -----------------------------------------------------------------------

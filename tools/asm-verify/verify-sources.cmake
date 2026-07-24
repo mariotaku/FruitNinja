@@ -105,7 +105,6 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/entities/SplatEntity.cpp"
     "${_PROJECT_ROOT}/src/entities/SuperFruitControl.cpp"
     "${_PROJECT_ROOT}/src/entities/SuperFruitGlow.cpp"
-    "${_PROJECT_ROOT}/src/entities/SuperFruitHitControl.cpp"
     "${_PROJECT_ROOT}/src/entities/SuperFruitState.cpp"
 
     # Game

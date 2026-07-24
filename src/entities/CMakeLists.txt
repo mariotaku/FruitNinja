@@ -14,6 +14,5 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/SplatEntity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SuperFruitControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SuperFruitGlow.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/SuperFruitHitControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SuperFruitState.cpp
 )

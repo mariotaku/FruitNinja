@@ -751,9 +751,7 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     // Clear the linked slasher's head anchor and remove it quickly.
     if (m_pLinkedSlasher) {
         m_pLinkedSlasher->ClearHeadPosX();   // SlashEntity+0x7c (m_HeadPos.x = 0)
-        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: SuperFruitHitControl::RemoveQuickly(m_pLinkedSlasher)
-        //   (SuperFruitHitControl unported). Null the pointer for now to avoid a dangle.
-        m_pLinkedSlasher = nullptr;
+        m_pLinkedSlasher->ClampTailPosZ();   // SlashEntity+0x78 (m_TailPos.z floored to 0.8f)
     }
 
     // Combo-count popup label (resets the fade-in each hit).
