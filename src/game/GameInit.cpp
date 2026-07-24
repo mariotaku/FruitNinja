@@ -953,9 +953,26 @@ void GameDraw(float dt, bool active) {
         // DIFFERS: original = no pause bg-dim (v1.6.1 GameDraw @0x001cd720). Port injects a full-screen
         //   ~50% black quad between pass15 (WaveManager::Draw(0)) and pass16 (HUD::Draw(0x08)) so the
         //   frozen gameplay dims while the pause UI (layers 0x08/0x108/0x100) stays bright.
+        //   Alpha source tracks whichever freeze is active: PauseScreen::m_Alpha eases the manual
+        //   in-game pause overlay's own state machine (FADE_IN/ACTIVE/RESUME_EXIT/...), while
+        //   game_work.m_PauseAmount is the real freeze ramp for the arcade game-over/bonus reveal
+        //   (GameOverScreen::Update, STATE_MAIN_DISPLAY: alpha += (1-alpha)*0.125). The two never
+        //   overlap: PauseScreen::IsEnabled() (v1.6.1 @0x00153e4c) requires |m_PauseAmount| < 0.001,
+        //   so m_PauseAmount only leaves 0 once pause is disabled, and PauseScreen::m_State only
+        //   leaves PAUSE_STATE_HIDDEN via PauseGameCallback (manual pause) -- during which
+        //   m_PauseAmount is pinned at 0 by SkipToPause/PauseGame. So max() of the two, clamped to
+        //   [0,1] first, always resolves to the single actually-active freeze without popping the
+        //   manual-pause fade-in (m_PauseAmount contributes 0 throughout manual pause).
         {
             PauseScreen* ps = ts->pPauseScreen;
-            if (ps && ps->m_Alpha > 0.0f) {
+            // m_PauseAmount uses -1.0f as a pause-transition sentinel (see GameInit.cpp @0x0c writes) --
+            // clamp to [0,1] before combining so a negative transition value never contributes / underflows.
+            float pauseAmountAlpha = game_work.m_PauseAmount;
+            if (pauseAmountAlpha < 0.0f) pauseAmountAlpha = 0.0f;
+            if (pauseAmountAlpha > 1.0f) pauseAmountAlpha = 1.0f;
+            const float psAlpha = ps ? ps->m_Alpha : 0.0f;
+            const float dimA = (pauseAmountAlpha > psAlpha) ? pauseAmountAlpha : psAlpha;
+            if (dimA > 0.0f) {
                 MatrixManager& mm = MatrixManager::GetInstance();
                 mm.GetWorldStack().Reset();
                 // Scale(481,321,1) matches DrawBackground's full-ortho-coverage quad above.
@@ -969,7 +986,7 @@ void GameDraw(float dt, bool active) {
                 dimMat.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
                 mm.GetWorldStack().SetCurrentMatrix(dimMat);
                 mm.UploadModelViewOnly();
-                const uint8_t dimAlpha = (uint8_t)(ps->m_Alpha * 128.0f);
+                const uint8_t dimAlpha = (uint8_t)(dimA * 128.0f);
                 Renderer::GetInstance()->DrawColorQuad(Colour(0, 0, 0, dimAlpha));
             }
         }
