@@ -908,6 +908,32 @@ void ScrollingMenu::Reset() {
 // Binary @ 0x0015af38 -- no-op stub (single bx lr).
 void ScrollingMenu::Skip() {}
 
+#ifndef __bada__
+// Port specific: no binary counterpart -- see ScrollingMenu.h.
+// Mirrors Update()'s Phase 2 touch-acquire rect test (pos + m_OuterRegion[4],
+// [0]=LEFT [1]=TOP [2]=RIGHT [3]=BOTTOM) but against an arbitrary point
+// instead of a live touch slot.
+bool ScrollingMenu::ContainsPoint(float gx, float gy) const {
+    const float xMin = pos.x + m_OuterRegion[0];
+    const float yMax = pos.y + m_OuterRegion[1];
+    const float xMax = pos.x + m_OuterRegion[2];
+    const float yMin = pos.y + m_OuterRegion[3];
+    return gx >= xMin && gx <= xMax && gy >= yMin && gy <= yMax;
+}
+
+// Port specific: no binary counterpart -- see ScrollingMenu.h.
+// Phase 5's layout cursor is `curY = pos.y - m_Velocity.y`, decreasing as the
+// item index increases (items are laid out downward). A LARGER m_Velocity.y
+// therefore brings an EARLIER (smaller-index) item to the focal point, so
+// scrolling toward LATER items (wheel-down) means DECREASING m_Velocity.y --
+// hence the minus sign below. Nudging m_Velocity.y directly (not snapping it)
+// lets the existing Phase 4/7 spring in Update()/UpdateRealtime() animate the
+// list smoothly to the new closest item, exactly like a small fling.
+void ScrollingMenu::ScrollByItems(int delta) {
+    m_Velocity.y -= (float)delta * m_Width;   // m_Width = binary field_0x9c (item row height, see .h note)
+}
+#endif
+
 // ASM-spec v1.6.1 DefaultClickedMenuItemCallback @0x1af5f4: identity pass-through.
 ScrollingMenuItem* DefaultClickedMenuItemCallback(ScrollingMenuItem* item) {
     return item;

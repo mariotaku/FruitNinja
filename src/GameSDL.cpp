@@ -14,8 +14,12 @@
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
 #include "game/GameTaskState.h"
+#include "game/GameTaskInput.h"   // Port specific: RegressMenuCallback for ESC-as-back
 #include "screens/PauseScreen.h"
 #include "screens/MainScreen.h"   // IsInGameplay() for the background-freeze gate
+#include "hud/HUD.h"              // Port specific: walk HUD::controls for ESC/wheel routing
+#include "hud/ScrollingMenu.h"    // Port specific: mouse-wheel scroll target
+#include <cmath>                  // Port specific: fabsf for the pause/transition guards
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "debug/OSD.h"    // Port specific: dev toast overlay (binary OSD is a dead stub)
@@ -271,6 +275,73 @@ void Game::pollInput() {
                    ev.key.keysym.scancode == SDL_SCANCODE_F12) {
             // Port specific: screenshot on F12.
             g_takeScreenshot = true;
+        } else if (ev.type == SDL_MOUSEWHEEL) {
+            // Port specific: desktop mouse-wheel scrolls a hovered
+            // ScrollingMenu by +/-1 item (smooth spring, no binary
+            // counterpart -- the binary is touch-only Bada hardware).
+            // Guard: don't scroll a screen mid-transition (same shape as
+            // the in-game m_PauseAmount guard below -- see GetTransitionAlpha).
+            if (game_work.mHud) {
+                ScrollingMenu* activeList = nullptr;
+                float transitionAlpha = 1.0f;
+                for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
+                     it != game_work.mHud->controls.end(); ++it) {
+                    ScrollingMenu* list = (*it)->GetScrollList();
+                    if (list) {
+                        activeList = list;
+                        transitionAlpha = (*it)->GetTransitionAlpha();
+                        break;
+                    }
+                }
+                bool mid = transitionAlpha > 0.0f && transitionAlpha < 0.999f;
+                if (activeList && !mid) {
+                    int ww = 0, wh = 0;
+                    if (window) SDL_GetWindowSize(static_cast<SDL_Window*>(window), &ww, &wh);
+                    int mx = 0, my = 0;
+                    SDL_GetMouseState(&mx, &my);
+                    if (ww > 0 && wh > 0) {
+                        float nx = (float)mx / (float)ww;
+                        float ny = (float)my / (float)wh;
+                        float gx, gy;
+                        Layout::TouchToGame(nx, ny, &gx, &gy);
+                        if (activeList->ContainsPoint(gx, gy)) {
+                            activeList->ScrollByItems(-ev.wheel.y);
+                        }
+                    }
+                }
+            }
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
+            // Port specific: ESC-as-back (no binary counterpart -- the
+            // binary is touch-only Bada hardware with no keyboard).
+            if (game_work.taskStateIndex == 2) {
+                // In game: same gate PauseScreen::IsEnabled uses -- don't
+                // fire mid pause/camera transition.
+                if (fabsf(game_work.m_PauseAmount) < 0.001f) {
+                    PauseScreen* pauseScreen = GetTaskState()->pPauseScreen;
+                    if (pauseScreen) pauseScreen->PauseGameCallback();
+                }
+            } else if (game_work.taskStateIndex == 1) {
+                // Menus: block while any HUD control's transition alpha is
+                // mid-fade (BaseScreen subclasses / ShopScreen override
+                // GetTransitionAlpha; everything else reports 1.0f, a no-op
+                // for this check). Otherwise fire the canonical back-key
+                // handler, which auto-routes to whichever menu screen's
+                // back-bomb button is currently active.
+                bool mid = false;
+                if (game_work.mHud) {
+                    for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
+                         it != game_work.mHud->controls.end(); ++it) {
+                        float a = (*it)->GetTransitionAlpha();
+                        if (a > 0.0f && a < 0.999f) { mid = true; break; }
+                    }
+                }
+                if (!mid) {
+                    InputEvent ev2;
+                    memset(&ev2, 0, sizeof(ev2));
+                    RegressMenuCallback(&ev2);
+                }
+            }
+            // taskStateIndex == 0 (splash): ESC does nothing.
         } else if (ev.type == SDL_WINDOWEVENT &&
                    (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
                     ev.window.event == SDL_WINDOWEVENT_MINIMIZED  ||

@@ -19,4 +19,15 @@
 
 void GameTaskInitInput();
 
+struct InputEvent;
+
+// v1.6.1 RegressMenuCallback @ 0x001ca350 -- the "RegressMenu" action handler
+// (back-key input). Unconditionally sets game_work.m_bFrameDirty (see
+// GameTaskInput.cpp), which MenuButton::Update's back-key force-slice block
+// (m_bBackdropActive-gated) picks up and routes to whichever menu screen's
+// back-bomb button is currently active. Declared here (not just file-local
+// in GameTaskInput.cpp) so other translation units (GameSDL.cpp's ESC
+// handler) can call it directly instead of poking m_bFrameDirty themselves.
+bool RegressMenuCallback(InputEvent* ev);
+
 #endif  // FN_GAME_TASK_INPUT_H

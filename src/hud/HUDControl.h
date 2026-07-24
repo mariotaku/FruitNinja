@@ -16,6 +16,9 @@
 
 struct Renderer;
 namespace Mortar { class MortarSound; }
+#ifndef __bada__
+class ScrollingMenu;
+#endif
 
 class HUDControl {
 public:
@@ -125,6 +128,25 @@ public:
     // overlay AABB matches the rendered quad. Default returns `pos` unmodified.
     // Not in binary; appended after binary vtable.
     virtual _Vector3<float> GetDrawPos() const { return pos; }
+
+    // Port specific: no binary counterpart -- desktop mouse-wheel scroll hook.
+    // Returns this control's scrollable list, or 0 if it doesn't have one.
+    // Only ShopScreen overrides this today (ScrollingMenu* m_pShopList).
+    // Lives on HUDControl (not BaseScreen) because ShopScreen derives from
+    // HUDControl3d directly, not BaseScreen -- HUDControl is the nearest
+    // common base shared with every other entry in HUD::controls, so a
+    // single walk of that list can find whichever screen owns a scroll list.
+    // Appended after the binary vtable; not compiled under __bada__.
+#ifndef __bada__
+    virtual ScrollingMenu* GetScrollList() { return 0; }
+
+    // Port specific: no binary counterpart -- companion to GetScrollList().
+    // Desktop mouse-wheel handling must not scroll a screen that is still
+    // sliding in/out (mirrors the in-game m_PauseAmount transition guard).
+    // Returns 1.0f (fully settled) by default; screens with a transition
+    // alpha (ShopScreen, BaseScreen subclasses) override to expose it.
+    virtual float GetTransitionAlpha() const { return 1.0f; }
+#endif
 
 #ifndef __bada__
     // Port specific: no binary counterpart -- optional per-PRESENT tick (called

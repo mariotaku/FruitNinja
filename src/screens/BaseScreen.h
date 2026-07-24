@@ -82,6 +82,12 @@ public:
     // ScreenButton MenuButtons pending-removal.
     void RemoveButtons();
 
+#ifndef __bada__
+    // Port specific: see HUDControl::GetTransitionAlpha. Gates the desktop
+    // ESC-as-back route while this screen is sliding in/out.
+    float GetTransitionAlpha() const override { return m_TransitionAlpha; }
+#endif
+
 protected:
     // +0x7C: button descriptors. UpdateButtons iterates this each frame
     // to lazily create/update MenuButtons.

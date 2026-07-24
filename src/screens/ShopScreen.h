@@ -134,6 +134,13 @@ public:
 
     int GetType() override { return 1; }
 
+#ifndef __bada__
+    // Port specific: desktop mouse-wheel scroll hook -- see HUDControl::GetScrollList.
+    ScrollingMenu* GetScrollList() override { return m_pShopList; }
+    // Port specific: gates the wheel-scroll route while the shop is sliding in/out.
+    float GetTransitionAlpha() const override { return m_TransitionAlpha; }
+#endif
+
     // Matches ShopScreen::LoadContent @ 0x001b2a20 (PLT thunk @0x001047b8)
     // Loads all static textures. No internal guard -- the guard lives at the ctor
     // call site (`if (!s_bContentLoaded) LoadContent();`).

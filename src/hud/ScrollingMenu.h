@@ -260,6 +260,24 @@ public:
     void Reset() override;
     // Binary @ 0x0015af38 -- Skip: empty no-op in binary (return only).
     void Skip() override;
+
+#ifndef __bada__
+    // Port specific: no binary counterpart -- desktop mouse-wheel hover hit-test.
+    // Tests an arbitrary game-space point against pos + m_OuterRegion[4]
+    // (the SAME rect Update()'s Phase 2 touch-acquire scan uses), rather than
+    // a specific touch slot -- mirrors HUDControl::TouchInRegion's rect but
+    // for a point supplied directly (mouse position), not a live touch.
+    bool ContainsPoint(float gx, float gy) const;
+
+    // Port specific: no binary counterpart -- desktop mouse-wheel scroll.
+    // Nudges m_Velocity.y by one item row; Phase 5's closest-item search and
+    // Phase 7's snap-spring (already running every Update/UpdateRealtime
+    // call) then animate smoothly to the new closest item on their own --
+    // no separate snap/kick needed. delta>0 scrolls toward later items,
+    // delta<0 toward earlier items (see .cpp for the sign derivation
+    // against Phase 5's curY = pos.y - m_Velocity.y layout).
+    void ScrollByItems(int delta);
+#endif
 };
 
 #ifdef __bada__
