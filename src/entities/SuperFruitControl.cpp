@@ -32,6 +32,7 @@
 #include "game/WaveManager.h"
 #include "game/FruitCamera.h"
 #include "game/BombHit.h"
+#include "game/PowerUpManager.h"
 #include "Game.h"
 #include "engine/particle/PSPParticleManager.h"
 #include "math/MathUtil.h"
@@ -128,9 +129,8 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     m_OuterRadius = 0.0f;
     memset(_pad_e0, 0, sizeof(_pad_e0));
 
-    // TODO: v1.6.1 DAT_002d928c/9290 (SuperFruitControl @0x001be1c8) -- binary inits
-    //   m_SpinAxis/m_TintA/B/Current with (0, DAT_002d928c, DAT_002d9290); the two DAT
-    //   Y/Z tint/spin constants are unmapped, so X=0 and Y/Z left zero (do NOT guess).
+    // v1.6.1 @0x001be1c8: tint/spin Y,Z read from DAT_002d928c/9290 which are uninitialized
+    //   .bss (heap garbage); the port's zero-init is the faithful/safe behavior.
     m_SpinAxis    = _Vector3<float>(0.0f, 0.0f, 0.0f);
     m_TintCurrent = _Vector3<float>(0.0f, 0.0f, 0.0f);
     m_TintA       = _Vector3<float>(0.0f, 0.0f, 0.0f);
@@ -231,9 +231,8 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit, SuperFruitState& state)
     // finale-clock m_Timer at +0x88.)
     HUDControl::m_Timer = state.m_Spin;
 
-    // TODO: v1.6.1 DAT_002d928c/9290 -- super-fruit restore tint/spinAxis Y,Z (unmapped; cosmetic).
-    // The tint / spin-axis work vectors are left zero-initialised (memset above) as a
-    // safe placeholder until the two DAT constants are resolved; do NOT guess values.
+    // v1.6.1 @0x001be1c8: tint/spin Y,Z read from DAT_002d928c/9290 which are uninitialized
+    //   .bss (heap garbage); the port's zero-init (memset above) is the faithful/safe behavior.
 
     // (restore ctor: register by symmetry with Release unregister; not byte-confirmed)
     SlashEntity::OnComboCancelEvent() += Mortar::Delegate1<void, SlashEntity*>::Make(
@@ -1093,9 +1092,16 @@ int SuperFruitControl::NumPomegranatesSpawnedThisGame()
 }
 
 // Binary @ 0x001b99d4. Game-mode gating for final pomegranate spawn.
-// TODO: v1.6.1 SuperFruitControl::CanSpawnFinalPomegranate @0x001b99d4 -- gate needs PowerUpManager::GetActiveProgression + Fruit::NumberOfPowerupFruits
+// ASM-spec v1.6.1 SuperFruitControl::CanSpawnFinalPomegranate @0x001b99d4: same
+// powerup-progression gate idiom as GlobalProbabilityOveride::CanSpawn @0x00120d2c --
+// if no powerup-flagged fruit is currently active, gate on progression >= 2.0.
 bool SuperFruitControl::CanSpawnFinalPomegranate()
 {
+    if (Fruit::NumberOfPowerupFruits() < 1) {
+        return PowerUpManager::GetInstance()
+            ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f) >= 2.0f
+            : false;
+    }
     return false;
 }
 
@@ -1206,7 +1212,11 @@ void SuperFruitControl::ResetAll()
 
     SuperFruitControls.clear();
 
-    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- this->+0x33 = 1 (game-level done-flag write; target unresolved in port)
+    // v1.6.1 @0x001bb52c: binary's __thiscall writes this+0x33=1 (m_bPendingRemoval,
+    //   HUDControl::SetPendingRemoval()) on the active controller instance. Port's ResetAll
+    //   is static (renamed to dodge the HUDControl3d::Reset() virtual collision; called from
+    //   PauseScreen.cpp with no instance in scope) -- needs the active-controller pointer to
+    //   reap it. TODO: route the active instance here.
 }
 
 // Binary @ 0x001ba460. Stops all in-flight fruit and bombs during the
