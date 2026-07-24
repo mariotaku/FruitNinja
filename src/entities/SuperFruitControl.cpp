@@ -23,6 +23,7 @@
 #include "Bomb.h"
 #include "SlashEntity.h"
 #include "SplatEntity.h"
+#include "collision/ColLine.h"
 #include "Jiblet.h"
 #include "FruitRay.h"
 #include "ActorManager.h"
@@ -484,9 +485,14 @@ void SuperFruitControl::Update(float dt)
                 }
                 m_pHostFruit->m_TimeScale = ts;
             }
-            // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- spin.x != 0 arm of the
-            //   host m_TimeScale write is not yet RE'd (m_SpinAxis stays 0 in the port until
-            //   GetSliceDir lands, so this arm is currently dormant).
+            // NOTE: v1.6.1 Update @0x001bd0f8: when this control's own m_SpinAxis.x != 0,
+            //   host Fruit m_TimeScale = T_1616(host->pos.x, host->vel.x>=0 ? 216 : -216,
+            //   host->vel.x>=0 ? 144 : -144). (Not the host Fruit's own m_SpinAxis -- Fruit
+            //   has no such member; the gate reads THIS control's +0xa8 field, which is only
+            //   ever non-zero after Sliced() rolls it via GetSliceDir, i.e. after the throw/
+            //   anticipation phase this branch runs in has already ended.) Dormant in the port:
+            //   during this phase m_SpinAxis is always (0,0,0) from the ctor, so this arm never
+            //   fires; the exact binary formula for the x!=0 case is otherwise unconfirmed.
             PushBombsAway(dt);
         }
 
@@ -501,10 +507,18 @@ void SuperFruitControl::Update(float dt)
         float a = -HUDControl::m_Timer;                       // HUDControl::m_Timer (+0x2c)
         uint16_t idx = (uint16_t)(int)(a * 182.0f);
         _Vector3<float> dir(SinIdx(idx), CosIdx(idx), 0.0f);
-        // TODO: v1.6.1 -- camTgt fold = host.pos + spinAxis fade-in wobble + tint lerp; spinAxis/tint
-        //   stay ~0 until GetSliceDir lands, so host.pos is correct for now.
+        // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bd0f8: camTgt fold -- host.pos, plus
+        //   a fade-in wobble along m_SpinAxis (freq 2.0), plus the tint-lerp offset (which also
+        //   refreshes m_TintCurrent this frame).
         if (m_pHostFruit) {
             _Vector3<float> camTgt = m_pHostFruit->pos;
+            if (m_FadeIn < 1.0f) {
+                camTgt += m_SpinAxis * JumpySinPulse(Clamp(2.0f * m_FadeIn, 0.0f, 1.0f), 2.0f);
+            }
+            float scaleClamped = m_Scale;
+            if (scaleClamped > 1.0f) scaleClamped = 1.0f;
+            m_TintCurrent = m_TintA + (m_TintB - m_TintA) * SinTransition(scaleClamped, 105.0f);
+            camTgt += m_TintCurrent;
             if (game_work.m_FruitCamera) {
                 game_work.m_FruitCamera->StartZoomIn(camTgt, 0.625f, a,
                     Mortar::Delegate0<void>::Make(this, &SuperFruitControl::TransitionFin));
@@ -708,10 +722,27 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     // Glow-counter reroll + per-hit scale-pop.
     if (m_GlowCounter > 0) m_GlowCounter--;
     if (m_GlowCounter < 1) {
-        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED: binary also rerolls
-        //   m_TintB here (Magnitude gate -> Rand32 or Atan2Idx-based Cos/Sin * rand). GetSliceDir
-        //   is now ported, but this reroll's exact branch logic + tint DAT constants are unmapped,
-        //   so the tint term stays deferred.
+        // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbee4: m_TintB reroll. All constants
+        //   are inline immediates (not DATs). idx selects a direction by m_TintB's current
+        //   magnitude: near-zero -> full-random angle; large -> roughly away from current tint
+        //   (opposite-direction fold, jittered); mid-range -> exactly opposite. r's magnitude
+        //   scale (*8+7) matches the binary's literal operands but the exact rand helper composing
+        //   it is not asm-diffed -- uses the file's existing signed-rand idiom (RandF(2x)-x).
+        {
+            float mag = m_TintB.Magnitude();
+            uint16_t idx;
+            if (mag < 1.0f) {
+                idx = (uint16_t)Math::g_Random.Rand32(0);
+            } else if (mag >= 44.0f) {
+                idx = (uint16_t)((int)Math::Atan2Idx(m_TintB.y, m_TintB.x)
+                                 + 0x5ffa + (int)Math::g_Random.Rand32(0x3ffc));
+            } else {
+                _Vector3<float> d = m_TintB * -1.0f;
+                idx = (uint16_t)Math::Atan2Idx(d.y, d.x);
+            }
+            float r = SuperFruitSignedRand(1.0f) * 8.0f + 7.0f;
+            m_TintB += _Vector3<float>(CosIdx(idx), SinIdx(idx), 0.0f) * r;
+        }
         m_Scale = 0.0f;               // per-hit scale-pop (re-ramps in Update)
         m_TintA = m_TintCurrent;
         m_GlowCounter = 0;
@@ -734,12 +765,15 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     //   impulse = uniform[0.8, 1.1), rateMul = 0.65, pos.z = m_EmitterDepth - 5.0
     //   call A: fruit=(Fruit*)0, call B: fruit=(Fruit*)3
     if (m_pHostFruit) {
-        // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- binary derives the slice
-        //   angle from the slash-entity direction (Atan2Idx of the SlashEntity dir field),
-        //   not the host velocity. The exact SlashEntity dir field is unconfirmed, so this
-        //   keeps the host-velocity Atan2Idx as a stand-in until it is RE'd.
-        float angleDeg = (float)(int16_t)Math::Atan2Idx(
-            m_pHostFruit->vel.y, m_pHostFruit->vel.x) / 182.0f;
+        // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: slice angle is derived from
+        //   the SLASH ENTITY's collision line (Entity+0x38 m_Col, a ColLine*), not host velocity.
+        //   Reads the line's first point (a()), negated, then Atan2Idx(y,x).
+        float angleDeg = 0.0f;
+        if (slashEntity && slashEntity->m_Col) {
+            ColLine* line = static_cast<ColLine*>(slashEntity->m_Col);
+            _Vector3<float> d = line->a() * -1.0f;
+            angleDeg = (float)(int16_t)Math::Atan2Idx(d.y, d.x) / 182.0f;
+        }
         float impulse = 0.8f + Math::g_Random.RandF(0.3f);
         _Vector3<float> hostPos = m_pHostFruit->pos;
         float sliceZ = m_pHostFruit->m_ZPosition - 5.0f;   // m_EmitterDepth - 5
@@ -766,9 +800,47 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
         SpawnRay();
     }
 
-    // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED remaining:
-    //   pome-slice SFX (GameSound::SFXPlay); PSP emitter hookup. Wire when
-    //   those subsystems land.
+    // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: pome-slice SFX. n = T_1643(1,3)
+    // (uniform int in [1,3]); pitch ramps down from 0.4 as the combo approaches 28 hits, then
+    // holds at 0.4 past that.
+    {
+        int n = 1 + (int)Math::g_Random.Rand32(3);
+        char key[24];
+        snprintf(key, sizeof(key), "pome-slice-%i", n);
+        float t = (float)m_SliceCount / 28.0f;
+        float pitch = (t <= 0.8f) ? (t - 0.4f) : 0.4f;
+        if (game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay(key, 1.0f, 1.0f,
+                Mortar::Delegate1<bool, Mortar::MortarSound*>(), pitch);
+        }
+    }
+
+    // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: per-hit PSP emitter hookup.
+    // NOTE: the binary's particleStopper gate is `IsFastHardware() || stopper==2` -- the port
+    //   has no `stopper` debug setting mapped, so this only tests IsFastHardware().
+    {
+        Game* g = Game::GetInstance();
+        bool particlesOn = g && g->IsFastHardware();
+        if (particlesOn && m_pHostFruit) {
+            const FruitInfo* fi = Fruit::FruitInfo((long)m_pHostFruit->m_FruitType);
+            uint32_t emitterHash = fi ? fi->m_NameHash : 0;
+            PSPParticleManager& pm = PSPParticleManager::GetInstance();
+            if (pm.EmitterExists(emitterHash)) {
+                PSPParticleEmitter* e = pm.AddEmitter(emitterHash, 0, false);
+                if (e) {
+                    uint16_t negArc = (uint16_t)(-(int16_t)m_pHostFruit->m_SliceArcAngle);
+                    e->m_DirCos = CosIdx(negArc);
+                    e->m_DirSin = -SinIdx(negArc);
+                    if (slashEntity && slashEntity->m_Col) {
+                        ColLine* line = static_cast<ColLine*>(slashEntity->m_Col);
+                        e->m_Pos = line->a();
+                    }
+                    e->m_TimeScale /= WaveManager::GetInstance()->m_ComboSpeedDivisor;   // +0x2c
+                    e->m_SpinScale *= 0.5f;                                              // +0x28
+                }
+            }
+        }
+    }
 
     LOG_INFO("SUPERFRUIT", "Sliced() hit %d", m_SliceCount);
 }
@@ -1036,9 +1108,10 @@ void SuperFruitControl::LoadContent() {
     // ASM-spec v1.6.1 SuperFruitControl::LoadContent @0x001bda74
     FruitRay::RayTexture = Mortar::TextureManager::LoadLocalisedTexture("pomegranate_rays.tex");
 
-    // TODO: v1.6.1 SuperFruitControl::LoadContent @0x001bda74 -- also loads
-    //   SuperFruitGlow::GlowTexture (LoadLocalisedTexture, filename unresolved).
-    //   Blocked: SuperFruitGlow::GlowTexture is unported. Wire when it lands.
+    // NOTE: v1.6.1 SuperFruitControl::LoadContent @0x001bda74 also loads
+    //   SuperFruitGlow::GlowTexture here (LoadLocalisedTexture; the filename arg
+    //   is still unresolved). Deferred until SuperFruitGlow::GlowTexture is ported
+    //   -- the glow (a separate entity) is what consumes it, not this control.
 }
 
 // Frees the finale visuals loaded by LoadContent. Nulls the file-static SmartPtr
@@ -1205,7 +1278,9 @@ void SuperFruitControl::ResetAll()
     // v1.6.1 SuperFruitControl::Reset @0x001bb52c: FruitCamera::TransitionOut(game+0x4c).
     //   Port method is StartZoomOut() (binary symbol FruitCamera::TransitionOut @0x1bede8).
     if (game_work.m_FruitCamera) game_work.m_FruitCamera->StartZoomOut();
-    // TODO: v1.6.1 SuperFruitControl::Reset @0x001bb52c -- StackAllocatedPointer<Delegate0>::Delete((game+0x4c)+0x184) camera done-cb free
+    // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: StackAllocatedPointer<Delegate0>::
+    //   Delete((game+0x4c)+0x184) -- frees/clears the camera's zoom-done callback (FruitCamera+0x184).
+    if (game_work.m_FruitCamera) game_work.m_FruitCamera->m_OnZoomDone = Mortar::Delegate0<void>();
     UnpauseSlices();
 
     // Walk ActorManager type 6, OR 0x10 (ENT_KILLED) into each entity's flags(+0x0c)
