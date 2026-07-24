@@ -27,6 +27,11 @@ public:
     explicit StartGamePacket(int gameSeed);
 
     virtual ~StartGamePacket() {}
+
+    // MP-revival: wire (de)serialisation; v1.6.1 StartGamePacket::StartGamePacket @ 0x00158dc0.
+    // Payload order: m_Flags (i32), m_GameSeed (i32).
+    virtual void Serialize(Mortar::ByteWriter& w) const;
+    virtual void Deserialize(Mortar::ByteReader& r);
 };
 
 #if defined(__bada__)

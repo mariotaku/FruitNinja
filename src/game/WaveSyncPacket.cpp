@@ -16,3 +16,23 @@ WaveSyncPacket::WaveSyncPacket(long waveIdx, long waveData18, float score)
 {
     _pad25[0] = _pad25[1] = _pad25[2] = 0;
 }
+
+// MP-revival: real wire serialisation; v1.6.1 WaveSyncPacket::Serialize @ 0x00159230
+void WaveSyncPacket::Serialize(Mortar::ByteWriter& w) const {
+    NetworkPacket::WriteHeader(w);
+    w.I32(static_cast<int32_t>(m_WaveIdx));
+    w.I32(static_cast<int32_t>(m_WaveData18));
+    w.F32(m_Score);
+    w.I32(m_reserved20);
+    w.U8(m_Flag24);
+}
+
+// MP-revival: real wire deserialisation (inverse of Serialize above)
+void WaveSyncPacket::Deserialize(Mortar::ByteReader& r) {
+    NetworkPacket::ReadHeader(r);
+    m_WaveIdx = r.I32();
+    m_WaveData18 = r.I32();
+    m_Score = r.F32();
+    m_reserved20 = r.I32();
+    m_Flag24 = r.U8();
+}

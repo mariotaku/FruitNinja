@@ -31,6 +31,12 @@ public:
     WaveSyncPacket(long waveIdx, long waveData18, float score);
 
     virtual ~WaveSyncPacket() {}
+
+    // MP-revival: wire (de)serialisation; v1.6.1 WaveSyncPacket::Serialize @ 0x00159230.
+    // Payload order: m_WaveIdx (i32), m_WaveData18 (i32), m_Score (f32),
+    // m_reserved20 (i32), m_Flag24 (bool as u8).
+    virtual void Serialize(Mortar::ByteWriter& w) const;
+    virtual void Deserialize(Mortar::ByteReader& r);
 };
 
 #if defined(__bada__)

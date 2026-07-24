@@ -14,6 +14,7 @@
 //   +0x10  int32  m_Reserved10   (= 0; binary ctor zeroes 4th word at +0x10)
 
 #include <cstdint>
+#include "engine/network/ByteBuffer.h"
 
 namespace Mortar {
 
@@ -27,6 +28,32 @@ public:
     // Defunct: P2P MP -- no-op stub; v1.6.1 NetworkPacket::NetworkPacket @ 0x002333a4
     NetworkPacket() : m_PacketSize(0), m_Reserved08(0), m_PacketType(0), m_Reserved10(0) {}
     virtual ~NetworkPacket() {}
+
+    // MP-revival: wire (de)serialisation hooks. Not present as distinct
+    // virtuals in the binary (the real P2P layer is unrecoverable) -- this is
+    // port-only infra for the revived transport. Subclasses call
+    // WriteHeader/ReadHeader first, then their own payload fields in the
+    // order documented in their header.
+    virtual void Serialize(ByteWriter& w) const { WriteHeader(w); }
+    virtual void Deserialize(ByteReader& r) { ReadHeader(r); }
+
+protected:
+    // Writes the 20-byte base header (m_PacketSize, m_Reserved08, m_PacketType,
+    // m_Reserved10) in field order, verbatim from the stored fields (the ctor
+    // is responsible for setting m_PacketSize to the derived class's sizeof).
+    void WriteHeader(ByteWriter& w) const {
+        w.I32(m_PacketSize);
+        w.I32(m_Reserved08);
+        w.I32(m_PacketType);
+        w.I32(m_Reserved10);
+    }
+
+    void ReadHeader(ByteReader& r) {
+        m_PacketSize = r.I32();
+        m_Reserved08 = r.I32();
+        m_PacketType = r.I32();
+        m_Reserved10 = r.I32();
+    }
 };
 
 } // namespace Mortar

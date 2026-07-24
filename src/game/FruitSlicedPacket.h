@@ -30,6 +30,11 @@ public:
     FruitSlicedPacket(long fruitId, uint16_t sliceX, uint16_t sliceY, float sliceAngle, long playerIdx);
 
     virtual ~FruitSlicedPacket() {}
+
+    // MP-revival: wire (de)serialisation; v1.6.1 FruitSlicedPacket::Serialize @ 0x00156f80.
+    // Payload order: m_FruitId (i32), m_SliceX (u16), m_SliceY (u16), m_SliceAngle (f32), m_PlayerIdx (i32).
+    virtual void Serialize(Mortar::ByteWriter& w) const;
+    virtual void Deserialize(Mortar::ByteReader& r);
 };
 
 #if defined(__bada__)

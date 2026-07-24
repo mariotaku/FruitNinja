@@ -30,6 +30,11 @@ public:
     PointsPacket(int points, int p18, int p1c, int p20);
 
     virtual ~PointsPacket() {}
+
+    // MP-revival: wire (de)serialisation; v1.6.1 PointsPacket::Serialize @ 0x001585f8.
+    // Payload order matches ctor param order: m_Points, m_reserved18, m_reserved1c, m_reserved20.
+    virtual void Serialize(Mortar::ByteWriter& w) const;
+    virtual void Deserialize(Mortar::ByteReader& r);
 };
 
 #if defined(__bada__)

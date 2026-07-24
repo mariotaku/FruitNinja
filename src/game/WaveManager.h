@@ -251,6 +251,21 @@ public:
 
     // --- Binary region END: +0x2f0 (752 bytes) --------------------------
 
+    // --- MP-revival: online seed sync (port-only, not in binary layout) -----
+    // DIFFERS: revived -- no binary body, retail stub @0x00123108 (UpdateNetworking)
+    // / @0x00123110 (SendWaveSyncPacket). These fields do not exist in the 0x2f0
+    // binary struct; appended past the layout-asserted tail so __bada__ offsets
+    // above are unaffected.
+    uint32_t m_OnlineSeed;      // seed received from StartGamePacket::m_GameSeed
+    bool     m_HaveOnlineSeed;  // true once SetOnlineSeed() has been called
+
+    // MP-revival: transient "local wave just ended" edge, set by GetNextWave()
+    // and consumed+cleared by the next UpdateNetworking() poll. Bridges the two
+    // functions since the barrier (m_SyncLocalReady/m_SyncRemotePending) is
+    // per-wave sticky state while this is a one-frame edge trigger. No binary
+    // counterpart -- port-only plumbing, not part of the 0x2f0 struct.
+    bool     m_WaveBoundaryPending;
+
     // --- Construction / singleton --------------------------------------
 
     WaveManager();
@@ -369,6 +384,12 @@ public:
     // 0x00122af8: network sync receive (multiplayer).
     void RecievedSync(int waveIdx, float score);
 
+    // MP-revival: install the seed shared by the P2P host (from StartGamePacket::m_GameSeed)
+    // so both peers draw fruit/bomb spawns from the same m_Random stream. Call before the
+    // first Reset() of the online game (network dispatch does this when a StartGamePacket
+    // arrives). DIFFERS: revived -- no binary body, retail stub @0x00123108 (UpdateNetworking).
+    void SetOnlineSeed(uint32_t seed) { m_OnlineSeed = seed; m_HaveOnlineSeed = true; }
+
     // --- Power-up modifiers (PowerUpManager::Update calls these) ------
 
     // 0x001286fc: m_BombChance *= mult
@@ -383,13 +404,21 @@ public:
     // 0x0012872c: m_CritChanceMult *= mult
     void CriticalChanceMod(float mult);
 
-    // --- Networking stubs (defunct online MP) ------------------------
+    // --- Networking (MP-revival: online per-wave barrier) ------------
 
-    // 0x001217e0: always returns 0.
-    static int  UpdateNetworking(float dt, int playerIdx);
+    // v1.6.1 WaveManager::UpdateNetworking @0x00123108: retail body is a bare
+    // `return 0;` (always spawn, gate never closes). MP-revival reconstructs the
+    // per-wave barrier from the surviving sync fields (m_SyncLocalReady/
+    // m_SyncRemotePending/m_SyncReceived): stalls UpdateWave's spawn loop via the
+    // +0x00 gate until both peers report the same wave boundary.
+    // DIFFERS: revived -- no binary body, retail stub @0x00123108 (UpdateNetworking).
+    int  UpdateNetworking(float dt, int playerIdx);
 
-    // 0x0012197c: empty.
-    static void SendWaveSyncPacket();
+    // v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110: retail body is a bare
+    // `return;`. MP-revival builds a WaveSyncPacket(waveIdx, 0, score) and sends
+    // it via SendP2PPacket. DIFFERS: revived -- no binary body, retail stub
+    // @0x00123110 (SendWaveSyncPacket).
+    void SendWaveSyncPacket(int waveIdx, float score);
 
     // 0x00121980: always false.
     static bool ShouldDisplayNetworkWaitIndicator();
@@ -465,7 +494,13 @@ static_assert(offsetof(WaveManager, m_pCurrentWave)              == 0x234, "");
 static_assert(offsetof(WaveManager, m_NextWaveDelay_P0)          == 0x23c, "");
 static_assert(offsetof(WaveManager, m_FruitQueue)                == 0x24c, "");
 static_assert(offsetof(WaveManager, m_GlobalProbabilityOverride) == 0x2e4, "");
-static_assert(sizeof(WaveManager)                                == 0x2f0, "");
+// Binary-faithful region ends at 0x2f0 (752 bytes); m_OnlineSeed/m_HaveOnlineSeed/
+// m_WaveBoundaryPending are MP-revival-only fields appended past it (feat/mp-revival
+// branch) -- sizeof grows beyond retail's 0x2f0 by design. DIFFERS: revived -- no
+// binary body, retail stub @0x00123108 (UpdateNetworking) / @0x00123110
+// (SendWaveSyncPacket); the extra tail bytes have no retail counterpart at all.
+static_assert(offsetof(WaveManager, m_OnlineSeed) == 0x2f0, "");
+static_assert(sizeof(WaveManager) > 0x2f0, "");
 #endif
 
 #endif  // FN_WAVE_MANAGER_H

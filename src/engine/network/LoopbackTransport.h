@@ -1,0 +1,69 @@
+#ifndef FN_ENGINE_NETWORK_LOOPBACKTRANSPORT_H
+#define FN_ENGINE_NETWORK_LOOPBACKTRANSPORT_H
+
+#include "IMpTransport.h"
+
+#include <deque>
+#include <vector>
+
+// Port-only enhancement (feat/mp-revival): no binary counterpart, so no
+// // DIFFERS / // ASM-verified markers apply to this file.
+//
+// In-process loopback implementation of IMpTransport: pairs two ends over a
+// shared pair of message queues (A->B, B->A), entirely in memory. No
+// sockets, no threads -- both ends are ticked by the same process (a unit
+// test, or a local hot-seat/dev session). Useful as the seam's reference
+// implementation and as the transport for MP unit tests.
+
+namespace Mortar {
+
+// Shared backing store for one loopback pair. Owned jointly by the two
+// LoopbackTransport ends created via CreatePair(); freed when both ends are
+// destroyed (see LoopbackTransport::~LoopbackTransport).
+struct LoopbackChannel {
+    std::deque<std::vector<uint8_t> > qAtoB;
+    std::deque<std::vector<uint8_t> > qBtoA;
+    bool connectedA;
+    bool connectedB;
+    int refCount;
+
+    LoopbackChannel() : connectedA(false), connectedB(false), refCount(0) {}
+};
+
+// One end (0 or 1) of an in-process loopback transport pair.
+// Host()/Join() resolve instantly (no real handshake exists for a
+// same-process loopback): calling either marks this end connected and
+// returns true immediately.
+class LoopbackTransport : public IMpTransport {
+public:
+    // Creates a shared channel and returns its two ends. `a` is end 0
+    // (LocalPlayerNumber() == 0, the "host" side), `b` is end 1 (the "peer"
+    // side). Caller owns the returned pointers and must delete both; the
+    // shared LoopbackChannel is refcounted and freed when the second end is
+    // destroyed.
+    static void CreatePair(LoopbackTransport*& a, LoopbackTransport*& b);
+
+    virtual ~LoopbackTransport();
+
+    virtual bool Host();
+    virtual bool Join(const char* endpoint);
+    virtual void Disconnect();
+
+    virtual bool IsConnected() const;
+    virtual bool IsConnecting() const;
+
+    virtual int LocalPlayerNumber() const;
+
+    virtual void Send(const uint8_t* data, int len, bool reliable);
+    virtual int Poll(uint8_t* out, int cap);
+
+private:
+    LoopbackTransport(LoopbackChannel* channel, int end);
+
+    LoopbackChannel* m_Channel;
+    int m_End; // 0 or 1
+};
+
+} // namespace Mortar
+
+#endif // FN_ENGINE_NETWORK_LOOPBACKTRANSPORT_H

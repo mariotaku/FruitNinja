@@ -227,6 +227,9 @@ target_sources(mortar_engine PRIVATE
     network/NetworkManager.cpp
     network/OpenFeint.cpp
     network/P2PMessageHandling.cpp
+    # MP revival (feat/mp-revival): transport seam, port-only, no binary counterpart
+    network/LoopbackTransport.cpp
+    network/MpTransport.cpp
     # Phase 10 — System stubs (Bada OS services; all no-op)
     system/PowerManager.cpp
     system/PlatformFuncs.cpp

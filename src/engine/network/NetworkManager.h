@@ -48,8 +48,11 @@ public:
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x231c40 area
     void Initialise(int /*flags*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x2310c8 (nearly idle)
-    void Update(float /*dt*/) {}
+    // MP-revival: real body -- pumps the active transport's inbound queue,
+    // dispatching each received packet through Mortar::GlobalP2PMessageHandler
+    // (P2PMessageHandling.cpp).
+    // DIFFERS: revived -- no binary body, retail stub @0x2310c8 (nearly idle)
+    void Update(float dt);
 
     // Defunct: NetworkManager -- no-op stub
     void Draw(float /*dt*/) {}
@@ -57,8 +60,9 @@ public:
     // Defunct: NetworkManager -- no-op stub
     void Destroy() {}
 
-    // Defunct: NetworkManager -- no-op stub (returns false)
-    bool IsOnline() { return false; }
+    // MP-revival: real body -- reflects the active transport's connected state.
+    // DIFFERS: revived -- no binary body, retail stub (returned false)
+    bool IsOnline();
 
     // Defunct: NetworkManager -- no-op stub (returns false)
     bool HasCredentials() { return false; }
@@ -87,17 +91,42 @@ public:
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6f4
     bool DisconnectP2P(bool /*b*/) { return false; }
 
-    // Defunct: NetworkManager -- no-op stub (returns 0)
-    int GetLocalPlayerNumber() { return 0; }
+    // MP-revival: real body -- forwards to the active transport, or 0 offline.
+    // DIFFERS: revived -- no binary body, retail stub (returned 0)
+    int GetLocalPlayerNumber();
 
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d924
     void GetPlayerName(int /*idx*/, char* out, int /*cap*/) { if (out) out[0] = 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e6b8
-    int IsInP2PGame() const { return 0; }
+    // MP-revival: real body -- 1 when the active transport is connected.
+    // DIFFERS: revived -- no binary body, retail stub @0x0018e6b8 (returned 0)
+    int IsInP2PGame() const;
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e6b0
-    void OnP2PGameOver() {}
+    // MP-revival: no-op-but-real hook -- records that the opponent has left
+    // the session. Called by GlobalP2PMessageHandler on PlayerDisconnectGamePacket.
+    // DIFFERS: revived -- no binary body, retail stub @0x0018e6b0
+    void OnP2PGameOver();
+
+    // MP-revival: sets when GlobalP2PMessageHandler observes the peer has
+    // disconnected. Port-only accessor, no binary counterpart.
+    bool OnMultiplayerDisconnect() const;
+
+    // MP-revival: port-only accessors backing the inbound packet dispatch in
+    // Mortar::GlobalP2PMessageHandler (P2PMessageHandling.cpp). Storage is
+    // file-static in NetworkManager.cpp (not a member) to avoid perturbing
+    // the binary-faithful 668-byte layout.
+    void SetOpponentScore(int points);
+    int GetOpponentScore() const;
+
+    // Last-received FruitSlicedPacket fields (Stage 1: recorded only, not yet
+    // applied to gameplay -- see GlobalP2PMessageHandler's TODO in
+    // P2PMessageHandling.cpp for the follow-up EntityTracker apply).
+    void SetLastPeerSlice(long fruitId, uint16_t sliceX, uint16_t sliceY, float sliceAngle, long playerIdx);
+    long GetLastPeerFruitId() const;
+    uint16_t GetLastPeerSliceX() const;
+    uint16_t GetLastPeerSliceY() const;
+    float GetLastPeerSliceAngle() const;
+    long GetLastPeerSlicePlayerIdx() const;
 
     // Defunct: NetworkManager -- no-op stub
     void StartHostingMultiplayerGame() {}

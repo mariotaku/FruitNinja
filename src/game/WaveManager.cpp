@@ -27,6 +27,7 @@
 #include "hud/SpeedControl.h"
 #include "engine/network/NetworkManager.h"
 #include "engine/network/P2PMessageHandling.h"
+#include "game/WaveSyncPacket.h"
 #include "entities/EntityTracker.h"
 #include "debug/Logger.h"
 
@@ -177,6 +178,8 @@ WaveManager::WaveManager()
     , m_StepAccumulator(0.0f)
     , m_SavedWaveDelay(0)
     , m_pWaveQue(nullptr), m_pWaveQueItem(nullptr)
+    , m_OnlineSeed(0), m_HaveOnlineSeed(false)
+    , m_WaveBoundaryPending(false)
 {
     m_ComboTimer = 0.0f;
     m_ComboSpeed = 0.0f; m_TargetComboSpeed = 0.0f;
@@ -653,7 +656,17 @@ void WaveManager::Reset(bool fullReset) {
     // ASM-spec v1.6.1 WaveManager::Reset @ 0x0012ba78: when not online-multiplayer,
     // unconditionally reseeds this WaveManager's own RNG from a fresh
     // Math::g_random.Rand32(0) draw, before the arcade-texture-load block below.
-    if (!IsOnlineMultiplayer()) {
+    // MP-revival: when online AND a StartGamePacket seed has arrived, seed from
+    // that shared value instead so every peer's m_Random stream (and therefore
+    // every fruit/bomb spawn draw at lines ~708,1348,1359,1406,1424,1464,1769,
+    // 1973,1978,1985,2020,2111,2118,2121,2145,2484,2558) is identical across
+    // peers. DIFFERS: revived -- no binary body, retail stub @0x00123108
+    // (UpdateNetworking) / @0x00123110 (SendWaveSyncPacket) -- this online branch
+    // itself has no binary counterpart since online MP never shipped a working
+    // seed-sync path; offline behavior (else branch) is unchanged.
+    if (IsOnlineMultiplayer() && m_HaveOnlineSeed) {
+        m_Random.Seed(m_OnlineSeed);
+    } else if (!IsOnlineMultiplayer()) {
         m_Random.Seed(Math::g_Random.Rand32(0));
     }
 
@@ -1853,8 +1866,12 @@ void WaveManager::GetNextWave(int playerIdx) {
         }
     }
 
-    // Multiplayer sync (not ported).
-    // if (IsMultiplayer()) SendWaveSyncPacket();
+    // MP-revival: mark the local-wave-boundary edge; UpdateNetworking's barrier
+    // (next poll) sends the sync packet and stalls spawning until the peer
+    // reports the same boundary. DIFFERS: revived -- no binary body, retail
+    // stub @0x00123108 (UpdateNetworking) / @0x00123110 (SendWaveSyncPacket);
+    // offline (!IsOnlineMultiplayer()) behavior is unaffected.
+    if (IsOnlineMultiplayer()) m_WaveBoundaryPending = true;
 }
 
 // ----------------------------------------------------------------------------
@@ -2453,10 +2470,14 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     }
 }
 
-void WaveManager::RecievedSync(int /*waveIdx*/, float /*score*/) {
-    // Binary @ 0x00122af8: per-frame wave-state network sync.
-    // Defunct (P2P MP): NetworkManager::SyncWaveState is a no-op stub.
-    Mortar::NetworkManager::GetInstance()->SyncWaveState();
+// v1.6.1 WaveManager::RecievedSync @0x00123444: inbound wave-sync packet handler.
+// MP-revival: the network dispatch (network agent's lane) calls this when a
+// WaveSyncPacket arrives from the peer. Stamps the surviving sync fields
+// (WaveManager.h +0x37/+0x38/+0x40) so UpdateNetworking's barrier can advance.
+void WaveManager::RecievedSync(int waveIdx, float score) {
+    m_SyncReceived = 1;
+    m_SyncWaveIdx = waveIdx;
+    if (score < 999.0f) m_SyncScore = score;
 }
 
 // ----------------------------------------------------------------------------
@@ -2469,14 +2490,50 @@ void WaveManager::FruitMultiplyer(float mult)    { m_FruitChance   *= mult; }   
 void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }  // +0x74
 
 // ----------------------------------------------------------------------------
-// Networking stubs
+// Networking -- MP-revival per-wave barrier
 // ----------------------------------------------------------------------------
 
-int  WaveManager::UpdateNetworking(float /*dt*/, int /*playerIdx*/) { return 0; }
-// Defunct: P2P MP wave-sync packet -- empty in v1.6.1 binary @ 0x0012197c too
-// (literal `return;`); only the GOT trampoline at 0x00102390 had a body,
-// and that calls a NetworkManager fn pointer that's null on Bada.
-void WaveManager::SendWaveSyncPacket()                               {}
+// v1.6.1 WaveManager::UpdateNetworking @0x00123108: retail body is a bare
+// `return 0;` (offline: gate always open, spawning never stalls).
+// DIFFERS: revived -- no binary body, retail stub @0x00123108. Online: closes
+// the +0x00 spawn-suppression gate (m_SpeedControl[0]; see UpdateWave's
+// ldrb-gate read) while waiting for the peer to reach the same wave boundary,
+// so both peers' m_Random streams advance through identical spawn draws.
+int WaveManager::UpdateNetworking(float /*dt*/, int playerIdx) {
+    if (!IsOnlineMultiplayer()) return 0;   // offline unchanged
+
+    if (m_WaveBoundaryPending && !m_SyncLocalReady) {
+        m_SyncLocalReady = 1;
+        SendWaveSyncPacket(m_WaveCount[0], (float)GetCurrentScore(playerIdx));
+        m_SyncRemotePending = 1;
+    }
+    m_WaveBoundaryPending = false;
+
+    bool gateClosed = (m_SyncRemotePending != 0 && m_SyncReceived == 0);
+    // +0x00 gate: reinterpret_cast<HUDControl3d*>(1) closes (LSB!=0 on __bada__,
+    // non-null on host); nullptr opens. Matches SuperFruitControl's existing
+    // use of this same slot as a spawn-suppression gate.
+    m_SpeedControl[0] = gateClosed ? reinterpret_cast<HUDControl3d*>(1) : nullptr;
+
+    if (m_SyncReceived != 0 && m_SyncRemotePending != 0) {
+        // Both sides ready -- advance.
+        m_SyncRemotePending = 0;
+        m_SyncReceived = 0;
+        m_SyncLocalReady = 0;
+        return 0;
+    }
+    return gateClosed ? 1 : 0;
+}
+
+// v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110: retail body is a bare
+// `return;`. DIFFERS: revived -- no binary body, retail stub @0x00123110.
+// Builds a WaveSyncPacket(waveIdx, 0, score) and hands it to SendP2PPacket
+// (m_WaveData18 has no known binary purpose -- see WaveSyncPacket.h -- send 0).
+void WaveManager::SendWaveSyncPacket(int waveIdx, float score) {
+    WaveSyncPacket packet(waveIdx, 0, score);
+    SendP2PPacket(packet, true);
+}
+
 bool WaveManager::ShouldDisplayNetworkWaitIndicator()               { return false; }
 
 // Binary @ 0x00121778.
