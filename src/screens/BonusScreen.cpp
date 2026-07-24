@@ -237,14 +237,9 @@ void BonusScreen::AwardScores() {
     int total = m_TotalScore;
     // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: flyFXName/collectFXName
     // literal refs @0x001639f4/0x00163a0c (<6 branch) and @0x00163ad8/0x00163ba4
-    // (>=6 branch) resolve to "bonus_star_trail"/"bonus_star_impact"; delayStep/
-    // delayCap are -0.05f/-0.3f for the <6 branch and -0.05f/-0.5f for the >=6
-    // branch (both bursts in that branch share the branch's tuning).
-    // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- baseAngle/angleSpread
-    // (0, 0xff3a) reused from the analogous already-verified combo-coin burst at
-    // SlashEntity.cpp:1911-1915 pending asm-inspector confirmation; whether the
-    // >=6 branch's second burst spawns from a distinct "base2" position is also
-    // unresolved (reusing `base` here rather than guessing a second position).
+    // (>=6 branch) resolve to "bonus_star_trail"/"bonus_star_impact"; delayStep is
+    // -0.05f in all 3 calls. delayCap: -0.5f for the <6 branch (@0x00163a1c),
+    // -0.3f for both bursts of the >=6 branch (@0x00163af4, @0x00163bcc).
     // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: coins spawned here pass
     // AddToScoreOnArrival (v1.6.1 @0x00162ab8), which credits coin->m_CoinValue to
     // game_work.currentScore, NOT Coin::DefaultArrivedDelegate()/CoinArrived
@@ -252,28 +247,32 @@ void BonusScreen::AwardScores() {
     // in the arcade score / high score.
     if (total < 6) {
         Coin::MakeCoins(total, 6, base, 0, 0xff3a,
-                         /*target=*/nullptr, -0.05f, -0.3f,
+                         /*target=*/nullptr, -0.05f, -0.5f,
                          "bonus_star_trail", "bonus_star_impact",
-                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);  // ASM-spec v1.6.1 delayCap -0.5f @0x00163a1c (<6 branch)
     } else {
         Coin::MakeCoins(6, 6, base, 0, 0xff3a,
                          /*target=*/nullptr, -0.05f, -0.3f,
                          "bonus_star_trail", "bonus_star_impact",
-                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);  // ASM-verified: v1.6.1 delayCap -0.3 (all 3 AwardScores MakeCoins)
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);  // ASM-verified: v1.6.1 delayCap -0.3 @0x00163af4 (>=6 branch, 1st burst)
         total = m_TotalScore;  // re-read (unchanged, just re-fetched -- matches binary)
         Coin::MakeCoins(total - 6, 6, base, 0, 0xff3a,
                          /*target=*/nullptr, -0.05f, -0.3f,
                          "bonus_star_trail", "bonus_star_impact",
-                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);  // ASM-verified: v1.6.1 delayCap -0.3 (all 3 AwardScores MakeCoins)
+                         Mortar::Delegate1<void, Coin*>::MakeFree(&AddToScoreOnArrival), false);  // ASM-verified: v1.6.1 delayCap -0.3 @0x00163bcc (>=6 branch, 2nd burst)
     }
 
-    // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- Ghidra's decompile of
-    // the CreateCameraShake args (impact=(0.3,1.0,extraout_s2)) is flagged as a
-    // likely VFP-tracking artifact by the RE report; using the analogous
-    // already-ported constant from AddToScoreOnArrival (Coin.cpp) instead.
-    // asm-inspector needed to confirm exact intensity/dirScale floats.
+    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: primes the file-static
+    // g_oneInThree counter (Coin.cpp, shared with AddToScoreOnArrival @0x00162ab8)
+    // to 3 right before this CreateCameraShake, so the next coin landing
+    // deterministically hits the ==3 firework branch (@0x00163c08).
+    Coin_PrimeOneInThree(3);
+
+    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: CreateCameraShake args
+    // are (base, 0.3f, 1.0f) -- distinct from AddToScoreOnArrival's own (0.15,0.75)
+    // shake in Coin.cpp; do not conflate the two call sites.
     if (game_work.m_FruitCamera) {
-        game_work.m_FruitCamera->CreateCameraShake(base, 0.15f, 0.75f);
+        game_work.m_FruitCamera->CreateCameraShake(base, 0.3f, 1.0f);
     }
 
     PSPParticleEmitter* fxEmitter =
@@ -284,13 +283,12 @@ void BonusScreen::AwardScores() {
 
     GetCurrentScore(0);  // ASM-spec: call only, return value unused here (cache refresh side-effect).
 
-    // TODO: v1.6.1 0x0016393c (BonusScreen::AwardScores) -- SFXPlay's exact
-    // vol/gain/pitch args and whether a finishCallback is passed are unresolved
-    // (Ghidra shows one confirmed 1.0f literal, second float unclear); using
-    // the vol=1.0f,gain=1.0f default pattern seen elsewhere (e.g. Coin.cpp
-    // AddToScoreOnArrival) until asm-inspector confirms.
+    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: SFXPlay("equip-unlock",
+    // vol=0.0f, gain=1.0f) -- vol literal @0x00163cb4. With unity master gain,
+    // vol=0.0f still resolves audible via finalVol=(1-(1-master)*vol)*gain,
+    // matching the Bonus-Firework-Explode / drum-roll call pattern elsewhere.
     if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("equip-unlock", 1.0f, 1.0f);
+        game_work.mGameSound->SFXPlay("equip-unlock", 0.0f, 1.0f);
     }
 }
 

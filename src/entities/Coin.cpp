@@ -659,3 +659,10 @@ void AddToScoreOnArrival(Coin* coin) {
     }
     AddToCurrentScore(coin->m_CoinValue, 0, false, false);
 }
+
+// ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: exposes the file-static
+// g_oneInThree counter (declared above) so AwardScores can prime it to 3 right
+// before its own CreateCameraShake -- identical storage AddToScoreOnArrival uses.
+void Coin_PrimeOneInThree(int value) {
+    g_oneInThree = value;
+}

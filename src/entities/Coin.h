@@ -182,4 +182,11 @@ static_assert(sizeof(Coin) == 0x94, "Coin size mismatch"); // v1.6.1 Coin @0x1d9
 // coin->m_CoinValue via AddToCurrentScore.
 void AddToScoreOnArrival(Coin* coin);
 
+// ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: writes g_oneInThree = 3
+// (@0x00163c08) right before its own CreateCameraShake, priming the SAME
+// file-static counter AddToScoreOnArrival (@0x00162ab8, above) reads/increments,
+// so the next coin landing deterministically hits the ==3 firework branch.
+// Exposes Coin.cpp's file-static g_oneInThree to other translation units.
+void Coin_PrimeOneInThree(int value);
+
 #endif  // FN_COIN_H
