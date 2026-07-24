@@ -7,9 +7,11 @@
 // window.FNAudio, via EM_JS. No SDL audio device is opened on web.
 //
 // Architecture (vs. the SDL software mixer this replaces):
-//   - One browser AudioContext. masterSfxGain + musicGain -> destination.
-//     The browser decodes Ogg/Vorbis and mixes on its OWN audio thread, so
-//     there is no per-callback main-thread mix (the SDL emscripten backend's
+//   - One browser AudioContext. masterSfxGain + musicGain -> limiter (a
+//     DynamicsCompressorNode configured as a brick-wall limiter, parity with
+//     SoundManagerSDL's soft-knee limiter) -> destination. The browser
+//     decodes Ogg/Vorbis and mixes on its OWN audio thread, so there is no
+//     per-callback main-thread mix (the SDL emscripten backend's
 //     ScriptProcessorNode ran on the JS main thread and crackled under load).
 //   - Assets are transcoded to sfx/<name>.ogg at build time by
 //     tools/assets/stage-assets.py --web, plus a sfx/sfx-loops.json loop map.
@@ -84,8 +86,30 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
     var bornSuspended = (ctx.state === 'suspended');
     var masterSfx = ctx.createGain();
     var music = ctx.createGain();
-    masterSfx.connect(ctx.destination);
-    music.connect(ctx.destination);
+
+    // Brick-wall limiter: WebAudio sums every playing SFX/music node in
+    // float on the AudioContext's own graph, so stacked SFX can push the
+    // summed signal past |1.0| (0dBFS) -- the browser's device output then
+    // hard-clips, same distortion the SDL soft-knee limiter above this
+    // backend's SDL sibling (SoundManagerSDL.cpp SoftClipSample) exists to
+    // avoid. DynamicsCompressorNode is the browser-native way to tame that:
+    // configured with a hard knee and high ratio it behaves as a limiter
+    // rather than a musical compressor. threshold=-1dB sits just under
+    // full scale, so a single (or a couple of moderate) sounds pass through
+    // essentially unaffected -- only summed peaks near/over 0dBFS actually
+    // get caught, matching the SDL limiter's "singles full, only stacks
+    // compressed" behaviour. Both master buses feed this ONE shared limiter
+    // before the destination, so SFX-vs-music stacking is caught too.
+    var limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -1.0;  // dB, just below 0dBFS
+    limiter.knee.value = 0.0;        // hard knee -> brick-wall
+    limiter.ratio.value = 20.0;      // limiting (not gentle compression)
+    limiter.attack.value = 0.003;    // fast, catch transients
+    limiter.release.value = 0.10;
+    limiter.connect(ctx.destination);
+
+    masterSfx.connect(limiter);
+    music.connect(limiter);
     masterSfx.gain.value = masterSfxGain;
     music.gain.value = 0.45 * masterMusicGain;
 
