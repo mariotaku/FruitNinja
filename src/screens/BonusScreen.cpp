@@ -298,6 +298,11 @@ void BonusScreen::AwardScores() {
 // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc (asm-inspector, fresh binary read):
 //   maxLines=1 (not 0) on m_ScoreBox/m_TotalBox, and per-award row colour = m_Awards[i].m_Colour
 //   (not a fixed palette) -- both corrected below; supersedes the prior (stale) verified pass.
+// ASM-verified: 2026-07-24T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc (re-analyst)
+//   maxLines=1 confirmed by direct disassembly (mov r2,#0x1 / str r2,[sp,#0x4] immediately before
+//   each ctor call) for ALL FOUR BakedStringBox ctors in this function: m_RankLabelBoxes[i]
+//   @0x001622ac, m_RankValueBoxes[i] @0x00162330, m_ScoreBox, m_TotalBox. Supersedes the prior
+//   pass above, which only caught m_ScoreBox/m_TotalBox and left the per-row boxes at maxLines=0.
 void BonusScreen::BuildBonusText() {
     // +0xD8 build-once latch (was mis-named m_bSkipIntro; binary sets it inside
     // BuildBonusText @0x001621dc, not at the Update call site).
@@ -317,6 +322,9 @@ void BonusScreen::BuildBonusText() {
     // fresh binary read): row colour is the per-award element's OWN animated m_Colour (+0x50),
     // NOT a fixed 3-entry palette. The prior "fixed gold/red/blue palette" ASM-verified marker
     // here was WRONG and has been removed.
+    // maxLines=1 for BOTH boxes (label @0x001622ac, value @0x00162330) -- same fix as m_ScoreBox
+    // below; with maxLines=0 a long award name wraps to a 2nd line and overlaps the next row
+    // (42px row pitch was never meant for 2 lines).
     for (int i = 0; i < (int)m_Awards.size() && i < 3; ++i) {
         if (!m_RankLabelBoxes[i]) {
             // m_RankLabelBoxes[i] (+0xC0): name label, w=220, h=10, align=1 (LEFT).
@@ -327,7 +335,7 @@ void BonusScreen::BuildBonusText() {
                 220.0f,  // 0xDC
                 10.0f,
                 (Mortar::ALIGNMENT_TYPE)0x01,    // LEFT
-                0,       // maxLines
+                1,       // maxLines: binary passes 1 (single line, no wrap) @0x001622ac -- long names must NOT wrap into the next row (same fix as m_ScoreBox)
                 0        // lineSpacing (binary 7th arg = 0; step = (int)(13+0) = 13px)
             );
             m_RankLabelBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
@@ -347,7 +355,7 @@ void BonusScreen::BuildBonusText() {
                 60.0f,   // 0x3C
                 10.0f,
                 (Mortar::ALIGNMENT_TYPE)0x0F,    // center-H + center-V (binary @0x162324)
-                0,
+                1,       // maxLines=1 @0x00162330
                 0        // lineSpacing (binary 7th arg = 0; step = (int)(16+0) = 16px)
             );
             m_RankValueBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
