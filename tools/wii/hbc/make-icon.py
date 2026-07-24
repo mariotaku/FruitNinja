@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Generate the Homebrew Channel icon (apps/fruitninja/icon.png), 128x48.
 
-Composes the game's FRUIT + NINJA logo lettering in a diagonal cascade over a
-dark maroon vertical gradient. Decodes the source textures directly from the
-LOCAL FruitNinjaBada game dump (FruitNinjaBada/Data/textures/hd_fruit_text.tex,
-hd_ninja_text.tex) via tools/lib/tex_decoder.py -- the dump is gitignored and
-not distributed (Halfbrick copyright; see docs/gallery/README.md), and this
-script's own output (icon.png) is likewise gitignored, so nothing copyrighted
-is ever committed. Bring your own dump to regenerate the icon.
+Composes the game's FRUIT + NINJA logo lettering in a diagonal cascade over the
+in-game dojo wood board (gb_game). Decodes the source textures directly from the
+LOCAL FruitNinjaBada game dump (FruitNinjaBada/Data/textures/gb_game.tex,
+hd_fruit_text.tex, hd_ninja_text.tex) via tools/lib/tex_decoder.py -- the dump is
+gitignored and not distributed (Halfbrick copyright; see docs/gallery/README.md),
+and this script's own output (icon.png) is likewise gitignored, so nothing
+copyrighted is ever committed. Bring your own dump to regenerate the icon.
 
     python tools/wii/hbc/make-icon.py
 
@@ -28,14 +28,14 @@ sys.path.insert(0, os.path.join(ROOT, "tools", "lib"))
 import tex_decoder
 
 W, H = 1024, 384          # compose at 8x, downscale to 128x48 for crisp edges
-TOP, BOT = (60, 12, 12), (12, 4, 4)   # maroon gradient
-FRUIT_H = 210             # FRUIT lettering height (of 384)
+WOOD_TEX = "gb_game"      # in-game dojo wood board (vertical planks + slashes)
+FRUIT_H = 231             # FRUIT lettering height (of 384)
 NINJA_SCALE = 0.70        # NINJA 30% smaller than FRUIT
-SPREAD = 150              # extra horizontal offset (widens the cascade)
-OVERLAP = 58              # vertical overlap between FRUIT and NINJA
+SPREAD = 165              # extra horizontal offset (widens the cascade)
+OVERLAP = 64              # vertical overlap between FRUIT and NINJA
 
 
-def load(name):
+def load(name, crop_bbox=True):
     tex_path = os.path.join(BADA_TEXTURES, name + ".tex")
     if not os.path.exists(tex_path):
         sys.exit(
@@ -48,7 +48,7 @@ def load(name):
         sys.exit("Wii icon: " + tex_path + " did not decode as a known Tex1 format")
     width, height, rgba = decoded
     im = Image.frombytes("RGBA", (width, height), bytes(rgba))
-    return im.crop(im.getbbox())
+    return im.crop(im.getbbox()) if crop_bbox else im
 
 
 def scale_h(im, h):
@@ -56,14 +56,20 @@ def scale_h(im, h):
     return im.resize((w, h), Image.LANCZOS)
 
 
+def wood_bg():
+    # Center horizontal band of the dojo wood board at the icon aspect,
+    # scaled to fill. Native brightness -- no gamma/level adjustment.
+    bg = load(WOOD_TEX, crop_bbox=False).convert("RGB")
+    bw, bh = bg.size
+    band_h = int(bw / (W / H))
+    y0 = (bh - band_h) // 2
+    band = bg.crop((0, y0, bw, y0 + band_h)).resize((W, H), Image.LANCZOS)
+    return band.convert("RGBA")
+
+
 def main():
     fruit, ninja = load("hd_fruit_text"), load("hd_ninja_text")
-    # vertical gradient background
-    col = Image.new("RGB", (1, H))
-    for y in range(H):
-        t = y / (H - 1)
-        col.putpixel((0, y), tuple(int(TOP[i] + (BOT[i] - TOP[i]) * t) for i in range(3)))
-    icon = col.resize((W, H)).convert("RGBA")
+    icon = wood_bg()
     # diagonal cascade: FRUIT upper-left, NINJA lower-right
     f = scale_h(fruit, FRUIT_H)
     n = scale_h(ninja, int(FRUIT_H * NINJA_SCALE))
