@@ -1111,35 +1111,35 @@ void GameModeScreen::DeletedMenuButton(HUDControl* ctrl) {
 #endif
 }
 
-// Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x0013dfdc sets gameMode=1, m_State=4 + NetworkManager flag
+// Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x001810e8 sets gameMode=1, m_State=4 + NetworkManager flag
 void GameModeScreen::CasinoModeCallback() {
     game_work.gameMode = 1;
     m_State = 4;
     // Defunct: NetworkManager online-MP flag omitted
 }
 
-// Defunct: online MP (Versus) -- no-op stub; v1.6.1 binary @ 0x0013e01c sets m_State=7 + alpha=1.0 to enter matchmaker
+// Defunct: online MP (Versus) -- no-op stub; v1.6.1 binary @ 0x00181140 sets m_State=7 + alpha=1.0 to enter matchmaker
 void GameModeScreen::VersusModeCallback() {
     m_State = 7;
     m_TransitionAlpha = 1.0f;
     // Defunct: matchmaker entry omitted
 }
 
-// Defunct: P2P connect -- no-op stub; v1.6.1 binary @ 0x0013dfd4 sets m_State=8 (GameCenter connect)
+// Defunct: P2P connect -- no-op stub; v1.6.1 binary @ 0x001810dc sets m_State=8 (GameCenter connect)
 void GameModeScreen::P2PConnectCallback() {
     m_State = 8;
     // Defunct: GameCenter/P2P connect omitted
 }
 
-// Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x0013e10c calls GotoFruitNinjaPage(1,-1) then m_State=0xd
+// Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x00181290 calls GotoFruitNinjaPage(1,-1) then m_State=0xd
 void GameModeScreen::BuyNow() {
     // Defunct: GotoFruitNinjaPage(1,-1) omitted (online upsell)
     // Defunct: m_State=0xd transition omitted (UpsellScreen is Phantom)
 }
 
-// Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 binary @ 0x0013e084 sets m_State=10 + bumps modeS_p* counters
+// Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 binary @ 0x001811c8 sets m_State=10 + bumps modeS_p* counters
 void GameModeScreen::SwitchToUpsell(int idx) {
-    // Binary @ 0x0013e084: FruitSaveData::AddToTotal for the matching
+    // Binary @ 0x001811c8: FruitSaveData::AddToTotal for the matching
     // modeS_p* counter. Per-idx key is "modeS_p<n>" where <n> is the
     // tile slot. Stat tracking happens even though the UpsellScreen
     // transition itself is defunct (UpsellScreen is Phantom in this build).
@@ -1152,17 +1152,17 @@ void GameModeScreen::SwitchToUpsell(int idx) {
     (void)idx;
 }
 
-// Defunct: upsell return path -- no-op stub; v1.6.1 binary @ 0x0013e07c sets m_State=1 (transition-in resume)
+// Defunct: upsell return path -- no-op stub; v1.6.1 binary @ 0x001811bc sets m_State=1 (transition-in resume)
 void GameModeScreen::UpsellFinished() {
     // Defunct: upsell return path omitted (UpsellScreen is Phantom)
 }
 
-// Defunct: online-MP shrink hook -- no-op stub; v1.6.1 binary @ 0x0013e02c snapshots fruit pose + zeroes vel/scale
+// Defunct: online-MP shrink hook -- no-op stub; v1.6.1 binary @ 0x00181160 snapshots fruit pose + zeroes vel/scale
 void GameModeScreen::ShrinkedMultiplayerButton() {
     // Defunct: online-MP fruit snapshot omitted
 }
 
-// Defunct: online-MP button lifecycle -- no-op stub; v1.6.1 binary @ 0x0013ecdc grows/shrinks the 4th MenuButton based on connectivity
+// Defunct: online-MP button lifecycle -- no-op stub; v1.6.1 binary @ 0x0018234c grows/shrinks the 4th MenuButton based on connectivity
 void GameModeScreen::UpdateOnlineMultiplayerButton(float /*dt*/) {
     // Defunct: online-MP button grow/shrink based on connectivity omitted
 }

@@ -202,28 +202,28 @@ public:
     // (typo "Commings" preserved from binary symbol)
     void CommingsSoonCallback();
 
-    // Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x0013dfdc sets m_State=4
+    // Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x001810e8 sets m_State=4
     void CasinoModeCallback();
 
-    // Defunct: online MP (Versus) -- no-op stub; v1.6.1 binary @ 0x0013e01c sets m_State=7 + alpha=1.0
+    // Defunct: online MP (Versus) -- no-op stub; v1.6.1 binary @ 0x00181140 sets m_State=7 + alpha=1.0
     void VersusModeCallback();
 
-    // Defunct: P2P connect -- no-op stub; v1.6.1 binary @ 0x0013dfd4 sets m_State=8 (GameCenter connect)
+    // Defunct: P2P connect -- no-op stub; v1.6.1 binary @ 0x001810dc sets m_State=8 (GameCenter connect)
     void P2PConnectCallback();
 
-    // Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x0013e10c calls GotoFruitNinjaPage(1,-1) then m_State=0xd
+    // Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x00181290 calls GotoFruitNinjaPage(1,-1) then m_State=0xd
     void BuyNow();
 
-    // Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 binary @ 0x0013e084 sets m_State=10
+    // Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 binary @ 0x001811c8 sets m_State=10
     void SwitchToUpsell(int idx);
 
-    // Defunct: upsell return path -- no-op stub; v1.6.1 binary @ 0x0013e07c sets m_State=1
+    // Defunct: upsell return path -- no-op stub; v1.6.1 binary @ 0x001811bc sets m_State=1
     void UpsellFinished();
 
-    // Defunct: online-MP shrink hook -- no-op stub; v1.6.1 binary @ 0x0013e02c snapshots fruit pose + zeroes vel/scale
+    // Defunct: online-MP shrink hook -- no-op stub; v1.6.1 binary @ 0x00181160 snapshots fruit pose + zeroes vel/scale
     void ShrinkedMultiplayerButton();
 
-    // Defunct: online-MP button lifecycle -- no-op stub; v1.6.1 binary @ 0x0013ecdc
+    // Defunct: online-MP button lifecycle -- no-op stub; v1.6.1 binary @ 0x0018234c
     void UpdateOnlineMultiplayerButton(float dt);
 
 };
