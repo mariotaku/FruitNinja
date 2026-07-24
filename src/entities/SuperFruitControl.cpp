@@ -14,6 +14,7 @@
 #include "engine/asset/Texture.h"
 #include "engine/asset/TextureManager.h"
 #include "engine/asset/Mesh.h"
+#include "engine/audio/GameSound.h"
 #include "math/_Vector2.h"
 #include "hud/MissControl.h"
 #include "SuperFruitState.h"
@@ -338,7 +339,11 @@ void SuperFruitControl::Update(float dt)
 
     // whoosh SFX: one-shot on crossing (Lifetime - 0.1)
     if (m_Timer >= m_Lifetime - 0.1f && m_PrevTimer < m_Lifetime - 0.1f) {
-        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- GameSound::SFXPlay(game+0x18c, DAT_001bcd80, pitch=0.125, vol=1.0, cb@DAT_001bcd7c) (whoosh SFX)
+        // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: whoosh SFXPlay("pome-zoomout", vol=1.0, pitch=0.125).
+        if (game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("pome-zoomout", 1.0f, 1.0f,
+                Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.125f);
+        }
     }
 
     if (m_Timer >= m_Lifetime) {
@@ -355,7 +360,8 @@ void SuperFruitControl::Update(float dt)
             StopAllFruit();
             UnpauseSlices();
             if (m_pLinkedSlasher) {
-                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- clear *(int*)(m_pLinkedSlasher+0x7c) = 0 (SlashEntity field +0x7c)
+                // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: clear linked slasher's head-pos X.
+                m_pLinkedSlasher->ClearHeadPosX();   // SlashEntity+0x7c (m_HeadPos.x = 0)
             }
             // zoom target = host pos clamped x in [-204,204], y in [-128,128]
             if (m_pHostFruit) {
@@ -377,7 +383,8 @@ void SuperFruitControl::Update(float dt)
             }
             if (m_Timer >= m_Lifetime + 0.5f) {
                 // one-shot: the actual blast
-                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.0, dur=2.0, pos) (needs camera)
+                // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: blast CreateCameraShake(pos, 1.0, 2.0).
+                if (game_work.m_FruitCamera) game_work.m_FruitCamera->CreateCameraShake(pos, 1.0f, 2.0f);
                 ExplodeSuperFruit();
                 SpawnJibs();
                 StopRays();
@@ -394,7 +401,8 @@ void SuperFruitControl::Update(float dt)
             UpdateExplosion(dt);
             float tLateShake = m_Lifetime + 0.5f + 0.35f + 0.4f;  // DAT_001bcd9c=0.35, DAT_001bcd90=0.4
             if (m_PrevTimer < tLateShake && tLateShake <= m_Timer) {
-                // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::CreateCameraShake(game+0x4c, mag=1.6, dur=2.0, pos) (DAT_001bcd94=1.6)
+                // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: late CreateCameraShake(pos, 1.6, 2.0).
+                if (game_work.m_FruitCamera) game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
             }
             // ease global time-scale back toward 1.0: ts = (ts-1)*pow(0.75, dt*60) + 1
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
@@ -801,7 +809,11 @@ void SuperFruitControl::ExplodeSuperFruit()
     CriticalFlash(hostPos, Colour(255, 255, 255, 255));
 
     // ---- (C) explosion SFX ----
-    // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- SFXPlay(game+0x18c, DAT_001bae78 SFX key, pitch=0.125, vol=2.0, cb@DAT_001bae74) (SFX key/cb unresolved)
+    // ASM-spec v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: SFXPlay("pome-burst", vol=2.0, pitch=0.125).
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("pome-burst", 2.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.125f);
+    }
 
     // ---- (D) 8 lettered mesh fragments (cube-corner pattern) ----
     // fmt string @ 0x0028383a: "models/Fruit/%s_%c_piece_%d.mmd"
@@ -953,7 +965,8 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
         fruit->vel.x       = -fruit->vel.x;              // [fruit+0x1c]
     }
 
-    // TODO: v1.6.1 SuperFruitControl::SuperFruitThrown @0x001bbf48 -- SuperFruitThrown SFX not yet ported
+    // v1.6.1 SuperFruitThrown @0x001bbf48 has no SFXPlay; the throw loop "pome-lp" is played
+    // by SuperFruitGlow's ctor (already ported).
 
     // ASM-spec v1.6.1 SuperFruitControl::SuperFruitThrown @0x001bbf48:
     // increment "super_pomegranates_spawned" stat when super-fruit is thrown.
