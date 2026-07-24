@@ -32,6 +32,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <string>
 
 // .wav.pcm header layout (5 x int32, little-endian, 20 bytes)
@@ -247,6 +248,44 @@ Voice* SoundManager::FindVoice(uint32_t id) {
     return nullptr;
 }
 
+// Soft-knee limiter: linear passthrough below kSoftClipThreshold, smooth
+// asymptotic saturation from there up to the int16 ceiling.
+//
+// Rationale (port-specific mixer stage, not a binary behaviour -- no
+// DIFFERS marker per the SDL-only-file convention): the binary's
+// MAMAudioThread::FillBuffer mixed samples pre-attenuated by >>4 at load
+// time (see LoadSound's kSfxHeadroomShift comment), which gave 16 stacked
+// voices headroom before the raw add could saturate. The port plays SFX at
+// unity gain (kSfxHeadroomShift=0) instead, matching the Wii backend and
+// how the game actually felt through AudioOut's device volume stage. That
+// means a SINGLE voice already sits near full scale, so summing several
+// voices with the old per-voice saturating clamp pinned the total to
+// +-32767 almost immediately -- a harsh, order-dependent hard clip once any
+// voice pushed the running sum past the ceiling (later voices in the mix
+// loop stopped contributing at all). Accumulating every voice into an
+// int32 buffer first and applying ONE soft-knee curve at the end fixes
+// this: sums that stay under the threshold (a single SFX, or a couple of
+// quiet ones) pass through bit-identical to unity, and only genuinely loud
+// stacks get compressed, smoothly, instead of clipped.
+static const int32_t kSoftClipThreshold = 22937;  // 0.7 * 32767 -- linear knee point
+static const int32_t kSoftClipCeiling   = 32767;
+
+static int16_t SoftClipSample(int32_t x) {
+    int32_t sign = (x < 0) ? -1 : 1;
+    int32_t ax   = (x < 0) ? -x : x;
+    if (ax <= kSoftClipThreshold) {
+        return (int16_t)x;  // linear region: bit-exact passthrough
+    }
+    // Asymptotic soft-saturation of the excess above the knee, approaching
+    // kSoftClipCeiling but never reaching/crossing it.
+    float excess = (float)(ax - kSoftClipThreshold);
+    float range  = (float)(kSoftClipCeiling - kSoftClipThreshold);
+    float y = range * (1.0f - expf(-excess / range));
+    int32_t out = kSoftClipThreshold + (int32_t)y;
+    if (out > kSoftClipCeiling) out = kSoftClipCeiling;
+    return (int16_t)(sign * out);
+}
+
 // SDL2 audio callback. Runs on the audio thread.
 // Mixes all active voices + music voice into the output buffer.
 // Output: S16LE mono 16kHz.
@@ -258,6 +297,15 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
     // Zero output
     SDL_memset(stream, 0, (size_t)len);
 
+    // Per-callback int32 mix accumulator (no per-voice clamping -- see
+    // SoftClipSample rationale above). Sized to the largest callback frame
+    // count actually requested (want.samples: 256 @16kHz desktop, 4096
+    // @48kHz emscripten -- see Init()).
+    static const int kMaxCallbackSamples = 4096;
+    static int32_t s_MixAccum[kMaxCallbackSamples];
+    int mixSamples = nSamples;
+    if (mixSamples > kMaxCallbackSamples) mixSamples = kMaxCallbackSamples;
+    SDL_memset(s_MixAccum, 0, sizeof(int32_t) * (size_t)mixSamples);
 
     // Mix each SFX voice. Matches MAMAudioThread::FillBuffer (0x0018c020):
     // samples were attenuated >>4 in LoadSound to leave headroom for 16
@@ -277,6 +325,9 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
     // Port-side multiply is the lossless equivalent of the binary's
     // boolean mute when volume is 0 or 1; intermediate values produce
     // smoother fades than the binary supported, which is harmless.
+    //
+    // Accumulates into s_MixAccum (int32, unclamped) instead of out[]
+    // directly -- see SoftClipSample rationale above.
     for (int vi = 0; vi < VOICE_COUNT; vi++) {
         Voice& v = self->m_Voices[vi];
         if (v.id == 0 || !v.playing || !v.buf) continue;
@@ -298,12 +349,9 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
                     break;
                 }
             }
-            if (!muted && voiceVol > 0.0f) {
+            if (!muted && voiceVol > 0.0f && s < mixSamples) {
                 int32_t scaled = (int32_t)((float)src[v.cursor] * voiceVol);
-                int32_t mixed  = out[s] + scaled;
-                if (mixed >  32767) mixed =  32767;
-                if (mixed < -32768) mixed = -32768;
-                out[s] = (int16_t)mixed;
+                s_MixAccum[s] += scaled;
             }
             v.cursor++;
             s++;
@@ -311,12 +359,12 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
     }
 
     // Mix music voice. Port specific: applies s_MusicVolume the same way the
-    // SFX loop above applies per-voice v.volume (float multiply + saturating
-    // clamp) so music actually responds to SetMusicVolume(). Previously this
-    // branch mixed src[] raw and ignored s_MusicVolume entirely -- SongPlay's
-    // existing "global s_MusicVolume scales in callback" comment (see the
-    // m_MusicVoice.volume = 1.0f init) documents this as the intended design
-    // that was never wired up.
+    // SFX loop above applies per-voice v.volume (float multiply into the
+    // shared int32 accumulator) so music actually responds to
+    // SetMusicVolume(). Previously this branch mixed src[] raw and ignored
+    // s_MusicVolume entirely -- SongPlay's existing "global s_MusicVolume
+    // scales in callback" comment (see the m_MusicVoice.volume = 1.0f init)
+    // documents this as the intended design that was never wired up.
     {
         Voice& mv = self->m_MusicVoice;
         if (mv.id != 0 && mv.playing && mv.buf) {
@@ -335,12 +383,9 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
                         break;
                     }
                 }
-                if (!muted && musicVol > 0.0f) {
+                if (!muted && musicVol > 0.0f && s < mixSamples) {
                     int32_t scaled = (int32_t)((float)src[mv.cursor] * musicVol);
-                    int32_t mixed  = out[s] + scaled;
-                    if (mixed >  32767) mixed =  32767;
-                    if (mixed < -32768) mixed = -32768;
-                    out[s] = (int16_t)mixed;
+                    s_MixAccum[s] += scaled;
                 }
                 mv.cursor++;
                 s++;
@@ -348,6 +393,12 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
         }
     }
 
+    // Final stage: one soft-knee limiter pass, int32 accumulator -> int16
+    // output. Replaces the old per-voice saturating hard clamp (see
+    // SoftClipSample rationale above).
+    for (int s = 0; s < mixSamples; s++) {
+        out[s] = SoftClipSample(s_MixAccum[s]);
+    }
 }
 
 // 0x0018cab8 -- allocates MortarSoundMAM (port: plain MortarSound)
