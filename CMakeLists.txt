@@ -98,6 +98,18 @@ endif()
 # the fn_prebaked_fonts target below).
 option(FN_PREBAKED_FONTS "Prebaked bitmap font atlases (FreeType-baked offline)" ${FRUIT_PLATFORM_WII})
 
+# --- Ogg Vorbis SFX/music (SDL backend) ---
+# webOS ships Ogg-transcoded sfx/*.ogg (via stage-assets.py --ogg-audio,
+# mirroring the web build's Ogg transcode) instead of raw sfx/*.wav.pcm, to
+# shrink the IPK. SoundManagerSDL::LoadSound decodes the .ogg with
+# third_party/stb/stb_vorbis.c (src/engine/CMakeLists.txt) and reads the loop
+# point from the build-generated SfxLoopTable.generated.cpp (see
+# src/engine/audio/SfxLoopTable.h) instead of the .wav.pcm header (gone once
+# audio ships as .ogg). Default ON for webOS, OFF elsewhere: host/emscripten
+# builds are unaffected (emscripten already has its own Ogg path via the Web
+# Audio backend, SoundManagerWebAudio.cpp -- this option is SDL-backend-only).
+option(FN_OGG_AUDIO "Ogg Vorbis SFX/music (SDL backend)" ${FRUIT_PLATFORM_WEBOS})
+
 # --- Block-preload resource loader (task #36) ---
 # Force-loads a screen/mode's texture/SFX/mesh/font manifest synchronously at
 # a block-entry hook (GameModeScreen::SetupLevel, ShopScreen ctor, etc)
@@ -193,6 +205,18 @@ endfunction()
 # BakedStringTTF.cpp.
 if (FN_PREBAKED_FONTS)
     add_compile_definitions(FN_PREBAKED_FONTS=1)
+endif()
+
+# Ogg Vorbis gate (see the FN_OGG_AUDIO option above). Consumed by
+# SoundManagerSDL.cpp (LoadSound's #if defined(FN_OGG_AUDIO) branch) and
+# src/engine/CMakeLists.txt (adds stb_vorbis.c + the generated loop table).
+if (FN_OGG_AUDIO)
+    add_compile_definitions(FN_OGG_AUDIO=1)
+    # third_party/stb/stb_vorbis.c is a C source; the project() above declares
+    # only CXX, so CMAKE_C_COMPILE_OBJECT is unset and the generate step fails.
+    # Enable C here (only when the Ogg path is compiled in) so the buildroot
+    # toolchain's C compiler is configured for that one TU.
+    enable_language(C)
 endif()
 
 # Block-preload loader gate (see the FN_BLOCK_PRELOAD option above). Consumed
@@ -875,14 +899,26 @@ if(NOT FN_ASM_VERIFY)
     else()
         # --subset-font (independent of --web): webOS wants the gangofchinese.ttf
         # glyph-subset shrink for a smaller IPK but NOT --web's Ogg/WebP-audio
-        # transcoding (it keeps raw .wav.pcm via SDL, like host). --web already
-        # implies --subset-font internally, so web behaviour is unchanged.
+        # transcoding. --web already implies --subset-font internally, so web
+        # behaviour is unchanged.
+        # --ogg-audio + --gen-loop-table (FN_OGG_AUDIO, default ON for webOS):
+        # transcodes sfx/*.wav.pcm to sfx/*.ogg like --web does, plus emits the
+        # generated C++ loop table (SfxLoopTable.generated.cpp, consumed by
+        # SoundManagerSDL.cpp) since the SDL backend has no sfx-loops.json
+        # reader. --web already implies --ogg-audio internally; passing
+        # --gen-loop-table under EMSCRIPTEN too is harmless (extra unused
+        # generated source) but is gated off here to avoid feeding the
+        # web build a TU it doesn't compile.
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
         set(FN_ASSET_STAGING_COMMANDS
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.py ${CMAKE_SOURCE_DIR}
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
                     ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR}
                     $<$<BOOL:${EMSCRIPTEN}>:--web>
                     $<$<BOOL:${FRUIT_PLATFORM_WEBOS}>:--subset-font>
+                    $<$<BOOL:${FN_OGG_AUDIO}>:--ogg-audio>
+                    $<$<BOOL:${FN_OGG_AUDIO}>:--gen-loop-table>
+                    $<$<BOOL:${FN_OGG_AUDIO}>:${CMAKE_BINARY_DIR}/generated/SfxLoopTable.generated.cpp>
         )
     endif()
     # ALL: the host runtime + every test read assets from FN_STAGING_DATA_DIR
@@ -894,6 +930,17 @@ if(NOT FN_ASM_VERIFY)
         COMMENT "Staging assets (svg->webp via resvg-py; textures->WebP; web:+ogg+font)"
         VERBATIM
     )
+
+    # FN_OGG_AUDIO: mortar_engine's audio/SfxLoopTable.generated.cpp source
+    # (added by src/engine/CMakeLists.txt) is WRITTEN by fn_asset_staging
+    # above (stage-assets.py --gen-loop-table), so mortar_engine must not
+    # compile before staging runs. mortar_engine already exists here (created
+    # by add_subdirectory(src/engine) further up), so the dependency is added
+    # from this scope rather than from within src/engine/CMakeLists.txt
+    # (fn_asset_staging doesn't exist yet at that point in the file).
+    if (FN_OGG_AUDIO)
+        add_dependencies(mortar_engine fn_asset_staging)
+    endif()
 
     # --- Prebaked font bake, non-Wii (FN_PREBAKED_FONTS) ---
     # Host/web counterpart of the Wii fn_wii_fonts target below (see that

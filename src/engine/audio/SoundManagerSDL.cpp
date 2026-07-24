@@ -20,6 +20,16 @@
 // Init(), see below) never needs a per-callback resample. This file's
 // loading/mixing code is unaware of the swap -- it just reads whatever is at
 // the (unchanged) virtual data path.
+//
+// Port specific (FN_OGG_AUDIO, default ON for webOS): LoadSound loads
+// sfx/<name>.ogg (stb_vorbis decode) instead of sfx/<name>.wav.pcm to shrink
+// the IPK. The .ogg is transcoded from the same .wav.pcm at build time
+// (tools/assets/stage-assets.py --ogg-audio) at the identical rate/channels
+// (mono S16), so the decoded PCM fills SoundBuffer exactly like the .wav.pcm
+// path -- no resample. The only thing the .ogg container can't carry is the
+// custom 20-byte loop-point header, so loopStart comes from a separate
+// build-generated lookup table (SfxLoopStartSamples, see SfxLoopTable.h)
+// instead.
 
 #include "audio/SoundManager.h"
 #include <SDL.h>            // SDL audio backend (SoundManager is SDL-bound)
@@ -34,6 +44,17 @@
 #include <cstring>
 #include <cmath>
 #include <string>
+
+#if defined(FN_OGG_AUDIO)
+#include "audio/SfxLoopTable.h"
+// third_party/stb/stb_vorbis.c is compiled as its own C translation unit
+// (src/engine/CMakeLists.txt, FN_OGG_AUDIO block); forward-declare the one
+// entry point this file calls rather than including the whole single-file
+// decoder's implementation into a second TU.
+extern "C" int stb_vorbis_decode_memory(const unsigned char* mem, int len,
+                                         int* channels, int* sample_rate,
+                                         short** output);
+#endif
 
 // .wav.pcm header layout (5 x int32, little-endian, 20 bytes)
 // Offset 0: type/format field (always 1)
@@ -149,6 +170,91 @@ void SoundManager::Init() {
     SDL_PauseAudioDevice(m_AudioDevice, 0);
 }
 
+#if defined(FN_OGG_AUDIO)
+// Load sfx/<name>.ogg into a heap buffer via stb_vorbis. The .ogg is
+// transcoded from the same .wav.pcm at the same rate/channels (mono S16;
+// tools/assets/stage-assets.py --ogg-audio), so the decoded PCM fills
+// SoundBuffer identically to the .wav.pcm path below -- no resample. loopStart
+// comes from the build-generated SfxLoopTable (the .ogg container has no
+// .wav.pcm header to carry it). Returns nullptr on any failure.
+SoundBuffer* SoundManager::LoadSound(const char* name) {
+    // Build path: DATA_DIR/sfx/<name>.ogg
+    std::string path = std::string(TextureManager::GetDataDir()) + "/sfx/" + name + ".ogg";
+
+    SDL_RWops* rw = SDL_RWFromFile(path.c_str(), "rb");
+    if (!rw) {
+        // Case-insensitive POSIX fallback -- see the .wav.pcm path's comment.
+        std::string ciPath = Mortar::ResolvePathCI(path.c_str());
+        if (!ciPath.empty()) {
+            rw = SDL_RWFromFile(ciPath.c_str(), "rb");
+            if (rw) path = std::move(ciPath);
+        }
+    }
+    if (!rw) {
+        LOG_ERROR("SoundManager", "LoadSound: cannot open '%s': %s",
+                  path.c_str(), SDL_GetError());
+        return nullptr;
+    }
+
+    Sint64 fileSize = rw->size(rw);
+    if (fileSize <= 0) {
+        LOG_ERROR("SoundManager", "LoadSound: bad file size for '%s'", path.c_str());
+        rw->close(rw);
+        return nullptr;
+    }
+
+    unsigned char* fileBuf = new unsigned char[(size_t)fileSize];
+    size_t readBytes = rw->read(rw, fileBuf, 1, (size_t)fileSize);
+    rw->close(rw);
+    if (readBytes != (size_t)fileSize) {
+        LOG_ERROR("SoundManager", "LoadSound: short read on '%s'", path.c_str());
+        delete[] fileBuf;
+        return nullptr;
+    }
+
+    int channels = 0, rate = 0;
+    short* decoded = nullptr;
+    int sampleCount = stb_vorbis_decode_memory(fileBuf, (int)fileSize, &channels, &rate, &decoded);
+    delete[] fileBuf;
+
+    if (sampleCount <= 0 || !decoded) {
+        LOG_ERROR("SoundManager", "LoadSound: stb_vorbis decode failed for '%s'", path.c_str());
+        if (decoded) free(decoded);
+        return nullptr;
+    }
+
+    // All sfx assets are mono (the .ogg was transcoded from mono .wav.pcm);
+    // downmix defensively if a stray asset ever decodes as stereo+ so a
+    // single bad file doesn't corrupt playback rate/timing.
+    int16_t* raw = new int16_t[sampleCount];
+    if (channels <= 1) {
+        memcpy(raw, decoded, sizeof(int16_t) * (size_t)sampleCount);
+    } else {
+        for (int i = 0; i < sampleCount; i++) {
+            raw[i] = decoded[(size_t)i * channels];  // take channel 0
+        }
+    }
+    free(decoded);
+
+    // Lowercased basename (no extension) is the SfxLoopTable key -- name
+    // arrives already lowercase from every caller (SFXPlay/SongPlay), but
+    // normalise defensively since the generated table is keyed strictly
+    // lowercase.
+    std::string lowerName(name);
+    for (size_t i = 0; i < lowerName.size(); ++i) {
+        if (lowerName[i] >= 'A' && lowerName[i] <= 'Z') lowerName[i] = (char)(lowerName[i] + ('a' - 'A'));
+    }
+    int loopStart = (int)Mortar::SfxLoopStartSamples(lowerName.c_str());
+    bool loop = (loopStart != 0);
+
+    SoundBuffer* buf = new SoundBuffer();
+    buf->samples     = raw;
+    buf->sampleCount = sampleCount;
+    buf->loop        = loop;
+    buf->loopStart   = loopStart;
+    return buf;
+}
+#else
 // Load .wav.pcm file into heap buffer, apply >>4 sample shift.
 // Returns nullptr on any failure (file not found, bad header, etc.)
 SoundBuffer* SoundManager::LoadSound(const char* name) {
@@ -238,6 +344,7 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     buf->loopStart   = loopStart;
     return buf;
 }
+#endif  // FN_OGG_AUDIO
 
 // Find a voice by monotonic ID. Returns nullptr if not found.
 Voice* SoundManager::FindVoice(uint32_t id) {

@@ -136,6 +136,36 @@ if(NOT FN_ASM_VERIFY)
         )
     endif()
 endif()
+if(NOT FN_ASM_VERIFY AND FN_OGG_AUDIO AND NOT EMSCRIPTEN)
+    # webOS (SDL backend): decode sfx/*.ogg via stb_vorbis (public domain,
+    # third_party/stb/stb_vorbis.c) instead of reading raw sfx/*.wav.pcm --
+    # see SoundManagerSDL.cpp's LoadSound FN_OGG_AUDIO branch. Loop points come
+    # from the build-generated table below (the .ogg has no .wav.pcm header).
+    # Emscripten already has its own Ogg path (SoundManagerWebAudio.cpp, browser
+    # decode) and never compiles SoundManagerSDL.cpp, so this block is
+    # redundant there even if FN_OGG_AUDIO were somehow also set -- excluded
+    # explicitly to avoid compiling stb_vorbis.c into a TU that never uses it.
+    target_sources(mortar_engine PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/stb/stb_vorbis.c
+    )
+    # Single-file public-domain decoder: no stdio dependency needed (we always
+    # decode from an in-memory buffer via stb_vorbis_decode_memory), so trim
+    # the pulled-in libc surface for the cross/buildroot toolchain.
+    set_source_files_properties(
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/stb/stb_vorbis.c
+        PROPERTIES COMPILE_DEFINITIONS "STB_VORBIS_NO_STDIO;STB_VORBIS_NO_PUSHDATA_API"
+    )
+
+    # Build-generated loop-start table (stage-assets.py --gen-loop-table; see
+    # src/engine/audio/SfxLoopTable.h for the contract). Written by the
+    # fn_asset_staging custom target BEFORE mortar_engine compiles it -- see
+    # the add_dependencies(mortar_engine fn_asset_staging) call in the root
+    # CMakeLists.txt (placed there because fn_asset_staging isn't defined yet
+    # at the point add_subdirectory(src/engine) runs).
+    set(FN_SFX_LOOP_TABLE_CPP "${CMAKE_BINARY_DIR}/generated/SfxLoopTable.generated.cpp")
+    set_source_files_properties(${FN_SFX_LOOP_TABLE_CPP} PROPERTIES GENERATED TRUE)
+    target_sources(mortar_engine PRIVATE ${FN_SFX_LOOP_TABLE_CPP})
+endif()
 target_sources(mortar_engine PRIVATE
     # Phase 7 — Particles
     # Entity + ActorManager live in src/entities/ (game-namespace port),
