@@ -146,6 +146,16 @@ public:
     // Returns 1.0f (fully settled) by default; screens with a transition
     // alpha (ShopScreen, BaseScreen subclasses) override to expose it.
     virtual float GetTransitionAlpha() const { return 1.0f; }
+
+    // Port specific: no binary counterpart -- desktop ESC-as-back discriminator.
+    // taskStateIndex alone can't tell "in a menu" from "in a live round": State 1
+    // (Frontend) is dead code (FrontendTask.cpp/SplashTask.cpp jump straight to
+    // State 2), so BOTH menus and live gameplay run under taskStateIndex==2. The
+    // real discriminator is whether a menu's back-bomb ring is currently armed --
+    // true in every menu screen (Main/GameMode/Dojo/Shop/About/GameOver each set
+    // m_bBackdropActive=1 on their back/regress MenuButton) and false mid-round.
+    // Default false; MenuButton overrides to read its own flag.
+    virtual bool HasActiveBackBomb() const { return false; }
 #endif
 
 #ifndef __bada__

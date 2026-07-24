@@ -301,6 +301,10 @@ public:
     bool SetToMultiplayerState() override;
     int  GetType() override { return 5; }
     void Skip() override;
+#ifndef __bada__
+    // Port specific: desktop ESC-as-back discriminator -- see HUDControl::HasActiveBackBomb.
+    bool HasActiveBackBomb() const override { return m_bBackdropActive != 0; }
+#endif
 
     // MenuButton::Init @ 0x0019b994 (5-arg; sets all fields, calls CreateFruit)
     void Init(_Vector3<float> buttonPos, Mortar::Delegate0<void> clickCb,

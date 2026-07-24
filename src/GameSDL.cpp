@@ -313,35 +313,49 @@ void Game::pollInput() {
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
             // Port specific: ESC-as-back (no binary counterpart -- the
             // binary is touch-only Bada hardware with no keyboard).
+            //
+            // taskStateIndex alone can't distinguish menu vs. live round: State 1
+            // (Frontend) is dead code (FrontendTask.cpp / SplashTask.cpp both jump
+            // straight to State 2), so BOTH menus and gameplay run under
+            // taskStateIndex==2 -- the menu screens ARE the paused Game task.
+            // The real discriminator is whether a menu's back-bomb ring is armed:
+            // every menu screen (Main/GameMode/Dojo/Shop/About/GameOver) sets
+            // m_bBackdropActive=1 on its back/regress MenuButton, and that flag is
+            // never set during a live round. See HUDControl::HasActiveBackBomb.
             if (game_work.taskStateIndex == 2) {
-                // In game: same gate PauseScreen::IsEnabled uses -- don't
-                // fire mid pause/camera transition.
-                if (fabsf(game_work.m_PauseAmount) < 0.001f) {
-                    PauseScreen* pauseScreen = GetTaskState()->pPauseScreen;
-                    if (pauseScreen) pauseScreen->PauseGameCallback();
-                }
-            } else if (game_work.taskStateIndex == 1) {
-                // Menus: block while any HUD control's transition alpha is
-                // mid-fade (BaseScreen subclasses / ShopScreen override
-                // GetTransitionAlpha; everything else reports 1.0f, a no-op
-                // for this check). Otherwise fire the canonical back-key
-                // handler, which auto-routes to whichever menu screen's
-                // back-bomb button is currently active.
+                bool menuBackActive = false;
                 bool mid = false;
                 if (game_work.mHud) {
                     for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
                          it != game_work.mHud->controls.end(); ++it) {
                         float a = (*it)->GetTransitionAlpha();
-                        if (a > 0.0f && a < 0.999f) { mid = true; break; }
+                        if (a > 0.0f && a < 0.999f) mid = true;
+                        if ((*it)->HasActiveBackBomb()) menuBackActive = true;
                     }
                 }
-                if (!mid) {
-                    InputEvent ev2;
-                    memset(&ev2, 0, sizeof(ev2));
-                    RegressMenuCallback(&ev2);
+                if (menuBackActive) {
+                    // Menu: block while any HUD control's transition alpha is
+                    // mid-fade (BaseScreen subclasses / ShopScreen override
+                    // GetTransitionAlpha; everything else reports 1.0f, a no-op
+                    // for this check). Otherwise fire the canonical back-key
+                    // handler, which auto-routes to whichever menu screen's
+                    // back-bomb button is currently active.
+                    if (!mid) {
+                        InputEvent ev2;
+                        memset(&ev2, 0, sizeof(ev2));
+                        RegressMenuCallback(&ev2);
+                    }
+                } else {
+                    // Live round: same gate PauseScreen::IsEnabled uses -- don't
+                    // fire mid pause/camera transition.
+                    if (fabsf(game_work.m_PauseAmount) < 0.001f) {
+                        PauseScreen* pauseScreen = GetTaskState()->pPauseScreen;
+                        if (pauseScreen) pauseScreen->PauseGameCallback();
+                    }
                 }
             }
             // taskStateIndex == 0 (splash): ESC does nothing.
+            // taskStateIndex == 1 (Frontend): dead code, never reached in v1.6.1.
         } else if (ev.type == SDL_WINDOWEVENT &&
                    (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
                     ev.window.event == SDL_WINDOWEVENT_MINIMIZED  ||
