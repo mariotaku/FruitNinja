@@ -7,6 +7,7 @@
 #include "BombBlast.h"
 #include "Jiblet.h"
 #include "SlashEntity.h"
+#include "FruitRay.h"
 #include "debug/Logger.h"
 
 #include <cstdio>
@@ -22,7 +23,7 @@
 //       case 3:  return new SlashEntity();  // 0x188 bytes
 //       case 4:  return new BombBlast();    // 0x70  bytes
 //       case 5:  return new Jiblet();       // 0xB0  bytes (memset 0xB0 first)
-//       case 6:  return new FruitRay();     // (unported)
+//       case 6:  return new FruitRay();     // 0xE4 bytes
 //       default: return nullptr;
 //       }
 //   }
@@ -35,7 +36,7 @@ Mortar::Entity* CreateEntity(long entityType) {
     case 3:  return new SlashEntity();
     case 4:  return new BombBlast();
     case 5:  return new Jiblet();
-    // TODO: v1.6.1 CreateEntity @0x001d8fec case 6 FruitRay (unported)
+    case 6:  return new FruitRay();
     default:
         LOG_WARN("ENTITYFACTORY", "unknown entity type %ld", entityType);
         return nullptr;

@@ -24,6 +24,7 @@
 #include "SlashEntity.h"
 #include "SplatEntity.h"
 #include "Jiblet.h"
+#include "FruitRay.h"
 #include "ActorManager.h"
 #include "game/GameWork.h"
 #include "game/GameMode.h"
@@ -759,9 +760,15 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     snprintf(buf, sizeof(buf), "%i HITS", m_SliceCount);
     ChangeText(buf, true, NULL);
 
+    // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: SpawnRay fires on
+    // odd m_SliceCount.
+    if (m_SliceCount & 1) {
+        SpawnRay();
+    }
+
     // TODO: v1.6.1 SuperFruitControl::Sliced @0x001bb994 -- BLOCKED remaining:
-    //   pome-slice SFX (GameSound::SFXPlay); SpawnRay on odd m_SliceCount;
-    //   PSP emitter hookup. Wire when those subsystems land.
+    //   pome-slice SFX (GameSound::SFXPlay); PSP emitter hookup. Wire when
+    //   those subsystems land.
 
     LOG_INFO("SUPERFRUIT", "Sliced() hit %d", m_SliceCount);
 }
@@ -1026,9 +1033,12 @@ void SuperFruitControl::LoadContent() {
         JibletModel = Mortar::MeshManager::GetInstance()->Load("models/fruit/pomegranate_jiblet.mmd");
     }
 
+    // ASM-spec v1.6.1 SuperFruitControl::LoadContent @0x001bda74
+    FruitRay::RayTexture = Mortar::TextureManager::LoadLocalisedTexture("pomegranate_rays.tex");
+
     // TODO: v1.6.1 SuperFruitControl::LoadContent @0x001bda74 -- also loads
-    //   SuperFruitGlow::GlowTexture + FruitRay::RayTexture (2x LoadLocalisedTexture,
-    //   filenames unresolved). Blocked: FruitRay is unported. Wire when it lands.
+    //   SuperFruitGlow::GlowTexture (LoadLocalisedTexture, filename unresolved).
+    //   Blocked: SuperFruitGlow::GlowTexture is unported. Wire when it lands.
 }
 
 // Frees the finale visuals loaded by LoadContent. Nulls the file-static SmartPtr
@@ -1036,6 +1046,7 @@ void SuperFruitControl::LoadContent() {
 void SuperFruitControl::UnLoadContent() {
     ShockWaveTexture = NULL;
     JibletModel = NULL;
+    FruitRay::RayTexture = NULL;
 }
 
 // Port specific: diagnostic accessor for tests/tooling (not a binary symbol).
@@ -1402,13 +1413,10 @@ void SuperFruitControl::StopRays()
     std::list<Mortar::Entity*>::iterator it;
     Mortar::Entity* e = am->GetEntityFirst(6, it);
     while (e != NULL) {
-        // TODO: v1.6.1 0x001b9b4c (SuperFruitControl::StopRays) -- x64 byte-offset landmine (#189);
-        // ray (type-6) class unported, loop body dormant (no producer). +0xE0 = Entity[3].m_LaunchVelocity.y
-        // on the ray subclass; use named field once ported.
-#if defined(__bada__)
-        uint8_t* rawBase = reinterpret_cast<uint8_t*>(e);
-        rawBase[0xe0] = 1;
-#endif
+        // ASM-spec v1.6.1 SuperFruitControl::StopRays @0x001b9b4c: +0xE0 on the
+        // type-6 entity is FruitRay::m_Expiring; setting it flips the ray from
+        // host-tracking to its Update fade-out branch.
+        static_cast<FruitRay*>(e)->m_Expiring = 1;
         e = am->GetEntityNext(6, it);
     }
 
@@ -1417,6 +1425,37 @@ void SuperFruitControl::StopRays()
     if (m_pHostFruit) {
         m_pHostFruit->m_RotVel1 = _Vector3<float>(0.0f, 0.0f, 0.0f);   // Fruit+0x100
         m_pHostFruit->m_RotVel2 = _Vector3<float>(0.0f, 0.0f, 0.0f);   // Fruit+0x10c
+    }
+}
+
+// ASM-spec v1.6.1 SuperFruitControl::SpawnRay @0x001ba810. Spawns one
+// type-6 FruitRay entity, oriented by a pseudo-random quaternion built from
+// three axis-aligned rotations: the file-static `rayNum` counter cycles the
+// elevation band (8-way, low/high split at rayNum&7 < 4) and the quadrant
+// (rayNum&3) that seeds the heading sweep.
+void SuperFruitControl::SpawnRay()
+{
+    static int rayNum = 0;
+    rayNum++;
+    int i = rayNum & 7;
+
+    float yLo = 5.0f, yHi = 70.0f;
+    if (i < 4) { yLo = -35.0f; yHi = -5.0f; }
+
+    int q = i & 3;
+    float zDeg = GetRandBetween(0.0f, 180.0f, 0.0f, 0.0f);
+    float yDeg = GetRandBetween(yLo, yHi, 0.0f, 0.0f);
+    float xDeg = GetRandBetween((float)(q * 90), (float)(q * 90 + 80), 0.0f, 0.0f);
+
+    Quaternion qz; qz.CreateFromAxisAngle(0.0f, 0.0f, 1.0f, (uint16_t)(int)(zDeg * 182.0f));
+    Quaternion qy; qy.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, (uint16_t)(int)(yDeg * 182.0f));
+    Quaternion qx; qx.CreateFromAxisAngle(1.0f, 0.0f, 0.0f, (uint16_t)(int)(xDeg * 182.0f));
+    Quaternion rot = qz * qy * qx;
+
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    FruitRay* r = am ? static_cast<FruitRay*>(am->Add(6, true)) : 0;
+    if (r) {
+        r->Init(m_pHostFruit, rot);
     }
 }
 

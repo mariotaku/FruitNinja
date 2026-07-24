@@ -231,6 +231,12 @@ public:
     // (stop flag). "Rays" are type-6 Entity actors, NOT PSPParticles.
     void StopRays();
 
+    // ASM-spec v1.6.1 SuperFruitControl::SpawnRay @0x001ba810. Spawns one
+    // type-6 FruitRay entity via ActorManager::Add(6,true), oriented by a
+    // pseudo-random quaternion (rayNum-cycled elevation band + quadrant-swept
+    // heading), and Init()s it against this control's host fruit.
+    void SpawnRay();
+
     // Binary @ 0x1bc748. PSPParticleManager emitter hookup for jib particle trails.
     // PSPParticleManager hookup implemented; Jiblet mesh spawn pending Jiblet/MeshManager port.
     void SpawnJibs();

@@ -9,6 +9,7 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/EntityTracker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Fruit.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/FruitInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/FruitRay.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Jiblet.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SlashEntity.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/SplatEntity.cpp

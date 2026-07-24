@@ -100,6 +100,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/entities/EntityFactory.cpp"
     "${_PROJECT_ROOT}/src/entities/Fruit.cpp"
     "${_PROJECT_ROOT}/src/entities/FruitInfo.cpp"
+    "${_PROJECT_ROOT}/src/entities/FruitRay.cpp"
     "${_PROJECT_ROOT}/src/entities/Jiblet.cpp"
     "${_PROJECT_ROOT}/src/entities/SlashEntity.cpp"
     "${_PROJECT_ROOT}/src/entities/SplatEntity.cpp"
