@@ -79,35 +79,54 @@ void DrawStartFade() {
     const uint8_t r = (uint8_t)r_f;
     const Colour col(r, r, r, a);
 
-    // DIFFERS: opt-in widescreen -- backdrop behind the splash logo is a solid
-    // black quad spanning the full drawable (Layout::HalfWidth()*2 wide) so the
-    // widened side bars fade in/out together with the logo instead of showing
-    // through. Faithful 3:2 / __bada__: HalfWidth()==240 so this is exactly the
-    // original 480x320 quad. The backdrop tracks the SAME bright/rgb_factor
-    // alpha as the logo (col, computed above) but never scales down with the
-    // logo's alpha_factor growth -- it must stay full-coverage throughout the
-    // whole fade, unlike the logo quad below which grows from 1x to 2x.
+    // DIFFERS: opt-in widescreen -- the 480-wide logo quad below only covers
+    // x in [-240, 240], so on a widescreen drawable (Layout::HalfWidth() > 240)
+    // two solid black SIDE-STRIP quads fill the remaining gap (x in
+    // [240, HalfWidth] and [-HalfWidth, -240]) so the widened bars fade in/out
+    // together with the logo instead of showing through. Faithful 3:2 /
+    // __bada__: HalfWidth()==240 so stripW is exactly 0 and NO strips are
+    // drawn -- this is the original single 480x320 logo quad, unchanged.
+    // The strips must NOT overlap the logo quad's own x range (that was the
+    // old bug: a single full-width backdrop double-blended the center 480
+    // while the side strips only blended once, producing a darker center,
+    // brighter sides, and hard seams at x=+-240). The strips track the SAME
+    // bright/rgb_factor alpha as the logo (col.a) but never scale down with
+    // the logo's alpha_factor growth -- they stay full-coverage throughout
+    // the whole fade, unlike the logo quad below which grows from 1x to 2x.
 #ifdef __bada__
-    const float bgHalfWidth = 240.0f;
+    const float stripW = 0.0f;
 #else
-    const float bgHalfWidth = Layout::HalfWidth();
+    const float stripW = Layout::HalfWidth() - 240.0f;
 #endif
     const Colour bgCol(0, 0, 0, col.a);
 
     // Port specific: the renderer's DrawQuad skips the draw entirely when no
     // texture is bound (see Renderer::DrawQuad's s_LastBoundTexId guard), so
-    // the black backdrop binds the splash texture too (degenerate UV -> the
-    // sample is irrelevant, tint carries full colour) and stays bound for the
-    // logo draw that follows -- one Set/UnSet bracket for both quads.
+    // the side-strip quads bind the splash texture too (degenerate UV samples
+    // a texel that happens to be opaque, so the tint carries full colour) and
+    // stay bound for the logo draw that follows -- one Set/UnSet bracket for
+    // all quads.
     game->pSplashTex->Set();
 
-    mm.GetWorldStack().Reset();
-    Matrix44 matBg = Matrix44::MakeScale(bgHalfWidth * 2.0f, (float)FN_SCREEN_H, 0.0f);
-    matBg.GlobalTranslate44(_Vector3<float>(0.0f, 0.0f, 0.0f));
-    mm.GetWorldStack().SetCurrentMatrix(matBg);
-    mm.UploadModelViewOnly();
-    // Degenerate UV (flat sample) -- tint carries full colour, no texture needed.
-    Mortar::Mesh::DrawQuadUnCached(bgCol, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+    if (stripW > 0.0f) {
+        const float stripCenter = (240.0f + Layout::HalfWidth()) * 0.5f;
+
+        mm.GetWorldStack().Reset();
+        Matrix44 matBgR = Matrix44::MakeScale(stripW, (float)FN_SCREEN_H, 0.0f);
+        matBgR.GlobalTranslate44(_Vector3<float>(stripCenter, 0.0f, 0.0f));
+        mm.GetWorldStack().SetCurrentMatrix(matBgR);
+        mm.UploadModelViewOnly();
+        // Degenerate UV (opaque texel) -- tint carries full colour.
+        Mortar::Mesh::DrawQuadUnCached(bgCol, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+
+        mm.GetWorldStack().Reset();
+        Matrix44 matBgL = Matrix44::MakeScale(stripW, (float)FN_SCREEN_H, 0.0f);
+        matBgL.GlobalTranslate44(_Vector3<float>(-stripCenter, 0.0f, 0.0f));
+        mm.GetWorldStack().SetCurrentMatrix(matBgL);
+        mm.UploadModelViewOnly();
+        // Degenerate UV (opaque texel) -- tint carries full colour.
+        Mortar::Mesh::DrawQuadUnCached(bgCol, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+    }
 
     mm.GetWorldStack().Reset();
     // ASM-spec v1.6.1 DrawStartFade @0x001cd4fc: logo scale = Vec3(480,320,0)*scale_mul (grows 1x->2x = the "explode")
