@@ -89,13 +89,13 @@ public:
     void AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
                   const char* name, int tier);
 
-    // STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
+    // v1.6.1 BonusScreen::GetTimeFirstAward @0x00162010
     float GetTimeFirstAward();
 
-    // STUB: BonusScreen::GetTimePerAward -- binary @ 0x???? (TODO RE)
+    // v1.6.1 BonusScreen::GetTimePerAward @0x00162030
     float GetTimePerAward();
 
-    // STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
+    // v1.6.1 BonusScreen::LoadContent @0x00162008
     void LoadContent();
 
     // v1.6.1 BonusScreen::Shake @ 0x00162054 (thunk 0x0011601c).
@@ -104,7 +104,7 @@ public:
     // per-award reveal block with (0.1f, 10.0f).
     void Shake(float duration, float amplitude);
 
-    // STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
+    // v1.6.1 BonusScreen::UnLoadContent @0x0016200c
     void UnLoadContent();
     // ---- end STUBS ----
 

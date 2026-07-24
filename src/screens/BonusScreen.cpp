@@ -152,7 +152,10 @@ BonusScreen::BonusScreen()
     sm.PreLoadSound("Bonus-Explosion-3");        // rodata 0x00281e84
     sm.PreLoadSound("Bonus-Explosion-5");        // rodata 0x00281e96
 
-    // TODO: v1.6.1 BonusScreen::SetUpBonusScreen @0x0012ede8 -- create the BakedStringBox score/rank boxes
+    // NOTE: BakedStringBox creation is BonusScreen::BuildBonusText @0x001621dc (already
+    // ported + ASM-verified, called every Update tick via the m_bBonusTextBuilt latch).
+    // BonusManager::SetUpBonusScreen @0x0012ede8 is a DIFFERENT method (on BonusManager,
+    // already ported in BonusManager.cpp) that fills m_Awards via AddAward beforehand.
 }
 
 // ---------------------------------------------------------------------------
@@ -199,13 +202,15 @@ void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
 }
 
 
-// STUB: BonusScreen::GetTimeFirstAward -- binary @ 0x???? (TODO RE)
-float BonusScreen::GetTimeFirstAward() { return 0.0f; }
+// v1.6.1 BonusScreen::GetTimeFirstAward @0x00162010: getter, struct@0x2d8c3c+0x00 = 0.666667f.
+// Dead accessor (no binary xrefs; Update reads FIRST_AWARD directly).
+float BonusScreen::GetTimeFirstAward() { return FIRST_AWARD; }
 
-// STUB: BonusScreen::GetTimePerAward -- binary @ 0x???? (TODO RE)
-float BonusScreen::GetTimePerAward() { return 0.0f; }
+// v1.6.1 BonusScreen::GetTimePerAward @0x00162030: getter, struct@0x2d8c3c+0x04 = 0.6f.
+// Dead accessor (no binary xrefs; Update reads TIME_PER_AWARD directly).
+float BonusScreen::GetTimePerAward() { return TIME_PER_AWARD; }
 
-// STUB: BonusScreen::LoadContent -- binary @ 0x???? (TODO RE)
+// v1.6.1 BonusScreen::LoadContent @0x00162008: bx lr (empty).
 void BonusScreen::LoadContent() {}
 
 // v1.6.1 BonusScreen::Shake @ 0x00162054 (thunk 0x0011601c).
@@ -219,7 +224,7 @@ void BonusScreen::Shake(float duration, float amplitude) {
     m_ShakeAngle = (uint16_t)Math::g_Random.Rand32(0xff3a);
 }
 
-// STUB: BonusScreen::UnLoadContent -- binary @ 0x???? (TODO RE)
+// v1.6.1 BonusScreen::UnLoadContent @0x0016200c: bx lr (empty).
 void BonusScreen::UnLoadContent() {}
 
 // ---------------------------------------------------------------------------
