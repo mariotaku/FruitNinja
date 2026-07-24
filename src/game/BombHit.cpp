@@ -30,6 +30,7 @@
 #include "screens/MainScreen.h"
 #include <cstdio>
 #include "game/GameWork.h"
+#include "render/Layout.h"
 
 // CriticalFlash state — matches binary CriticalFlash (v1.6.1) @ 0x001cca50 +
 // DrawCritHit (v1.6.1) @ 0x001ccfa0.
@@ -124,7 +125,16 @@ void DrawCritHit() {
     float scale = normClamped * CRITICAL_FLASH_SCALE_MUL;
     if (scale <= 0.0f) return;
 
-    float sx = scale; if (sx > CRITICAL_FLASH_MAX_X) sx = CRITICAL_FLASH_MAX_X;
+    // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 480 under __bada__ --
+    // widen the crit-flash X cap by HalfWidth()/240 so the fullscreen flash covers
+    // the widened field sides, matching the game background / pause-dim quads
+    // (GameInit.cpp:758/967). Identity at HalfWidth()==240.
+#ifdef __bada__
+    const float maxX = CRITICAL_FLASH_MAX_X;                            // 480.0f (faithful, no widescreen on Bada)
+#else
+    const float maxX = CRITICAL_FLASH_MAX_X * (Layout::HalfWidth() / 240.0f);
+#endif
+    float sx = scale; if (sx > maxX) sx = maxX;
     float sy = scale; if (sy > CRITICAL_FLASH_MAX_Y) sy = CRITICAL_FLASH_MAX_Y;
 
     // Alpha = clamp(stored.a * t, 0, stored.a)
