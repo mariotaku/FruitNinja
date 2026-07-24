@@ -95,6 +95,12 @@ ALWAYS (both host and web):
   Everything else in Data is copied through unchanged (mtime-based
   copy-if-different).
 
+  SAVE FILE EXCLUSION (all platforms): the top-level FruitySave.xml,
+  ItemSave.xml, SettingsSave.xml captured in the source dump are the real
+  device's runtime save state, not app assets -- they are never copied into
+  any staged tree (host, --web, --wii, --ogg-audio/webOS). See
+  EXCLUDED_SAVE_FILES.
+
 AUDIO (--ogg-audio flag, IMPLIED by --web):
 
   3. AUDIO: every sfx/*.wav.pcm is TRANSCODED to Ogg/Vorbis (sfx/<name>.ogg)
@@ -265,6 +271,19 @@ LOOP_TABLE_FOOTER = (
 # fn_asset_staging CMake target before this script): repo-relative, sibling
 # of FruitNinjaBada/Data.
 WIDGET_TEX_RELDIR = os.path.join("assets", "ui-widgets", "generated")
+
+# Runtime SAVE files captured in the source dump (FruitNinjaBada/Data/ was
+# pulled from a real device, so it carries that device's progress/coins/
+# settings). These are written by the game itself at runtime to save_dir
+# (the writable app-install/SD dir, NOT the read-only staged Data tree) --
+# see src/game/FruitSaveData.cpp GetSavePath(), src/game/ItemManager.cpp
+# GetItemSavePath()/BuildItemSaveFullPath(), src/game/SettingsSave.cpp. The
+# game handles their absence gracefully (src/mainEmscripten.cpp:742), so
+# shipping the dump's copies is dead weight AND wrong: every fresh install
+# would boot with the dumped device's progress instead of starting clean.
+# Excluded top-level-only (case-insensitive) from ALL staged trees (host,
+# --web, --wii, --ogg-audio/webOS) -- never shipped in any package.
+EXCLUDED_SAVE_FILES = {"fruitysave.xml", "itemsave.xml", "settingssave.xml"}
 
 # Wii prebaked-font plan inputs (task #51): repo-relative, gitignored scratch
 # dir -- see tools/wii/prebaked-font-format.md. Not committed, so this step
@@ -917,15 +936,21 @@ def stage_tree_raw(src_root, dst_root):
     dependency."""
     stats = {"other_copied": 0, "other_skipped": 0, "widget_tex_copied": 0,
              "tex_transcoded": 0, "tex_skipped": 0, "tex_verbatim": 0,
-             "ttf_excluded": 0,
+             "ttf_excluded": 0, "save_files_skipped": 0,
              "gx_counts": {}}
     for root, _dirs, files in os.walk(src_root):
         rel_dir = os.path.relpath(root, src_root)
         dst_dir = os.path.join(dst_root, rel_dir) if rel_dir != "." else dst_root
         rel_norm = rel_dir.replace("\\", "/")
         is_font_dir = rel_norm == FONT_RELPATH
+        is_data_root = rel_norm == "."
         os.makedirs(dst_dir, exist_ok=True)
         for name in files:
+            if is_data_root and name.lower() in EXCLUDED_SAVE_FILES:
+                print("[stage-assets] skipping runtime save file {} (not shipped; "
+                      "written to save_dir/FN_SAVE_DIR at runtime)".format(name))
+                stats["save_files_skipped"] += 1
+                continue
             src_path = os.path.join(root, name)
             dst_path = os.path.join(dst_dir, name)
             if is_font_dir and name.lower().endswith(".ttf"):
@@ -958,6 +983,7 @@ def stage_tree(src_root, dst_root, is_web, is_ogg_audio, is_subset_font, font_co
         "font_out_bytes": 0,
         "font_glyph_count": 0,
         "font_codepoint_count": 0,
+        "save_files_skipped": 0,
     }
     loops = {}
     sample_loops = {}
@@ -970,8 +996,15 @@ def stage_tree(src_root, dst_root, is_web, is_ogg_audio, is_subset_font, font_co
         rel_norm = rel_dir.replace("\\", "/")
         is_sfx_dir = rel_norm == SFX_RELPATH or rel_norm.startswith(SFX_RELPATH + "/")
         is_font_dir = rel_norm == FONT_RELPATH
+        is_data_root = rel_norm == "."
 
         for name in files:
+            if is_data_root and name.lower() in EXCLUDED_SAVE_FILES:
+                print("[stage-assets] skipping runtime save file {} (not shipped; "
+                      "written to save_dir at runtime)".format(name))
+                stats["save_files_skipped"] += 1
+                continue
+
             src_path = os.path.join(root, name)
 
             if is_ogg_audio and is_sfx_dir and name.lower().endswith(".wav.pcm"):
@@ -1004,6 +1037,29 @@ def stage_tree(src_root, dst_root, is_web, is_ogg_audio, is_subset_font, font_co
                     stats["other_skipped"] += 1
 
     return stats, loops, sample_loops
+
+
+def sweep_stale_save_files(dst_root):
+    """Remove any of EXCLUDED_SAVE_FILES already sitting at the top of a
+    staging dir from a prior run that predates this exclusion -- stage_tree /
+    stage_tree_raw now skip copying them, but an existing incrementally-staged
+    dir would otherwise keep the dumped device's stale save around
+    indefinitely (copy-if-different only copies/skips, never deletes).
+    Mirrors sweep_stale_pcm/sweep_stale_wii_ttf's pattern; runs on every
+    platform (host/web/wii)."""
+    removed = 0
+    if not os.path.isdir(dst_root):
+        return removed
+    for name in os.listdir(dst_root):
+        if name.lower() in EXCLUDED_SAVE_FILES:
+            full = os.path.join(dst_root, name)
+            if os.path.isfile(full):
+                try:
+                    os.remove(full)
+                    removed += 1
+                except OSError:
+                    pass
+    return removed
 
 
 def sweep_stale_wii_ttf(dst_root):
@@ -1138,6 +1194,12 @@ def main():
         if removed_ttf:
             print("[stage-assets] removed {} stale staged .ttf under {}/ "
                   "(pre-task-#54 leftovers)".format(removed_ttf, FONT_RELPATH))
+        print("[stage-assets] runtime save files excluded (dead weight + wrong to ship): "
+              "{} file(s)".format(stats["save_files_skipped"]))
+        removed_saves = sweep_stale_save_files(dst_root)
+        if removed_saves:
+            print("[stage-assets] removed {} stale staged save file(s) from an "
+                  "earlier run".format(removed_saves))
 
         stage_wii_prebaked_fonts(repo_root, dst_root, stats)
         if stats["prebaked_fonts_baked"]:
@@ -1222,6 +1284,13 @@ def main():
 
     print("[stage-assets] other assets: {} copied, {} unchanged (skipped)".format(
         stats["other_copied"], stats["other_skipped"]))
+
+    print("[stage-assets] runtime save files excluded (dead weight + wrong to ship): "
+          "{} file(s)".format(stats["save_files_skipped"]))
+    removed_saves = sweep_stale_save_files(dst_root)
+    if removed_saves:
+        print("[stage-assets] removed {} stale staged save file(s) from an "
+              "earlier run".format(removed_saves))
 
 
 if __name__ == "__main__":
