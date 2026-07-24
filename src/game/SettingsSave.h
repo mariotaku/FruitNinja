@@ -29,8 +29,9 @@
 // LoadSettings leaves any untouched global at its current value (never
 // zeroes/resets), and SaveSettings always writes a fresh well-formed file.
 //
-// Save path: <data_dir>/SettingsSave.xml on desktop, /save/SettingsSave.xml
-// (IDBFS-backed) on the web build -- mirrors FruitSaveData's GetSavePath().
+// Save path: <save_dir>/SettingsSave.xml on every platform (per-platform
+// save_dir -- see src/platform/SaveDirSDL.h) -- mirrors FruitSaveData's
+// GetSavePath().
 void SaveSettings();
 void LoadSettings();
 

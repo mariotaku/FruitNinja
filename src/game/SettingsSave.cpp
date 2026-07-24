@@ -20,28 +20,15 @@
 
 namespace {
 
-// Resolve the on-disk settings-save path. Mirrors FruitSaveData.cpp's
+// Resolve the on-disk settings-save path: <save_dir>/SettingsSave.xml on
+// every platform -- save_dir is resolved per-platform in exactly one place
+// per backend (Mortar_ResolveSaveDir for host/webOS/Emscripten --
+// src/platform/SaveDirSDL.h; FN_SAVE_DIR on Wii -- GameWii.cpp), so this
+// function carries no platform branches. Mirrors FruitSaveData.cpp's
 // GetSavePath() (not shared -- that helper is anonymous-namespace/local
 // to that translation unit too).
 std::string GetSettingsSavePath() {
-#if defined(__EMSCRIPTEN__)
-    // Port specific: on the web build, saves go to the IDBFS-backed /save
-    // mount rather than the read-only MEMFS asset bundle.
-    return std::string("/save/SettingsSave.xml");
-#elif defined(FRUIT_PLATFORM_WII) || defined(FRUIT_PLATFORM_WEBOS)
-    // Port specific: Wii's data_dir (FN_DATA_DIR) is mounted read-only
-    // (FileSystem_Direct writable=false); saves go to the separate writable
-    // save_dir instead -- see Game.h save_dir comment. webOS reuses the same
-    // split: save_dir is the app install dir (see Game::init, GameSDL.cpp),
-    // kept separate from data_dir (<approot>/Data) for the same reason.
-    Game* g = Game::GetInstance();
-    if (!g) return std::string("SettingsSave.xml");
-    return g->save_dir + "/SettingsSave.xml";
-#else
-    Game* g = Game::GetInstance();
-    if (!g) return std::string("SettingsSave.xml");
-    return g->data_dir + "/SettingsSave.xml";
-#endif
+    return Game::GetInstance()->save_dir + "/" + "SettingsSave.xml";
 }
 
 } // namespace

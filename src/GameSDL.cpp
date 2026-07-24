@@ -23,6 +23,7 @@
 #include "render/gl_funcs.h"
 #include "render/Layout.h"
 #include "platform/AppDirSDL.h"
+#include "platform/SaveDirSDL.h"
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -156,18 +157,18 @@ bool Game::init(void* win, void* gl) {
     }
 #if defined(FRUIT_PLATFORM_WEBOS)
     // Port specific: ignore the compile-time FN_DATA_DIR on webOS -- resolve
-    // both the read-only asset dir and the writable save dir relative to the
-    // app's own install directory instead (see fn_webos_app_dir above). Data/
-    // sits directly under the app root (install() rules in CMakeLists.txt);
-    // save_dir reuses that same root -- webOS dev-mode apps can write under
-    // their own install dir, and mirrors the Wii save_dir split without
-    // needing a separate writable partition (see Game.h save_dir comment).
+    // the read-only asset dir relative to the app's own install directory
+    // instead (see fn_webos_app_dir above). Data/ sits directly under the
+    // app root (install() rules in CMakeLists.txt).
     std::string appDir = fn_webos_app_dir();
     data_dir = appDir + "/Data";
-    save_dir = appDir;
 #else
     data_dir = FN_DATA_DIR;
+    std::string appDir = FN_DATA_DIR;
 #endif
+    // Port specific: shared resolver so this can never drift from mainSDL.cpp's
+    // pre-init resolution of the same save_dir (see SaveDirSDL.h).
+    save_dir = Mortar_ResolveSaveDir(appDir.c_str());
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
 
     // DisplayManager holds game-space dimensions (480×320), not SDL pixel dimensions.

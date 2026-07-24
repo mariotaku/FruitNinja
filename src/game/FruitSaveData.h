@@ -449,12 +449,14 @@ int FruitCounter(const char* name, int count, int extra, void* ctx);
 
 // GetLoadFileFullPath -- v1.6.1 @0x0015262c (_Z19GetLoadFileFullPathv).
 // Returns the relative save-file path used for loading on Bada ("FruitySave.xml").
-// DIFFERS: port I/O uses GetSavePath() returning <data_dir>/FruitySave.xml; binary hardcodes relative path.
+// DIFFERS: port I/O uses GetSavePath() returning <save_dir>/FruitySave.xml
+//   (per-platform save_dir -- see src/platform/SaveDirSDL.h); binary hardcodes relative path.
 const char* GetLoadFileFullPath();
 
 // GetSaveFileFullPath -- v1.6.1 @0x00152610 (_Z19GetSaveFileFullPathv).
 // Returns the absolute Bada home path used for saving ("/Home/FruitySave.xml").
-// DIFFERS: port I/O uses GetSavePath() returning <data_dir>/FruitySave.xml; binary hardcodes Bada home.
+// DIFFERS: port I/O uses GetSavePath() returning <save_dir>/FruitySave.xml
+//   (per-platform save_dir -- see src/platform/SaveDirSDL.h); binary hardcodes Bada home.
 const char* GetSaveFileFullPath();
 
 // DlTwVal -- v1.6.1 @0x00152dc4 (_Z7DlTwValPKciiPv) ("Downloaded Tweak Value")

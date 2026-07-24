@@ -68,6 +68,9 @@ int main() {
     {
         char cwd[1024];
         game->data_dir = fn_getcwd(cwd, sizeof(cwd)) ? std::string(cwd) : std::string(".");
+        // Save/load resolve via save_dir (GetSavePath = save_dir + "/FruitySave.xml");
+        // point it at the same writable cwd this test reads/writes from.
+        game->save_dir = game->data_dir;
     }
     Mortar::MortarGame::GetInstance()->m_versionCombined =
         GetVersionFromString(GetVersionString());
@@ -164,7 +167,7 @@ int main() {
     SaveGame(&src);
 
     // --- Assert the emitted XML uses the BINARY element names ---
-    std::string savePath = game->data_dir + "/FruitySave.xml";
+    std::string savePath = game->save_dir + "/FruitySave.xml";
     {
         TiXmlDocument doc;
         CHECK(doc.LoadFile(savePath.c_str()));

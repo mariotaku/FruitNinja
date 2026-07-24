@@ -75,7 +75,10 @@ bool Game::init(void* win, void* gl) {
     Mortar::TextureManager::SetDataDir(data_dir.c_str());
     // Port specific: writable save dir, separate from the read-only asset
     // tree above (see Game.h save_dir comment). mainWii.cpp mkdir()s this
-    // path at boot, before Game::init() runs.
+    // path at boot, before Game::init() runs. Wii is GX, not SDL -- it sets
+    // its own save_dir directly rather than going through the shared SDL
+    // Mortar_ResolveSaveDir() resolver (src/platform/SaveDirSDL.h) that the
+    // host/webOS/Emscripten backends use.
     save_dir = FN_SAVE_DIR;
 
     // Port specific: load persisted settings (widescreen pref, motion mode,

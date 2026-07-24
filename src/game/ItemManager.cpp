@@ -62,21 +62,13 @@ const char* ItemManager::GetItemSavePath() const {
     return "ItemSave.xml";
 }
 
-// Port specific: build the full on-disk path for ItemSave.xml.
-// On Emscripten, routes to the IDBFS-backed /save mount rather than the
-// read-only MEMFS asset bundle.  On all other platforms, prepends data_dir.
+// Port specific: build the full on-disk path for ItemSave.xml, under
+// <save_dir>/ItemSave.xml on every platform -- save_dir is resolved
+// per-platform in exactly one place per backend (Mortar_ResolveSaveDir for
+// host/webOS/Emscripten -- src/platform/SaveDirSDL.h; FN_SAVE_DIR on Wii --
+// GameWii.cpp), so this function carries no platform branches.
 static std::string BuildItemSaveFullPath() {
-#if defined(__EMSCRIPTEN__)
-    return std::string("/save/ItemSave.xml");
-#elif defined(FRUIT_PLATFORM_WII) || defined(FRUIT_PLATFORM_WEBOS)
-    // Port specific: Wii's data_dir (FN_DATA_DIR) is mounted read-only
-    // (FileSystem_Direct writable=false); saves go to the separate writable
-    // save_dir instead -- see Game.h save_dir comment. webOS reuses the same
-    // split: save_dir is the app install dir (see Game::init, GameSDL.cpp).
-    return Game::GetInstance()->save_dir + "/ItemSave.xml";
-#else
-    return Game::GetInstance()->data_dir + "/ItemSave.xml";
-#endif
+    return Game::GetInstance()->save_dir + "/" + "ItemSave.xml";
 }
 
 // -----------------------------------------------------------------------
@@ -85,7 +77,8 @@ static std::string BuildItemSaveFullPath() {
 // DIFFERS: original = Mortar TiXml (operator new(0x48)) (v1.6.1 LoadItemData @0x00139d68),
 //   using tinyxml2 because the TiXml subsystem is unported -- container/iteration logic matches.
 // DIFFERS: original = saves at GetItemSavePath() return ("ItemSave.xml", same directory);
-//   port uses BuildItemSaveFullPath() which routes to /save/ on Emscripten.
+//   port uses BuildItemSaveFullPath() which routes to <save_dir>/ItemSave.xml
+//   (per-platform save_dir -- see src/platform/SaveDirSDL.h).
 // -----------------------------------------------------------------------
 void ItemManager::LoadItemData() {
     // Phase 1: Parse itemList.xml (binary path v1.6.1 LoadItemData @0x00139d68)
@@ -347,7 +340,7 @@ void ItemManager::SaveItemInfo() {
     doc.InsertEndChild(root);
 
     // Build full save path — binary uses flat "ItemSave.xml" (no subdir).
-    // Port: use BuildItemSaveFullPath() which routes to /save on Emscripten.
+    // Port: use BuildItemSaveFullPath() which routes to <save_dir>/ItemSave.xml.
     std::string saveFullPath = BuildItemSaveFullPath();
     doc.SaveFile(saveFullPath.c_str());
 #if defined(__EMSCRIPTEN__)

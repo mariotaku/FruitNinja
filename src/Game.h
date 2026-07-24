@@ -81,11 +81,14 @@ struct Game : public Mortar::MortarGame {
 
     // Port specific: writable save directory, separate from data_dir so the
     // (read-only) asset tree can become a disc/archive later without taking
-    // save files with it. Set on Wii (FN_SAVE_DIR, GameWii.cpp) and webOS
-    // (the app's own install dir, resolved at runtime -- see Game::init /
-    // fn_webos_app_dir in GameSDL.cpp). Other platforms' save helpers still
-    // route through data_dir directly (host) or a hardcoded IDBFS path (web)
-    // -- see GetSavePath() / GetSettingsSavePath() / BuildItemSaveFullPath().
+    // save files with it. Every save-path helper (GetSavePath() /
+    // GetSettingsSavePath() / BuildItemSaveFullPath()) joins this with the
+    // filename -- no platform branches live in those functions themselves.
+    // Set on Wii directly (FN_SAVE_DIR, GameWii.cpp -- GX backend, no SDL);
+    // every SDL-backed platform (host/webOS/Emscripten) resolves it through
+    // the single shared Mortar_ResolveSaveDir() (src/platform/SaveDirSDL.h),
+    // called identically from both mainSDL.cpp (pre-init) and Game::init
+    // (GameSDL.cpp) so the two calls can't drift apart.
     std::string save_dir;
 
     // Port control

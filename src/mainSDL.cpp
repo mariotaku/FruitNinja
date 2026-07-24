@@ -9,6 +9,7 @@
 #include "game/SettingsSave.h"
 #include "render/Layout.h"
 #include "platform/AppDirSDL.h"
+#include "platform/SaveDirSDL.h"
 #include <cstdio>
 #include <cstring>
 
@@ -37,24 +38,23 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
 }
 
 int main(int argc, char* argv[]) {
-    // Port specific: construct the Game singleton and resolve data_dir up
-    // front (mirrors the data_dir assignment at the top of Game::init(),
-    // GameSDL.cpp) so GetSettingsSavePath() -- which reads Game::GetInstance()
-    // -- resolves to the same path SaveSettings() writes to. Without this,
-    // LoadSettings() below would run before any Game exists, GetInstance()
-    // would return nullptr, and settings would silently load from (and only
-    // ever save to) two different paths -- i.e. never actually load.
+    // Port specific: construct the Game singleton and resolve data_dir/save_dir
+    // up front (mirrors Game::init(), GameSDL.cpp) so GetSettingsSavePath() --
+    // which reads Game::GetInstance() -- resolves to the same path
+    // SaveSettings() writes to. Without this, LoadSettings() below would run
+    // before any Game exists, GetInstance() would return nullptr, and settings
+    // would silently load from (and only ever save to) two different paths --
+    // i.e. never actually load. save_dir goes through the same shared
+    // Mortar_ResolveSaveDir() resolver Game::init calls, so the two can't drift.
     Game game;
 #if defined(FRUIT_PLATFORM_WEBOS)
-    // Port specific: see the matching FRUIT_PLATFORM_WEBOS branch in
-    // Game::init (GameSDL.cpp) -- must match exactly so GetSettingsSavePath()
-    // resolves the same save_dir both here (pre-init LoadSettings) and later.
     std::string appDir = fn_webos_app_dir();
     game.data_dir = appDir + "/Data";
-    game.save_dir = appDir;
 #else
     game.data_dir = FN_DATA_DIR;
+    std::string appDir = FN_DATA_DIR;
 #endif
+    game.save_dir = Mortar_ResolveSaveDir(appDir.c_str());
 
     // Port specific: load persisted settings. Language, motion mode,
     // sensitivity, and the FPS counter are user-settable via the in-game

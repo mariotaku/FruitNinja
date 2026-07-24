@@ -382,27 +382,13 @@ int ParseIntCsv(const char* s, int* vals, int maxCount) {
     return count;
 }
 
-// Resolve the on-disk save path. Binary uses /Home/FruitySave.xml on
-// Bada; the port writes to <data_dir>/FruitySave.xml so the file lives
-// next to the asset tree.
+// Resolve the on-disk save path. Binary uses /Home/FruitySave.xml on Bada;
+// the port writes to <save_dir>/FruitySave.xml on every platform -- save_dir
+// is resolved per-platform in exactly one place per backend (Mortar_ResolveSaveDir
+// for host/webOS/Emscripten -- src/platform/SaveDirSDL.h; FN_SAVE_DIR on Wii --
+// GameWii.cpp), so this function itself carries no platform branches.
 std::string GetSavePath() {
-#if defined(__EMSCRIPTEN__)
-    // Port specific: on the web build, saves go to the IDBFS-backed /save
-    // mount rather than the read-only MEMFS asset bundle.
-    return std::string("/save/FruitySave.xml");
-#elif defined(FRUIT_PLATFORM_WII) || defined(FRUIT_PLATFORM_WEBOS)
-    // Port specific: Wii's data_dir (FN_DATA_DIR) is mounted read-only
-    // (FileSystem_Direct writable=false); saves go to the separate writable
-    // save_dir instead -- see Game.h save_dir comment. webOS reuses the same
-    // split: save_dir is the app install dir (see Game::init, GameSDL.cpp).
-    Game* g = Game::GetInstance();
-    if (!g) return std::string("FruitySave.xml");
-    return g->save_dir + "/FruitySave.xml";
-#else
-    Game* g = Game::GetInstance();
-    if (!g) return std::string("FruitySave.xml");
-    return g->data_dir + "/FruitySave.xml";
-#endif
+    return Game::GetInstance()->save_dir + "/" + "FruitySave.xml";
 }
 
 } // namespace

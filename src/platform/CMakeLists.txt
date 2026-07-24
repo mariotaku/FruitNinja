@@ -5,6 +5,7 @@ if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
     target_sources(fruit-ninja-game PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/InputTranslatorSDL.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/AppDirSDL.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/SaveDirSDL.cpp
     )
 endif()
 
