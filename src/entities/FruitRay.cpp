@@ -1,10 +1,16 @@
 #include "FruitRay.h"
 
 #include "Fruit.h"
+#include "ActorManager.h"
 #include "asset/Texture.h"
+#include "asset/Mesh.h"
+#include "math/Colour.h"
 #include "math/Random.h"
 #include "math/MathUtil.h"
 #include "game/GameWork.h"
+#include "render/QUADCUSTOMVERTEX.h"
+#include "render/MatrixManager.h"
+#include <list>
 
 // Binary @ 0x001d954c -- base Entity ctor only; no field priming here (Init
 // primes every field). entityType is set here to match the CreateEntity(6)
@@ -67,3 +73,83 @@ void FruitRay::Update(float dt) {
 }
 
 Mortar::SmartPtr<Mortar::Texture> FruitRay::RayTexture;
+
+// ASM-spec v1.6.1 FruitRay::DrawRay @0x001e48b8
+//
+// Builds a 3-vertex QUADCUSTOMVERTEX strip (a thin ray "fan" -- one wide
+// vertex + two narrow ones) and draws it with the ray's world matrix.
+//
+// Per-vertex fields (confirmed from ASM @0x1e48c4-0x1e4950):
+//   pos = (0,0,0), normal = (0,0,1), colour = Colour(255,255,255,alpha).PlatformColour()
+//   where alpha = clamp(m_Life*255, 0, 255).
+//   v-coordinate (QUADCUSTOMVERTEX+0x20): vert[0] = 1.0f, vert[1]/vert[2] = 0.05f
+//   (0x3d4ccccd) -- the "thin ray fan" shape. u-coordinate (+0x1c) is left
+//   at whatever the (zero-initialised) stack held -- binary never writes it
+//   in this loop, so it is 0.0f here for parity.
+//
+// Transform chain (confirmed from ASM @0x1e4958-0x1e4a18):
+//   lengthFactor = m_Life * -2.0f + 3.0f
+//   scaledVec    = scale (Entity+0x28) * lengthFactor      (_Vector3::operator*(T))
+//   m            = Scale44(scaledVec)                      -- diag-scale matrix from scaledVec
+//   m            = m * m_StartMatrix
+//   m            = m * m_WorldMatrix
+//   m.GlobalTranslate44(pos)                                (Entity+0x10)
+// TODO: asm-inspect the Vec3-taking Scale44(Vec3*, Matrix44* out) overload
+// (binary @0x00102ec4 and siblings resolve to PLT thunks in the current
+// Ghidra view, not an inline body) -- port uses Matrix44::MakeScale(scaledVec)
+// as the byte-faithful equivalent (diag(sx,sy,sz,1) from a Vec3), matching
+// every other MakeScale(Vec3) call site in the port, but the exact thunk
+// target hasn't been ASM-diffed against this port body yet.
+void FruitRay::DrawRay() {
+    if (!RayTexture.IsValid()) return;
+
+    QUADCUSTOMVERTEX verts[3];
+    for (int i = 0; i < 3; ++i) {
+        verts[i].x = 0.0f;
+        verts[i].y = 0.0f;
+        verts[i].z = 0.0f;
+        verts[i].nx = 0.0f;
+        verts[i].ny = 0.0f;
+        verts[i].nz = 1.0f;
+        verts[i].u = 0.0f;
+        verts[i].v = (i == 0) ? 1.0f : 0.05f;
+
+        float alpha = m_Life * 255.0f;
+        Colour c(255, 255, 255, (alpha > 0.0f) ? (uint8_t)(int)alpha : 0);
+        verts[i].colour = c.PlatformColour();
+    }
+
+    float lengthFactor = m_Life * -2.0f + 3.0f;
+    _Vector3<float> scaledVec = scale * lengthFactor;
+
+    Matrix44 m = Matrix44::MakeScale(scaledVec);
+    m = m * m_StartMatrix;
+    m = m * m_WorldMatrix;
+    m.GlobalTranslate44(pos);
+
+    RayTexture->Set();
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().SetCurrentMatrix(m);
+    mm.UploadModelViewOnly();
+
+    Mortar::Mesh::DrawTriStrip(verts, 3, false, NULL);
+
+    RayTexture->UnSet(true);
+}
+
+// ASM-spec v1.6.1 FruitRay::DrawRays @0x001e4ac4
+// Static batch: walks every ActorManager type-6 (FruitRay) entity and draws
+// it. Called from GameDraw (v1.6.1 @0x001cd9d4), not from ActorManager::Draw's
+// per-entity vtable dispatch.
+void FruitRay::DrawRays() {
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    if (!am) return;
+
+    std::list<Mortar::Entity*>::iterator it;
+    Mortar::Entity* e = am->GetEntityFirst(6, it);
+    while (e != NULL) {
+        static_cast<FruitRay*>(e)->DrawRay();
+        e = am->GetEntityNext(6, it);
+    }
+}

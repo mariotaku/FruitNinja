@@ -8,10 +8,13 @@
 // SuperFruitControl::StopRays). Binary: ctor @0x001d954c, Init @0x001e4740,
 // Update @0x001e45e0.
 //
-// Rendering is dispatched by ActorManager's type-6 batch-draw pipeline (a
-// SEPARATE code path from Entity::Draw, not yet ported); Draw/DrawUpdate are
-// therefore empty overrides here and rays do not yet visibly render. A
-// follow-up will port the type-6 draw dispatch.
+// Rendering is a STANDALONE static batch (FruitRay::DrawRays @0x001e4ac4),
+// called directly from GameDraw -- NOT ActorManager's per-entity Draw
+// dispatch. ActorManager::Draw DOES call Entity::Draw(r) on every type-6
+// entity too (it has no type-based skip), so the Draw/PostUpdate overrides
+// below stay empty per the binary (FruitRay has no vtable Draw override
+// distinct from the base no-op-shaped behaviour); the actual per-ray render
+// work lives in DrawRay(), invoked only via the DrawRays() static batch.
 //
 
 #include "Entity.h"
@@ -56,14 +59,26 @@ public:
     // ASM-spec v1.6.1 FruitRay::Update @0x001e45e0
     void Update(float dt) override;
 
-    // Type-6 batch-draw pipeline handles rendering (ActorManager, not yet
-    // ported) -- these vtable overrides stay empty per the binary.
+    // Rendering happens via the DrawRays() static batch below, not per-entity
+    // vtable dispatch -- these overrides stay empty per the binary.
     void Draw(Renderer& r) override {}
     void PostUpdate(float dt) override {}
 
     // ASM-spec v1.6.1 FruitRay::RayTexture -- loaded by SuperFruitControl::LoadContent
     // via TextureManager::LoadLocalisedTexture("pomegranate_rays.tex").
     static Mortar::SmartPtr<Mortar::Texture> RayTexture;
+
+    // ASM-spec v1.6.1 FruitRay::DrawRay @0x001e48b8. Per-instance render: builds
+    // a 3-vertex QUADCUSTOMVERTEX tri-fan-shaped strip (thin ray quad), binds
+    // RayTexture, uploads a world matrix built from this ray's scale/orientation,
+    // and issues one Mesh::DrawTriStrip. Called only from DrawRays() below.
+    void DrawRay();
+
+    // ASM-spec v1.6.1 FruitRay::DrawRays @0x001e4ac4. Static batch: walks every
+    // ActorManager type-6 (FruitRay) entity and calls DrawRay() on each. Called
+    // directly from GameDraw (v1.6.1 @0x001cd9d4), which sets the platform draw
+    // colour to white before the batch and restores black after.
+    static void DrawRays();
 };
 
 #ifdef __bada__

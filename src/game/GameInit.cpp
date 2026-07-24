@@ -32,6 +32,7 @@
 #include "entities/BombFlash.h"
 #include "entities/SplatEntity.h"
 #include "entities/BombBlast.h"
+#include "entities/FruitRay.h"
 #include "engine/MenuBackground.h"
 #include "asset/MeshManager.h"
 #include "particle/PSPParticleManager.h"
@@ -861,6 +862,13 @@ void GameDraw(float dt, bool active) {
 
         // 2g. HUD::Draw(0x80) -- DojoScreen / AboutScreen (v1.6.1 GameDraw @0x001cd720)
         game_work.mHud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
+
+        // 2h. FruitRay::DrawRays -- super-fruit ray burst (v1.6.1 GameDraw @0x001cd9d4).
+        // Binary sets the platform draw colour to white before the batch and
+        // restores black after (DisplayManagerBada::SetDrawColour).
+        dm.SetDrawColour(Colour::White);
+        FruitRay::DrawRays();
+        dm.SetDrawColour(Colour::Black);
     }
 
     // Particle dt: binary GameDraw recomputes s0=frameDt/wavedt before each
