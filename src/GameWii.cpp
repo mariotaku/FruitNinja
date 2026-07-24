@@ -29,6 +29,7 @@
 #include "game/SettingsSave.h"
 #include "platform/wii/WiiVideo.h"
 #include "platform/wii/WiiPointer.h"
+#include "platform/RenderInterp.h"
 
 #include <gccore.h>
 #include <ogc/conf.h>
@@ -194,7 +195,7 @@ void Game::setCurrentFps(float fps) {
 // real EFB dims read in Game::init (s_efbW/s_efbH) and
 // DisplayManager::SwapBuffers (DisplayManagerWii.cpp) for the GX_CopyDisp/
 // VIDEO present.
-void Game::renderFrame(float /*alpha*/, int /*steps*/) {
+void Game::renderFrame(float alpha, int /*steps*/) {
     // Port specific: Layout::EffectiveAspect() -- the CONTENT aspect (1.5
     // when !IsWideLayout(), else clamped-to-[1.5,16/9] g_RawWindowAspect) --
     // must come out to EXACTLY 1.5 or EXACTLY 16/9 on Wii, a pure function of
@@ -271,9 +272,15 @@ void Game::renderFrame(float /*alpha*/, int /*steps*/) {
 
     Mortar::DisplayManager::GetInstance().BeginFrame();
 
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+    fn::RenderInterp::Get().ApplyForDraw(alpha);
+#endif
     float savedDt = game_work.dt;
     GameTaskDraw(game_work.dt);
     game_work.dt = savedDt;
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+    fn::RenderInterp::Get().RestoreAfterDraw();
+#endif
 
     FN::DebugFps_Draw(s_currentFps);
     OSD_Update(0.0f);

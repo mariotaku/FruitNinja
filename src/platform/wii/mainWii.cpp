@@ -25,6 +25,7 @@
 #include "Game.h"
 #include "config.h"
 #include "platform/FixedStepDriver.h"
+#include "platform/RenderInterp.h"
 #include "platform/wii/WiiVideo.h"
 #include "platform/wii/InputTranslatorWii.h"
 #include "platform/wii/SplashBootScreen.h"
@@ -298,6 +299,9 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < steps && g_game.running; ++i) {
             g_inputTranslator.DispatchForSimTick();
             g_game.stepUpdate();
+#if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
+            fn::RenderInterp::Get().SnapshotAfterStep();
+#endif
         }
 
         // Port specific: no binary counterpart. Per-PRESENT UI tick (see
