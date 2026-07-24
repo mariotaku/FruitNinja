@@ -538,7 +538,16 @@ void BonusScreen::Update(float dt) {
     //   score  = (s16<=0) ? 0 : (0.5f + s16*0.5f) * TierBase*Multiplier
     // Each award's own slot is independent of the others -- this is what staggers the
     // reveal instead of firing all 3 awards' effects together.
-    if (m_Timer < revealEnd) {
+    // ASM-spec v1.6.1 BonusScreen::Update @0x001642e8: the per-award loop runs
+    // EVERY tick, NOT revealEnd-gated. An earlier `if (m_Timer < revealEnd)`
+    // wrapper here froze entry.m_Alpha (and each entry's DisplayedScore) at the
+    // last reveal-tick value once m_Timer >= revealEnd, so at the finale the
+    // tier-value numbers (drawn at scale entry.m_Alpha) vanished while the
+    // stars (not alpha-gated) stayed. Out-of-range awards (localFrac <0 or >1)
+    // just re-assert their settled alpha/score every frame (converge block
+    // @0x164640). The revealEnd gate that IS real lives in the tail below
+    // (m_DisplayedScore/m_NamePulseScale), not around this loop.
+    {
         int totalDisplayed = 0;
         for (int i = 0; i < (int)m_Awards.size(); ++i) {
             BonusAwardHud& entry = m_Awards[i];
