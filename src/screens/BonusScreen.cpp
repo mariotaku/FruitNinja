@@ -45,9 +45,6 @@ static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
 // revealEnd formula and m_bPendingRemoval latch below (v1.6.1 BonusScreen::Update @0x00163dd0).
 // AWARD_SPACING removed: superseded by TIME_PER_AWARD (0.6f), the real per-award stagger
 // (see SET_DEFINES below and the Phase B ASM-spec block).
-// TODO: resolve phase-timer rodata @ DAT_00162cdc for PRE_OFFSET slide-in
-// -- v1.6.1 BonusScreen::Update @0x00163dd0
-static const float PRE_OFFSET     = 1.0f;
 
 // SET_DEFINES globals — set on every BonusScreen::Update by SET_DEFINES() @ 0x00162090.
 // Non-const so SET_DEFINES can write them; initial values match what SET_DEFINES writes.
@@ -440,32 +437,33 @@ void BonusScreen::Update(float dt) {
     // STATE_BONUS_PHASE, m_pBonusScreen->m_Timer = m_Timer). Do NOT self-advance here.
 
     // -----------------------------------------------------------------------
-    // Phase A: pre-show slide-in (timer < 0). Sets m_AnimPos only -- NO early return:
-    // binary Update has no early returns; every path converges into the per-award loop,
-    // shake, and the unconditional BuildBonusText() tail below.
+    // Phase A: m_AnimPos 3-way state machine (timer vs [0, TOTAL_TIME]). Sets m_AnimPos
+    // only -- NO early return: binary Update has no early returns; every path converges
+    // into the per-award loop, shake, and the unconditional BuildBonusText() tail below.
     // -----------------------------------------------------------------------
-    if (m_Timer < 0.0f) {
-        // Slide-in from off-screen. m_AnimPos.y interpolates toward 0.
-        // TODO: resolve exact slide-in math from binary v1.6.1 BonusScreen::Update @0x00163dd0
-        m_AnimPos.y = m_Timer * PRE_OFFSET;
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: m_AnimPos 3-way on m_Timer.
+    // Slide span 240.0f (rodata @0x164270), NOT tuning[+0x18]=250.
+    if (m_Timer > TOTAL_TIME) {
+        // Transition-out @0x163f20: eases back offscreen (+Y) as f^2, f in [0,1] over
+        // TRANSITION_OUT_TIME after TOTAL_TIME.
+        float f = (m_Timer - TOTAL_TIME) / TRANSITION_OUT_TIME;
+        m_AnimPos = _Vector3<float>(0.0f, 240.0f * f * f, 0.0f);
+    } else if (m_Timer < 0.0f) {
+        // Pre-show slide-in @0x16405c: linear from -240 (offscreen) to 0 as m_Timer goes
+        // -TRANSITION_IN_TIME..0. fp = m_Timer/TRANSITION_IN_TIME + 1 (0->1);
+        // AnimPos = (0,-240,0)*(1-fp) == (0, 240*m_Timer/TRANSITION_IN_TIME, 0).
+        m_AnimPos = _Vector3<float>(0.0f, 240.0f * m_Timer / TRANSITION_IN_TIME, 0.0f);
 
         // NOTE: binary's rush-loop SFX start/stop gate (m_RushLoopSFX, "Bonus-drum-roll")
         // requires m_Timer>0, so it never fires during this slide-in phase; the m_Timer>0
         // / m_Timer<revealEnd guards below skip it while sliding in.
     } else {
-        // Reveal window onward: m_AnimPos settles at Zero (RE-confirmed the per-award
-        // emitter accumPos below reads pos + m_AnimPos + m_ShakeOffset directly with no
-        // extra drift once m_Timer >= 0). The transition-out slide (m_Timer > TOTAL_TIME)
-        // is a separate, still-unresolved gap -- see TODO at game_singleton+0x40 below.
-        m_AnimPos.x = 0.0f;
-        m_AnimPos.y = 0.0f;
-        m_AnimPos.z = 0.0f;
+        // Settle @0x164154: reveal window through finale, m_AnimPos pinned to Zero.
+        m_AnimPos = _Vector3<float>(0.0f, 0.0f, 0.0f);
     }
 
-    // TODO: v1.6.1 0x00163dd0 (BonusScreen::Update) -- the transition-out (m_Timer >
-    // TOTAL_TIME) slide-out math drives a transition object at game_singleton+0x40 that
-    // isn't identified yet. m_AnimPos is pinned to Zero above for the whole m_Timer>=0
-    // range (reveal window through finale) until that object is RE'd.
+    // TODO: v1.6.1 @0x163f20/0x16405c -- co-lerp game_work.mHud scales[3..5] toward 0.5
+    // (faithful but visually inert; HUD::Draw reads only scales[0..2] in port scope).
 
     // -----------------------------------------------------------------------
     // Reveal-end threshold (binary @0x00163e00-0163e24).
@@ -664,13 +662,22 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // Shake update (independent of phase)
     // -----------------------------------------------------------------------
+    // ASM-spec v1.6.1 BonusScreen::Update @0x001647fc: wobble writes m_ShakeOffset.
     if (m_ShakeTimer > 0.0f) {
-        m_ShakeTimer -= dt;
-        // Damped wobble around m_ShakeOffset.
-        // TODO: resolve exact wobble math from binary v1.6.1 BonusScreen::Update @0x00163dd0
-        float wobble = m_ShakeTimer * m_ShakeDuration;
-        m_ShakeAngle = (uint16_t)((int)m_ShakeAngle + (int)(wobble * 100.0f));
-        (void)wobble;
+        m_ShakeTimer -= dt;   // post-decrement timer feeds mag below
+        float mag = m_ShakeTimer * m_ShakeAmplitude / m_ShakeDuration;
+        _Vector3<float> wobbleVec(Math::SinIdx(m_ShakeAngle) * mag,
+                                   Math::CosIdx(m_ShakeAngle) * mag, 0.0f);
+        _Vector3<float> diff = wobbleVec - m_ShakeOffset;
+        if (diff.MagnitudeSqr() >= 25.0f) {   // 0x41c80000
+            // angle bumped by a random step only when displacement^2 >= 25.
+            // TODO: v1.6.1 T.1212 @0x162690 -- exact angle-bump increment (rand*182*115)
+            //       not fully decoded; using g_Random.RandF(1.0f) as the 0..1 draw.
+            //       asm-inspector if the exact step matters visually.
+            m_ShakeAngle = (uint16_t)((int)m_ShakeAngle +
+                (int)(Math::g_Random.RandF(1.0f) * 182.0f * 115.0f));
+        }
+        m_ShakeOffset += diff * 0.2f;   // lerp toward wobbleVec
     }
 
     // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: tail @0x001648f0 calls
@@ -701,13 +708,13 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     // The per-award loop steps pos.y by -42 each row.
     _Vector3<float> savedPos = pos;
 
-    // Apply m_AnimPos to position before base draw.
-    pos.x += m_AnimPos.x;
-    pos.y += m_AnimPos.y;
-    pos.z += m_AnimPos.z;
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x0016494c: pos += m_AnimPos + m_ShakeOffset
+    // (both applied before the base plate draw).
+    pos += m_AnimPos + m_ShakeOffset;
 
     // Base box draw (HUDControl3d::Draw handles the dialog background via m_Texture@0x74),
-    // centered on pos (savedPos + m_AnimPos), BEFORE the FIRST_NAME_OFFSET content shift below.
+    // centered on pos (savedPos + m_AnimPos + m_ShakeOffset), BEFORE the FIRST_NAME_OFFSET
+    // content shift below.
     HUDControl3d::Draw(hudScaleRaw);
 
     // Total-score NUMBER -- binary draws it BEFORE the FIRST_NAME_OFFSET shift (@0x001649b0,
@@ -727,10 +734,6 @@ void BonusScreen::Draw(float* hudScaleRaw) {
             _Vector3<float>(pos.x + TOTAL_POS_X, pos.y + TOTAL_POS_Y, pos.z + TOTAL_POS_Z),
             Colour(255, 255, 255, 255), 0xF);
     }
-
-    // TODO: v1.6.1 BonusScreen::Draw @0x00164968 -- binary applies `pos += m_AnimPos +
-    //   m_ShakeOffset` (this port only adds m_AnimPos above, m_ShakeOffset still omitted).
-    //   Existing gap, unrelated to the FIRST_NAME_OFFSET fix below.
 
     // ASM-spec v1.6.1 BonusScreen::Draw @0x00164a68: pos += FIRST_NAME_OFFSET.
     // FIRST_NAME_OFFSET is a global Vec3 @0x003144cc = (-105.0f, +40.0f, 0.0f), static-init'd
