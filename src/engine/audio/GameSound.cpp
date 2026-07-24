@@ -44,7 +44,8 @@ int GameSound::FindFree() {
     return -1;
 }
 
-// ASM-spec v1.6.1 GameSound::SFXPlay @0x00151d04
+// ASM-verified: 2026-07-24T00:00Z v1.6.1 GameSound::SFXPlay @0x00151d04 (asm-inspector)
+// s0 is an ATTENUATION term, not raw volume: finalVol = (1 - (1-master)*s0) * s1. So s0=0.0 => full volume.
 // DIFFERS: binary v1.6.1 GameSound::SFXPlay @0x00151d04 calls SoundManager::SFXPlay(name, 0, NULL, 0x40, -1);
 //          port simplifies to 2-arg form. Mirror of the marker in MortarSound.cpp::Play.
 MortarSound* GameSound::SFXPlay(const char* name, float vol, float gain,

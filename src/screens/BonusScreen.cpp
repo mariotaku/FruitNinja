@@ -288,10 +288,8 @@ void BonusScreen::AwardScores() {
 
     GetCurrentScore(0);  // ASM-spec: call only, return value unused here (cache refresh side-effect).
 
-    // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: SFXPlay("equip-unlock",
-    // vol=0.0f, gain=1.0f) -- vol literal @0x00163cb4. With unity master gain,
-    // vol=0.0f still resolves audible via finalVol=(1-(1-master)*vol)*gain,
-    // matching the Bonus-Firework-Explode / drum-roll call pattern elsewhere.
+    // ASM-verified: 2026-07-24T00:00Z v1.6.1 BonusScreen::AwardScores tally SFXPlay @0x00163d80 (asm-inspector)
+    // "equip-unlock" (s0=0,s1=1,s2=0) => full volume, NOT silenced. Confirmed key is "equip-unlock", NOT "bonus-count-up".
     if (game_work.mGameSound) {
         game_work.mGameSound->SFXPlay("equip-unlock", 0.0f, 1.0f);
     }
@@ -511,15 +509,8 @@ void BonusScreen::Update(float dt) {
 
     // -----------------------------------------------------------------------
     // Rush-loop SFX start gate (binary @0x00163e40-0163ef8).
-    // ASM-spec v1.6.1 BonusScreen::Update @0x00163e40: while m_RushLoopSFX(+0xb4)==
-    //   nullptr and 0<m_Timer<revealEnd, starts "Bonus-drum-roll" (rodata 0x00281e62 --
-    //   memory-verified, same sound preloaded in the ctor via PreLoadSoundEx) through
-    //   GameSound::SFXPlay(name, vol, gain, finishCallback, pitch) @0x0010b4c8, storing
-    //   the result into m_RushLoopSFX. Binary passes vol=0.0f, gain=1.0f, pitch=0.0f
-    //   (memory-verified literal @0x0016426c == 0.0f, shared by both args), then
-    //   immediately calls MortarSound::SetVolume(0.0f) @0x001108c4 on the freshly
-    //   returned sound -- ported verbatim even though it appears to silence the loop
-    //   immediately after starting it.
+    // ASM-verified: 2026-07-24T00:00Z v1.6.1 BonusScreen::Update drum-roll SFXPlay+SetVolume(0) @0x00163e94..0x00163ef4 (asm-inspector)
+    // "Bonus-drum-roll" (s0=0,s1=1,s2=0) starts at FULL vol, then SetVolume(0.0f) forces the channel silent -- genuine binary behaviour, not a bug. Drum-roll is deliberately inaudible.
     // -----------------------------------------------------------------------
     if (m_RushLoopSFX == 0 && m_Timer > 0.0f && m_Timer < revealEnd) {
         Game* game = Game::GetInstance();
@@ -600,9 +591,8 @@ void BonusScreen::Update(float dt) {
                 // literals s0=0.1f (@0x1642bc), s1=10.0f (@0x41200000).
                 Shake(0.1f, 10.0f);
 
-                // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: per-award reveal plays
-                // "Bonus-Explosion-%i" (i=2n+1 -> 1,3,5), SFXPlay(name,0.0f,1.0f,delegate,0.0f),
-                // once per award. vol 0.0f literal @0x1642c0 (matches Bonus-drum-roll shape).
+                // ASM-verified: 2026-07-24T00:00Z v1.6.1 BonusScreen::Update explosion SFXPlay @0x00164598 (asm-inspector)
+                // "Bonus-Explosion-%i" (i=2n+1 -> 1,3,5), (s0=0,s1=1,s2=0) => full volume, NOT silenced.
                 if (game_work.mGameSound) {
                     char sfxName[32];
                     snprintf(sfxName, sizeof(sfxName), "Bonus-Explosion-%i", 2 * i + 1);
