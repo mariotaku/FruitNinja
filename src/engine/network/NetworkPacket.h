@@ -29,6 +29,20 @@ public:
     NetworkPacket() : m_PacketSize(0), m_Reserved08(0), m_PacketType(0), m_Reserved10(0) {}
     virtual ~NetworkPacket() {}
 
+protected:
+    // MP-revival: base-ctor overload matching the binary's real 2-arg
+    // NetworkPacket(this, int typeId, int byteSize) signature (see class
+    // comment above). The default ctor above stays byte-for-byte faithful to
+    // the binary's own default (Reserved fields BSS-zeroed); this overload is
+    // what every concrete packet subclass should delegate to so m_PacketType
+    // and m_PacketSize carry their documented wire values instead of the
+    // stub's 0/0 -- otherwise PacketFactory::Create's m_PacketType switch
+    // (and NetworkManager::Update's PeekPacketType) never route correctly.
+    NetworkPacket(int32_t typeId, int32_t byteSize)
+        : m_PacketSize(byteSize), m_Reserved08(0), m_PacketType(typeId), m_Reserved10(0) {}
+
+public:
+
     // MP-revival: wire (de)serialisation hooks. Not present as distinct
     // virtuals in the binary (the real P2P layer is unrecoverable) -- this is
     // port-only infra for the revived transport. Subclasses call

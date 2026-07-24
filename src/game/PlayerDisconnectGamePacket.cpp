@@ -1,8 +1,12 @@
 #include "game/PlayerDisconnectGamePacket.h"
 #include <cstring>
 
-// MP-revival: real ctor -- v1.6.1 binary @ 0x1580e8 (id=104, size=0x58)
-PlayerDisconnectGamePacket::PlayerDisconnectGamePacket() : m_PlayerIdx(0) {
+// MP-revival: real ctor -- v1.6.1 binary @ 0x1580e8 (id=104, size=0x58).
+// Base ctor stamps m_PacketType=104/m_PacketSize=sizeof(PlayerDisconnectGamePacket) so
+// PacketFactory::Create's switch and NetworkManager::Update's PeekPacketType route
+// this packet correctly (see NetworkPacket.h's 2-arg base-ctor overload).
+PlayerDisconnectGamePacket::PlayerDisconnectGamePacket()
+    : Mortar::NetworkPacket(104, sizeof(PlayerDisconnectGamePacket)), m_PlayerIdx(0) {
     memset(m_MessageText, 0, sizeof(m_MessageText));
 }
 

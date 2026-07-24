@@ -504,6 +504,29 @@ target_include_directories(test_scrollingmenu_updaterealtime PRIVATE
 add_test(NAME scrollingmenu_updaterealtime COMMAND test_scrollingmenu_updaterealtime)
 set_tests_properties(scrollingmenu_updaterealtime PROPERTIES TIMEOUT 30)
 
+# Online-MP revival end-to-end loopback test (feat/mp-revival). Proves the
+# LoopbackTransport + 5 packet types + NetworkManager::Update dispatch +
+# WaveManager online-seed/wave-sync barrier all work together in one process:
+# transport basics, packet Serialize/Deserialize round-trip + PacketFactory
+# id regression guard, real seam dispatch (peer send -> NetworkManager::Update
+# drain -> GlobalP2PMessageHandler -> NetworkManager/WaveManager side effect),
+# RNG seed-stream parity (the mechanism behind StartGamePacket::m_GameSeed),
+# and the WaveManager::UpdateNetworking per-wave gate transition.
+# Same link pattern as test_scrollingmenu_updaterealtime above: no SDL_Init,
+# no game.init() -- WaveManager/NetworkManager are bare static singletons and
+# GetCurrentScore() null-checks Game::GetInstance(). Deterministic, no audio,
+# no GPU.
+add_executable(test_mp_loopback
+    test_mp_loopback.cpp
+)
+target_link_libraries(test_mp_loopback PRIVATE fruit-ninja-game)
+target_include_directories(test_mp_loopback PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/engine
+)
+add_test(NAME mp_loopback COMMAND test_mp_loopback)
+set_tests_properties(mp_loopback PROPERTIES TIMEOUT 30)
+
 # ---------------------------------------------------------------------------
 # Visual / component tests (SDL + GL + TestHarness)
 # All use fn_add_game_test for shared link/copy boilerplate.
