@@ -1,7 +1,7 @@
 // BonusScreen -- post-game bonus award display (HUDControl3d subclass).
 // v1.6.1: ctor @0x00162d1c, dtor D2 @0x00162724 / D1 @0x0016283c / D0 @0x00162954,
 //         Update @0x00163dd0, Draw @0x0016492c
-// AddAward / AwardScores -- TODO: re-verify v1.6.1 addr (prior 0x00133664/0x0013260C stale v1.5.x)
+// AddAward @0x00163234, AwardScores @0x0016393c (v1.6.1 confirmed).
 
 #include "BonusScreen.h"
 #include "hud/HUD.h"
@@ -39,6 +39,10 @@ using Mortar::TextureManager;
 static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
     return game_work.m_pTTFFontMain;
 }
+
+// v1.6.1 BonusScreen::BonusScreen @0x00162d5c: backing tex cached in a file-static
+// SmartPtr (plain !IsValid() guard, not __cxa_guard); every ctor copies it into m_Texture.
+static Mortar::SmartPtr<Mortar::Texture> s_bonusScreenBacking;
 
 // Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
 // REVEAL_END / FINALE_HOLD / DISMISS_BUFFER removed: superseded by the memory-verified
@@ -128,12 +132,11 @@ BonusScreen::BonusScreen()
     //   code-drawn m_ScoreBox/m_TotalBox text overlays at matching positions once the
     //   FIRST_NAME_OFFSET origin shift is applied. Not re-verified pixel-exact here; texture
     //   content itself is unchanged by this pass.
-    // TODO: v1.6.1 0x00162d5c (BonusScreen::BonusScreen) — binary caches backing tex in a load-once static
-    Mortar::SmartPtr<Mortar::Texture> bgTex =
-        TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
-    m_Texture = bgTex;
-    if (bgTex.IsValid()) {
-        size = _Vector3<float>((float)bgTex->GetWidth(), (float)bgTex->GetHeight(), 0.0f);
+    if (!s_bonusScreenBacking.IsValid())
+        s_bonusScreenBacking = TextureManager::LoadLocalisedTexture("arcade_diolog_box.tex");
+    m_Texture = s_bonusScreenBacking;
+    if (m_Texture.IsValid()) {
+        size = _Vector3<float>((float)m_Texture->GetWidth(), (float)m_Texture->GetHeight(), 0.0f);
     }
 
     // ASM-spec v1.6.1 BonusScreen::BonusScreen @ 0x00162ea4: preloads
@@ -470,8 +473,20 @@ void BonusScreen::Update(float dt) {
         m_AnimPos = _Vector3<float>(0.0f, 0.0f, 0.0f);
     }
 
-    // TODO: v1.6.1 @0x163f20/0x16405c -- co-lerp game_work.mHud scales[3..5] toward 0.5
-    // (faithful but visually inert; HUD::Draw reads only scales[0..2] in port scope).
+    // v1.6.1 BonusScreen::Update @0x163f20/@0x16405c/@0x1641a4: co-lerp mHud scales[3..5]->0.5.
+    // Visually inert in port scope (HUD::Draw reads only scales[0..2]) but faithful.
+    if (game_work.mHud) {
+        float* s = game_work.mHud->scales;
+        if (m_Timer > TOTAL_TIME) {
+            float f = 1.0f - (m_Timer - TOTAL_TIME) / TRANSITION_OUT_TIME;
+            for (int k = 3; k < 6; ++k) s[k] += (0.5f - s[k]) * f;
+        } else if (m_Timer < 0.0f) {
+            float f = -m_Timer / TRANSITION_IN_TIME;   // abs, 0..1
+            for (int k = 3; k < 6; ++k) s[k] += (0.5f - s[k]) * f;
+        } else {
+            s[3] = s[4] = s[5] = 0.5f;                 // settle: hard-set
+        }
+    }
 
     // -----------------------------------------------------------------------
     // Reveal-end threshold (binary @0x00163e00-0163e24).
@@ -509,10 +524,10 @@ void BonusScreen::Update(float dt) {
     if (m_RushLoopSFX == 0 && m_Timer > 0.0f && m_Timer < revealEnd) {
         Game* game = Game::GetInstance();
         if (game && game_work.mGameSound) {
-            // TODO: v1.6.1 0x00162a74 (T.1223) -- binary builds a BaseDelegate thunk here
-            // and wraps it into the Delegate1 finishCallback below (likely a loop-restart
-            // callback consumed by GameSound::Update's finishCallback dispatch); needs a
-            // follow-up RE pass to name/port it. Passing a no-op delegate until then.
+            // v1.6.1 @0x00162a74 (T.1223): binds free-fn DefaultSoundRemovedCallback (engine
+            // no-op default); the default-constructed Delegate1 here is behaviorally
+            // equivalent. (DefaultSoundRemovedCallback returns int, not bool, so it can't be
+            // passed to MakeFree<Delegate1<bool,MortarSound*>> without inventing a wrapper.)
             m_RushLoopSFX = game_work.mGameSound->SFXPlay(
                 "Bonus-drum-roll", 0.0f, 1.0f,
                 Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
@@ -688,11 +703,10 @@ void BonusScreen::Update(float dt) {
         _Vector3<float> diff = wobbleVec - m_ShakeOffset;
         if (diff.MagnitudeSqr() >= 25.0f) {   // 0x41c80000
             // angle bumped by a random step only when displacement^2 >= 25.
-            // TODO: v1.6.1 T.1212 @0x162690 -- exact angle-bump increment (rand*182*115)
-            //       not fully decoded; using g_Random.RandF(1.0f) as the 0..1 draw.
-            //       asm-inspector if the exact step matters visually.
+            // v1.6.1 BonusScreen::Update @0x00164918-0x00164920 (T.1212 @0x00162690 = RandF):
+            // step = (150.0f +- up to 60.0f jitter) * 182.0f (182 == 65536/360, deg->angle-idx).
             m_ShakeAngle = (uint16_t)((int)m_ShakeAngle +
-                (int)(Math::g_Random.RandF(1.0f) * 182.0f * 115.0f));
+                (int)((150.0f + Math::g_Random.RandF(1.0f) * 60.0f) * 182.0f));
         }
         m_ShakeOffset += diff * 0.2f;   // lerp toward wobbleVec
     }
