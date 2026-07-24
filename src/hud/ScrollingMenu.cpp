@@ -13,7 +13,6 @@
 #include "render/MatrixStack.h"
 #include <cstddef>
 #include <cmath>
-#include <cstdio>
 
 // ---------------------------------------------------------------------------
 // DAT constants from binary (via docs/screens/shop.md)
@@ -469,6 +468,8 @@ void ScrollingMenu::Update(float /*dt*/) {
         } else if (m_DragTargetIdx == i) {
             // This is the dragged item
             m_ClosestIdx = m_DragTargetIdx;
+            // ASM-verified: 2026-07-25T00:00Z v1.6.1 ScrollingMenu::Update @0x001b098c (asm-inspector) -- drag-target arm refreshes the snap delta every frame (folds to curY-pos.y), same as the closest arm; omitting it froze the delta -> velocity ramp.
+            m_SnapDist = curY - pos.y;
             closestDist = curY - pos.y;
             if (closestDist < 0.0f) closestDist = -closestDist;
             dragTargetItem = item;  // binary: pSVar4 = pSVar10
@@ -603,6 +604,41 @@ void ScrollingMenu::UpdateRealtime(float dtSeconds) {
     // Phase 7 below already uses to know a touch is live; when no touch is
     // active this no-ops and m_PendingVelocity is left as-is (a release fling
     // continues decaying via Phase 4 below, untouched).
+    //
+    // Bug fix (momentum runaway, small-fling-then-tap): in the binary's single-
+    // pass Update @0x001b03b4, the recompute above and the Phase 4 integrate
+    // below are the SAME function call, so a stationary tap's `pending =
+    // (V - anchor) * -0.5` always converges against a V sampled the SAME
+    // instant the anchor was latched (Phase 2, also that call). The port
+    // splits recompute (here, gated on GetLivePos success) from integrate
+    // (unconditional below) across presents; when the gate fails for a
+    // present but a touch is still nominally owned (m_TouchId != -1), the old
+    // code fell through to integrate anyway -- feeding a NOT-recomputed
+    // (potentially stale, pre-tap-settle) m_PendingVelocity into m_Velocity
+    // unopposed. Track whether the recompute actually ran THIS present and
+    // skip the integrate when it didn't AND a touch is owned, so the pairing
+    // the binary gets for free from single-pass execution is restored. This
+    // does not affect the touch==-1 free-fling coast path (recompute is
+    // correctly skipped there and integrate must still run every present to
+    // decay the residual impulse).
+    //
+    // Kept after the Phase-5 m_SnapDist fix (drag-target arm refresh, see
+    // above): this gate covers a DIFFERENT scenario -- GetLivePos() failing
+    // (finger-lift TEvnt landed between sim ticks, flipping states1[slot].phase
+    // to released) on a present where no interleaved 60Hz Update() has yet run
+    // to clear m_TouchId. That is a genuine runtime race the single-pass
+    // binary Update() can never hit (recompute and integrate are the same
+    // function call, so GetLivePos-equivalent data is always fresh); the port's
+    // cross-present split can. Verified this is still load-bearing by hand-
+    // simulating test case 5 with the gate removed: GetLivePos correctly fails
+    // (phase forced to 1) so recompute is skipped, but an unconditional
+    // integrate would still fold the untouched (and in that test, deliberately
+    // re-inflated) m_PendingVelocity into m_Velocity -- exactly the bug this
+    // gate exists to prevent. Cases 3/4 never exercise the gate's skip path at
+    // all (their touch stays held/phase==0 for the whole test, so GetLivePos
+    // always succeeds and recomputedThisPresent is always true) -- they pass
+    // with or without it; case 5 requires it.
+    bool recomputedThisPresent = false;
     if (m_TouchId != -1) {
         float liveY, liveX;
         if (Mortar::Touch::GetInstance().GetLivePos(m_TouchId, liveX, liveY)) {
@@ -611,14 +647,18 @@ void ScrollingMenu::UpdateRealtime(float dtSeconds) {
             m_PendingVelocity.y = (m_Velocity.y -
                                    (anchorScrollY - (liveY - anchorY)))
                                   * DRAG_DELTA_FACTOR;
+            recomputedThisPresent = true;
         }
     }
 
     // --- Phase 4: velocity integration + friction (decaying IMPULSE) ---
     // pv *= powf(0.9,f); vel += pv ONCE -- do NOT multiply the add by f,
     // that would double-count the impulse already decayed above.
-    Vec3Scale_ScrollMenu(&m_PendingVelocity, f);
-    m_Velocity += m_PendingVelocity;
+    bool integrateRan = (m_TouchId == -1 || recomputedThisPresent);
+    if (integrateRan) {
+        Vec3Scale_ScrollMenu(&m_PendingVelocity, f);
+        m_Velocity += m_PendingVelocity;
+    }
 
     // Determine visible range limits (mirrors Update()'s Phase 5 preamble)
     float rangeTop = RANGE_TOP;
@@ -652,6 +692,8 @@ void ScrollingMenu::UpdateRealtime(float dtSeconds) {
             }
         } else if (m_DragTargetIdx == i) {
             m_ClosestIdx = m_DragTargetIdx;
+            // ASM-verified: 2026-07-25T00:00Z v1.6.1 ScrollingMenu::Update @0x001b098c (asm-inspector) -- drag-target arm refreshes the snap delta every frame (folds to curY-pos.y), same as the closest arm; omitting it froze the delta -> velocity ramp.
+            m_SnapDist = curY - pos.y;
             closestDist = curY - pos.y;
             if (closestDist < 0.0f) closestDist = -closestDist;
             dragTargetItem = item;

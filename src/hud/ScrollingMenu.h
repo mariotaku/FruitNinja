@@ -72,6 +72,18 @@ public:
     // split and the SM_DECAY_F/SM_SPRING_F macros shared with the __bada__ path.
     // Phase 5 also calls item->AdvanceAnim(dtSeconds) once per present here
     // (NOT from Update()'s Phase 5) -- see ScrollingMenuItem::AdvanceAnim.
+    //
+    // INVARIANT (fixed momentum-runaway regression): Phase 4's velocity
+    // integrate must never run on a present where the Phase-3B drag-delta
+    // recompute (also in this function, immediately above Phase 4) did NOT
+    // run. The binary's single-pass Update @0x001b03b4 pairs recompute+
+    // integrate for free (same function, same frame); this split-cadence
+    // port must re-derive that pairing explicitly (a local bool tracks
+    // whether the recompute executed this call) so a stationary tap always
+    // converges m_PendingVelocity -> ~0 instead of integrating a stale,
+    // pre-tap-settle impulse into m_Velocity. Does not affect the
+    // m_TouchId==-1 free-fling coast path, which must integrate every present
+    // regardless (no recompute applies there -- that's the intended decay).
     void UpdateRealtime(float dtSeconds) override;
 #endif
 
