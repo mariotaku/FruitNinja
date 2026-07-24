@@ -168,10 +168,11 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
 
     // Offset the control position along the spin direction, out from the host.
     size = _Vector3<float>(0.5f, 0.5f, 0.5f);
+    _Vector3<float> dir(0.0f, 0.0f, 0.0f);
     if (m_pHostFruit) {
         pos = _Vector3<float>(m_pHostFruit->pos.x, m_pHostFruit->pos.y, 0.0f);
         uint16_t idx = (uint16_t)(int)(spin * 182.0f);
-        _Vector3<float> dir(CosIdx(idx), SinIdx(idx), 0.0f);
+        dir = _Vector3<float>(CosIdx(idx), SinIdx(idx), 0.0f);
         pos += dir * (320.0f * 0.4f);
     }
 
@@ -182,9 +183,16 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     // First-slice popup label.
     ChangeText("SLICE!", false, NULL);
 
-    // TODO: v1.6.1 SuperFruitControl::SuperFruitControl @0x001be1c8 -- BLOCKED deps:
-    //   FruitCamera::Transition(...) throw-orbit camera move; slice-SFX
-    //   GameSound::SFXPlay(pitch 0.125). Wire when ported.
+    // v1.6.1 @0x001be1c8: throw-orbit camera zoom-in + ramp-down SFX.
+    if (m_pHostFruit && game_work.m_FruitCamera) {
+        _Vector3<float> camTgt = m_pHostFruit->pos + dir * (320.0f * 0.15f);   // dir*48
+        game_work.m_FruitCamera->StartZoomIn(camTgt, 0.625f, spin,
+            Mortar::Delegate0<void>::Make(this, &SuperFruitControl::TransitionFin));
+    }
+    if (game_work.mGameSound) {
+        game_work.mGameSound->SFXPlay("pome-rampdown", 1.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.125f);
+    }
 }
 
 // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*,SuperFruitState&) @0x001bea90:
@@ -489,11 +497,23 @@ void SuperFruitControl::Update(float dt)
             game_work.mHud->m_globalTimeScale *= powf(0.75f, dt * 60.0f);
         }
 
-        // build the spin-orbit camera transition for the thrown fruit
-        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- FruitCamera::Transition(game+0x4c, dist, angle, target, doneCb@DAT_001bd4ac) (needs camera + Math::SinIdx/CosIdx)
+        // v1.6.1 @0x001bca10 throw phase (every frame): re-target the zoom to the orbiting fruit.
+        float a = -HUDControl::m_Timer;                       // HUDControl::m_Timer (+0x2c)
+        uint16_t idx = (uint16_t)(int)(a * 182.0f);
+        _Vector3<float> dir(SinIdx(idx), CosIdx(idx), 0.0f);
+        // TODO: v1.6.1 -- camTgt fold = host.pos + spinAxis fade-in wobble + tint lerp; spinAxis/tint
+        //   stay ~0 until GetSliceDir lands, so host.pos is correct for now.
+        if (m_pHostFruit) {
+            _Vector3<float> camTgt = m_pHostFruit->pos;
+            if (game_work.m_FruitCamera) {
+                game_work.m_FruitCamera->StartZoomIn(camTgt, 0.625f, a,
+                    Mortar::Delegate0<void>::Make(this, &SuperFruitControl::TransitionFin));
+            }
 
-        // recompute pos from host + scaled dir
-        // TODO: v1.6.1 SuperFruitControl::Update @0x001bca10 -- pos(+0x08) orbit recompute from host + dirXY*320*0.25*0.625 (DAT_001bd49c=320.0)
+            // recompute pos from host + scaled dir
+            pos = _Vector3<float>(m_pHostFruit->pos.x, m_pHostFruit->pos.y, 0.0f);
+            pos += dir * (320.0f * 0.25f * 0.625f);           // dir*50
+        }
     }
 
     // tail: LAB_001bd0ac -- runs every frame.
@@ -899,6 +919,15 @@ void SuperFruitControl::ComboCancel(SlashEntity* se)
     (void)se;
     if (m_pHostFruit && m_Timer < m_Lifetime) {
         m_pHostFruit->m_SliceTimer = -1.0f;
+    }
+}
+
+// ASM-spec v1.6.1 SuperFruitControl::TransitionFin @0x001b9878: zoom-done Delegate0<void> cb.
+// Re-arms host fruit's slice timer negative iff the finished transition was a zoom-IN.
+void SuperFruitControl::TransitionFin()
+{
+    if (game_work.m_FruitCamera && game_work.m_FruitCamera->IsTransitionIn()) {
+        if (m_pHostFruit) m_pHostFruit->m_SliceTimer = -1.0f;
     }
 }
 

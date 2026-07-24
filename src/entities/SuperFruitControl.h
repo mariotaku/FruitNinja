@@ -243,6 +243,11 @@ public:
     // when the combo is cancelled while the super fruit is still in anticipation phase
     // (Timer < Lifetime). Subscribed to SlashEntity::OnComboCancelEvent().
     void ComboCancel(SlashEntity* se);
+
+    // Binary @ 0x001b9878. Zoom-done Delegate0<void> callback passed to FruitCamera::
+    // StartZoomIn. Re-arms the host fruit's slice timer negative iff the finished
+    // transition was a zoom-IN (mirrors ComboCancel's -1.0f re-arm).
+    void TransitionFin();
 };
 
 #ifdef __bada__
