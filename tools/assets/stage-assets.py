@@ -4,7 +4,7 @@ tools/assets/stage-assets.py -- Build-phase asset staging, shared by BOTH the
 host and web targets.
 
 Usage:
-    python3 stage-assets.py <repo_root> <out_staging_data_dir> [--web|--wii]
+    python3 stage-assets.py <repo_root> <out_staging_data_dir> [--web|--wii] [--subset-font]
 
 Mirrors FruitNinjaBada/Data into <out_staging_data_dir>. The real
 FruitNinjaBada/Data files are never modified; the staged copy is a build/
@@ -104,6 +104,8 @@ WEB-ONLY (--web flag):
      file -- the host build plays raw PCM via the existing SDL mixer,
      unchanged.
 
+FONT SUBSET (--subset-font flag, IMPLIED by --web):
+
   4. FONT (fontstruetype/gangofchinese.ttf, ~5 MB): SUBSET down to only the
      Unicode code points that appear in the loaded stringtables, via
      fonttools' pyftsubset. gangofchinese.ttf is the SHARED default TTF face
@@ -113,29 +115,41 @@ WEB-ONLY (--web flag):
      italian, dutch, swedish, danish, norwegian, finnish, korean, japanese,
      (traditional) chinese, latin spanish, polish, portuguese (pt/br),
      russian, fake debug language -- shares this one face; see
-     src/game/PreloadFontsTTF.cpp, src/engine/util/StringTable.cpp). The web
-     build ships one bundle for every language (the user can switch language
-     at runtime), so the used-glyph set is the UNION of every
-     translations_<lang>.str BODY file except translations_arabic.str (own
-     font) and translations_header.str (ASCII lookup keys, never rendered)
-     -- plus printable ASCII (digits/latin appear inside every language's
-     strings too: mode names, scores). arabic.ttf (99 KB) and every other
-     fontstruetype file are copied verbatim -- only gangofchinese.ttf is
-     subsetted. Glyph lookup is plain FreeType FT_Get_Char_Index per code
-     point (see FontCacheObjectTTF.cpp) -- no HarfBuzz shaping -- so a
-     code-point-based subset (no OpenType layout table retention) renders
-     identically. Host build ships the full unsubsetted TTF (copied
-     verbatim like any other file).
+     src/game/PreloadFontsTTF.cpp, src/engine/util/StringTable.cpp). Any
+     --subset-font build ships one bundle for every language (the user can
+     switch language at runtime), so the used-glyph set is the UNION of
+     every translations_<lang>.str BODY file except translations_arabic.str
+     (own font) and translations_header.str (ASCII lookup keys, never
+     rendered) -- plus printable ASCII (digits/latin appear inside every
+     language's strings too: mode names, scores). arabic.ttf (99 KB) and
+     every other fontstruetype file are copied verbatim -- only
+     gangofchinese.ttf is subsetted. Glyph lookup is plain FreeType
+     FT_Get_Char_Index per code point (see FontCacheObjectTTF.cpp) -- no
+     HarfBuzz shaping -- so a code-point-based subset (no OpenType layout
+     table retention) renders identically. Plain host build (no flags) ships
+     the full unsubsetted TTF (copied verbatim like any other file). --wii
+     never reaches this path (its own prebaked-atlas pipeline replaces TTF
+     entirely, see WII MODE above).
 
-Why WEB-only audio/font transcoding: the web build no longer runs the SDL
+     This step is decoupled from --web so the webOS target (FRUIT_PLATFORM_WEBOS,
+     which does NOT want the --web Ogg/WebP-audio transcoding but DOES want a
+     smaller IPK) can request just the font subset via --subset-font without
+     --web. --web implies --subset-font so existing web behaviour is
+     unchanged. If fontTools/pyftsubset isn't importable and can't be
+     auto-installed, subset_cjk_font degrades to a verbatim copy of the full
+     TTF (same non-fatal "missing tool -> skip, don't fail the stage"
+     contract as the widget-art/Pillow cases).
+
+Why WEB-only audio transcoding: the web build no longer runs the SDL
 software mixer. It uses the Web Audio API backend
 (src/engine/audio/SoundManagerWebAudio.cpp), which lets the browser decode
 Ogg/Vorbis and mix on its own audio thread -- off the JS main thread (no GC
 underrun / crackle on a slow webOS TV) -- and compressed assets shrink the
 .data payload from ~72 MB (uncompressed PCM) to a few MB. Desktop keeps the
 faithful SDL mixer + raw .wav.pcm untouched. The font subset is likewise
-only needed to shrink the wasm preload payload; the host build has no
-payload-size constraint and ships the full font.
+only needed to shrink the preload/install payload (wasm MEMFS preload for
+web, IPK size for webOS); a plain host build has no payload-size constraint
+and ships the full font.
 
 .wav.pcm format (Mortar::SoundManager::LoadSound, MAMAudioController):
     20-byte header, 5 x int32 LE: type(1), sampleRate, bitDepth(16),
@@ -166,13 +180,19 @@ looping sfx (e.g. bomb-fuse) and music (music-menu).
 Idempotent and incremental: an already-transcoded .ogg is skipped unless its
 source .wav.pcm is newer; other files use size+mtime copy-if-different. This
 script self-provisions Pillow (both host + web need it for texture WebP
-encode) and, under --web only, ffmpeg (audio/texture transcode -- texture
-transcode itself no longer uses ffmpeg, only audio does) and fontTools (CJK
-font subset): when either is missing AND it is running as root with apt-get
-available (i.e. inside the emscripten/emsdk container), it apt-get installs
-the tool; otherwise it raises a clear error naming the tool. The image's
-Python is PEP 668 externally-managed, so fontTools is installed via the apt
-`fonttools` package (not pip). The staged gangofchinese.ttf subset is
+encode) and, under --web only, ffmpeg (audio transcode; texture transcode
+itself no longer uses ffmpeg). Under --web or --subset-font, it also tries
+to self-provision fontTools (CJK font subset): when a tool is missing AND
+it is running as root with apt-get available (i.e. inside the
+emscripten/emsdk container), it apt-get installs the tool. ffmpeg is
+mandatory for --web (raises a clear error naming the tool if it can't be
+found/installed) -- but fontTools is best-effort: if it can't be imported
+or auto-installed, the font subset step is skipped and the full
+gangofchinese.ttf is copied verbatim instead (same non-fatal contract as
+the widget-art/node-not-found case), so --subset-font never hard-fails a
+build over a missing dev dependency. The image's Python is PEP 668
+externally-managed, so fontTools is installed via the apt `fonttools`
+package (not pip). The staged gangofchinese.ttf subset is
 skipped unless it is older than the source .ttf or any translations_*.str
 body file that feeds its charset.
 """
@@ -305,32 +325,43 @@ def ensure_ffmpeg():
 
 
 def ensure_fonttools():
-    """The fontTools module (apt `fonttools`) must be importable. The image's
-    Python is PEP 668 externally-managed, so install via apt, not pip."""
+    """Try to make the fontTools module (apt `fonttools`) importable. The
+    image's Python is PEP 668 externally-managed, so install via apt, not pip.
+
+    Returns True if fontTools is importable afterwards, False otherwise.
+    Unlike ensure_ffmpeg, this never raises -- the font subset is a
+    size-optimization, not a hard requirement (see subset_cjk_font's
+    graceful-skip-to-verbatim-copy fallback), so a missing/uninstallable
+    fontTools must not fail the whole asset stage."""
     try:
         import fontTools  # noqa: F401
-        return
+        return True
     except ImportError:
         pass
     import importlib
     if _can_apt_install():
         # PEP 668 externally-managed container Python -> apt, not pip.
-        _apt_install("fonttools")
+        try:
+            _apt_install("fonttools")
+        except RuntimeError as e:
+            print("[stage-assets] WARNING: {}".format(e), file=sys.stderr)
     else:
         # Bare host (native emsdk on Windows/MSYS2, not externally-managed) -> pip.
         print("[stage-assets] fontTools not found, installing via pip")
         proc = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "fonttools"])
         if proc.returncode != 0:
-            raise RuntimeError("pip install fonttools failed")
+            print("[stage-assets] WARNING: pip install fonttools failed", file=sys.stderr)
     importlib.invalidate_caches()
     try:
         import fontTools  # noqa: F401
-        return
+        return True
     except ImportError:
         pass
-    raise RuntimeError(
-        "fontTools not found and could not be auto-installed. Install it: "
-        "apt-get install -y fonttools (container) or pip install fonttools (host).")
+    print("[stage-assets] WARNING: fontTools not found and could not be "
+          "auto-installed (apt-get install -y fonttools, or pip install "
+          "fonttools) -- shipping the full unsubsetted font instead.",
+          file=sys.stderr)
+    return False
 
 
 def read_header(path):
@@ -788,8 +819,23 @@ def count_glyphs(ttf_path):
     return n
 
 
-def subset_cjk_font(src_path, dst_path, codepoints, charset_sources, charset_txt_path, stats):
+def subset_cjk_font(src_path, dst_path, codepoints, charset_sources, charset_txt_path,
+                     stats, fonttools_available):
+    """Subset gangofchinese.ttf to `codepoints` via pyftsubset. If fontTools
+    isn't available (ensure_fonttools couldn't import/install it), gracefully
+    degrades to a verbatim copy of the full font -- same non-fatal
+    "missing tool -> skip, don't fail the stage" contract as the widget-art
+    node/Pillow cases (see module docstring)."""
     stats["font_src_bytes"] = os.path.getsize(src_path)
+    if not fonttools_available:
+        if copy_if_different(src_path, dst_path):
+            stats["font_action"] = "copied verbatim (fontTools unavailable)"
+        else:
+            stats["font_action"] = "skipped (verbatim, up to date)"
+        stats["font_out_bytes"] = os.path.getsize(dst_path)
+        stats["font_glyph_count"] = 0
+        stats["font_codepoint_count"] = len(codepoints)
+        return
     if needs_font_subset(src_path, dst_path, charset_sources):
         run_pyftsubset(src_path, dst_path, codepoints, charset_txt_path)
         stats["font_action"] = "subsetted"
@@ -848,8 +894,8 @@ def stage_tree_raw(src_root, dst_root):
     return stats
 
 
-def stage_tree(src_root, dst_root, is_web, font_codepoints, font_charset_sources,
-               font_charset_txt_path):
+def stage_tree(src_root, dst_root, is_web, is_subset_font, font_codepoints,
+               font_charset_sources, font_charset_txt_path, fonttools_available):
     stats = {
         "sfx_transcoded": 0,
         "sfx_skipped": 0,
@@ -893,10 +939,11 @@ def stage_tree(src_root, dst_root, is_web, font_codepoints, font_charset_sources
             elif name.lower().endswith(".tex"):
                 dst_tex = os.path.join(dst_dir, name)
                 transcode_tex_file(src_path, dst_tex, stats)
-            elif is_web and is_font_dir and name.lower() == CJK_FONT_FILENAME:
+            elif is_subset_font and is_font_dir and name.lower() == CJK_FONT_FILENAME:
                 dst_font = os.path.join(dst_dir, name)
                 subset_cjk_font(src_path, dst_font, font_codepoints,
-                                 font_charset_sources, font_charset_txt_path, stats)
+                                 font_charset_sources, font_charset_txt_path, stats,
+                                 fonttools_available)
             else:
                 # Host build: *.wav.pcm (not staged above since is_web is
                 # False) falls through here and copies verbatim, same as any
@@ -952,13 +999,18 @@ def sweep_stale_pcm(dst_root):
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: stage-assets.py <repo_root> <out_staging_data_dir> [--web|--wii]", file=sys.stderr)
+        print("Usage: stage-assets.py <repo_root> <out_staging_data_dir> "
+              "[--web|--wii] [--subset-font]", file=sys.stderr)
         sys.exit(1)
 
     repo_root = sys.argv[1]
     dst_root = sys.argv[2]
     is_web = "--web" in sys.argv[3:]
     is_wii = "--wii" in sys.argv[3:]
+    # --web implies --subset-font (unchanged web behaviour); webOS (or any
+    # other non-web/non-wii target) can request just the font subset without
+    # the Ogg/WebP-audio transcoding --web also brings.
+    is_subset_font = is_web or "--subset-font" in sys.argv[3:]
 
     src_root = os.path.join(repo_root, "FruitNinjaBada", "Data")
 
@@ -1003,25 +1055,30 @@ def main():
                       stats.get("prebaked_fonts_missing", 0), WII_PREBAKED_FONTS_RELDIR))
         return
 
-    # Self-provision the external tools (install-where-used). Raises a clear
-    # error if missing and not auto-installable. Pillow is needed regardless
-    # of --web (texture transcode runs for host too).
+    # Self-provision the external tools (install-where-used). ffmpeg is
+    # mandatory for --web (raises a clear error if missing/uninstallable);
+    # Pillow is needed regardless of --web (texture transcode runs for host
+    # too). fontTools is best-effort (see ensure_fonttools) -- a missing
+    # fontTools degrades the font step to a verbatim copy, it never aborts
+    # the stage.
     _ensure_pillow()
     if is_web:
         ensure_ffmpeg()
-        ensure_fonttools()
+    fonttools_available = ensure_fonttools() if is_subset_font else False
 
     font_codepoints, font_charset_sources = set(), []
     font_charset_txt_path = os.path.join(os.path.dirname(dst_root), "gangofchinese-charset.txt")
-    if is_web:
+    if is_subset_font:
         stringtables_dir = os.path.join(src_root, STRINGTABLES_RELPATH)
         font_codepoints, font_charset_sources = gather_cjk_font_charset(stringtables_dir)
         # Sibling of dst_root (not inside Data/) so it never gets --preload-file'd.
 
-    print("[stage-assets] staging {} -> {} ({})".format(
-        src_root, dst_root, "web" if is_web else "host"))
-    stats, loops = stage_tree(src_root, dst_root, is_web, font_codepoints,
-                               font_charset_sources, font_charset_txt_path)
+    mode = "web" if is_web else "host"
+    if is_subset_font and not is_web:
+        mode += "+subset-font"
+    print("[stage-assets] staging {} -> {} ({})".format(src_root, dst_root, mode))
+    stats, loops = stage_tree(src_root, dst_root, is_web, is_subset_font, font_codepoints,
+                               font_charset_sources, font_charset_txt_path, fonttools_available)
 
     merge_widget_textures(repo_root, dst_root, stats)
 
@@ -1049,7 +1106,7 @@ def main():
     print("[stage-assets] widget textures: {} merged from {}".format(
         stats["widget_tex_copied"], WIDGET_TEX_RELDIR))
 
-    if is_web and stats["font_action"]:
+    if is_subset_font and stats["font_action"]:
         font_src_mb = stats["font_src_bytes"] / (1024.0 * 1024.0)
         font_out_mb = stats["font_out_bytes"] / (1024.0 * 1024.0)
         print("[stage-assets] font {}: {} -- {} codepoints, {} glyphs, "

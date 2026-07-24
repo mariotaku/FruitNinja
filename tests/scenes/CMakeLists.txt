@@ -29,7 +29,12 @@ macro(add_scene_test _target _source)
         ${CMAKE_SOURCE_DIR}/tests
     )
 
-    target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
+    # fn_link_game_engine_group (defined in the root CMakeLists.txt) wraps
+    # fruit-ninja-game + mortar_engine in a GNU-ld --start-group/--end-group
+    # on non-MSVC linkers -- see its definition for why the two static libs
+    # are mutually dependent.
+    fn_link_game_engine_group(${_target} PRIVATE)
+    target_link_libraries(${_target} PRIVATE SDL2::SDL2main)
 
     # SDL2_image: test_harness.h uses IMG_SavePNG.
     if (TARGET SDL2_image::SDL2_image)

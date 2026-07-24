@@ -154,6 +154,39 @@ if (FN_ENABLE_HD_ASSETS)
     add_compile_definitions(FN_ENABLE_HD_ASSETS=1)
 endif()
 
+# ---------------------------------------------------------------------------
+# fn_link_game_engine_group -- link fruit-ninja-game + mortar_engine as a
+# resolved-together pair.
+#
+# The MP-revival wiring made mortar_engine (NetworkManager::Update ->
+# PacketFactory::Create; P2PMessageHandling.cpp's GlobalP2PMessageHandler ->
+# Fruit/WaveManager/AddToCurrentScore/MissControl/EntityTracker) call back
+# into fruit-ninja-game, while fruit-ninja-game already PUBLIC-links
+# mortar_engine. The two static libs are genuinely mutually dependent -- this
+# mirrors the original binary, which is one monolithic module where
+# NetworkManager legitimately calls into game-side packet/entity code; the
+# engine/game split into two static libs is only a port-side convenience.
+#
+# MSVC multi-passes archives and links this cycle fine (target_link_libraries
+# PRIVATE fruit-ninja-game already pulls mortar_engine in transitively via its
+# PUBLIC link). GNU ld (webOS toolchain, and any other GNU-like linker) is
+# single-pass and leaves mortar_engine's references to game symbols
+# unresolved unless the two archives are wrapped in --start-group/--end-group
+# so the linker re-scans them until everything resolves.
+#
+# cmake_minimum_required here is 3.20, below the 3.24 needed for the
+# $<LINK_GROUP:RESCAN,...> generator expression, so this uses the raw
+# -Wl,--start-group/--end-group linker flags instead. MSVC (and any other
+# non-GNU-like linker) just gets the plain, already-working link.
+function(fn_link_game_engine_group _target _visibility)
+    if (MSVC)
+        target_link_libraries(${_target} ${_visibility} fruit-ninja-game)
+    else()
+        target_link_libraries(${_target} ${_visibility}
+            -Wl,--start-group fruit-ninja-game mortar_engine -Wl,--end-group)
+    endif()
+endfunction()
+
 # Prebaked font atlas gate (see the FN_PREBAKED_FONTS option above). Consumed
 # by src/engine/render/BakedFontWii.{h,cpp} (outer guard, was FRUIT_PLATFORM_WII
 # only) and the prebaked-atlas branches in FontCacheObjectTTF.{h,cpp} /
@@ -840,11 +873,16 @@ if(NOT FN_ASM_VERIFY)
                     ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR} --wii
         )
     else()
+        # --subset-font (independent of --web): webOS wants the gangofchinese.ttf
+        # glyph-subset shrink for a smaller IPK but NOT --web's Ogg/WebP-audio
+        # transcoding (it keeps raw .wav.pcm via SDL, like host). --web already
+        # implies --subset-font internally, so web behaviour is unchanged.
         set(FN_ASSET_STAGING_COMMANDS
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.py ${CMAKE_SOURCE_DIR}
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
                     ${CMAKE_SOURCE_DIR} ${FN_STAGING_DATA_DIR}
                     $<$<BOOL:${EMSCRIPTEN}>:--web>
+                    $<$<BOOL:${FRUIT_PLATFORM_WEBOS}>:--subset-font>
         )
     endif()
     # ALL: the host runtime + every test read assets from FN_STAGING_DATA_DIR
@@ -933,7 +971,8 @@ if (EMSCRIPTEN)
     if (TARGET fn_prebaked_fonts)
         add_dependencies(fruit-ninja fn_prebaked_fonts)
     endif()
-    target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
+    fn_link_game_engine_group(fruit-ninja PRIVATE)
+    target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main)
     target_link_options(fruit-ninja PRIVATE
         "SHELL:-sUSE_SDL=2"
         "SHELL:-sUSE_FREETYPE=1"
@@ -1065,8 +1104,8 @@ elseif (FRUIT_PLATFORM_WII)
     # the link path, so bare -l names resolve. --gc-sections is fine: main()
     # transitively references every needed symbol, and libogc functions are
     # pulled by the shim/backends -- nothing live is dropped.
+    fn_link_game_engine_group(fruit-ninja PRIVATE)
     target_link_libraries(fruit-ninja PRIVATE
-        fruit-ninja-game
         -lfat -lwiiuse -lbte -lasnd -logc -lm)
 
     # --- elf2dol (POST_BUILD) ---
@@ -1190,7 +1229,8 @@ else()
     if (TARGET fn_prebaked_fonts)
         add_dependencies(fruit-ninja fn_prebaked_fonts)
     endif()
-    target_link_libraries(fruit-ninja PRIVATE fruit-ninja-game SDL2::SDL2main)
+    fn_link_game_engine_group(fruit-ninja PRIVATE)
+    target_link_libraries(fruit-ninja PRIVATE SDL2::SDL2main)
 
     # webOS TV: statically link libstdc++/libgcc so the shipped ELF embeds
     # the toolchain's newer GLIBCXX/CXXABI symbol versions instead of

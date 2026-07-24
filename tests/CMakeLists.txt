@@ -67,7 +67,12 @@ macro(fn_add_game_test _target _source)
     target_compile_definitions(${_target} PRIVATE
         FN_TEST_SCREENSHOT_DIR="${CMAKE_CURRENT_BINARY_DIR}/screenshots")
 
-    target_link_libraries(${_target} PRIVATE fruit-ninja-game SDL2::SDL2main)
+    # fn_link_game_engine_group (defined in the root CMakeLists.txt) wraps
+    # fruit-ninja-game + mortar_engine in a GNU-ld --start-group/--end-group
+    # on non-MSVC linkers -- see its definition for why the two static libs
+    # are mutually dependent.
+    fn_link_game_engine_group(${_target} PRIVATE)
+    target_link_libraries(${_target} PRIVATE SDL2::SDL2main)
 
     # Tests load assets from FN_STAGING_DATA_DIR (FN_DATA_DIR_PATH points there),
     # so staging must have run before a test executes. Depend on it so building any
@@ -289,7 +294,9 @@ if (EXISTS "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data")
     # Links fruit-ninja-game (not just mortar_engine) because StringTableUtilLoadStringsTable
     # reads game_work.languageFlag (v1.6.1 @0x0014ca5c -- the binary's StringTableUtil* live in
     # the game code range and read game state), so the engine StringTable TU references game_work.
-    target_link_libraries(test_localisation PRIVATE fruit-ninja-game mortar_engine)
+    # fn_link_game_engine_group (root CMakeLists.txt): GNU-ld --start-group
+    # wrap for the fruit-ninja-game <-> mortar_engine mutual dependency.
+    fn_link_game_engine_group(test_localisation PRIVATE)
     target_include_directories(test_localisation PRIVATE
         ${CMAKE_SOURCE_DIR}/src/engine
     )
@@ -487,7 +494,9 @@ set_tests_properties(menubutton_anchor PROPERTIES TIMEOUT 30)
 add_executable(test_scrollingmenu_updaterealtime
     test_scrollingmenu_updaterealtime.cpp
 )
-target_link_libraries(test_scrollingmenu_updaterealtime PRIVATE fruit-ninja-game)
+# fn_link_game_engine_group (root CMakeLists.txt): GNU-ld --start-group
+# wrap for the fruit-ninja-game <-> mortar_engine mutual dependency.
+fn_link_game_engine_group(test_scrollingmenu_updaterealtime PRIVATE)
 target_include_directories(test_scrollingmenu_updaterealtime PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/src/engine
