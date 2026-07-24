@@ -43,10 +43,11 @@ static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
 // Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
 // REVEAL_END / FINALE_HOLD / DISMISS_BUFFER removed: superseded by the memory-verified
 // revealEnd formula and m_bPendingRemoval latch below (v1.6.1 BonusScreen::Update @0x00163dd0).
-// TODO: resolve phase-timer rodata @ DAT_00162cdc for the remaining two (PRE_OFFSET slide-in,
-// AWARD_SPACING per-award stagger -- v1.6.1 BonusScreen::Update @0x00163dd0)
+// AWARD_SPACING removed: superseded by TIME_PER_AWARD (0.6f), the real per-award stagger
+// (see SET_DEFINES below and the Phase B ASM-spec block).
+// TODO: resolve phase-timer rodata @ DAT_00162cdc for PRE_OFFSET slide-in
+// -- v1.6.1 BonusScreen::Update @0x00163dd0
 static const float PRE_OFFSET     = 1.0f;
-static const float AWARD_SPACING  = 0.5f;
 
 // SET_DEFINES globals — set on every BonusScreen::Update by SET_DEFINES() @ 0x00162090.
 // Non-const so SET_DEFINES can write them; initial values match what SET_DEFINES writes.
@@ -54,10 +55,11 @@ static const float AWARD_SPACING  = 0.5f;
 // (v1.6.1 BonusScreen::Update @0x00163dd0, re-analyst batch1 spec).
 static float TRANSITION_IN_TIME  = 0.333333f;  // 0x3eaa7efa (~1/3)
 static float TRANSITION_OUT_TIME = 0.25f;       // 0x3e800000
-// ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c / BuildBonusText @0x001621dc (asm-inspector,
-// fresh binary read): TIME_PER_AWARD = 1.0f. The prior 0.6f (0x3f19999a) was WRONG -- it had
-// grabbed the FIRST_AWARD initial-delay constant (0.666667f) by mistake.
-static float TIME_PER_AWARD      = 1.0f;        // 0x3f800000
+// ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0 (struct@0x2d8c3c+0x04, re-verified):
+// TIME_PER_AWARD = 0.6f, staggering each award's reveal 0.6s apart. The prior 1.0f had
+// grabbed the wrong tuning-struct slot; 0.6f is corroborated by the per-award one-shot
+// gate math (ph crosses 0.2s into a 0.6s slot) below.
+static float TIME_PER_AWARD      = 0.6f;        // 0x3f19999a
 static float FIRST_AWARD         = 0.666667f;   // 0x3f2a7efa (~2/3)
 static float TOTAL_TIME          = 7.0f;        // 0x40e00000
 static float AWARD_Y_DIF         = -42.0f;      // 0xc2280000
@@ -70,7 +72,7 @@ static float TOTAL_POS_Z         = 0.0f;        // DAT_003144bc
 static void SET_DEFINES() {
     TRANSITION_IN_TIME  = 0.333333f;
     TRANSITION_OUT_TIME = 0.25f;
-    TIME_PER_AWARD      = 1.0f;
+    TIME_PER_AWARD      = 0.6f;
     FIRST_AWARD         = 0.666667f;
     TOTAL_TIME          = 7.0f;
     AWARD_Y_DIF         = -42.0f;
@@ -447,7 +449,20 @@ void BonusScreen::Update(float dt) {
         // NOTE: binary's rush-loop SFX start/stop gate (m_RushLoopSFX, "Bonus-drum-roll")
         // requires m_Timer>0, so it never fires during this slide-in phase; the m_Timer>0
         // / m_Timer<revealEnd guards below skip it while sliding in.
+    } else {
+        // Reveal window onward: m_AnimPos settles at Zero (RE-confirmed the per-award
+        // emitter accumPos below reads pos + m_AnimPos + m_ShakeOffset directly with no
+        // extra drift once m_Timer >= 0). The transition-out slide (m_Timer > TOTAL_TIME)
+        // is a separate, still-unresolved gap -- see TODO at game_singleton+0x40 below.
+        m_AnimPos.x = 0.0f;
+        m_AnimPos.y = 0.0f;
+        m_AnimPos.z = 0.0f;
     }
+
+    // TODO: v1.6.1 0x00163dd0 (BonusScreen::Update) -- the transition-out (m_Timer >
+    // TOTAL_TIME) slide-out math drives a transition object at game_singleton+0x40 that
+    // isn't identified yet. m_AnimPos is pinned to Zero above for the whole m_Timer>=0
+    // range (reveal window through finale) until that object is RE'd.
 
     // -----------------------------------------------------------------------
     // Reveal-end threshold (binary @0x00163e00-0163e24).
@@ -501,24 +516,53 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // Phase B: per-award reveal (0 <= timer < revealEnd)
     // -----------------------------------------------------------------------
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0 -- per-award reveal timing:
+    //   FIRST_AWARD    = 0.666667f          (initial delay before award 0's slot)
+    //   TIME_PER_AWARD = 0.6f               (each award gets its own 0.6s slot,
+    //                                         staggered i*0.6s after FIRST_AWARD)
+    //   ph  = fmod(m_Timer - FIRST_AWARD, TIME_PER_AWARD)   -- position within CURRENT slot
+    //   s15 = clamp((ph - 0.2f) / 0.1f, 0, 1)               -- this-frame alpha driver
+    //   s16 = clamp((ph - dt - 0.2f) / 0.1f, 0, 1)          -- prev-frame alpha driver
+    //   one-shot gate (emitters + Shake + Bonus-Explosion SFX) fires when s16<=0 && s15>0,
+    //     i.e. exactly the frame ph first crosses 0.2s UPWARD into award i's slot.
+    //   alpha  = s15                                        (linear 0->1 over [0.2s,0.3s))
+    //   score  = (s16<=0) ? 0 : (0.5f + s16*0.5f) * TierBase*Multiplier
+    // Each award's own slot is independent of the others -- this is what staggers the
+    // reveal instead of firing all 3 awards' effects together.
     if (m_Timer < revealEnd) {
         int totalDisplayed = 0;
         for (int i = 0; i < (int)m_Awards.size(); ++i) {
             BonusAwardHud& entry = m_Awards[i];
-            float localT = m_Timer - (float)i * AWARD_SPACING;
+            float localFrac = (m_Timer - FIRST_AWARD - (float)i * TIME_PER_AWARD) / TIME_PER_AWARD;
 
-            if (localT < 0.0f) {
+            if (localFrac < 0.0f) {
                 // Not yet revealed.
                 entry.m_Alpha          = 0.0f;
                 entry.m_DisplayedScore = 0;
                 continue;
             }
 
-            // Just-crossed-zero this frame: spawn emitters + play SFX.
-            // "Just crossed" = localT < dt (first frame localT >= 0).
-            if (localT < dt) {
-                // TODO: PSPParticleManager::AddEmitter x3 for award[i]
-                // TODO: FruitCamera::CreateCameraShake(...)
+            if (localFrac > 1.0f) {
+                // Fully revealed (this award's slot is behind us).
+                entry.m_Alpha          = 1.0f;
+                entry.m_DisplayedScore = entry.m_TierBase * entry.m_Multiplier;
+                totalDisplayed += entry.m_DisplayedScore;
+                continue;
+            }
+
+            float ph  = fmodf(m_Timer - FIRST_AWARD, TIME_PER_AWARD);
+            float s15 = (ph - 0.2f) / 0.1f;
+            if (s15 < 0.0f) s15 = 0.0f;
+            if (s15 > 1.0f) s15 = 1.0f;
+            float s16 = ((ph - dt) - 0.2f) / 0.1f;
+            if (s16 < 0.0f) s16 = 0.0f;
+            if (s16 > 1.0f) s16 = 1.0f;
+
+            // One-shot reveal gate: fires the single frame ph first crosses 0.2s
+            // UPWARD into award i's slot -- prev frame below 0.2 (s16<=0), this
+            // frame at/above 0.2 (s15>0). ph increases monotonically within the
+            // slot, so this pair is true for exactly one frame per award.
+            if (s16 <= 0.0f && s15 > 0.0f) {
                 // ASM-spec v1.6.1 BonusScreen::Update @0x00164534: memory-verified
                 // literals s0=0.1f (@0x1642bc), s1=10.0f (@0x41200000).
                 Shake(0.1f, 10.0f);
@@ -533,17 +577,41 @@ void BonusScreen::Update(float dt) {
                         sfxName, 0.0f, 1.0f,
                         Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
                 }
+
+                // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: 3 particle emitters
+                // spawned at accumPos = pos + m_AnimPos + m_ShakeOffset +
+                // FIRST_NAME_OFFSET(-105,+40,0) + (0.5,0,0), z-alternating red/blue by
+                // (i&1) so successive awards' bursts don't z-fight.
+                _Vector3<float> accumPos(
+                    pos.x + m_AnimPos.x + m_ShakeOffset.x - 105.0f + 0.5f,
+                    pos.y + m_AnimPos.y + m_ShakeOffset.y + 40.0f,
+                    pos.z + m_AnimPos.z + m_ShakeOffset.z);
+
+                PSPParticleManager& ppm = PSPParticleManager::GetInstance();
+
+                PSPParticleEmitter* redFx = ppm.AddEmitter(StringHash("bonus_mode_fx_red"), 0, false);
+                if (redFx) {
+                    redFx->m_Pos = _Vector3<float>(accumPos.x, accumPos.y,
+                        (i & 1) ? -1.0f : 1.0f);
+                }
+                PSPParticleEmitter* blueFx = ppm.AddEmitter(StringHash("bonus_mode_fx_blue"), 0, false);
+                if (blueFx) {
+                    blueFx->m_Pos = _Vector3<float>(accumPos.x, accumPos.y,
+                        (i & 1) ? 1.0f : -1.0f);
+                }
+                PSPParticleEmitter* impactFx = ppm.AddEmitter(StringHash("impact_fx"), 0, false);
+                if (impactFx) {
+                    impactFx->m_Pos = _Vector3<float>(accumPos.x, accumPos.y, 10.0f);
+                }
             }
 
-            // Alpha pulse on reveal -- TODO: resolve exact formula from binary v1.6.1 BonusScreen::Update @0x00163dd0
-            entry.m_Alpha = 1.0f + 0.3f * sinf(localT * 6.28f);
-            if (entry.m_Alpha < 0.0f) entry.m_Alpha = 0.0f;
+            // Alpha ramp: linear 0->1 across [0.2s, 0.3s) of this award's slot.
+            entry.m_Alpha = s15;
 
-            // Score counter ramp-up.
-            // TODO: resolve exact multiplier ramp math from binary v1.6.1 BonusScreen::Update @0x00163dd0
-            float scoreT = localT * 0.5f + 0.5f;
-            if (scoreT > 1.0f) scoreT = 1.0f;
-            entry.m_DisplayedScore = (int)((float)(entry.m_TierBase * entry.m_Multiplier) * scoreT);
+            // Score counter ramp-up: 0 before the gate fires, then 0.5->1.0 of
+            // TierBase*Multiplier across the same [0.2s, 0.3s) window.
+            entry.m_DisplayedScore = (s16 <= 0.0f) ? 0 :
+                (int)((float)(entry.m_TierBase * entry.m_Multiplier) * (0.5f + s16 * 0.5f));
 
             totalDisplayed += entry.m_DisplayedScore;
         }
@@ -715,7 +783,8 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     // Per-award loop: star + label + value. pos.y steps -42 each row.
     // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector, fresh binary read):
     //   per-row reveal gate `m_Timer - FIRST_AWARD >= i * TIME_PER_AWARD`
-    //   (initial delay FIRST_AWARD=0.666667f, interval TIME_PER_AWARD=1.0f).
+    //   (initial delay FIRST_AWARD=0.666667f, interval TIME_PER_AWARD=0.6f -- re-verified,
+    //   struct@0x2d8c3c+0x04; see the SET_DEFINES note above).
     //   Row colour = the per-award element's OWN animated m_Colour (+0x50), NOT a fixed palette
     //   (the prior kDrawRowColours 3-entry palette here was WRONG and has been removed).
     // -----------------------------------------------------------------------
