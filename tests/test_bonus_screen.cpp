@@ -16,6 +16,9 @@
 #include "hud/HUD.h"
 #include "engine/math/_Vector3.h"
 #include "render/Font.h"
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
 
 static const int TIMEOUT_FRAMES = 600;
 static const float kDtFixed = 1.0f / 60.0f;
@@ -34,7 +37,7 @@ int main(int argc, char* argv[]) {
     fn::TestHarness h(argc, argv, "bonus_screen");
     h.SetInitFrames(120);  // burn through GameInit so HUD is live
     if (!h.ParseFlags()) return 1;
-    if (!h.Init()) return 1;
+    if (!h.InitComponent()) return 1;  // strips the main-menu HUD -> board renders alone
     if (!game_work.mHud) { std::fprintf(stderr, "FAIL: mHud null after boot\n"); return 1; }
 
     // Construct BonusScreen with 3 mock awards.
@@ -49,9 +52,28 @@ int main(int argc, char* argv[]) {
 
     bs->pos = _Vector3<float>(0.0f, 0.0f, 0.0f); // binary ctor @0x162d1c settles pos = Vec3::Zero
     Mortar::SmartPtr<Mortar::Texture> noTex;
-    bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), noTex, "ALL_APPLES",   150);
-    bs->AddAward(Colour(0x00, 0xAD, 0x7E, 0xFF), noTex, "STRAIGHT_3",   300);
-    bs->AddAward(Colour(0x7E, 0xAD, 0x00, 0xFF), noTex, "FRUIT_FRENZY", 500);
+    // Award names default to the fixed keys, but FN_BONUS_NAMES="a|b|c" overrides
+    // them so a screenshot run can preview label text across lengths (long-name
+    // clipping/overflow diagnosis on the 220px-wide rank label box).
+    const char* dn0 = "ALL_APPLES";
+    const char* dn1 = "STRAIGHT_3";
+    const char* dn2 = "FRUIT_FRENZY";
+    static char nbuf[256];
+    const char* envn = std::getenv("FN_BONUS_NAMES");
+    if (envn) {
+        std::strncpy(nbuf, envn, sizeof(nbuf) - 1);
+        nbuf[sizeof(nbuf) - 1] = '\0';
+        char* p1 = std::strchr(nbuf, '|');
+        if (p1) {
+            *p1 = '\0'; dn0 = nbuf;
+            char* rest = p1 + 1; dn1 = rest;
+            char* p2 = std::strchr(rest, '|');
+            if (p2) { *p2 = '\0'; dn2 = p2 + 1; }
+        }
+    }
+    bs->AddAward(Colour(0xAD, 0x7E, 0x00, 0xFF), noTex, dn0, 150);
+    bs->AddAward(Colour(0x00, 0xAD, 0x7E, 0xFF), noTex, dn1, 300);
+    bs->AddAward(Colour(0x7E, 0xAD, 0x00, 0xFF), noTex, dn2, 500);
     if (bs->m_Awards.size() != 3) {
         std::fprintf(stderr, "FAIL: m_Awards.size()=%zu expected 3\n", bs->m_Awards.size());
         return 3;
@@ -71,6 +93,17 @@ int main(int argc, char* argv[]) {
 
     game_work.mHud->AddControl(bs);
 
+    if (h.IsScreenshot()) {
+        // Capture the fully-revealed board (all 3 awards shown, settled,
+        // before transition-out at m_Timer>7.0 and before dismissal ~7.2)
+        // so long-name label rendering is visible. The dismiss loop below
+        // would otherwise remove the board from the HUD first.
+        bs->m_Timer = 3.5f;
+        h.RunComponentHeadless(4);
+        h.ScreenshotPng();
+        return h.Shutdown();
+    }
+
     if (h.IsInteractive()) {
         // Keep the dialog up indefinitely in interactive mode: when the
         // reveal animation completes, restart it so the tester can look
@@ -83,7 +116,7 @@ int main(int argc, char* argv[]) {
     int firstScoreFrame = -1, dismissFrame = -1, maxScore = 0;
     for (int frame = 0; frame < TIMEOUT_FRAMES; ++frame) {
         bs->m_Timer += kDtFixed;
-        h.RunHeadless(1);
+        h.RunComponentHeadless(1);
         if (bs->m_DisplayedScore > maxScore) maxScore = bs->m_DisplayedScore;
         if (bs->m_DisplayedScore > 0 && firstScoreFrame < 0) firstScoreFrame = frame;
         if (bs->m_bPendingRemoval && dismissFrame < 0) { dismissFrame = frame; break; }
