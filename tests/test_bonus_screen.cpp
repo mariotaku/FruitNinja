@@ -98,7 +98,12 @@ int main(int argc, char* argv[]) {
         // before transition-out at m_Timer>7.0 and before dismissal ~7.2)
         // so long-name label rendering is visible. The dismiss loop below
         // would otherwise remove the board from the HUD first.
-        bs->m_Timer = 3.5f;
+        // FN_BONUS_TIMER overrides the pinned m_Timer so a run can capture a
+        // specific phase (e.g. reveal=1.5, pop-peak~2.77, settled=3.5).
+        float shotT = 3.5f;
+        const char* envt = std::getenv("FN_BONUS_TIMER");
+        if (envt) shotT = (float)std::atof(envt);
+        bs->m_Timer = shotT;
         h.RunComponentHeadless(4);
         h.ScreenshotPng();
         return h.Shutdown();
