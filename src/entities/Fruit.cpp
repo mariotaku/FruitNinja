@@ -1571,6 +1571,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
 
 // v1.6.1 Fruit::Slice @0x001dcba0 (body 0x001dcba0-0x001dd4ff): flipSide
 // logic, special-fruit x1.5 impulse, and spin-boost loop on both halves.
+// ASM-verified: 2026-07-25T17:45:50Z v1.6.1 Fruit::Slice @ 0x001dcba0..0x001dd4f8 (asm-inspector)
 void Fruit::Slice() {
     m_SliceTimer = 0.0f;
     // ASM-spec v1.6.1 Fruit::Slice @0x001dcba0: top-of-function stores
@@ -1617,8 +1618,14 @@ void Fruit::Slice() {
         m_bCritical = 0;
     }
 
+    const FruitInfoData* info = FruitInfo_Get(m_FruitType);
     bool flipSide = false;
-    if (fabsf(slicePlane.x) + fabsf(slicePlane.y) > 0.0f) {
+    // v1.6.1 Fruit::Slice @0x001dcc84: super-fruit (ldrb [r0,#0x330]) forces
+    // flipSide (`bne 0x001dcd20` -> `mov r11,#1`); the geometric predicate
+    // below is not executed at all in that case.
+    if (info->m_bIsSuperFruit) {
+        flipSide = true;
+    } else if (fabsf(slicePlane.x) + fabsf(slicePlane.y) > 0.0f) {
         // 16-bit angle of the rotated-Z XY projection.
         float rotAngleRad = atan2f(slicePlane.y, slicePlane.x);
         float sliceAngleRad = (float)(int16_t)m_SliceArcAngle *
@@ -1647,7 +1654,8 @@ void Fruit::Slice() {
     int   splatCount = (int)Math::g_Random.Rand32(2U) + 2;
 
     // Critical hit gets 1.5× impulse + crit dual-line AddSlice.
-    const FruitInfoData* info = FruitInfo_Get(m_FruitType);
+    // (`info` is fetched above, before the flipSide gate, matching the binary's
+    // single FruitInfo load.)
     const bool isCritical = (m_bCritical != 0);
     // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
     // (was: 0x00176e94 -- stale v1.5.x) -- the ENTIRE critical block (two AddSlice lines,
@@ -1682,10 +1690,10 @@ void Fruit::Slice() {
         }
     }
 
-    // Special-fruit (baseScore == 0x32 = 50) also gets 1.5x impulse and the
-    // configured juice-burst count. TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
-    // (was: 0x00176f4e..0x00176f72 -- stale v1.5.x).
-    if (info->m_Score == 0x32) {
+    // Special-fruit (baseScore == 0x32 = 50) or super-fruit also gets 1.5x
+    // impulse and the configured juice-burst count (v1.6.1 Fruit::Slice
+    // @0x001dce54..0x001dce70: ldr +0x314 == 0x32 || ldrb +0x330).
+    if (info->m_Score == 0x32 || info->m_bIsSuperFruit) {
         impulse *= 1.5f;
         splatCount = kSliceJuiceSplatCount;  // = 10 (binary DAT @ 0x001F3E20)
     }
@@ -1700,7 +1708,9 @@ void Fruit::Slice() {
 
     // --- Splat spawn ---
     // Per-splat speed = (impulse + RandF(0.5)*impulse) * (i*0.2 + 5).
-    // Per-splat angle = Rand32(0x10000) & 0xFFF0.
+    // Per-splat angle = Rand32(0xfff0) -- v1.6.1 @0x001dcf14
+    // (`movw r1,#0xfff0; bl Rand32`): ONE draw over [0, 0xfff0), not a
+    // 16-aligned masked draw.
     //
     // Binary uses raw impulse values directly (4..8 range from
     // CollisionResponse clamp). The port's Update integrates pos
@@ -1708,7 +1718,7 @@ void Fruit::Slice() {
     // was: stale ref 0x00177d00), which means velocities should also stay in
     // the binary's per-frame scale -- no extra x50 multiplier needed here.
     for (int i = 0; i < splatCount; ++i) {
-        const uint16_t angle16 = (uint16_t)(Math::g_Random.Rand32(0x10000) & 0xFFF0);
+        const uint16_t angle16 = (uint16_t)Math::g_Random.Rand32(0xfff0);
         const float r          = Math::g_Random.RandF(0.5f);
         const float speed      = (impulse + r * impulse) *
                                  ((float)i * 0.2f + 5.0f);
@@ -1766,57 +1776,61 @@ void Fruit::Slice() {
     // and:     off = rand * (1-sliceFactor) * 4.0
     const float sliceFactor = info->m_HitInfluence;
 
-    // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
-    // (was: 0x001771b6 -- stale v1.5.x) -- SELECT pattern: use const 10912.0f when randVal<=0x2aa8,
-    // recompute Rand32(0x5550) when >0x2aa8. Not a retry-if-small loop.
+    // SELECT pattern: use const 10920.0f when randVal <= 0x2aa8 (= 10920),
+    // recompute Rand32(0x5550) when > 0x2aa8. Not a retry-if-small loop.
+    // Constant from pool @0x001dcf08: bytes 00 A0 2A 46 = 0x462AA000 = 10920.0f.
     uint32_t _ra = Math::g_Random.Rand32(0x5550U);
-    float randA = (_ra > 0x2aa8U) ? (float)Math::g_Random.Rand32(0x5550U) : 10912.0f;
+    float randA = (_ra > 0x2aa8U) ? (float)Math::g_Random.Rand32(0x5550U) : 10920.0f;
     uint32_t _rb = Math::g_Random.Rand32(0x5550U);
-    float randB = (_rb > 0x2aa8U) ? (float)Math::g_Random.Rand32(0x5550U) : 10912.0f;
+    float randB = (_rb > 0x2aa8U) ? (float)Math::g_Random.Rand32(0x5550U) : 10920.0f;
 
     // Angle offsets for the two halves — bound by `(1-softness)*4`.
     const int16_t offA = (int16_t)(randA * (1.0f - sliceFactor) * 4.0f);
     const int16_t offB = (int16_t)(randB * (1.0f - sliceFactor) * 4.0f);
 
-    // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
-    // (was: 0x00177236 -- stale v1.5.x) -- also writes back into m_SliceArcAngle when flipSide is set.
+    // v1.6.1 Fruit::Slice @0x001dd204: flipSide writes arc+0x7ff8 back into
+    // m_SliceArcAngle, then the half-angle computations RE-ADD 0x7ff8 before
+    // the Sin/CosIdx calls (@0x001dd218 / @0x001dd2dc), cancelling back to
+    // ~arc (net -0x10). Draw-to-half mapping (@0x001dd23c): the m_SecondVel
+    // half uses the SECOND rand draw (offB, binary r6 @0x001dd1ec) added, the
+    // vel half uses the FIRST draw (offA, binary r8 @0x001dd198) subtracted.
     if (flipSide) {
         m_SliceArcAngle = (uint16_t)(m_SliceArcAngle + 0x7ff8);
     }
-    uint16_t base = m_SliceArcAngle;
-    uint16_t angA = (uint16_t)(base + offA);  // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0 (was: 0x0017725e stale v1.5.x)
-    uint16_t angB = (uint16_t)(base - offB);  // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0 (was: 0x0017727e stale v1.5.x)
+    uint16_t angSecond, angVel;  // m_SecondVel half, vel half
+    if (flipSide) {  // m_SliceArcAngle already == arc + 0x7ff8 from the write-back
+        angSecond = (uint16_t)(m_SliceArcAngle - offB + 0x7ff8);  // == arc - offB - 0x10
+        angVel    = (uint16_t)(m_SliceArcAngle + offA + 0x7ff8);  // == arc + offA - 0x10
+    } else {
+        angSecond = (uint16_t)(m_SliceArcAngle + offB);
+        angVel    = (uint16_t)(m_SliceArcAngle - offA);
+    }
 
-    const float radA = (float)(int16_t)angA * (6.2831853f / 65536.0f);
-    const float radB = (float)(int16_t)angB * (6.2831853f / 65536.0f);
-    _Vector3<float> dirA(sinf(radA), cosf(radA), 0.0f);
-    _Vector3<float> dirB(sinf(radB), cosf(radB), 0.0f);
+    const float radSecond = (float)(int16_t)angSecond * (6.2831853f / 65536.0f);
+    const float radVel    = (float)(int16_t)angVel * (6.2831853f / 65536.0f);
+    _Vector3<float> dirSecond(sinf(radSecond), cosf(radSecond), 0.0f);
+    _Vector3<float> dirVel(sinf(radVel), cosf(radVel), 0.0f);
 
-    _Vector3<float> halfVelA = dirA * (impulse * sliceFactor) +
+    _Vector3<float> halfVelSecond = dirSecond * (impulse * sliceFactor) +
         vel * (1.0f - sliceFactor);
-    _Vector3<float> halfVelB = dirB * (impulse * sliceFactor) +
+    _Vector3<float> halfVelVel = dirVel * (impulse * sliceFactor) +
         vel * (1.0f - sliceFactor);
 
     m_SecondPos = pos;
 
-    // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
-    // (was: 0x0017735e -- stale v1.5.x) -- the crit/special branch and the
-    // MoveFruitZPositionToBack branch are mutually exclusive (if/else):
-    //   if (m_bCriticalEligible || FRUIT_INFO[type].score == 0x32) {
-    //       // critical / special velocity override
-    //   } else if (m_bSpawnedByCriticalSplash == 0) {
-    //       MoveFruitZPositionToBack(this);  // modifies f->m_ZPosition(0x9C)
-    //   }
-    // The crit override uses raw m_SliceArcAngle (NOT the offset-baked radA) with
-    // +-0x3ffc / 0xc004, int32 truncation on each velocity component, and a
-    // x1.75 scale.
-    if (isCritical || info->m_Score == 0x32) {
+    // v1.6.1 Fruit::Slice @0x001dd380..0x001dd3b0: crit/special velocity
+    // override gated on crit (ldrb +0x165) || score == 0x32 (ldr +0x314) ||
+    // super-fruit (ldrb +0x330); mutually exclusive (if/else) with the
+    // MoveFruitZPositionToBack branch. The override uses raw m_SliceArcAngle
+    // (NOT the offset-baked half angles) with +-0x3ffc / 0xc004, int32
+    // truncation on each velocity component, and a x1.75 scale.
+    if (isCritical || info->m_Score == 0x32 || info->m_bIsSuperFruit) {
         const float critRadA = (float)(int16_t)(uint16_t)(m_SliceArcAngle + 0x3ffc) * (6.2831853f / 65536.0f);
         const float critRadB = (float)(int16_t)(uint16_t)(m_SliceArcAngle + 0xc004) * (6.2831853f / 65536.0f);
-        halfVelA = _Vector3<float>((float)(int)(sinf(critRadA) * impulse),
-                                   (float)(int)(cosf(critRadA) * impulse), 0.0f) * 1.75f;
-        halfVelB = _Vector3<float>((float)(int)(sinf(critRadB) * impulse),
-                                   (float)(int)(cosf(critRadB) * impulse), 0.0f) * 1.75f;
+        halfVelSecond = _Vector3<float>((float)(int)(sinf(critRadA) * impulse),
+                                        (float)(int)(cosf(critRadA) * impulse), 0.0f) * 1.75f;
+        halfVelVel = _Vector3<float>((float)(int)(sinf(critRadB) * impulse),
+                                     (float)(int)(cosf(critRadB) * impulse), 0.0f) * 1.75f;
     } else if (!m_bMenuFling) {
         // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
         // (was: 0x00177444..0x0017744e -- stale v1.5.x) -- only on the plain slice path and
@@ -1825,8 +1839,8 @@ void Fruit::Slice() {
         MoveFruitZPositionToBack(this->m_ZPosition);
     }
 
-    m_SecondVel = halfVelA;
-    vel         = halfVelB;
+    m_SecondVel = halfVelSecond;
+    vel         = halfVelVel;
 
         m_bSliced = true;
 
