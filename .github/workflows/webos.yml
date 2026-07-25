@@ -30,8 +30,11 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      # ffmpeg is required by tools/assets/stage-assets.py: the webOS build
+      # defaults FN_OGG_AUDIO=ON, so staging transcodes sfx/*.wav.pcm to Ogg
+      # Vorbis. Without it staging aborts ("ffmpeg not found on PATH").
       - name: Install Build Tools
-        run: sudo apt-get -yq update && sudo apt-get -y -qq install cmake ninja-build
+        run: sudo apt-get -yq update && sudo apt-get -y -qq install cmake ninja-build ffmpeg
 
       - name: Download webOS NDK
         uses: robinraju/release-downloader@v1.9
