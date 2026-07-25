@@ -44,7 +44,8 @@ parallel: [9] bindiff/ (whole-program twins -> ranked CSV)
 | Binary v1.6.1 (target) | `FruitNinjaBada/Bin/FruitNinja.exe` | No (gitignored) |
 | Cross-build manifest | `manifest.generated.toml` | No (gitignored) |
 | Triage verdicts (sticky per `asm_hash`) | `triage.json` | **Yes** (fidelity record) |
-| asm-verify report | `tmp/asm-verify/report.json` + `.md` | No (gitignored) |
+| asm-verify report (full sweep) | `tmp/asm-verify/report.json` + `.md` | No (gitignored) |
+| asm-verify report (filtered run) | `tmp/asm-verify/report.scoped.json` + `.md` | No (gitignored) |
 | Classification (triager input) | `report.json` `cause`/`likelihood` fields + `tmp/asm-verify/suggested-triage.json` | No (gitignored) |
 | BinDiff CSV | `tmp/bindiff-out/` | No (gitignored) |
 | Class-size / typeinfo reference | `tmp/binary-class-sizes.json`, `tmp/typeinfo-tree.json` | No (gitignored) |
@@ -56,14 +57,20 @@ parallel: [9] bindiff/ (whole-program twins -> ranked CSV)
 bash tools/asm-verify/setup.sh
 
 # Verify one class (cross-build + diff + classify for *Foo* symbols):
-bash tools/asm-verify/run.sh --class Foo
+bash tools/asm-verify/run.sh --class Foo        # -> report.scoped.json/.md
 
 # Full sweep (every symbol in manifest.generated.toml; several minutes):
-bash tools/asm-verify/run.sh
+bash tools/asm-verify/run.sh                    # -> report.json/.md
 
 # Read the verdicts:
 cat tmp/asm-verify/report.md
 ```
+
+Any `--filter`/`--class`/`--symbol` run writes `report.scoped.*` and leaves the
+full-sweep `report.json` alone, so `report.json` always means "the whole
+program, as of the last full sweep". Trust it only as far as its mtime: a
+cross-build breakage makes `run.sh` fail *without* replacing the previous
+report, so a stale-but-green report can outlive the tree it describes.
 
 Pre-requisite: Docker (Desktop / Rancher / native). The toolchain is **not
 vendored** — the Dockerfile pulls Sourcery G++ Lite 2010q1 at image-build time

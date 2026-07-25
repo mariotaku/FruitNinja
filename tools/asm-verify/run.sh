@@ -86,6 +86,20 @@ docker run --rm \
         cp /staging/tmp/asm-verify/report.json /work/tmp/asm-verify/report.json
     '
 
+# A FILTERED run covers only a handful of symbols, so it must never overwrite
+# the last full sweep: report.json/report.md always mean "whole-program sweep".
+# Without this, a stray `--class Foo` run leaves a 16-symbol residue sitting at
+# report.json that reads as the current state of the entire port -- which is
+# exactly how the pipeline looked healthy for three weeks while it was in fact
+# failing to compile.
+REPORT_BASE="report"
+if [ -n "$FILTER" ]; then
+    REPORT_BASE="report.scoped"
+    mv "$PROJECT_ROOT/tmp/asm-verify/report.json" "$PROJECT_ROOT/tmp/asm-verify/${REPORT_BASE}.json"
+    mv "$PROJECT_ROOT/tmp/asm-verify/report.md"   "$PROJECT_ROOT/tmp/asm-verify/${REPORT_BASE}.md"
+    echo "Filtered run ('$FILTER') -> tmp/asm-verify/${REPORT_BASE}.json (full-sweep report.json left untouched)."
+fi
+
 # Host-side: classify divergences and ENRICH report.json in place with a
 # per-symbol cause + real-bug-likelihood (HIGH/MED/LOW), plus write
 # tmp/asm-verify/suggested-triage.json. The ranked shortlist is printed to
@@ -96,9 +110,9 @@ docker run --rm \
 (
     cd "$PROJECT_ROOT" || exit 0
     if command -v python > /dev/null 2>&1; then
-        python tools/asm-verify/classify-divergences.py
+        python tools/asm-verify/classify-divergences.py "tmp/asm-verify/${REPORT_BASE}.json"
     elif command -v py > /dev/null 2>&1; then
-        py tools/asm-verify/classify-divergences.py
+        py tools/asm-verify/classify-divergences.py "tmp/asm-verify/${REPORT_BASE}.json"
     fi
 ) || true
 
@@ -120,5 +134,5 @@ docker run --rm \
 ) || true
 
 echo
-echo "Report:    tmp/asm-verify/report.md"
-echo "report.json enriched with per-symbol cause + likelihood (ranked shortlist printed above)."
+echo "Report:    tmp/asm-verify/${REPORT_BASE}.md"
+echo "${REPORT_BASE}.json enriched with per-symbol cause + likelihood (ranked shortlist printed above)."
