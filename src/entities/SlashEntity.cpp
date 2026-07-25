@@ -58,13 +58,19 @@ Mortar::Event1<SlashEntity*>& SlashEntity::OnComboCancelEvent() {
     return g_OnComboCancel;
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 SlashEntity::CheckCombo @ 0x00113d64 (re-analyst)
-// Returns signed-char combo quality score (-1, 0x00..0x18) sign-extended to int.
+// ASM-spec v1.6.1 CheckCombo @ 0x001320b4: signed-char combo quality score
+// (-1, 0x00..0x18) sign-extended to int. Binary file-static globals
+// comboTypes@0x002d9f74 interleave {slot.type @+0, slot.n @+4} pairs
+// ((&DAT_002d9f78)[uniq*2] = 1 initialises the COUNT field); the port's local
+// scratch array is equivalent (the globals have zero external xrefs).
 // Score table:
-//   0x18: 2 unique types in strict ABAB... (any length)
-//   0x14: 2 unique types, count==5, scratch[0]/[1].type == 2 (pomegranate)
-//   0x15: 3 unique types, count==5, scratch[0]/[1].type == 2 (binary quirk
-//         omits slot[2] -- preserved verbatim)
+//   0x18: 2 unique types in strict ABAB... (any length). Gate = !alternatingFlag:
+//         the flag goes FALSE when a repeat matches a non-last slot -- exactly
+//         what a genuine ABAB stream does -- then element-wise verified.
+//   0x14: 2 unique types, count==5, slot[0].n==2 || slot[1].n==2 (5 fruit, 3+2 split)
+//   0x15: 3 unique types, count==5, slot[0].n==2 || slot[1].n==2 (one pair; the
+//         binary only tests slots 0/1, which covers every 2+2+1 split -- at most
+//         one slot is the singleton)
 //   0x17/0x16: any slot has count 4/3 (only when uniq>1)
 //   0x04: all unique, count >= 5
 //   Rare single-fruit table: 14 named fruit -> 0x06..0x12 (uniq==1 path)
@@ -115,7 +121,11 @@ int CheckCombo(int* fruitTypes, int count, int* outDominantType) {
         for (int k = 0; k < 16; ++k)
             if (fruitTypes[0] == rareTypes[k]) return (signed char)rareTable[k].score;
     } else if (uniq == 2) {
-        if (alternating) {
+        // Binary gate is if (!flag): genuine ABAB clears the flag (every repeat
+        // of type A matches slot 0 while slot 1 is last), then the element-wise
+        // ABAB verify confirms. A no-repeat slice (e.g. 2 fruit, 2 types) keeps
+        // the flag TRUE and never reaches the 0x18 return.
+        if (!alternating) {
             bool ok = true;
             for (int i = 0; i < count; ++i) {
                 int expect = (i & 1) ? scratch[1].type : scratch[0].type;
@@ -123,10 +133,13 @@ int CheckCombo(int* fruitTypes, int count, int* outDominantType) {
             }
             if (ok) return 0x18;
         }
-        if (count == 5 && (scratch[0].type == 2 || scratch[1].type == 2)) return 0x14;
+        // Binary tests the COUNT field (slot[k].n == 2), not the fruit type:
+        // 5 fruit over 2 types with a 3+2 split.
+        if (count == 5 && (scratch[0].n == 2 || scratch[1].n == 2)) return 0x14;
     } else if (uniq == 3 && count == 5) {
-        if (scratch[0].type == 2 || scratch[1].type == 2) return 0x15;
-        // Quirk preserved: binary only checks slots 0 and 1 -- slot 2 pomegranate is missed.
+        // COUNT field again: 5 fruit over 3 types with one pair (2+2+1). Slots
+        // 0/1 suffice -- at most one slot of a 2+2+1 split is the singleton.
+        if (scratch[0].n == 2 || scratch[1].n == 2) return 0x15;
     } else if (uniq == count && uniq > 4) {
         return 0x04;
     }
@@ -1083,24 +1096,31 @@ void SlashEntity::UpdatePoints(float dt) {
         m_TrailShiftB = -1;
         m_SegLenSq    = -1.0f;
     } else {
-        // TODO: v1.6.1 0x1e6914 -- FruitCamera::TranslatePos not yet ported; use raw positions.
-        // Binary transforms m_HeadPos/m_TailPos through the camera before computing ColLine.
-        float midX = (m_HeadPos.x + m_TailPos.x) * 0.5f;
-        float midY = (m_HeadPos.y + m_TailPos.y) * 0.5f;
-        float midZ = (m_HeadPos.z + m_TailPos.z) * 0.5f;
+        // ASM-spec v1.6.1 SlashEntity::UpdatePoints @0x001e6914: both endpoints go
+        // through FruitCamera::TranslatePos(pos, inverse=true, useZeroCenter=false)
+        // (calls @0x001e6a44 head +0x7c / @0x001e6a84 tail +0x70; r3=1, [sp]=0).
+        // ColLine.a = midpoint of the TRANSLATED endpoints, ColLine.b = TRANSLATED
+        // tail, and m_SegLenSq uses the translated mid-tail delta.
+        FruitCamera* cam = game_work.m_FruitCamera;
+        _Vector3<float> headT = cam ? cam->TranslatePos(m_HeadPos, true, false) : m_HeadPos;
+        _Vector3<float> tailT = cam ? cam->TranslatePos(m_TailPos, true, false) : m_TailPos;
+
+        float midX = (headT.x + tailT.x) * 0.5f;
+        float midY = (headT.y + tailT.y) * 0.5f;
+        float midZ = (headT.z + tailT.z) * 0.5f;
 
         ColLine* pLine = static_cast<ColLine*>(m_Col);
         if (pLine) {
             pLine->a().x = midX;
             pLine->a().y = midY;
             pLine->a().z = midZ;
-            pLine->b.x   = m_TailPos.x;
-            pLine->b.y   = m_TailPos.y;
-            pLine->b.z   = m_TailPos.z;
+            pLine->b.x   = tailT.x;
+            pLine->b.y   = tailT.y;
+            pLine->b.z   = tailT.z;
         }
 
-        float dx = midX - m_TailPos.x;
-        float dy = midY - m_TailPos.y;
+        float dx = midX - tailT.x;
+        float dy = midY - tailT.y;
         m_SegLenSq = dx * dx + dy * dy;
     }
 
@@ -1179,13 +1199,14 @@ void SlashEntity::UpdatePoints(float dt) {
             //   (fVar30 > fVar35 * 9.0f * m_HeadThickScale)  [still wider than max]
             //
             // Inside that block, a secondary goto-retire fires when:
-            //   (ModSlashThickness < ModSlashEndThickness) AND (fVar30 < ModSlashEndThickness)
+            //   (ModSlashThickness < ModSlashEndThickness) AND (fVar30 < ModSlashEndThickness * 9.0)
+            //   (the binary compares against the already-x9 EndThickness value)
             //
             // The else of the outer if = RETIRE directly.
             //
             // Summary:
             //   RETIRE_A = (g_Scale1 > g_Scale2) AND (fVar30 <= maxHW)
-            //   RETIRE_B = (g_Scale1 < g_Scale2) AND (fVar30 < g_Scale2)  [inner goto]
+            //   RETIRE_B = (g_Scale1 < g_Scale2) AND (fVar30 < g_Scale2 * 9.0)  [inner goto]
             //   KEEP     = everything else
             // ------------------------------------------------------------------
             float maxHW = fVar35 * 9.0f * m_HeadThickScale;
@@ -1198,7 +1219,8 @@ void SlashEntity::UpdatePoints(float dt) {
             } else {
                 // Thickness <= EndThickness.
                 // Inner goto-retire (RETIRE_B): only when strictly less-than.
-                if (g_Scale1 < g_Scale2 && fVar30 < g_Scale2) retire = true;
+                // Binary threshold = EndThickness * 9.0 (pre-multiplied before the compare).
+                if (g_Scale1 < g_Scale2 && fVar30 < g_Scale2 * 9.0f) retire = true;
             }
 
             if (retire) {

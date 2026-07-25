@@ -389,8 +389,12 @@ private:
     // binary passes dir by value, this mutation is never caller-visible.
     void AddPoint(_Vector3<float> center, _Vector3<float> dir, float pressure);
 
-    // Binary @ 0x1e6914 -- per-frame full geometry re-derivation (miter, UV, alpha,
-    // m_Col, head cap). Replaces previous linear-fade approximation.
+    // v1.6.1 SlashEntity::UpdatePoints @0x001e6914 -- per-frame full geometry
+    // re-derivation (miter, UV, alpha, m_Col, head cap). The ColLine collision
+    // segment + m_SegLenSq are built from m_HeadPos/m_TailPos transformed through
+    // FruitCamera::TranslatePos(pos, inverse=true, useZeroCenter=false), so the
+    // blade's hit segment tracks the drawn blade during camera zoom (identity
+    // while m_ZoomT <= 0).
     void UpdatePoints(float dt);
 
 public:

@@ -634,6 +634,16 @@ fn_add_game_test(test_slash_collision test_slash_collision.cpp)
 add_test(NAME slash_collision COMMAND test_slash_collision)
 set_tests_properties(slash_collision PROPERTIES TIMEOUT 30)
 
+# CheckCombo (v1.6.1 @0x001320b4) classification pins -- guards the alternating
+# gate polarity (genuine ABAB -> 0x18; 2-fruit two-type slice -> NOT 0x18) and
+# the slot-COUNT (not fruit-type) semantics of the 0x14 (5 fruit, 2 types, 3+2)
+# and 0x15 (5 fruit, 3 types, one pair) branches, plus 0x16/0x17/0x04/fallback
+# and the dominant-type out param. High-fan-in scoring leaf: feeds the game-over
+# fact board and persisted save data. Pure logic: no SDL init, no GL, no audio.
+fn_add_game_test(test_slash_combo test_slash_combo.cpp)
+add_test(NAME slash_combo COMMAND test_slash_combo)
+set_tests_properties(slash_combo PROPERTIES TIMEOUT 30)
+
 # InputTranslatorSDL drain/dispatch split invariant (#173 bridge-to-origin fix).
 # Verifies that DrainSDLEvent() accumulates pending state WITHOUT dispatching
 # and DispatchForSimTick() consumes pending state. Pins the invariant that
