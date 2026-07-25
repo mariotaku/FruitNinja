@@ -7,9 +7,13 @@
 //     - 3 BakedStringBox title/desc/info boxes built in ctor (TTF path)
 //     - 4 mode buttons (back, classic, zen, arcade) created via CreateControls
 //       after state 0 -> state 2 alpha transition
+//     - the 5th "VS" ring (m_pOnlineMpButton) grows in via
+//       UpdateOnlineMultiplayerButton once a LoopbackTransport connects --
+//       first exercise of that create path (v1.6.1 @0x0018234c)
 //
 // --screenshot: renders GameModeScreen to stable state and writes:
 //   tmp/test/screenshots/gamemode/<lang>.png  (e.g. gamemode/en.png, gamemode/zh.png)
+//   tmp/test/screenshots/gamemode/versus_online.png (VS ring, transport connected)
 //
 // --lang=<name>  Language name or numeric flag (same set as test_fruitfact).
 //
@@ -26,6 +30,10 @@
 #include "hud/HUD.h"
 #include "hud/MenuButton.h"
 #include "game/GameWork.h"
+#include "engine/network/IMpTransport.h"
+#include "engine/network/LoopbackTransport.h"
+#include "engine/network/MpTransport.h"
+#include "engine/network/P2PMessageHandling.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -172,6 +180,109 @@ int main(int argc, char* argv[]) {
         } else {
             printf("[%s] screenshot written\n", shotLabel);
         }
+    }
+
+    // --- Assertion 3: VERSUS RING (m_pOnlineMpButton) grows in once a
+    // transport connects. First execution of UpdateOnlineMultiplayerButton's
+    // create path (v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton
+    // @0x0018234c), called from Update() case 2 (gated
+    // s_supportsP2P && !m_bIsFromPause -- this test's screen has
+    // isFromPause=false, and s_supportsP2P is true on host builds; see
+    // IsP2PSupported() in P2PMessageHandling.cpp).
+    //
+    // The default screenshot above already ran+captured with NO transport
+    // installed, so it is untouched by anything below.
+    {
+        Mortar::LoopbackTransport* a = 0;
+        Mortar::LoopbackTransport* b = 0;
+        Mortar::LoopbackTransport::CreatePair(a, b);
+        Mortar::SetMpTransport(a);
+        a->Host();
+        b->Join("");
+
+        // Host()/Join() are async (see IMpTransport.h): pump PollEvent() on
+        // both ends until 'a' resolves to CONNECTED. Bounded loop so a
+        // transport regression fails the test instead of hanging it.
+        for (int i = 0; i < 16 && !a->IsConnected(); ++i) {
+            a->PollEvent();
+            b->PollEvent();
+        }
+
+        if (!a->IsConnected()) {
+            fprintf(stderr, "FAIL: LoopbackTransport did not reach CONNECTED after pumping PollEvent()\n");
+            ++failures;
+        } else {
+            printf("PASS: LoopbackTransport connected\n");
+        }
+
+        if (!IsP2POnline()) {
+            fprintf(stderr, "FAIL: IsP2POnline() false after transport connect\n");
+            ++failures;
+        } else {
+            printf("PASS: IsP2POnline() true\n");
+        }
+
+        // Drive Update() (case 2 -> UpdateOnlineMultiplayerButton) enough
+        // frames for m_FrameTimer to ramp past 0 and the button to grow in,
+        // then settle its scale animation for the screenshot.
+        for (int i = 0; i < 90; ++i) {
+            h.RunComponentHeadlessMultiPass(1);
+        }
+
+        printf("[RESULT] m_pOnlineMpButton=%p", (void*)screen->m_pOnlineMpButton);
+        if (screen->m_pOnlineMpButton) {
+            printf(" pos=(%.1f,%.1f) trackedFruit=%p",
+                   screen->m_pOnlineMpButton->pos.x, screen->m_pOnlineMpButton->pos.y,
+                   (void*)screen->m_pOnlineMpButton->m_pTrackedFruit);
+        }
+        printf("\n");
+
+        if (!screen->m_pOnlineMpButton) {
+            fprintf(stderr,
+                "FAIL: m_pOnlineMpButton null -- UpdateOnlineMultiplayerButton create path not reached\n");
+            ++failures;
+        } else {
+            printf("PASS: m_pOnlineMpButton non-null (VS ring, pos=%.1f,%.1f)\n",
+                   screen->m_pOnlineMpButton->pos.x, screen->m_pOnlineMpButton->pos.y);
+
+            bool inHud = false;
+            if (game_work.mHud) {
+                for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
+                     it != game_work.mHud->controls.end(); ++it) {
+                    if (*it == screen->m_pOnlineMpButton) { inHud = true; break; }
+                }
+            }
+            if (!inHud) {
+                fprintf(stderr, "FAIL: m_pOnlineMpButton not found in game_work.mHud->controls\n");
+                ++failures;
+            } else {
+                printf("PASS: m_pOnlineMpButton in HUD\n");
+            }
+
+            if (!screen->m_pOnlineMpButton->m_pTrackedFruit) {
+                fprintf(stderr, "FAIL: m_pOnlineMpButton->m_pTrackedFruit null (vs_watermelon not created)\n");
+                ++failures;
+            } else {
+                printf("PASS: m_pOnlineMpButton->m_pTrackedFruit non-null (vs_watermelon)\n");
+            }
+        }
+
+        // --- Screenshot (only when --screenshot flag is present) ---
+        if (h.IsScreenshot()) {
+            if (!h.ScreenshotPng("gamemode/versus_online")) {
+                fprintf(stderr, "FAIL: ScreenshotPng('gamemode/versus_online') failed\n");
+                ++failures;
+            } else {
+                printf("[gamemode/versus_online] screenshot written\n");
+            }
+        }
+
+        // Teardown: unhook the transport before deleting it so no other test
+        // state (or a later screen in this same process) sees a dangling
+        // pointer via GetMpTransport().
+        Mortar::SetMpTransport(0);
+        delete a;
+        delete b;
     }
 
     if (failures > 0) {
