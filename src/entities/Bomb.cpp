@@ -118,14 +118,9 @@ Bomb::Bomb()
       m_pOwnerButton(nullptr),
       m_bMenuBombHit(0),
       m_Countdown(0.0f),
-      m_SpeedMult(1.0f)
-#ifdef __bada__
-      , m_Field_0xAC(0.0f)
-#endif
+      m_SpeedMult(1.0f),
+      m_Field_0xAC(0.0f)
 {
-#ifndef __bada__
-    m_RotFraction[0] = m_RotFraction[1] = 0;
-#endif
     entityType = 1;  // Bomb
 }
 
@@ -170,11 +165,7 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* scaleOrNull) {
     m_bHit = 0;
     m_bMovement = 1;
     m_SpeedMult = 1.0f;
-#ifdef __bada__
     m_Field_0xAC = 0.0f;
-#else
-    m_RotFraction[0] = m_RotFraction[1] = 0;
-#endif
     m_SpawnTimer = SPAWN_TIMER_INIT;
 
     // Binary: loop x2 assigns both X and Y axes (rand 1..7 vel, rand 0..0x166 rot),
@@ -241,7 +232,7 @@ static inline void AccelGrowth(_Vector3<float>& vel, _Vector3<float>& accel, flo
     accel *= (newLen / len);
 }
 
-// ASM-spec v1.6.1 Bomb::Update @ 0x1d6098
+// ASM-verified: 2026-07-25T17:31Z v1.6.1 Bomb::Update @ 0x001d6098 (asm-inspector)
 void Bomb::Update(float dt) {
     const float gameDt   = game_work.dt;               // countdown/SFX/spawn-timer gating only, ASM @0x1d60ec/0x1d6350
     const float scaledDt = dt * m_SpeedMult;            // v1.6.1 @0x1d6098: scaledDt derives from the incoming dt param, NOT game_work.dt
@@ -266,9 +257,13 @@ void Bomb::Update(float dt) {
             if (prevCountdown >= FUSE_SFX_THRESHOLD && m_Countdown < FUSE_SFX_THRESHOLD
                 && !g_bombData.bFuseSfxFiredThisFrame
                 && game_work.bM_bPaused == 0) {
-                g_bombData.bFuseSfxFiredThisFrame = 1;
+                // v1.6.1 @0x1d63a4-0x1d63b8: SoundManager::GetInstance() then vtable
+                // slot 0 (PreLoadSound) with "Bomb-Fuse" (rodata 0x00283fdd),
+                // immediately before the throw SFX.
+                Mortar::SoundManager::GetInstance().PreLoadSound("Bomb-Fuse");
                 if (game_work.mGameSound)
                     game_work.mGameSound->SFXPlay("Throw-bomb", 1.0f, 1.0f);
+                g_bombData.bFuseSfxFiredThisFrame = 1;  // @0x1d6488: set after the play
             }
 
             if (m_Countdown > 0.0f) return;
@@ -276,11 +271,14 @@ void Bomb::Update(float dt) {
             // Countdown expired: chain-bomb spawning
             {
                 WaveManager* wm = WaveManager::GetInstance();
-                const float sl = wm->m_SpawnLevel;  // +0x68: bomb chain spawn level
-                int iVar7 = (int)sl;
-                const float frac = sl - (float)iVar7;
+                // v1.6.1 @0x1d64a4: vldr s16,[wm,#0x6c] = m_BombChance (NOT m_SpawnLevel +0x68)
+                const float chance = wm->m_BombChance;
+                int iVar7 = (int)chance;
+                const float frac = chance - (float)iVar7;
                 if (frac > 0.01f) {
-                    const int rand100 = rand() % 100;
+                    // v1.6.1 @0x1d64d0: add r0,r0,#0x8 -> WaveManager member RNG
+                    // (m_Random, +0x8) Rand32(100); NOT libc rand().
+                    const uint32_t rand100 = wm->GetRandom().Rand32(100);
                     if ((float)rand100 < frac * 100.0f) iVar7++;
                 }
                 if (iVar7 < 1) {
@@ -308,22 +306,12 @@ void Bomb::Update(float dt) {
         // real gameplay bombs are never affected; SettingsScreen is only reachable from
         // the main menu (MainScreen::SettingsCallback), so this can't gate gameplay.
         const bool freezeMenuSpin = m_bMenuBombHit && SettingsScreen::IsOpen();
+        // v1.6.1 @0x1d6654 (ALIVE arm, m_bHit==0): PLAIN wrapping int16 add, no dt
+        // scaling (ldrh/add/strh). The dt-scaled variant belongs to the menu-hit arm
+        // (@0x1d624c), not here.
         if (scaledDt > 0.0f && !freezeMenuSpin) {
-#ifdef __bada__
-            // faithful int16 truncation (matches binary @0x1d624c)
-            m_RotX = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotX + (float)(uint16_t)m_RotVelX * dtNorm);
-            m_RotY = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotY + (float)(uint16_t)m_RotVelY * dtNorm);
-#else
-            // Port specific: 16-bit fixed-point fractional carry so slo-mo sub-unit deltas accumulate
-            //   instead of truncating (smooth slow instead of full-stop). Binary @0x1d624c re-casts int16
-            //   each frame; the +0xAC carry (repurposed dead field) accumulates the fraction. sizeof(Bomb)==0xB0.
-            uint32_t accX = (uint32_t)m_RotFraction[0] + (uint32_t)((float)(uint16_t)m_RotVelX * dtNorm * 65536.0f);
-            m_RotX = (int16_t)(uint16_t)((uint16_t)m_RotX + (uint16_t)(accX >> 16));
-            m_RotFraction[0] = (uint16_t)accX;
-            uint32_t accY = (uint32_t)m_RotFraction[1] + (uint32_t)((float)(uint16_t)m_RotVelY * dtNorm * 65536.0f);
-            m_RotY = (int16_t)(uint16_t)((uint16_t)m_RotY + (uint16_t)(accY >> 16));
-            m_RotFraction[1] = (uint16_t)accY;
-#endif
+            m_RotX = (int16_t)(m_RotX + m_RotVelX);
+            m_RotY = (int16_t)(m_RotY + m_RotVelY);
         }
 
         if (m_Col) static_cast<ColSphere*>(m_Col)->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
@@ -348,12 +336,12 @@ void Bomb::Update(float dt) {
                 AccelGrowth(vel, m_AccelForce, dtNorm);
             }
             pos += vel * dtNorm;
-            // ASM-spec v1.6.1 Bomb::Update @0x1d6654: menu-hit rotation is a PLAIN int16 add
-            // (no dtNorm scaling), unlike the dtNorm-scaled ALIVE branch (@0x1d624c). Gated on
-            // scaledDt>0. This matches the binary -- leave as-is.
+            // v1.6.1 @0x1d624c (menu-hit arm, m_bHit && m_bMenuBombHit): dt-SCALED
+            // rotation (vmla.f32 with dtNorm, then vcvt.u32.f32 truncate). The
+            // (uint32_t) cast reproduces vcvt.u32.f32 incl. negatives saturating to 0.
             if (scaledDt > 0.0f) {
-                m_RotX = (int16_t)(m_RotX + m_RotVelX);
-                m_RotY = (int16_t)(m_RotY + m_RotVelY);
+                m_RotX = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotX + (float)(uint16_t)m_RotVelX * dtNorm);
+                m_RotY = (int16_t)(uint16_t)(uint32_t)((float)(uint16_t)m_RotY + (float)(uint16_t)m_RotVelY * dtNorm);
             }
         }
 

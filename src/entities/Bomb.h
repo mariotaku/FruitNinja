@@ -77,7 +77,9 @@ public:
     // +0x6C: Z layer from GetBombZPosition()
     float m_ZPosition;                       // +0x6C
 
-    // +0x70..+0x77: rotation state (plain int16; Update does rot+=vel each frame)
+    // +0x70..+0x77: rotation state. Update: alive arm does a plain wrapping
+    // int16 rot+=vel (@0x1d6654); menu-hit arm adds vel*dtNorm with u32
+    // truncation (@0x1d624c).
     int16_t m_RotVelX;                       // +0x70
     int16_t m_RotVelY;                       // +0x72
     int16_t m_RotX;                          // +0x74
@@ -110,16 +112,8 @@ public:
     // +0xA8: speed multiplier; 1.0 normal, ~0.666 fat
     float m_SpeedMult;                       // +0xA8
 
-    // +0xAC: binary writes 0.0f in Init and never reads it (pads sizeof to 0xB0).
-    // Port specific: host build repurposes this dead 4-byte slot as the slow-mo spin
-    //   fractional carry (16.16-style two uint16 fixed-point fractions, X/Y) so sub-unit
-    //   slow-motion rotation deltas accumulate instead of truncating to 0 each frame.
-    //   Same offset/size in both branches -> sizeof(Bomb)==0xB0 either way. See Update().
-#ifdef __bada__
-    float m_Field_0xAC;                      // +0xAC faithful field (unused; keeps 0xB0 ABI). Binary writes 0.0f, never reads.
-#else
-    uint16_t m_RotFraction[2];               // +0xAC Port specific: X/Y rotation fractional carry (host only)
-#endif
+    // +0xAC: binary writes 0.0f in Init/ctor and never reads it (pads sizeof to 0xB0).
+    float m_Field_0xAC;                      // +0xAC
 
     Bomb();
     ~Bomb();
