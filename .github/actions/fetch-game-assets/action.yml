@@ -65,8 +65,30 @@ inputs:
 runs:
   using: 'composite'
   steps:
+    # ---- Cache the extracted Data/ ---------------------------------------
+    # Skips the ~20 MB archive.org download + unzip + hash verify on a hit.
+    # The key pins every input that determines the content (item, filename,
+    # expected binary MD5), so bumping the asset pin busts the cache and the
+    # download + anti-drift verify below run again. Both the web and webOS
+    # jobs share this cache, since the key does not mention the workflow.
+    - name: Restore cached game assets
+      id: assets-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ inputs.destination }}
+        key: fn-assets-${{ inputs.asset-identifier }}-${{ inputs.asset-filename }}-${{ inputs.expected-bin-md5 }}
+
+    - name: Report cache hit
+      if: steps.assets-cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: |
+        echo "Game assets restored from cache: ${{ inputs.destination }}"
+        echo "(archive.org download + binary hash verify skipped -- the cache"
+        echo " key pins the asset identifier, filename and expected MD5.)"
+
     # ---- Download game assets from archive.org ---------------------------
     - name: Download Fruit Ninja assets from archive.org
+      if: steps.assets-cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         ASSET_FILENAME="${{ inputs.asset-filename }}"
@@ -78,6 +100,7 @@ runs:
         echo "Download complete. Size: $(wc -c < fruit-ninja-assets.zip) bytes"
 
     - name: Extract Data/ from Fruit Ninja asset archive
+      if: steps.assets-cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         # Composite-action steps run as `bash -eo pipefail`, whereas the plain
