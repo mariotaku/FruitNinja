@@ -38,9 +38,7 @@ namespace Mortar {
 
 Mortar::Texture* Texture::s_CurrentlySetTexture = 0;
 
-#if !defined(__bada__)
 GLuint Texture::s_LastBoundTexId = 0;
-#endif
 
 // v1.6.1 addition: AlternativeTextureLoader path-rewrite toggle.
 // Binary: bool global @ data segment; default false (Prefix/Postfix are empty in shipped data).

@@ -71,6 +71,12 @@ inline bool WideLayoutRestartPending() { return false; }
 inline bool IsLetterbox() { return true; }
 inline void SetLetterbox(bool /*letterbox*/) {}
 
+// Collapses to the original constant, as the header comment above promises.
+// Draw code (StartupEffects' splash side-strips, BombHit's crit flash) calls
+// this unguarded; at 240.0f every widescreen-only term evaluates to zero
+// width, so the faithful build emits the original single-screen geometry.
+inline float HalfWidth() { return 240.0f; }
+
 } // namespace Layout
 
 #else

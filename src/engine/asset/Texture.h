@@ -117,10 +117,14 @@ public:
     // std::string is host-only; the cross-build sees only the __bada__ layout).
 #if !defined(__bada__)
     std::string m_Path;
+#endif
 
     // Last-bound texId tracker (port-side; binary doesn't track this globally).
+    // Like s_CurrentlySetTexture above, a static member doesn't affect
+    // sizeof(Texture)/offsets, so it is declared unconditionally -- the ES2
+    // Renderer::DrawQuad reads it outside any __bada__ guard and the
+    // cross-build must still compile.
     static GLuint s_LastBoundTexId;
-#endif
 
     // Secondary DeviceResource/AutoInstanceList base vptr placeholder (+0x30).
     // DIFFERS: original = pointer to DeviceResource vtable (secondary MI base);
