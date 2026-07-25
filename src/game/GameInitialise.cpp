@@ -60,6 +60,7 @@
 #include <ctime>
 #include <string>
 #include "game/GameWork.h"
+#include "game/StartupEffects.h"  // FN::g_SaveFileExisted (Emscripten-only)
 #include "engine/render/FontCacheObjectTTF.h"  // GetAtlas()->InitialiseData for #282 lang scale
 
 #if defined(FRUIT_PLATFORM_WII)
@@ -220,7 +221,15 @@ void GameInitialise(void* window, const char* config) {
     // InitialiseData @ 0x0011c3f0 follows the ctor with a LoadGame call
     // so persistent state is restored before the rest of init runs.
     game_work.m_SaveData = new FruitSaveData();
-    LoadGame(game_work.m_SaveData);
+    const bool saveExisted = LoadGame(game_work.m_SaveData);
+#ifdef __EMSCRIPTEN__
+    // Port specific: publishes whether a save file already existed at boot
+    // (LoadGame returns false only on first run, when FruitySave.xml is
+    // absent -- see FruitSaveData.cpp LoadGame @0x0015591c). Consumed by
+    // mainEmscripten.cpp to decide the audio-consent overlay's 4-way branch
+    // (first run vs. returning user) and to gate the music-off default below.
+    FN::g_SaveFileExisted = saveExisted;
+#endif
 
     // InitialiseData step 7: restore last-used game mode from save
     game_work.gameMode = (uint8_t)game_work.m_SaveData->m_GameMode;
@@ -242,24 +251,12 @@ void GameInitialise(void* window, const char* config) {
             game_work.m_SaveData->AddToTotal("musicOff", hMusicOff, -musicOffCount, false, true);
     }
 #ifdef __EMSCRIPTEN__
-    // Port specific: web audio init -- SFX shows ON from boot so the sound
-    // button renders in the ON state immediately; no visible flip on first
-    // touch. The AudioContext is created suspended-or-running depending on
-    // browser state (SoundManager::Init -> fnaudio_init,
-    // SoundManagerWebAudio.cpp); if born suspended, it's unlocked by the
-    // splash-time audio-consent overlay tap (shell.html
-    // #audio-consent-overlay, wired through mainEmscripten.cpp's
-    // fn_set_audio_enabled / ctx.resume()) -- no detection beyond that born
-    // state, no persistence at all (see mainEmscripten.cpp's g_gameInited
-    // comment block). GameInit step 23 calls SoundManager::Initialise +
-    // SetSFXVolume(0.5f) (because m_bSoundOn=true here), so SFX volume is
-    // already correct once the AudioContext actually unlocks (via the tap,
-    // or because it was already running). Music stays OFF / opt-in; the
-    // user enables it via the in-game music toggle. Nothing here is
-    // remembered across loads -- fn_set_audio_enabled/fn_audio_consent_skip
-    // overwrite both flags for THIS SESSION ONLY on every single load.
-    game_work.m_bSoundOn = true;
-    game_work.m_bMusicOn = false;
+    // DIFFERS: original = music ON by default (v1.6.1 InitialiseData @0x0011c3f0
+    // derives m_bMusicOn from the "musicOff" total; absent == on). Web defaults
+    // music OFF on the FIRST run only (no FruitySave.xml yet) -- starting music
+    // the instant a fresh page unlocks is hostile. A RETURNING user's saved
+    // choice is never touched; sound needs no branch (absent total == on).
+    if (!saveExisted) game_work.m_bMusicOn = false;
 #endif
 
     // InitialiseData step 12: per-power-up slash colour table

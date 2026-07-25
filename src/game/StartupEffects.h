@@ -29,6 +29,16 @@ void DrawNews();
 // writes true, so it stays false for the lifetime of desktop/bada builds and
 // their splash behaviour is completely unaffected.
 extern bool g_AudioConsentPending;
+
+// Port specific: web audio-consent overlay decision. True iff a save file
+// (FruitySave.xml) already existed at boot -- i.e. FruitSaveData::LoadGame
+// (GameInitialise.cpp) returned true. Set once, at boot, by GameInitialise.cpp
+// under __EMSCRIPTEN__; read by mainEmscripten.cpp's BootWait to publish
+// window.FNAudioPrefs.hasSave for shell.html's 4-way overlay branch (returning
+// user with a saved preference gets a single-tap "unlock only" overlay instead
+// of the two-button first-run PLAY WITH SOUND / PLAY MUTED choice). Compiled
+// on every target like g_AudioConsentPending; stays false off-web.
+extern bool g_SaveFileExisted;
 } // namespace FN
 
 // @ ~0x0016bc12 — draw start-up fade-in overlay.

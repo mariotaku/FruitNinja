@@ -3,22 +3,30 @@
      Boot-direct: the game starts immediately on load-complete (no boot-time
      tap gate), same as before. A SEPARATE, later gate exists right after
      g_game.init() succeeds: BootWait (mainEmscripten.cpp) freezes the game's
-     own splash (FN::g_AudioConsentPending), then asks JS
-     (_fnMaybeShowAudioConsent) whether to show the native-styled
-     audio-consent overlay (#audio-consent-overlay) -- "PLAY WITH SOUND" or
-     "PLAY MUTED". The decision is the AudioContext's BORN state
-     (window.FNAudio.bornSuspended, captured once, synchronously, at
-     context-creation time in fnaudio_init -- SoundManagerWebAudio.cpp --
-     NOT a resume()-then-poll check): born suspended (locked, the common
-     case) shows the overlay; born already running (PWA/home-screen launch,
-     prior sticky activation, a site-level autoplay grant, etc.) skips it and
-     un-freezes immediately. No storage of any kind (nothing remembered
-     across loads, not SettingsSave.xml, not localStorage): the overlay's tap
-     is simply the discrete browser gesture that resumes the AudioContext and
-     picks the sound/music state for THIS SESSION ONLY, then un-freezes the
-     splash so the game continues underneath.
-     This replaces relying on a LATER in-game gesture for the audio unlock
-     (a pure slice/touchmove never satisfies it).
+     own splash (FN::g_AudioConsentPending), publishes the already-loaded
+     sfx/music preference as window.FNAudioPrefs (game_work.m_bSoundOn/
+     m_bMusicOn/whether a save file existed -- see GameInitialise.cpp, which
+     genuinely persists the preference via FruitSaveData's "soundOff"/
+     "musicOff" totals), then asks JS (_fnMaybeShowAudioConsent) which of 4
+     things to do:
+       - AudioContext already unlocked (window.FNAudio.bornSuspended ===
+         false, captured once at context-creation time in fnaudio_init --
+         SoundManagerWebAudio.cpp -- NOT a resume()-then-poll check): nothing
+         to unlock, skip straight to fn_audio_consent_done().
+       - both sound and music prefs are off: nothing to unlock either (no
+         audio will play), skip straight to fn_audio_consent_done() -- the
+         permanent capture-phase gesture listeners (mainEmscripten.cpp
+         fnWakeAudio) cover a later in-game re-enable.
+       - a save file already exists (returning user, at least one channel
+         on): show a single-button "TAP TO PLAY" unlock-only overlay --
+         their saved preference is never touched, the tap is purely the
+         browser gesture.
+       - true first run (no save yet): show the two-button "PLAY WITH
+         SOUND" / "PLAY MUTED" overlay, which both unlocks AND sets the
+         first-run default (safe -- no saved preference exists yet).
+     Either overlay's tap un-freezes the splash so the game continues
+     underneath. This replaces relying on a LATER in-game gesture for the
+     audio unlock (a pure slice/touchmove never satisfies it).
      Letterboxed 3:2 canvas on a solid black background, centred loading
      progress bar (no splash image, no shade).
      Required Emscripten placeholder: {{{ SCRIPT }}} -->
@@ -292,17 +300,22 @@
       outline: none;
     }
 
-    /* --- AUDIO-CONSENT overlay: shown when the AudioContext is born
-       SUSPENDED (the common case). No storage of any kind (nothing
-       remembered across loads). Shown via _fnMaybeShowAudioConsent's
-       born-state check (window.FNAudio.bornSuspended, captured once at
-       context-creation time -- see SoundManagerWebAudio.cpp fnaudio_init),
-       called from mainEmscripten.cpp BootWait right after g_game.init()
+    /* --- AUDIO-CONSENT overlay: shown only when the browser's AudioContext
+       unlock gesture is actually needed -- see _fnMaybeShowAudioConsent's
+       4-way decision (top-of-file comment) for the full skip/unlock-only/
+       first-run logic. The sfx/music PREFERENCE is genuinely persisted
+       (FruitSaveData "soundOff"/"musicOff" totals, GameInitialise.cpp) --
+       this overlay never decides or stores that, only the unlock gesture.
+       Two DOM variants share the same markup (#audio-consent-muted hidden +
+       #audio-consent-sound relabelled "TAP TO PLAY" for the unlock-only,
+       single-button case; both buttons shown with their default labels for
+       the two-button first-run case) rather than a second overlay element.
+       display:none by default -- JS flips it to flex only when an unlock
+       gesture is actually needed; skipped (never shown) otherwise.
+       Called from mainEmscripten.cpp BootWait right after g_game.init()
        succeeds, overlaid on the game's own already-rendering splash (which
        C++ freezes via FN::g_AudioConsentPending, synchronously, just before
-       that call -- see StartupEffects.h). display:none by default -- JS
-       flips it to flex only when born-suspended; skipped (never shown) when
-       the context was already born 'running'.
+       that call -- see StartupEffects.h).
        Styled to MATCH #restart-overlay exactly (same dark translucent
        full-viewport background, same white title, same bordered-pill button
        look) rather than a distinct in-game panel -- shares the #restart-btn
@@ -310,8 +323,8 @@
        construction; only the two-button layout (.consent-btn) differs.
        Fade in/out (not restartFadeIn's one-shot keyframe): opacity starts at
        0 and transitions over 0.25s; _showAudioConsent flips display:flex then
-       opacity:1 on the next frame (see script below), _onAudioConsentTap
-       flips opacity back to 0 and waits for transitionend before setting
+       opacity:1 on the next frame (see script below), the tap handlers flip
+       opacity back to 0 and wait for transitionend before setting
        display:none, so both directions animate through the same property. */
     #audio-consent-overlay {
       position: fixed;
@@ -469,20 +482,27 @@
       <div id="progress-bar"></div>
     </div>
 
-    <!-- Audio-consent overlay: shown when the AudioContext is born
-         SUSPENDED (the common case). Hidden (display:none) until
-         _fnMaybeShowAudioConsent's born-state check (called from C++ right
-         after g_game.init() succeeds -- see BootWait, mainEmscripten.cpp)
-         decides to show it -- overlaid on the game's own splash, which C++
-         freezes for the duration (see FN::g_AudioConsentPending,
-         StartupEffects.h). No storage of any kind -- nothing about this
-         choice is remembered across loads. The tap on either button is the
-         discrete browser gesture that (a) unlocks the Web Audio
-         AudioContext, (b) picks the sound on/off state for THIS SESSION
-         ONLY, and (c) un-freezes the splash so the game continues -- see
-         _onAudioConsentTap in the script block below. Styled to match
-         the restart overlay exactly (see CSS) -- same look, just two buttons
-         instead of one. -->
+    <!-- Audio-consent overlay: shown ONLY when a browser AudioContext unlock
+         gesture is actually needed -- see _fnMaybeShowAudioConsent's 4-way
+         decision (top-of-file comment). Hidden (display:none) until that
+         decision (called from C++ right after g_game.init() succeeds -- see
+         BootWait, mainEmscripten.cpp) shows it -- overlaid on the game's own
+         splash, which C++ freezes for the duration (see
+         FN::g_AudioConsentPending, StartupEffects.h). The sfx/music
+         PREFERENCE is genuinely persisted (FruitSaveData "soundOff"/
+         "musicOff" totals, GameInitialise.cpp) -- this overlay never
+         decides or stores it.
+         Two variants share this same markup:
+           - Returning user (a save already exists): single-button
+             unlock-only "TAP TO PLAY" -- #audio-consent-muted is hidden and
+             the #audio-consent-sound button is relabelled; its tap only resumes the
+             AudioContext and un-freezes the splash, the saved preference is
+             untouched (see the unlock-only tap handler below).
+           - True first run (no save yet): both buttons shown with their
+             default labels; the tap on either (a) unlocks the AudioContext,
+             (b) sets the first-run sound on/off default, and (c) un-freezes
+             the splash -- see _onAudioConsentTap in the script block below.
+         Styled to match the restart overlay exactly (see CSS). -->
     <div id="audio-consent-overlay" role="alertdialog" aria-modal="true" aria-label="Enable sound?">
       <h1 id="audio-consent-title">Fruit Ninja</h1>
       <button id="audio-consent-sound" class="consent-btn" tabindex="0">PLAY WITH SOUND</button>
@@ -867,68 +887,164 @@
     if (btn) btn.focus();
   }
 
-  /* Show/skip decision: called from C++ (BootWait, mainEmscripten.cpp) right
+  /* Call the exported C++ "overlay's job is done" setter. Used both by the
+     skip paths below (nothing to unlock) and by the unlock-only tap handler
+     (see _onAudioConsentUnlockTap) -- never writes game_work.m_bSoundOn/
+     m_bMusicOn, only clears the splash-freeze gate (+ a belt-and-braces
+     SetSFXVolume repeat on the C++ side, see mainEmscripten.cpp). */
+  function _callAudioConsentDone() {
+    try {
+      if (typeof Module !== 'undefined' && Module._fn_audio_consent_done) {
+        Module._fn_audio_consent_done();
+      }
+    } catch (e) {
+      console.warn('[audio-consent] fn_audio_consent_done threw (non-fatal):', e);
+    }
+  }
+
+  /* Hide the overlay -- the (now un-frozen) splash + game continue
+     underneath exactly as they were already rendering, fading through the
+     overlay for 0.25s (the CSS transition on #audio-consent-overlay).
+     display:none is deferred to transitionend (with a setTimeout fallback
+     for browsers that suppress transitionend on an already-hidden/removed
+     element) so the fade-out actually plays instead of vanishing instantly.
+     _hideDone is idempotent-guarded so the transitionend listener and the
+     fallback timer can't both act. Shared by both the two-button and the
+     unlock-only tap handlers. */
+  function _hideAudioConsentOverlay() {
+    var overlay = document.getElementById('audio-consent-overlay');
+    if (overlay) {
+      overlay.style.opacity = '0';
+      var _hidden = false;
+      function _hideDone() {
+        if (_hidden) return;
+        _hidden = true;
+        overlay.style.display = 'none';
+      }
+      overlay.addEventListener('transitionend', _hideDone);
+      setTimeout(_hideDone, 300);
+    }
+  }
+
+  /* 4-way decision: called from C++ (BootWait, mainEmscripten.cpp) right
      after g_game.init() succeeds (which already froze the splash via
-     FN::g_AudioConsentPending, synchronously, just before this runs).
-     NO STORAGE OF ANY KIND -- nothing about the audio choice is remembered
-     across loads. The decision is based purely on window.FNAudio.bornSuspended
-     -- the AudioContext's state captured ONCE, SYNCHRONOUSLY, at the moment
-     it was created (fnaudio_init, SoundManagerWebAudio.cpp) -- NOT a
-     resume()-then-poll check (that would race an unrequested resume attempt
-     and only resolve asynchronously; the born state needs no async wait at
-     all, it's exactly what the browser already decided at context-creation
-     time):
-       - bornSuspended === true (locked, the common case -- a real gesture is
-         required): SHOW the overlay. Its tap (_onAudioConsentTap below) is
-         that gesture.
-       - bornSuspended === false (already unlocked at creation -- PWA/
-         home-screen launch, prior sticky activation carried over a
-         navigation, a site-level autoplay grant, etc.): SKIP the overlay
-         entirely, call back fn_audio_consent_skip(1, 0) (the plain first-run
-         default C++ already applied to game_work at boot) to un-freeze the
-         splash immediately -- no gesture was ever needed.
-       - window.FNAudio or its ctx doesn't exist yet (e.g. no Web Audio API
-         support at all): treat as locked (show the overlay) -- a safe
-         default; the tap's resumePending fallback still covers a ctx that
-         appears later. */
+     FN::g_AudioConsentPending, synchronously, just before this runs, and
+     published window.FNAudioPrefs = {sound, music, hasSave} from the
+     already-loaded/first-run-defaulted game_work flags -- see
+     GameInitialise.cpp, which genuinely persists the sfx/music preference
+     via FruitSaveData's "soundOff"/"musicOff" totals). This function only
+     ever decides whether a browser AudioContext UNLOCK gesture is needed --
+     it never decides or stores the sound/music preference itself:
+       1. bornSuspended === false (AudioContext already unlocked at creation
+          time -- PWA/home-screen launch, prior sticky activation carried
+          over a navigation, a site-level autoplay grant, etc.): nothing to
+          unlock. Skip the overlay, call back fn_audio_consent_done()
+          immediately.
+       2. prefs.sound === 0 && prefs.music === 0 (both channels off): nothing
+          to unlock either, since no audio will play. Skip the overlay, call
+          back fn_audio_consent_done(). The permanent capture-phase gesture
+          listeners (fnWakeAudio, mainEmscripten.cpp) still resume() the
+          context on whatever later tap re-enables audio in-game.
+       3. prefs.hasSave (a returning user with an existing saved preference,
+          at least one channel on): show the single-button unlock-only
+          overlay ("TAP TO PLAY") -- their saved preference is never offered
+          as a choice or touched.
+       4. else (true first run, no save yet): show the two-button PLAY WITH
+          SOUND / PLAY MUTED overlay, which both unlocks AND sets the
+          first-run default (safe -- no saved preference exists yet to
+          clobber).
+     bornSuspended itself is captured ONCE, SYNCHRONOUSLY, at the moment the
+     AudioContext was created (fnaudio_init, SoundManagerWebAudio.cpp) -- NOT
+     a resume()-then-poll check (that would race an unrequested resume
+     attempt and only resolve asynchronously; the born state needs no async
+     wait at all). window.FNAudio or its ctx not existing yet (e.g. no Web
+     Audio API support at all) is treated as locked -- a safe default; the
+     unlock handlers' resumePending fallback still covers a ctx that appears
+     later. window.FNAudioPrefs missing is treated as prefs={sound:1,
+     music:0, hasSave:0} (matches the port's own compiled-in first-run
+     default) so a stale/mismatched JS build fails safe into showing the
+     ordinary two-button overlay rather than silently skipping consent. */
+  var _audioConsentMode = 'two-button'; // 'two-button' | 'unlock-only'
   function _fnMaybeShowAudioConsent() {
     var bornSuspended = true; // safe default if FNAudio/ctx isn't there yet
     if (window.FNAudio && window.FNAudio.ctx) {
       bornSuspended = (window.FNAudio.bornSuspended !== false);
     }
+    var prefs = window.FNAudioPrefs || { sound: 1, music: 0, hasSave: 0 };
 
     if (!bornSuspended) {
-      try {
-        if (typeof Module !== 'undefined' && Module._fn_audio_consent_skip) {
-          Module._fn_audio_consent_skip(1, 0);
-        }
-      } catch (e) {
-        console.warn('[audio-consent] fn_audio_consent_skip threw (non-fatal):', e);
-      }
+      _callAudioConsentDone();
       return;
     }
 
+    if (prefs.sound === 0 && prefs.music === 0) {
+      _callAudioConsentDone();
+      return;
+    }
+
+    if (prefs.hasSave) {
+      _audioConsentMode = 'unlock-only';
+      var soundBtn = document.getElementById('audio-consent-sound');
+      var mutedBtn = document.getElementById('audio-consent-muted');
+      if (soundBtn) soundBtn.textContent = 'TAP TO PLAY';
+      if (mutedBtn) mutedBtn.style.display = 'none';
+      _showAudioConsent();
+      return;
+    }
+
+    _audioConsentMode = 'two-button';
     _showAudioConsent();
   }
 
   /* Expose for C++ (EM_ASM) in mainEmscripten.cpp. */
   window._fnMaybeShowAudioConsent = _fnMaybeShowAudioConsent;
 
-  /* Audio-consent overlay: tap handler shared by both buttons.
-     soundOn: true for "PLAY WITH SOUND", false for "PLAY MUTED".
-     This function runs SYNCHRONOUSLY inside the click/touchstart handler --
-     it is the discrete browser gesture (not a slice) required to unlock the
-     Web Audio AudioContext on mobile browsers (notably mobile Firefox, which
-     only honours resume()/context creation within the gesture's transient-
-     activation window). By the time this overlay can even be shown, C++ has
-     already called g_game.init() (see BootWait in mainEmscripten.cpp -- the
-     overlay is only ever shown via _fnMaybeShowAudioConsent, called AFTER
-     init succeeds, never before), so SoundManager::Init -> fnaudio_init has
-     already run and window.FNAudio.ctx already exists in the overwhelming
-     common case. The resumePending fallback below still covers the
-     (currently believed unreachable, but harmless to guard) case where
-     fnaudio_init has somehow not run yet at tap time. */
   var _audioConsentHandled = false;
+
+  /* Unlock-only tap handler (returning user, single "TAP TO PLAY" button --
+     _audioConsentMode === 'unlock-only'). Runs SYNCHRONOUSLY inside the
+     click/touchend handler -- the discrete browser gesture (not a slice)
+     required to unlock the Web Audio AudioContext on mobile browsers
+     (notably mobile Firefox, which only honours resume() within the
+     gesture's transient-activation window). NEVER writes
+     game_work.m_bSoundOn/m_bMusicOn -- the saved preference is untouched;
+     only the unlock gesture + splash un-freeze happen here (via
+     fn_audio_consent_done, see mainEmscripten.cpp). */
+  function _onAudioConsentUnlockTap() {
+    if (_audioConsentHandled) return;
+    _audioConsentHandled = true;
+
+    try {
+      if (!window.FNAudio) window.FNAudio = {};
+      var ctx = window.FNAudio.ctx;
+      if (ctx) {
+        if (typeof ctx.resume === 'function') ctx.resume();
+      } else {
+        window.FNAudio.resumePending = true;
+      }
+    } catch (e) {
+      console.warn('[audio-consent] AudioContext unlock threw (non-fatal):', e);
+    }
+
+    _callAudioConsentDone();
+    _hideAudioConsentOverlay();
+  }
+
+  /* Two-button tap handler (true first run -- _audioConsentMode ===
+     'two-button'). soundOn: true for "PLAY WITH SOUND", false for
+     "PLAY MUTED". Runs SYNCHRONOUSLY inside the click/touchend handler for
+     the same mobile-Firefox-transient-activation reason as
+     _onAudioConsentUnlockTap above. By the time this overlay can even be
+     shown, C++ has already called g_game.init() (see BootWait in
+     mainEmscripten.cpp -- the overlay is only ever shown via
+     _fnMaybeShowAudioConsent, called AFTER init succeeds, never before), so
+     SoundManager::Init -> fnaudio_init has already run and window.FNAudio.ctx
+     already exists in the overwhelming common case. The resumePending
+     fallback below still covers the (currently believed unreachable, but
+     harmless to guard) case where fnaudio_init has somehow not run yet at
+     tap time. Safe to write game_work.m_bSoundOn/m_bMusicOn here (via
+     fn_set_audio_enabled) because a first run has no saved preference to
+     clobber -- this tap IS the first-run default. */
   function _onAudioConsentTap(soundOn) {
     if (_audioConsentHandled) return;
     _audioConsentHandled = true;
@@ -945,9 +1061,9 @@
       console.warn('[audio-consent] AudioContext unlock threw (non-fatal):', e);
     }
 
-    /* Sound/music choice (session only, nothing persisted) + splash
-       un-freeze: handled by the exported C++ setter (fn_set_audio_enabled,
-       mainEmscripten.cpp). game_work is guaranteed to exist by this point. */
+    /* First-run sound/music default + splash un-freeze: handled by the
+       exported C++ setter (fn_set_audio_enabled, mainEmscripten.cpp).
+       game_work is guaranteed to exist by this point. */
     try {
       if (typeof Module !== 'undefined' && Module._fn_set_audio_enabled) {
         Module._fn_set_audio_enabled(soundOn ? 1 : 0);
@@ -956,26 +1072,7 @@
       console.warn('[audio-consent] fn_set_audio_enabled threw (non-fatal):', e);
     }
 
-    /* Hide the overlay -- the (now un-frozen) splash + game continue
-       underneath exactly as they were already rendering, fading through the
-       overlay for 0.25s (the CSS transition on #audio-consent-overlay).
-       display:none is deferred to transitionend (with a setTimeout fallback
-       for browsers that suppress transitionend on an already-hidden/removed
-       element) so the fade-out actually plays instead of vanishing instantly.
-       _hideDone is idempotent-guarded so the transitionend listener and the
-       fallback timer can't both act. */
-    var overlay = document.getElementById('audio-consent-overlay');
-    if (overlay) {
-      overlay.style.opacity = '0';
-      var _hidden = false;
-      function _hideDone() {
-        if (_hidden) return;
-        _hidden = true;
-        overlay.style.display = 'none';
-      }
-      overlay.addEventListener('transitionend', _hideDone);
-      setTimeout(_hideDone, 300);
-    }
+    _hideAudioConsentOverlay();
   }
 
   (function () {
@@ -983,17 +1080,24 @@
     var mutedBtn = document.getElementById('audio-consent-muted');
     if (!soundBtn || !mutedBtn) return;
 
+    /* Routes to the unlock-only handler when the overlay was shown in that
+       mode (returning user, single visible button relabelled "TAP TO
+       PLAY"); otherwise the ordinary two-button choice handler. */
     function _mk(soundOn) {
       return function (e) {
         e.preventDefault();
-        _onAudioConsentTap(soundOn);
+        if (_audioConsentMode === 'unlock-only') {
+          _onAudioConsentUnlockTap();
+        } else {
+          _onAudioConsentTap(soundOn);
+        }
       };
     }
 
     soundBtn.addEventListener('click',    _mk(true));
     // touchend (finger UP = a completed tap), not touchstart (finger down), so a
     // stray touch-down/drag doesn't trigger; preventDefault suppresses the ghost
-    // click. Both still count as the audio-unlock gesture. _onAudioConsentTap is
+    // click. Both still count as the audio-unlock gesture. The tap handlers are
     // idempotent so any click/touchend overlap is a no-op.
     soundBtn.addEventListener('touchend', _mk(true), {passive: false});
     soundBtn.addEventListener('keydown', function (e) {

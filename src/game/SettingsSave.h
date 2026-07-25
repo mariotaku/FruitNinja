@@ -10,11 +10,16 @@
 //   Layout::SetWideLayout() (opt-in widescreen layout, see
 //   src/engine/render/Layout.h).
 //
-// The web audio-consent overlay's sound/muted choice is intentionally NOT
-// persisted here (or anywhere) -- see mainEmscripten.cpp's g_gameInited
-// comment block: whether the overlay shows is decided fresh every load from
-// the AudioContext's born state, and the tapped choice only ever applies to
-// game_work for that session.
+// The sfx/music on/off preference is NOT part of this file -- it is
+// genuinely persisted separately, via FruitSaveData's "soundOff"/"musicOff"
+// totals (GameInitialise.cpp derives game_work.m_bSoundOn/m_bMusicOn from
+// them at boot, matching v1.6.1 InitialiseData @0x0011c3f0). The web
+// audio-consent overlay only gates the browser's separate AudioContext
+// UNLOCK gesture on top of that persisted preference -- see
+// mainEmscripten.cpp's g_gameInited comment block for the show/skip/
+// unlock-only/first-run decision. Nothing about THAT unlock decision is
+// persisted (it is re-derived every load from the AudioContext's born state
+// plus the already-loaded preference).
 //
 // Call LoadSettings() once at startup, before any CLI/URL override write to
 // those globals (so an explicit --lang / ?lang= etc. override still wins by

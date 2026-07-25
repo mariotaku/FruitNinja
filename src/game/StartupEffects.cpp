@@ -29,6 +29,11 @@ void DrawNews() {
 // Default false everywhere; only ever set true by mainEmscripten.cpp
 // (Emscripten-only), so desktop/bada builds never see it flip.
 bool g_AudioConsentPending = false;
+
+// Port specific: web save-file-existed-at-boot flag (see StartupEffects.h).
+// Default false everywhere; only ever written by GameInitialise.cpp under
+// __EMSCRIPTEN__, so desktop/bada builds never see it flip.
+bool g_SaveFileExisted = false;
 } // namespace FN
 
 // DrawStartFade @ 0x001cd4fc

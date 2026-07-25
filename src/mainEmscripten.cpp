@@ -86,31 +86,37 @@ static volatile int g_tap_started = 0;
 // freezes StartupEffects' splashFadeTimer so the splash holds steady behind
 // it -- see StartupEffects.h).
 //
-// NO STORAGE OF ANY KIND -- nothing about the audio choice is remembered
-// across loads (not SettingsSave.xml, not localStorage). The show/skip
-// decision is based on the AudioContext's BORN state, captured ONCE,
-// SYNCHRONOUSLY, right when it's created (fnaudio_init,
-// SoundManagerWebAudio.cpp: window.FNAudio.bornSuspended = (ctx.state ===
-// 'suspended') immediately after `new AC()`) -- NOT a resume()-then-poll
-// check. A resume()-then-poll would race an unrequested resume attempt
-// against whatever happens next and only resolves asynchronously; the born
-// state needs no async wait and is exactly what the browser already decided
-// at context-creation time (a real gesture requirement vs. an already-
-// granted context -- PWA/home-screen launch, prior sticky activation carried
-// over a navigation, a site-level autoplay grant, etc.).
-//
-// BootWait freezes the splash UNCONDITIONALLY right after init, then calls
-// JS's window._fnMaybeShowAudioConsent() (shell.html), which reads
-// window.FNAudio.bornSuspended:
-//   - true (born locked, the common case): SHOW the overlay. Its tap
-//     (fn_set_audio_enabled) resumes the AudioContext (the gesture) and sets
-//     game_work.m_bSoundOn/m_bMusicOn for THIS SESSION ONLY, then un-freezes.
-//   - false (born already unlocked): SKIP the overlay entirely, un-freeze
-//     immediately via fn_audio_consent_skip -- no gesture was ever needed.
+// The sfx/music on-off PREFERENCE *is* persisted (FruitSaveData's
+// "soundOff"/"musicOff" totals, GameInitialise.cpp -- restored into
+// game_work.m_bSoundOn/m_bMusicOn before this overlay ever runs). This
+// overlay's only job is the browser's separate, unrelated AudioContext
+// UNLOCK requirement -- a discrete user gesture some browsers demand before
+// any audio can play at all, regardless of the user's sound/music choice.
+// The show/skip/style decision reads BOTH the AudioContext's BORN state
+// (window.FNAudio.bornSuspended, captured ONCE, SYNCHRONOUSLY, right when
+// the context is created -- fnaudio_init, SoundManagerWebAudio.cpp -- NOT a
+// resume()-then-poll check, which would race an unrequested resume attempt
+// and only resolve asynchronously) AND window.FNAudioPrefs (published just
+// below, from the already-loaded game_work flags):
+//   - bornSuspended === false (already unlocked -- PWA/home-screen launch,
+//     prior sticky activation, a site-level autoplay grant, etc.): SKIP the
+//     overlay, nothing to unlock -- fn_audio_consent_done() un-freezes.
+//   - prefs.sound === 0 && prefs.music === 0 (both channels off): SKIP the
+//     overlay -- nothing to unlock either, since no audio will play; the
+//     permanent capture-phase gesture listeners below (fnWakeAudio) will
+//     resume() the context on whatever later tap re-enables audio in-game.
+//   - prefs.hasSave (a returning user, at least one channel on): show the
+//     single-button "TAP TO PLAY" unlock-only overlay -- no sound/music
+//     choice offered, their saved preference is never touched. Tap does
+//     ctx.resume() then fn_audio_consent_done().
+//   - else (true first run, no save yet): the two-button PLAY WITH SOUND /
+//     PLAY MUTED overlay -> fn_set_audio_enabled(1|0), which both unlocks
+//     and sets the first-run default (safe: no saved preference exists yet
+//     to clobber).
 //
 // game.init() has ALREADY run by the time this overlay can appear (BootWait
 // triggers the check right after init succeeds), so game_work always exists
-// when the tap or the skip callback lands -- no before/after-init race here.
+// when any of these callbacks land -- no before/after-init race here.
 static volatile int g_gameInited = 0;
 
 // Port specific: called from JS once the initial syncfs(true) callback fires.
@@ -121,19 +127,20 @@ EMSCRIPTEN_KEEPALIVE void fn_idbfs_ready(void) {
     g_idbfs_ready = 1;
 }
 
-// Port specific: called from JS on the audio-consent overlay button tap
-// (shell.html #audio-consent-overlay). on=1 for "PLAY WITH SOUND", on=0 for
-// "PLAY MUTED". By construction the overlay only ever appears after
-// g_game.init() has already run (see BootWait below), so game_work always
-// exists; apply directly. g_gameInited is still checked defensively in case
-// a stray/duplicate call somehow lands before init (should not happen).
-// Mirrors v1.6.1 MainScreen::SoundCallback @0x00195d14 (the same
-// game_work.m_bSoundOn flip + SetSFXVolume(0.5f : 0.0f) pattern) plus the
-// m_bMusicOn flag UpdateMusic (v1.6.1 @0x001cc18c) reads every frame -- no
-// direct SetMusicVolume call needed, UpdateMusic's volume ramp handles that.
-// SESSION ONLY -- no SaveSettings() call, nothing persisted; re-decided from
-// scratch (the born-state check runs again, no memory of this choice) on
-// the next load.
+// Port specific: called from JS on the FIRST-RUN two-button overlay's tap
+// (shell.html #audio-consent-overlay -- shown only when no save file exists
+// yet, see the g_gameInited comment block above). on=1 for "PLAY WITH
+// SOUND", on=0 for "PLAY MUTED". Safe to write game_work.m_bSoundOn/
+// m_bMusicOn directly here because a first run has no saved preference to
+// clobber -- this call IS the first-run default. By construction the
+// overlay only ever appears after g_game.init() has already run (see
+// BootWait below), so game_work always exists; apply directly.
+// g_gameInited is still checked defensively in case a stray/duplicate call
+// somehow lands before init (should not happen). Mirrors v1.6.1
+// MainScreen::SoundCallback @0x00195d14 (the same game_work.m_bSoundOn flip
+// + SetSFXVolume(0.5f : 0.0f) pattern) plus the m_bMusicOn flag UpdateMusic
+// (v1.6.1 @0x001cc18c) reads every frame -- no direct SetMusicVolume call
+// needed, UpdateMusic's volume ramp handles that.
 EMSCRIPTEN_KEEPALIVE void fn_set_audio_enabled(int on) {
     if (!g_gameInited) return;
     game_work.m_bSoundOn = (on != 0);
@@ -145,19 +152,19 @@ EMSCRIPTEN_KEEPALIVE void fn_set_audio_enabled(int on) {
     FN::g_AudioConsentPending = false;
 }
 
-// Port specific: called from JS (window._fnMaybeShowAudioConsent, via
-// BootWait's post-init check) when the AudioContext was already born
-// 'running' (window.FNAudio.bornSuspended === false) -- the overlay is
-// skipped entirely, no gesture was ever needed. Applies the plain first-run
-// default (sound on, music off) that GameInitialise.cpp's __EMSCRIPTEN__
-// guard already set at boot -- re-applying it here is a no-op in practice
-// (game_work is already in this state) but keeps the call shape symmetric
-// with fn_set_audio_enabled. Un-freezes the splash. No persistence.
-EMSCRIPTEN_KEEPALIVE void fn_audio_consent_skip(int soundOn, int musicOn) {
+// Port specific: called from JS once the audio-consent overlay's job is
+// done -- either the unlock-only "TAP TO PLAY" overlay was tapped (returning
+// user, saved preference already loaded and untouched), or
+// _fnMaybeShowAudioConsent decided no overlay was needed at all (already
+// unlocked, or both channels off). Clears ONLY the splash-freeze gate --
+// never writes game_work.m_bSoundOn/m_bMusicOn (the loaded/first-run-default
+// preference from GameInitialise.cpp must survive untouched). The
+// SetSFXVolume call is belt-and-braces idempotence: GameInit step 23 already
+// set the SFX volume from the loaded m_bSoundOn during g_game.init(), so this
+// is a safe no-op repeat, not a source of truth.
+EMSCRIPTEN_KEEPALIVE void fn_audio_consent_done(void) {
     if (!g_gameInited) return;
-    game_work.m_bSoundOn = (soundOn != 0);
-    game_work.m_bMusicOn = (musicOn != 0);
-    Mortar::SoundManager::GetInstance().SetSFXVolume(soundOn != 0 ? 0.5f : 0.0f);
+    Mortar::SoundManager::GetInstance().SetSFXVolume(game_work.m_bSoundOn ? 0.5f : 0.0f);
     FN::g_AudioConsentPending = false;
 }
 
@@ -606,23 +613,31 @@ static void BootWait(void* arg) {
     }
 
     // Port specific: audio-consent overlay -- game_work now exists (post
-    // GameInitialise), so fn_set_audio_enabled / fn_audio_consent_skip can
+    // GameInitialise), so fn_set_audio_enabled / fn_audio_consent_done can
     // apply directly from here on.
     g_gameInited = 1;
 
     // Freeze the splash (StartupEffects' splashFadeTimer, gated in
     // GameInit.cpp's GameUpdate) UNCONDITIONALLY, BEFORE the game loop's
     // first tick -- so the very first rendered frame is already the frozen
-    // one -- then ask JS (shell.html _fnMaybeShowAudioConsent) whether to
-    // actually show the overlay: it reads window.FNAudio.bornSuspended
-    // (captured synchronously in fnaudio_init at context-creation time, no
-    // async check here) and either shows the overlay (born locked) or calls
-    // back fn_audio_consent_skip immediately (born already unlocked). No
-    // detection beyond that born-state read, no storage of any kind.
+    // one -- then publish the loaded sfx/music preference (game_work is
+    // already populated by GameInitialise.cpp at this point) so shell.html's
+    // _fnMaybeShowAudioConsent can pick the right one of its 4 branches (see
+    // the g_gameInited comment block above) without needing its own copy of
+    // the preference logic.
     FN::g_AudioConsentPending = true;
+    // NOTE: assign the fields one at a time -- do NOT use a JS object literal
+    // here. EM_ASM is a macro and the C preprocessor balances PARENTHESES, not
+    // braces, so the commas inside `{ sound: $0, music: $1 }` are parsed as
+    // extra macro arguments and the build dies with a confusing "to match this
+    // '('" error pointing at the NEXT EM_ASM in the file.
     EM_ASM({
+        window.FNAudioPrefs = {};
+        window.FNAudioPrefs.sound = $0;
+        window.FNAudioPrefs.music = $1;
+        window.FNAudioPrefs.hasSave = $2;
         if (typeof window._fnMaybeShowAudioConsent === 'function') { window._fnMaybeShowAudioConsent(); }
-    });
+    }, game_work.m_bSoundOn ? 1 : 0, game_work.m_bMusicOn ? 1 : 0, FN::g_SaveFileExisted ? 1 : 0);
 
     // Port specific: web audio (#73) -- resume the suspended AudioContext on the
     // first user gesture, called SYNCHRONOUSLY inside the gesture handler.  Mobile
