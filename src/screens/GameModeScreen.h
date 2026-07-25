@@ -122,10 +122,20 @@ public:
     //   +0xc0  m_pChallengeData   (int; = 0)
     //   +0xc4  m_LayerFlagsAlt    (0x80; int32)
     //   +0xc8  m_FrameTimer       (drives DrawConnectTexture animation)
-    //   +0xcc  m_pArcadeButton    (arcade_mode.tex, banana)
+    //   +0xcc  m_pOnlineMpButton  (the "VS"/online-MP ring button -- verified at
+    //          instruction level: `str r5,[r4,#0xcc]` @0x00182618 inside
+    //          v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x0018234c
+    //          stores the freshly-created VS MenuButton. sizeof==0xdc ground
+    //          truth from operator new(0xdc) at the construction site in
+    //          v1.6.1 MainScreen::Update @0x00197594.)
     //   +0xd0  m_pTitleBox  (BakedStringBox* from LocalizedString 0x3be/0x3bf/0x3c0)
     //   +0xd4  m_pDescBox   (BakedStringBox* from LocalizedString 0x3ba)
     //   +0xd8  m_pInfoBox   (BakedStringBox* from LocalizedString 0x39f)
+    //
+    // Arcade has NO slot in the 220-byte binary layout: the port previously
+    // labelled +0xcc m_pArcadeButton on the false premise that 0xdc left no room
+    // for the online-MP button. m_pArcadeButton is a port-only convenience cache
+    // and lives in the trailing port-specific block below.
 
     // +0x94: 12-byte gap between BaseScreen tail and first own member.
     uint8_t _pad_0x94[12];
@@ -143,7 +153,10 @@ public:
     int     m_pChallengeData;        // +0xc0: challenge data (int, not ptr -- SetIsChallenge's 2nd param is int)
     int     m_LayerFlagsAlt;         // +0xc4: = 0x80
     float   m_FrameTimer;            // +0xc8: drives DrawConnectTexture animation
-    MenuButton* m_pArcadeButton;     // +0xcc: arcade_mode.tex, banana, ArcadeModeCallback
+    // Defunct: online MP ("VS" ring) button slot -- inert on main (only ever
+    // nulled, never populated); v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton
+    // @ 0x0018234c stores it (`str r5,[r4,#0xcc]` @0x00182618).
+    MenuButton* m_pOnlineMpButton;   // +0xcc
     Mortar::BakedStringBox* m_pTitleBox;  // +0xd0: mode text (LocalizedString 0x3be/0x3bf/0x3c0 three-liner)
     Mortar::BakedStringBox* m_pDescBox;   // +0xd4: desc text (LocalizedString 0x3ba = "MODE SELECT")
     Mortar::BakedStringBox* m_pInfoBox;   // +0xd8: info text (LocalizedString 0x39f = "MULTIPLAYER")
@@ -167,8 +180,10 @@ public:
     // spinner fix). Update state 3-6 only drains + disarms.
     bool m_bLoading;
 #endif
-    // Defunct online-MP button slot — kept so DeletedMenuButton can null it cleanly.
-    MenuButton* m_pOnlineMpButton;
+    // Port-only convenience cache for the Arcade button -- no slot in the
+    // 220-byte binary layout (see class-layout comment above). __bada__
+    // excludes it; CreateControls uses a plain local there.
+    MenuButton* m_pArcadeButton;
 #endif // !defined(__bada__)
 
     void CreateControls();
@@ -243,7 +258,7 @@ static_assert(offsetof(GameModeScreen, m_ChallengeId)        == 0xbc, "m_Challen
 static_assert(offsetof(GameModeScreen, m_pChallengeData)     == 0xc0, "m_pChallengeData offset");
 static_assert(offsetof(GameModeScreen, m_LayerFlagsAlt)      == 0xc4, "m_LayerFlagsAlt offset");
 static_assert(offsetof(GameModeScreen, m_FrameTimer)         == 0xc8, "m_FrameTimer offset");
-static_assert(offsetof(GameModeScreen, m_pArcadeButton)      == 0xcc, "m_pArcadeButton offset");
+static_assert(offsetof(GameModeScreen, m_pOnlineMpButton)    == 0xcc, "m_pOnlineMpButton offset");
 static_assert(offsetof(GameModeScreen, m_pTitleBox)          == 0xd0, "m_pTitleBox offset");
 static_assert(offsetof(GameModeScreen, m_pDescBox)           == 0xd4, "m_pDescBox offset");
 static_assert(offsetof(GameModeScreen, m_pInfoBox)           == 0xd8, "m_pInfoBox offset");

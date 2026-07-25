@@ -238,7 +238,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pChallengeData(0)           // +0xc0
     , m_LayerFlagsAlt(0x80)         // +0xc4 DAT matches ctor write movs r2,#1; adds r2,#0x7f
     , m_FrameTimer(0.0f)            // +0xc8 DAT_0013e59c
-    , m_pArcadeButton(nullptr)      // +0xcc
+    , m_pOnlineMpButton(nullptr)    // +0xcc
     , m_pTitleBox(nullptr)          // +0xd0
     , m_pDescBox(nullptr)           // +0xd4
     , m_pInfoBox(nullptr)           // +0xd8
@@ -248,7 +248,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
 #if defined(FN_BLOCK_PRELOAD)
     , m_bLoading(false)
 #endif
-    , m_pOnlineMpButton(nullptr)
+    , m_pArcadeButton(nullptr)
 #endif
 {
 #if defined(__bada__)
@@ -489,10 +489,13 @@ void GameModeScreen::CreateControls() {
     // Binary: scale -> RotateFacingUp(false, Vec3(0,1,0)) -> AddControl.
     // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
     // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
-    m_pArcadeButton = new MenuButton();
-    m_pArcadeButton->m_Texture = game_work.m_RingTex[0xd];
+    // Arcade has no slot in the 220-byte binary struct (see class-layout comment
+    // in the header) -- built via a local; the port-only m_pArcadeButton cache is
+    // assigned at the end under !__bada__.
+    MenuButton* arcadeBtn = new MenuButton();
+    arcadeBtn->m_Texture = game_work.m_RingTex[0xd];
     {
-        MenuButton* btn = m_pArcadeButton;
+        MenuButton* btn = arcadeBtn;
         // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
         // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
         // MODESELECT_RING_SPREAD in widescreen. Identity (spread=1) at 3:2/__bada__.
@@ -503,33 +506,38 @@ void GameModeScreen::CreateControls() {
 #ifndef __bada__
         arcadeX -= (Layout::HalfWidth() - 240.0f) * ARCADE_RECENTER;
 #endif
-        m_pArcadeButton->Init(_Vector3<float>(arcadeX, POS_ARCADE.y, POS_ARCADE.z),
-                              Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
-                              Fruit::FruitType(FRUIT_ARCADE, false),
-                              _Vector3<float>(0, 0, 0),
-                              Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
+        arcadeBtn->Init(_Vector3<float>(arcadeX, POS_ARCADE.y, POS_ARCADE.z),
+                        Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
+                        Fruit::FruitType(FRUIT_ARCADE, false),
+                        _Vector3<float>(0, 0, 0),
+                        Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
-    m_pArcadeButton->m_RestScale = sharedTargetSize;
-    if (m_pArcadeButton->m_pTrackedFruit) {
-        m_pArcadeButton->m_pTrackedFruit->scale =
-            m_pArcadeButton->m_pTrackedFruit->scale * ARCADE_FRUIT_SCALE;
-        m_pArcadeButton->m_pTrackedFruit->RotateFacingUp(
+    arcadeBtn->m_RestScale = sharedTargetSize;
+    if (arcadeBtn->m_pTrackedFruit) {
+        arcadeBtn->m_pTrackedFruit->scale =
+            arcadeBtn->m_pTrackedFruit->scale * ARCADE_FRUIT_SCALE;
+        arcadeBtn->m_pTrackedFruit->RotateFacingUp(
             false,
             _Vector3<float>(0.0f, 1.0f, 0.0f));
     }
-    m_pArcadeButton->SetText(
+    arcadeBtn->SetText(
         GETSTRING_CAST_0(LSTR_GM_ARCADE),
         game_work.m_RingColours[10],
         game_work.m_RingColours[11],
         41.0f, 12.0f, true, true);
-    game_work.mHud->AddControl(m_pArcadeButton);
+    game_work.mHud->AddControl(arcadeBtn);
+#if !defined(__bada__)
+    m_pArcadeButton = arcadeBtn;
+#endif
 }
 
 void GameModeScreen::RemoveButtons() {
     if (m_pBackButton)    { m_pBackButton->SetPendingRemoval();    m_pBackButton    = nullptr; }
     if (m_pClassicButton) { m_pClassicButton->SetPendingRemoval(); m_pClassicButton = nullptr; }
     if (m_pZenButton)     { m_pZenButton->SetPendingRemoval();     m_pZenButton     = nullptr; }
+#if !defined(__bada__)
     if (m_pArcadeButton)  { m_pArcadeButton->SetPendingRemoval();  m_pArcadeButton  = nullptr; }
+#endif
 }
 
 // ===================================================================
@@ -1088,27 +1096,29 @@ void GameModeScreen::CommingsSoonCallback() {
 }
 
 // Binary @ 0x00183814 (v1.6.1) — clears m_p*Button cache on HUDControl destroy;
-//                               online-MP slot also flings the orphan fruit off-screen.
+//                               online-MP slot (+0xcc) also flings the orphan fruit off-screen.
 void GameModeScreen::DeletedMenuButton(HUDControl* ctrl) {
     MenuButton* btn = static_cast<MenuButton*>(ctrl);
     // DIFFERS: port-specific back-button reap; v1.6.1 DeletedMenuButton @0x00183814
-    // does not null field_0xa0 (m_pBackButton) -- binary handles only classic/zen/arcade
-    // slots. Kept: guards against UAF if m_pBackButton is accessed after HUD reaps the
-    // button. Binary relies on HUD lifetime ordering the port may not fully replicate.
+    // does not null field_0xa0 (m_pBackButton) -- binary handles only the classic/zen
+    // slots and the online-MP slot (+0xcc). Kept: guards against UAF if m_pBackButton
+    // is accessed after HUD reaps the button. Binary relies on HUD lifetime ordering
+    // the port may not fully replicate.
     if (btn == m_pBackButton)    { m_pBackButton    = nullptr; return; }
     if (btn == m_pClassicButton) { m_pClassicButton = nullptr; return; }
     if (btn == m_pZenButton)     { m_pZenButton     = nullptr; return; }
-    if (btn == m_pArcadeButton)  {
-        m_pArcadeButton = nullptr;
-        // TODO: v1.6.1 0x00183814 -- arcade fruit fling on button delete (reads +0x18 fruit ptr, writes offscreen pos) not ported
-        return;
-    }
 #if !defined(__bada__)
+    // Port-only convenience cache; the binary has no Arcade slot (see the
+    // class-layout comment in the header), so there is no binary branch to match.
+    if (btn == m_pArcadeButton)  { m_pArcadeButton = nullptr; return; }
+#endif
     if (btn == m_pOnlineMpButton) {
         m_pOnlineMpButton = nullptr;
-        // Defunct: online-MP detached fruit fling (v1.6.1 binary @ 0x00183814)
+        // TODO: v1.6.1 0x00183814 (GameModeScreen::DeletedMenuButton) -- the +0xcc
+        // branch also flings the tracked fruit off-screen (reads +0x18 fruit ptr,
+        // writes offscreen pos); port only nulls the pointer. Inert on main: the
+        // slot is never populated (Defunct online MP).
     }
-#endif
 }
 
 // Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x001810e8 sets gameMode=1, m_State=4 + NetworkManager flag
