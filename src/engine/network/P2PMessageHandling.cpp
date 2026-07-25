@@ -23,6 +23,7 @@
 #include "entities/Fruit.h"
 #include "engine/math/MathUtil.h"
 #include "hud/HUD.h"
+#include "hud/ZenVersusControl.h"
 
 namespace Mortar {
 
@@ -108,17 +109,48 @@ void SendP2PPacket(Mortar::NetworkPacket& packet, bool reliable) {
 void LaunchP2PMatchMaker() {
 }
 
+// DIFFERS: Bada v1.6.1 stripped, revived from iOS 1.6.1 CreateMultiplayerControls @0x0002ac84
+// News a ZenVersusControl for the just-started online-versus session and adds
+// it to the HUD. Guarded by a static instance pointer so a second
+// session-start event (e.g. RetryOnlineMultiplayerGame) doesn't stack a
+// duplicate control; ClearMultiplayerControls (below) releases the guard on
+// disconnect so a fresh session after a full teardown gets its own instance.
+static ZenVersusControl* s_pZenVersusControl = 0;
+void CreateMultiplayerControls() {
+    if (s_pZenVersusControl != 0) {
+        return;
+    }
+    if (game_work.mHud == 0) {
+        return;
+    }
+    s_pZenVersusControl = new ZenVersusControl();
+    game_work.mHud->AddControl(s_pZenVersusControl, false);
+}
+
+// Port-only helper (no binary counterpart) -- removes and deletes the
+// session's ZenVersusControl, if any, and clears the CreateMultiplayerControls
+// guard so the next session-start gets a fresh instance. HUD::RemoveControl
+// unlinks the control from the draw/update list but does NOT delete it (see
+// HUD.cpp), so the delete here is explicit.
+static void ClearMultiplayerControls() {
+    if (s_pZenVersusControl != 0) {
+        if (game_work.mHud != 0) {
+            game_work.mHud->RemoveControl(s_pZenVersusControl);
+        }
+        delete s_pZenVersusControl;
+        s_pZenVersusControl = 0;
+    }
+}
+
 // MP-revival: msgCode 8 (CONNECTED / session-start) handler.
 // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8).
 // Resets per-session gameplay state so a freshly-established connection
 // starts from a clean slate, same as iOS 1.5's case-8 body.
 static void HandleP2PConnected() {
-    // TODO: iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8) -- iOS clears
-    // fixed MP player-name buffers on game_work before the NAMES event fills
-    // them in. The port's GameWork struct has no dedicated MP name-buffer
-    // fields (see GameWork.h -- no RE'd offset for them), so there is nothing
-    // to clear here yet; msgCode 9's handler (HandleP2PNames below) has the
-    // matching gap.
+    // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8): clears the
+    // fixed MP player-name buffers before the NAMES event (msgCode 9,
+    // HandleP2PNames below) fills them in. See GameWork::ResetPlayerNames.
+    game_work.ResetPlayerNames();
 
     InstantLevelDestroy(); // real port function -- see game/BombHit.h
 
@@ -143,6 +175,7 @@ static void HandleP2PConnected() {
     }
 
     CreateMultiplayerTutorialControl();
+    CreateMultiplayerControls();
 
     // Mark the session as an active online-MP match. m_bMPRetryPending is the
     // port's existing "MP session active" gate (read by TimeControl's
@@ -159,15 +192,16 @@ static void HandleP2PNames() {
     Mortar::NetworkManager::GetInstance()->GetPlayerName(0, buf0, sizeof buf0);
     Mortar::NetworkManager::GetInstance()->GetPlayerName(1, buf1, sizeof buf1);
 
-    // TODO: iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 9) -- iOS copies
-    // buf0/buf1 into fixed MP name buffers on game_work, uppercasing and
-    // truncating to 10 chars + "..." if longer. The port's GameWork struct
-    // has no RE'd offset for these buffers (see HandleP2PConnected's
-    // matching TODO above), so buf0/buf1 are fetched (NetworkManager::
-    // GetPlayerName is itself a stub returning "") but not stored anywhere
-    // yet. Wire this up once the name-buffer offsets are RE'd.
-    (void)buf0;
-    (void)buf1;
+    // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 9): copies the
+    // resolved names into game_work's per-player name buffers (see
+    // GameWork::SetPlayerName). iOS additionally uppercases and truncates to
+    // 10 chars + "..." if longer; NetworkManager::GetPlayerName is itself a
+    // defunct stub returning an empty string here (no GameCenter backend), so
+    // that truncation path never observably fires in this build -- omitted
+    // pending a real name-resolution backend. Local names are set separately
+    // (SetPlayerName) rather than through this network path.
+    if (buf0[0] != '\0') game_work.SetPlayerName(0, buf0);
+    if (buf1[0] != '\0') game_work.SetPlayerName(1, buf1);
 }
 
 // MP-revival: msgCode 7 (DATA) sub-dispatch -- the original single-level
@@ -441,6 +475,8 @@ void HandleDisconnection(int code) {
         case 6:  reason = "The connection to the other player was lost."; break;
         default: reason = "You have been disconnected."; break;
     }
+
+    ClearMultiplayerControls();
 
     if (IsOnlineMultiplayer()) {
         CleanupAndReturnToMainMenu();

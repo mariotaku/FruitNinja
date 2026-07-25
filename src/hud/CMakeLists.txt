@@ -30,4 +30,5 @@ target_sources(fruit-ninja-game PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ProgressionTimerControl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/BSButton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ScrollingMenuItemRemoveAnimate.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/ZenVersusControl.cpp
 )

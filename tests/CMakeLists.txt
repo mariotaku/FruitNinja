@@ -1493,3 +1493,17 @@ set_tests_properties(screenshot_slash_texture PROPERTIES TIMEOUT 60
 fn_add_game_test(test_superfruit_finale_tick test_superfruit_finale_tick.cpp)
 add_test(NAME superfruit_finale_tick COMMAND test_superfruit_finale_tick)
 set_tests_properties(superfruit_finale_tick PROPERTIES TIMEOUT 120)
+
+# ZenVersusControl (online-VERSUS HUD, revived from iOS 1.6.1 -- see
+# hud/ZenVersusControl.h/.cpp) isolated component render test. Headless --
+# passes with ctest -E screenshot (still needs a GL context to construct the
+# control + settle Update()).
+# Screenshot variant writes tmp/test/screenshots/versus_hud/{p1_leading,
+# p2_leading,tied}.png (needs GPU).
+fn_add_game_test(test_versus_hud_render test_versus_hud_render.cpp)
+add_test(NAME versus_hud_render COMMAND test_versus_hud_render)
+set_tests_properties(versus_hud_render PROPERTIES TIMEOUT 60
+    LABELS "component_zenversuscontrol")
+add_test(NAME screenshot_versus_hud COMMAND test_versus_hud_render --screenshot)
+set_tests_properties(screenshot_versus_hud PROPERTIES TIMEOUT 60
+    LABELS "category_rendering;component_zenversuscontrol")

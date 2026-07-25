@@ -12,6 +12,8 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdio>
+#include <cstring>
 #include "engine/math/_Vector3.h"
 #include "engine/math/Colour.h"
 #include "engine/render/Font.h"
@@ -237,6 +239,45 @@ struct GameWork {
     // field was never resolved to a game_work offset.
     // ASM-spec iOS1.5 RetryOnlineMultiplayerGame @0x00035bd4.
     float   m_P2PReadyTimeout;
+
+    // DIFFERS: Bada v1.6.1 stripped, revived from iOS 1.6.1 -- player-name
+    // storage for the versus HUD (ZenVersusControl.cpp). iOS reads these from
+    // game_work+0x1c1 (P0) / +0x2c1 (P1) / +0x3c1 (P2) / +0x4c1 (P3), 4x256
+    // buffers; iOS ResetPlayerNames @0x00031f58 memsets all four. This port's
+    // GameWork+0x1BD region (buf0..buf3 above) is already spoken for by the
+    // item/achievement total arrays (see the +0x1BD comment) -- NOT the same
+    // storage -- so these are dedicated fields appended past the
+    // layout-asserted tail, same pattern as m_bP2PPeerReady/m_P2PReadyTimeout
+    // above. Use GetPlayerName()/SetPlayerName()/ResetPlayerNames() below
+    // rather than touching m_PlayerName directly.
+    char m_PlayerName[4][256];
+
+    // Returns the stored name for player `i` (0..3), or a default "P<i+1>"
+    // placeholder if it has never been set (GameCenter's GetPlayerName is a
+    // defunct stub that always returns an empty string -- see
+    // NetworkManager.h -- so names are only ever set locally).
+    const char* GetPlayerName(int i) {
+        static char s_defaultBuf[8];
+        if (i < 0 || i > 3) return "";
+        if (m_PlayerName[i][0] == '\0') {
+            snprintf(s_defaultBuf, sizeof(s_defaultBuf), "P%d", i + 1);
+            return s_defaultBuf;
+        }
+        return m_PlayerName[i];
+    }
+
+    void SetPlayerName(int i, const char* name) {
+        if (i < 0 || i > 3) return;
+        if (!name) { m_PlayerName[i][0] = '\0'; return; }
+        std::strncpy(m_PlayerName[i], name, sizeof(m_PlayerName[i]) - 1);
+        m_PlayerName[i][sizeof(m_PlayerName[i]) - 1] = '\0';
+    }
+
+    // ASM-spec iOS1.6.1 ResetPlayerNames @0x00031f58: memsets all four
+    // 256-byte name buffers to zero.
+    void ResetPlayerNames() {
+        for (int i = 0; i < 4; ++i) m_PlayerName[i][0] = '\0';
+    }
 };
 
 extern "C" GameWork game_work;  // C-linkage global at .bss 0x002d931c, zero-initialised

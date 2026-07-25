@@ -137,4 +137,12 @@ void HandleDisconnection(int code);
 // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 / RetryOnlineMultiplayerGame @0x00035bd4.
 void CreateMultiplayerTutorialControl();
 
+// DIFFERS: Bada v1.6.1 stripped, revived from iOS 1.6.1 CreateMultiplayerControls @0x0002ac84
+// For an online-versus session, news a ZenVersusControl and HUD::AddControl's
+// it -- guarded by a static so repeat session-start events (retry, etc.)
+// don't stack duplicate controls. Null-safe: no-ops if game_work.mHud is
+// unset. Called from HandleP2PConnected (session-start / msgCode 8 CONNECTED)
+// alongside the existing CreateMultiplayerTutorialControl() call.
+void CreateMultiplayerControls();
+
 #endif // FN_ENGINE_NETWORK_P2P_MESSAGE_HANDLING_H
