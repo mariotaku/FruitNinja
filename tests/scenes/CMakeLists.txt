@@ -167,3 +167,21 @@ set_tests_properties(scene_jiblet PROPERTIES TIMEOUT 60)
 add_scene_test(scene_superfruit_finale scene_superfruit_finale.cpp)
 add_test(NAME scene_superfruit_finale COMMAND scene_superfruit_finale)
 set_tests_properties(scene_superfruit_finale PROPERTIES TIMEOUT 60)
+
+# ---- scene_versus_ingame: online-VERSUS in-game render/screenshot test ----
+# Drives a real LoopbackTransport session (host="us", guest=PASSIVE peer that
+# never sends gameplay packets) through the organic NetworkManager::Update ->
+# GlobalP2PMessageHandler -> HandleP2PConnected dispatch (sets the versus/combo
+# mode, resets WaveManager, and constructs the revived ZenVersusControl via
+# CreateMultiplayerControls), then bypasses the menu-click/camera-zoom state
+# machine the same way test_gameplay.cpp does to get real fruit spawning via
+# the actual WaveManager/ActorManager pipeline, and captures 3 PNGs:
+#   tmp/test/screenshots/scene_versus_ingame/early.png (fruit airborne, 0-0)
+#   tmp/test/screenshots/scene_versus_ingame/mid.png   (our score bumped via
+#     AddToCurrentScore, opponent fixed at 150 -- slider visibly biased)
+#   tmp/test/screenshots/scene_versus_ingame/late.png  (more waves, opponent
+#     score held fixed -- proves the peer stayed passive)
+# Port specific: standalone online-versus in-game visual capture test
+add_scene_test(scene_versus_ingame scene_versus_ingame.cpp)
+add_test(NAME scene_versus_ingame COMMAND scene_versus_ingame)
+set_tests_properties(scene_versus_ingame PROPERTIES TIMEOUT 60)
