@@ -13,6 +13,9 @@ on:
       - 'tools/assets/**'
       - 'CMakeLists.txt'
       - '.github/workflows/webos.yml'
+      # The job uses the local fetch-game-assets composite action, so changes
+      # to it must retrigger this build -- otherwise action fixes ship untested.
+      - '.github/actions/**'
 
 env:
   WEBOS_SDK: /opt/arm-webos-linux-gnueabi_sdk-buildroot
