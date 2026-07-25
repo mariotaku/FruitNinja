@@ -36,6 +36,19 @@
 //                      steps are driven organically (real code path) vs.
 //                      manually constructed (receiver-only, sender side not
 //                      yet auto-wired).
+//   7. ASYNC CONNECT -- proves Host()/Join() are non-blocking/async per
+//                      IMpTransport.h's contract: they return immediately
+//                      with IsConnecting()==true, IsConnected()==false;
+//                      pumping PollEvent() fewer than the delay's tick count
+//                      keeps it CONNECTING; the Nth tick delivers
+//                      MP_EVT_CONNECTED and flips IsConnected()==true.
+//   8. CONNECT FAILURE -- proves a failed connect attempt (via the
+//                      SetConnectShouldFail() injection hook) surfaces as
+//                      MP_EVT_CONNECT_FAILED (never MP_EVT_CONNECTED),
+//                      routes through NetworkManager::Update() to
+//                      HandleDisconnection (observable: MP session flags
+//                      cleared), and leaves IsConnected()==false with no
+//                      session-start effects.
 //
 // Pure in-process: no GPU, no audio, no SDL/window. Links fruit-ninja-game
 // directly (same pattern as test_scrollingmenu_updaterealtime.cpp) since
@@ -97,8 +110,26 @@ static void test_transport_basics() {
     CHECK(!a->IsConnected());
     CHECK(!b->IsConnected());
 
+    // MP-revival: Host()/Join() are async/non-blocking -- they return
+    // "attempt accepted", not "connected" (see IMpTransport.h contract).
+    // Right after calling them, both ends must be CONNECTING, not CONNECTED.
     CHECK(a->Host() == true);
     CHECK(b->Join("") == true);
+    CHECK(a->IsConnecting());
+    CHECK(b->IsConnecting());
+    CHECK(!a->IsConnected());
+    CHECK(!b->IsConnected());
+
+    // Pump PollEvent() on both ends until the async connect resolves
+    // (LOOPBACK_DEFAULT_CONNECT_DELAY ticks) -- mirrors a real per-frame poll
+    // loop. Drain to MP_EVT_NONE each tick, same pattern NetworkManager::
+    // Update uses.
+    for (int i = 0; i < Mortar::LoopbackTransport::LOOPBACK_DEFAULT_CONNECT_DELAY; ++i) {
+        while (a->PollEvent() != Mortar::MP_EVT_NONE) {}
+        while (b->PollEvent() != Mortar::MP_EVT_NONE) {}
+    }
+    CHECK(!a->IsConnecting());
+    CHECK(!b->IsConnecting());
     CHECK(a->IsConnected());
     CHECK(b->IsConnected());
 
@@ -272,6 +303,19 @@ static void test_seam_dispatch() {
 
     Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
 
+    // MP-revival: connect is async now -- pump both ends' PollEvent() (via
+    // Update()/direct calls) until CONNECTED before exercising data packets.
+    // `a` is drained through the real NetworkManager::Update() path (which
+    // also exercises HandleP2PConnected/HandleP2PNames as a side effect, same
+    // as before); `b` is drained directly since it's never installed as the
+    // active transport here.
+    for (int i = 0; i < Mortar::LoopbackTransport::LOOPBACK_DEFAULT_CONNECT_DELAY; ++i) {
+        nm->Update(1.0f / 60.0f);
+        while (b->PollEvent() != Mortar::MP_EVT_NONE) {}
+    }
+    CHECK(a->IsConnected());
+    CHECK(b->IsConnected());
+
     // -- PointsPacket -> SetOpponentScore --
     {
         PointsPacket pkt(1234, 0, 0, 0);
@@ -420,6 +464,19 @@ static void test_wave_sync_handshake() {
     b->Join("");
     Mortar::SetMpTransport(a);
 
+    // MP-revival: connect is async -- pump both ends to CONNECTED before
+    // sending. Draining via raw PollEvent() (not NetworkManager::Update())
+    // pops the queued MP_EVT_CONNECTED/MP_EVT_NAMES without dispatching them
+    // through GlobalP2PMessageHandler, so this test's game_work is untouched
+    // (case 6 is the one that exercises those HandleP2PConnected/
+    // HandleP2PNames side effects via the real Update() dispatch path).
+    for (int i = 0; i < Mortar::LoopbackTransport::LOOPBACK_DEFAULT_CONNECT_DELAY; ++i) {
+        while (a->PollEvent() != Mortar::MP_EVT_NONE) {}
+        while (b->PollEvent() != Mortar::MP_EVT_NONE) {}
+    }
+    CHECK(a->IsConnected());
+    CHECK(b->IsConnected());
+
     WaveManager* wm = WaveManager::GetInstance();
     wm->m_SyncLocalReady = 1;
     wm->m_SyncRemotePending = 0;
@@ -484,33 +541,54 @@ static void test_full_session_handshake() {
     Mortar::LoopbackTransport* guest = 0;
     Mortar::LoopbackTransport::CreatePair(host, guest);
 
+    // MP-revival: Host()/Join() are async/non-blocking -- return value means
+    // "attempt accepted", not "connected" (see IMpTransport.h contract).
     CHECK(host->Host() == true);
     CHECK(guest->Join("") == true);
     CHECK(host->LocalPlayerNumber() == 1);
     CHECK(guest->LocalPlayerNumber() == 2);
+    CHECK(host->IsConnecting());
+    CHECK(guest->IsConnecting());
+    CHECK(!host->IsConnected());
+    CHECK(!guest->IsConnected());
 
     Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
 
-    // -- Step 2: CONNECT + NAMES, organic (Host()/Join() queued MP_EVT_CONNECTED
-    // then MP_EVT_NAMES on each end; NetworkManager::Update drains them and
-    // dispatches through HandleP2PConnected/HandleP2PNames). Observable effect
-    // for HandleP2PConnected: sets game_work.gameMode = GAME_MODE_COMBO (the
-    // online-versus mode) and game_work.m_bMPRetryPending = 1 (session-active
-    // gate) -- see P2PMessageHandling.cpp. Baseline both fields first since
-    // game_work is a process-wide global that earlier cases may have touched.
+    // -- Step 2: CONNECT + NAMES. Async now: pump NetworkManager::Update()
+    // (installed transport alternating host/guest) LOOPBACK_DEFAULT_CONNECT_
+    // DELAY times per end so the connect attempt actually resolves before
+    // MP_EVT_CONNECTED/MP_EVT_NAMES are queued and drained (organic --
+    // NetworkManager::Update -> PollEvent -> HandleP2PConnected/
+    // HandleP2PNames). Observable effect for HandleP2PConnected: sets
+    // game_work.gameMode = GAME_MODE_COMBO (the online-versus mode) and
+    // game_work.m_bMPRetryPending = 1 (session-active gate) -- see
+    // P2PMessageHandling.cpp. Baseline both fields first since game_work is
+    // a process-wide global that earlier cases may have touched.
     game_work.gameMode = 0;
     game_work.m_bMPRetryPending = 0;
 
     Mortar::SetMpTransport(host);
-    nm->Update(1.0f / 60.0f);
+    for (int i = 0; i < Mortar::LoopbackTransport::LOOPBACK_DEFAULT_CONNECT_DELAY; ++i) {
+        nm->Update(1.0f / 60.0f);
+    }
+    CHECK(host->IsConnected());
+    CHECK(!host->IsConnecting());
     CHECK(game_work.gameMode == GAME_MODE_COMBO);
     CHECK(game_work.m_bMPRetryPending == 1);
 
-    // Guest end: same CONNECTED/NAMES drain, same observable effect.
+    // Guest end: same async CONNECTED/NAMES drain, same observable effect.
+    // (Guest's connect attempt already ran its delay ticks alongside host's
+    // above via the shared channel resolution gate in StartConnect/
+    // PollEvent, but PollEvent must still be called on the guest's own queue
+    // to drain+dispatch its events -- NetworkManager::Update does that here.)
     game_work.gameMode = 0;
     game_work.m_bMPRetryPending = 0;
     Mortar::SetMpTransport(guest);
-    nm->Update(1.0f / 60.0f);
+    for (int i = 0; i < Mortar::LoopbackTransport::LOOPBACK_DEFAULT_CONNECT_DELAY; ++i) {
+        nm->Update(1.0f / 60.0f);
+    }
+    CHECK(guest->IsConnected());
+    CHECK(!guest->IsConnecting());
     CHECK(game_work.gameMode == GAME_MODE_COMBO);
     CHECK(game_work.m_bMPRetryPending == 1);
 
@@ -602,6 +680,132 @@ static void test_full_session_handshake() {
     delete guest;
 }
 
+// ---------------------------------------------------------------------------
+// 7. ASYNC CONNECT -- Host()/Join() are non-blocking: return "attempt
+//    accepted" immediately (IsConnecting()==true, IsConnected()==false), and
+//    resolve to MP_EVT_CONNECTED only after LOOPBACK_DEFAULT_CONNECT_DELAY
+//    PollEvent() ticks on both ends (proves the async contract in
+//    IMpTransport.h end-to-end, independent of case 1's basic coverage).
+// ---------------------------------------------------------------------------
+static void test_async_connect() {
+    Mortar::LoopbackTransport* a = 0;
+    Mortar::LoopbackTransport* b = 0;
+    Mortar::LoopbackTransport::CreatePair(a, b);
+
+    const int N = Mortar::LoopbackTransport::LOOPBACK_DEFAULT_CONNECT_DELAY;
+    CHECK(N > 1); // otherwise the "still connecting" mid-loop assertion below is vacuous
+
+    // Host()/Join() return immediately -- non-blocking, "accepted" not "connected".
+    CHECK(a->Host() == true);
+    CHECK(b->Join("") == true);
+    CHECK(a->IsConnecting());
+    CHECK(b->IsConnecting());
+    CHECK(!a->IsConnected());
+    CHECK(!b->IsConnected());
+
+    // Pump N-1 ticks: still connecting, never jumps to CONNECTED early.
+    for (int i = 0; i < N - 1; ++i) {
+        CHECK(a->PollEvent() == Mortar::MP_EVT_NONE);
+        CHECK(b->PollEvent() == Mortar::MP_EVT_NONE);
+    }
+    CHECK(a->IsConnecting());
+    CHECK(b->IsConnecting());
+    CHECK(!a->IsConnected());
+    CHECK(!b->IsConnected());
+
+    // Final tick: MP_EVT_CONNECTED (then MP_EVT_NAMES) delivered, state flips.
+    CHECK(a->PollEvent() == Mortar::MP_EVT_CONNECTED);
+    CHECK(b->PollEvent() == Mortar::MP_EVT_CONNECTED);
+    CHECK(!a->IsConnecting());
+    CHECK(!b->IsConnecting());
+    CHECK(a->IsConnected());
+    CHECK(b->IsConnected());
+    CHECK(a->PollEvent() == Mortar::MP_EVT_NAMES);
+    CHECK(b->PollEvent() == Mortar::MP_EVT_NAMES);
+    CHECK(a->PollEvent() == Mortar::MP_EVT_NONE);
+    CHECK(b->PollEvent() == Mortar::MP_EVT_NONE);
+
+    delete a;
+    delete b;
+}
+
+// ---------------------------------------------------------------------------
+// 8. CONNECT FAILURE -- SetConnectShouldFail() injection resolves a connect
+//    attempt to MP_EVT_CONNECT_FAILED instead of MP_EVT_CONNECTED. Driven
+//    through the real NetworkManager::Update() dispatch to prove the failure
+//    routes to HandleDisconnection (observable via cleared MP session flags),
+//    IsConnected() stays false, and no session-start (HandleP2PConnected)
+//    effects run.
+// ---------------------------------------------------------------------------
+static void test_connect_failure() {
+    Mortar::LoopbackTransport* a = 0; // will fail to connect
+    Mortar::LoopbackTransport* b = 0;
+    Mortar::LoopbackTransport::CreatePair(a, b);
+
+    a->SetConnectShouldFail(2); // 2 = timeout (see HandleDisconnection's code map)
+
+    CHECK(a->Host() == true);
+    CHECK(b->Join("") == true);
+    CHECK(a->IsConnecting());
+    CHECK(!a->IsConnected());
+
+    // Baseline game_work MP flags to nonzero/sentinel so HandleDisconnection's
+    // clears are observable, and gameMode so we can prove HandleP2PConnected
+    // (session-start) never ran.
+    game_work.m_bP2PReady         = 1;
+    game_work.m_bP2PConnecting    = 1;
+    game_work.m_bP2POpponentReady = 1;
+    game_work.m_bMPRetryPending   = 1;
+    game_work.m_bP2PPeerReady     = 1;
+    game_work.m_P2PReadyTimeout   = 12.0f;
+    game_work.gameMode            = 0;
+
+    Mortar::SetMpTransport(a);
+    Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
+
+    // Pump exactly LOOPBACK_DEFAULT_CONNECT_DELAY ticks: still connecting/no
+    // effects until the last one, same async timing as a successful connect
+    // (case 7) -- only the outcome differs.
+    const int N = Mortar::LoopbackTransport::LOOPBACK_DEFAULT_CONNECT_DELAY;
+    for (int i = 0; i < N - 1; ++i) {
+        nm->Update(1.0f / 60.0f);
+        CHECK(a->IsConnecting());
+        CHECK(!a->IsConnected());
+    }
+    CHECK(game_work.m_bMPRetryPending == 1); // HandleP2PConnected has NOT run yet
+    CHECK(game_work.gameMode == 0);
+
+    // Final tick: MP_EVT_CONNECT_FAILED drains through NetworkManager::Update
+    // -> HandleDisconnection. b's peer end never sees CONNECTED either (the
+    // channel only resolves once, to FAILED, for a's side; b's own attempt is
+    // untouched by a's injected failure and would resolve independently --
+    // not exercised here since this test only cares about a's outcome).
+    nm->Update(1.0f / 60.0f);
+
+    CHECK(!a->IsConnecting());
+    CHECK(!a->IsConnected());
+
+    // HandleDisconnection's clears (P2PMessageHandling.cpp): all MP session
+    // flags reset to 0/0.0f.
+    CHECK(game_work.m_bP2PReady == 0);
+    CHECK(game_work.m_bP2PConnecting == 0);
+    CHECK(game_work.m_bP2POpponentReady == 0);
+    CHECK(game_work.m_bMPRetryPending == 0);
+    CHECK(game_work.m_bP2PPeerReady == 0);
+    CHECK(game_work.m_P2PReadyTimeout == 0.0f);
+
+    // No session-start: HandleP2PConnected's gameMode assignment never ran.
+    CHECK(game_work.gameMode == 0);
+
+    // No stray data pump: Poll() must stay a no-op post-failure (never connected).
+    uint8_t buf[64];
+    CHECK(a->Poll(buf, sizeof buf) == 0);
+
+    Mortar::SetMpTransport(0);
+    delete a;
+    delete b;
+}
+
 int main() {
     std::printf("test_mp_loopback: start\n");
 
@@ -627,6 +831,14 @@ int main() {
     int before6 = g_failures;
     test_full_session_handshake();
     std::printf("  [6] full session handshake (connect/names/ready/seed): %s\n", g_failures == before6 ? "OK" : "FAIL");
+
+    int before7 = g_failures;
+    test_async_connect();
+    std::printf("  [7] async connect (non-blocking Host/Join, delayed CONNECTED): %s\n", g_failures == before7 ? "OK" : "FAIL");
+
+    int before8 = g_failures;
+    test_connect_failure();
+    std::printf("  [8] connect failure (MP_EVT_CONNECT_FAILED -> HandleDisconnection): %s\n", g_failures == before8 ? "OK" : "FAIL");
 
     if (g_failures != 0) {
         std::printf("test_mp_loopback: FAIL (%d assertion(s) failed)\n", g_failures);

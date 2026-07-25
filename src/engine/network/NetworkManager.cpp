@@ -87,13 +87,17 @@ void DefaultButtonCallback() {
 }
 
 // MP-revival: real body -- drains the active transport's EVENT queue first
-// (session-setup handshake signals: CONNECTED/NAMES/DISCONNECTED -- see
-// IMpTransport::PollEvent), then its inbound DATA queue. Peeks each data
+// (session-setup handshake signals: CONNECTED/NAMES/DISCONNECTED/
+// CONNECT_FAILED -- see IMpTransport::PollEvent), then, ONLY if the
+// transport is actually connected, its inbound DATA queue. Peeks each data
 // message's wire header to learn its type, allocates the matching
 // NetworkPacket subclass via PacketFactory, deserialises the full payload,
 // and dispatches it through Mortar::GlobalP2PMessageHandler tagged
 // P2PMSG_DATA. Drains both queues fully each tick (Poll()/PollEvent() return
-// 0/MP_EVT_NONE when empty).
+// 0/MP_EVT_NONE when empty). Purely poll-driven -- never blocks: PollEvent()/
+// Poll() are non-blocking queue pops on every backend (see IMpTransport.h's
+// async contract), so this whole function completes within the current frame
+// regardless of connection state.
 // DIFFERS: revived -- no binary body, retail stub @0x2310c8.
 void NetworkManager::Update(float /*dt*/) {
     IMpTransport* t = GetMpTransport();
@@ -105,6 +109,9 @@ void NetworkManager::Update(float /*dt*/) {
     while ((ev = t->PollEvent()) != MP_EVT_NONE) {
         switch (ev) {
             case MP_EVT_CONNECTED:
+                // Session-start (msgCode 8) fires ONLY here, on the real
+                // async CONNECTED event -- never optimistically off Host()/
+                // Join()'s return value (see IMpTransport.h contract).
                 // Qualified call: see the data-pump note below for why this
                 // must be the free-function GlobalP2PMessageHandler, not
                 // NetworkManager's own defunct member of the same name.
@@ -116,9 +123,27 @@ void NetworkManager::Update(float /*dt*/) {
             case MP_EVT_DISCONNECTED:
                 HandleDisconnection(t->DisconnectCode());
                 break;
+            case MP_EVT_CONNECT_FAILED:
+                // A connect ATTEMPT failed/timed out before ever reaching
+                // CONNECTED -- funnel to the same HandleDisconnection path
+                // (clears MP session flags, returns to menu if a game was
+                // online) rather than a bespoke handler; the two events are
+                // distinguished only by which DisconnectCode() reason they
+                // carry.
+                HandleDisconnection(t->DisconnectCode());
+                break;
             default:
                 break;
         }
+    }
+
+    // Never dispatch in-band game data mid-connect (or after a failed/
+    // dropped connect) -- only once the transport has actually reached
+    // CONNECTED. LoopbackTransport::Poll() already no-ops in that case, but
+    // gating here too keeps the pump's intent explicit and holds for any
+    // future transport that might not self-gate.
+    if (!t->IsConnected()) {
+        return;
     }
 
     uint8_t buf[512];

@@ -25,16 +25,46 @@ namespace Mortar {
 // P2PMSG_DATA).
 // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8 / case 9).
 enum MpTransportEvent {
-    MP_EVT_NONE         = 0,
-    MP_EVT_CONNECTED    = 8, // session established -- mirrors iOS msgCode 8
-    MP_EVT_NAMES        = 9, // peer names available -- mirrors iOS msgCode 9
-    MP_EVT_DISCONNECTED = 10
+    MP_EVT_NONE           = 0,
+    MP_EVT_CONNECTED      = 8,  // session established -- mirrors iOS msgCode 8
+    MP_EVT_NAMES          = 9,  // peer names available -- mirrors iOS msgCode 9
+    MP_EVT_DISCONNECTED   = 10,
+    // MP-revival: a connect ATTEMPT (Host()/Join()) failed or timed out before
+    // ever reaching MP_EVT_CONNECTED. Distinct from MP_EVT_DISCONNECTED, which
+    // is a drop AFTER a session was established. DisconnectCode() carries the
+    // reason (e.g. 2=timeout) using the same code space HandleDisconnection
+    // already switches on.
+    MP_EVT_CONNECT_FAILED = 11
 };
 
+// ASYNC / NON-BLOCKING CONTRACT -- the game loop is single-threaded ~60fps and
+// must NEVER block on network I/O. Every method here returns within the
+// current frame; nothing here may sleep, spin, or perform blocking socket
+// calls. This is why the contract is poll-driven rather than callback- or
+// future-based: it plugs into the existing per-frame Update() shape with zero
+// threading.
+//
 // Contract:
-//  - Host()/Join() are async-starting: they may return true immediately
-//    (queued/connecting) or once actually connected, depending on the
-//    concrete backend. Poll IsConnecting()/IsConnected() to track progress.
+//  - Host()/Join(endpoint) are NON-BLOCKING and return QUICKLY: the return
+//    value means only "the connect attempt was accepted/started", NOT "we are
+//    connected". After either call returns, the transport is in a CONNECTING
+//    state: IsConnecting()==true, IsConnected()==false. The actual connection
+//    (or failure) completes LATER, asynchronously, surfaced only through
+//    PollEvent():
+//      * MP_EVT_CONNECTED       -- connect succeeded. IsConnected() becomes
+//                                   true, IsConnecting() becomes false.
+//      * MP_EVT_CONNECT_FAILED  -- connect failed or timed out.
+//                                   IsConnecting() becomes false,
+//                                   IsConnected() stays false.
+//    Callers MUST poll IsConnecting()/IsConnected()/PollEvent() once per
+//    frame to track progress; there is no synchronous "wait until connected"
+//    entry point by design.
+//  - A session-start side effect (e.g. the msgCode-8 handshake) must only run
+//    after an observed MP_EVT_CONNECTED, never optimistically off Host()/
+//    Join()'s return value.
+//  - Send()/Poll() while not connected (IsConnected()==false, whether IDLE,
+//    CONNECTING, or after a failed/dropped connection) are no-ops: Send()
+//    silently discards, Poll() returns 0. Never blocks, never crashes.
 //  - Send() enqueues exactly ONE whole message (message-framed, not a byte
 //    stream) for delivery to the remote peer. `reliable` selects a
 //    reliable/ordered vs. best-effort delivery mode where the backend
@@ -48,10 +78,15 @@ class IMpTransport {
 public:
     virtual ~IMpTransport() {}
 
-    // Become the session owner and wait for a peer to Join().
+    // Non-blocking: starts a connect attempt and returns immediately. `true`
+    // means the attempt was accepted (now CONNECTING), not that a peer is
+    // connected yet -- poll IsConnecting()/IsConnected()/PollEvent() to learn
+    // the outcome. Become the session owner and wait for a peer to Join().
     virtual bool Host() = 0;
 
-    // Connect to a host at `endpoint` (backend-defined address string).
+    // Non-blocking: starts a connect attempt to `endpoint` (backend-defined
+    // address string) and returns immediately. Same "accepted, not connected"
+    // return-value semantics as Host() -- see the class-level contract above.
     virtual bool Join(const char* endpoint) = 0;
 
     // Tear down the session. Safe to call when not connected.
@@ -78,17 +113,18 @@ public:
     virtual int Poll(uint8_t* out, int cap) = 0;
 
     // MP-revival: pop the next queued transport EVENT (session-setup
-    // handshake signal -- MP_EVT_CONNECTED/MP_EVT_NAMES/MP_EVT_DISCONNECTED),
-    // as opposed to a data packet. Returns MP_EVT_NONE when no event is
-    // queued. Callers loop PollEvent() until MP_EVT_NONE, same drain pattern
-    // as Poll(). Events and data messages are queued/drained independently
-    // (separate queues) -- draining one does not affect the other.
+    // handshake signal -- MP_EVT_CONNECTED/MP_EVT_NAMES/MP_EVT_DISCONNECTED/
+    // MP_EVT_CONNECT_FAILED), as opposed to a data packet. Returns
+    // MP_EVT_NONE when no event is queued. Callers loop PollEvent() until
+    // MP_EVT_NONE, same drain pattern as Poll(). Events and data messages are
+    // queued/drained independently (separate queues) -- draining one does not
+    // affect the other. Never blocks: purely pops from an in-memory queue.
     virtual int PollEvent() = 0;
 
-    // MP-revival: reason code for the most recent MP_EVT_DISCONNECTED event
-    // (see HandleDisconnection's `code` param in P2PMessageHandling.h for the
-    // code->reason-string mapping). Default 1 ("peer left") when the backend
-    // has no richer classification.
+    // MP-revival: reason code for the most recent MP_EVT_DISCONNECTED or
+    // MP_EVT_CONNECT_FAILED event (see HandleDisconnection's `code` param in
+    // P2PMessageHandling.h for the code->reason-string mapping). Default 1
+    // ("peer left") when the backend has no richer classification.
     virtual int DisconnectCode() const { return 1; }
 };
 
