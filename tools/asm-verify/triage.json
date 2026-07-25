@@ -132,6 +132,12 @@
     "score": 48420,
     "verdict": "ACCEPT-cosmetic"
   },
+  "_Z10CheckComboPiiS_": {
+    "asm_hash": "204bcbc3ceb077cc",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (prior systemic rationale did not cover the whole delta): inverted ABAB gate, and the 0x14/0x15 comparisons tested slot.type instead of slot.n (binary CheckCombo @0x001320b4). FIXED in 29198a33. Fresh sweep should confirm.",
+    "verdict": "MATCH-FIX-APPLIED"
+  },
   "_Z10GameUpdatefb": {
     "decided_at": "2026-06-18T07:20Z",
     "max_score": 61600,
@@ -571,6 +577,12 @@
     "score": 1210,
     "verdict": "ACCEPT-deferred"
   },
+  "_ZN10DojoScreen13CreateButtonsEv": {
+    "asm_hash": "c0769b16e8cdd7e4",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "Whole delta accounted for (binary @0x0016ad9c): binary's 6th ctor arg is an EMPTY function vs port nullptr; no-op virtual Init()->Reset() calls; delegate ctor/dtor scaffolding. All textures/positions/strings/colours/sizes verified equal. No live-path divergence remains.",
+    "verdict": "ACCEPT-cosmetic"
+  },
   "_ZN10DojoScreen13UnLoadContentEv": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 2800,
@@ -672,6 +684,12 @@
     "reason": "R4 W5 fix: MainScreen::game& moved to after m_pFont (+0x11c, last binary-faithful field) -- eliminates +4 drift. pPlayButton now reads at [r0,#0x9c], pDojoButton at [r0,#0xa0], pQuitBtn at [r0,#0xa4], pMoreGamesBtn at [r0,#0xa8]. Static_asserts added for m_OrigSize/pPlayButton/pDojoButton/pQuitBtn/pMoreGamesBtn/m_pFont offsets. Re-verify on next asm-verify run. [score refreshed 2026-05-17T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3245/2100 -> 5190/2100]",
     "score": 5190,
     "verdict": "ACCEPT-deferred"
+  },
+  "_ZN10MainScreen13CreateButtonsEv": {
+    "asm_hash": "ab4a86655cf0dd93",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "Whole delta accounted for (binary @0x001961f8): ~250 binary instrs are a DEAD 4th 'MoreGames' button block whose guard re-reads +0xa8 immediately after the quit block fills it, so it is unreachable in v1.6.1; two CreateNormalLeaderboardButton calls whose target is 'return 0' (defunct); port out-lines CreateQuitButton; no-op virtual Init() calls. All textures/positions/strings/colours verified equal. No live-path divergence remains.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MainScreen13MusicCallbackEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -901,6 +919,12 @@
     "reason": "Score 3940/2200. Multiplayer state differences. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3940/2200 -> 4500/2500]",
     "score": 4500,
     "verdict": "ACCEPT-deferred"
+  },
+  "_ZN10MenuButton4DrawEPf": {
+    "asm_hash": "8400d91c02a199c7",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "Whole delta accounted for (binary @0x0019c2e4): port's TTF label backend, inlined Matrix44 helpers vs out-of-line T_11xx thunks, and an unrolled mesh-build loop. Alpha ramp, layer demotion, press-dim, label order, NEW-badge bob and full sparkle geometry all verified equal. The separate known gap lives in CreateFruit @0x0019b6fc (already TODO'd), not Draw.",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10MenuButton4InitE8_Vector3IfEN6Mortar9Delegate0IvEEiS1_S4_": {
     "decided_at": "2026-06-18T01:24Z",
@@ -1280,11 +1304,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11BonusScreen6UpdateEf": {
-    "decided_at": "2026-06-18T02:22Z",
-    "max_score": 72700,
-    "reason": "BonusScreen::Update -- port has documented TODOs: slide-in math (src/screens/BonusScreen.cpp:336), SoundManager wiring. Score 82438/72400 [refreshed 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 82438/72400 -> 89925/72700]",
-    "score": 82590,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "3c437a75a83eb3cc",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07. PARTIALLY FIXED: drum-roll never ramped its volume -- binary calls SetVolume every frame, 0.5->1.166 gain (binary @0x00163dd0); fixed in f14f9313. STILL OPEN (suspected, NOT yet confirmed): (a) missing slide-in one-shot SFX; (b) sine-vs-linear slide easing; (c) per-award reveal alpha/pulse channels. Next pass: confirm/fix these three before any ACCEPT.",
+    "verdict": "FIX-NEEDED"
   },
   "_ZN11BonusScreen8AddAwardE6ColourN6Mortar8SmartPtrINS1_7TextureEEEPKci": {
     "decided_at": "2026-06-18T02:22Z",
@@ -1972,11 +1995,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11PauseScreen6UpdateEf": {
-    "decided_at": "2026-06-14T07:00Z",
-    "max_score": 102500,
-    "reason": "game_work offsets MATCH: port accesses [r0,#0x1a8] (vstr s10) and [r0,#0x164] (ldr/cbz) via game_work loaded from GOT+0x350 -- same field offsets as binary. Score 141500/102500 -- very large inherent divergence driven by WaveManager::GetInstance guard, PauseScreen Tier-2 stubs (P2 buttons, bomb-flash, HitMenuBomb, retry slide-in). See src/screens/PauseScreen.cpp:1-9. No game_work field at wrong offset. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 142085/102500 2026-06-14T05:55Z]",
-    "score": 141500,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "e6ae12319caf5d48",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (prior Tier-2-stub rationale did not cover the whole delta): m_Alpha set to 1.0 vs binary 0.0 on flash completion, and resume base X used 0.5*OX vs binary 0.375*OX (binary @0x001a5ebc). FIXED in e48a3519. Fresh sweep should confirm.",
+    "verdict": "MATCH-FIX-APPLIED"
   },
   "_ZN11PauseScreen7ReleaseEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2068,6 +2090,12 @@
     "reason": "PowerUpShop::SetBuyButtonState -- score 5090/3600 (grew from 4900). Same PowerUpShop struct field offset divergence as ButtonSlicedEv (m_pPurchaseInfo at +0x80 port vs +0x94 binary). Will heal automatically once the PowerUpShop / PowerUp struct layout fix lands per _ZN7PowerUp12LoadTexturesEv FIX-NEEDED. ACCEPT-deferred pending that fix. [fresh-sweep re-triage 2026-06-14T05:55Z]",
     "score": 5965,
     "verdict": "ACCEPT-deferred"
+  },
+  "_ZN11PowerUpShop4DrawEPf": {
+    "asm_hash": "39114289b97999b6",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "Whole delta accounted for (binary @0x001a8364): BOTH PowerUpShop ctors have ZERO code xrefs, so the class is never instantiated in v1.6.1 (linked-but-unreferenced relic). Draw is unreachable; no divergence here can be user-visible. Accepted indefinitely.",
+    "verdict": "ACCEPT-defunct"
   },
   "_ZN11PowerUpShop4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2180,11 +2208,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN11SlashEntity12UpdatePointsEf": {
-    "decided_at": "2026-06-18T01:24Z",
-    "max_score": 81500,
-    "reason": "Score 85400/85100. Very close to max. Minor GOT/PIC differences. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 85400/85100 -> 125726/81500]",
-    "score": 151971,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "b5f030dcd0fe4f50",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (was ACCEPT-deferred on a GOT/PIC rationale that did not cover the whole delta): collision line skipped FruitCamera::TranslatePos (stale TODO), and the RETIRE_B threshold was missing the x9 factor (binary @0x001e6914). FIXED in 29198a33. Fresh sweep should confirm.",
+    "verdict": "MATCH-FIX-APPLIED"
   },
   "_ZN11SlashEntity13SetModColoursEP6ColouriifPKcS3_bS3_S3_": {
     "decided_at": "2026-06-14T05:55Z",
@@ -2557,10 +2584,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11WaveManager10UpdateWaveEfii": {
-    "asm_hash": "cdb677ccb9f74b9f",
-    "decided_at": "2026-07-02T00:00Z",
-    "reason": "Core state machine correct: pre-spawn delay, spawner timer, wave-end detection, wait timer, GetNextWave call. Binary's missing blocks are defunct MP retry timers (m_NetTimerA/B at +0x44/+0x48) and freeze-check before GetNextWave (PowerUpManager::GetActiveSingle not yet wired). Port uses named API vs binary GOT blx chain; std:: container overhead inflates LCS gap. Binary @ 0x00115d7c.",
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "b93b43c9430f30db",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (was ACCEPT-deferred on defunct-MP/container rationale that did not cover the whole delta): port skipped the unconditional Rand32 draw, desyncing the seeded RNG stream (binary @0x00125d7c). FIXED in c32837ce. Fresh sweep should confirm.",
+    "verdict": "MATCH-FIX-APPLIED"
   },
   "_ZN11WaveManager11GetInstanceEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3173,11 +3200,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12ScreenEffect6UpdateEfff": {
-    "decided_at": "2026-06-18T02:35Z",
-    "max_score": 43300,
-    "reason": "ScreenEffect::Update (binary @ 0x00138844) -- 3 real logic fixes confirmed present: (a) sin-phase constant 65536->32764.0f (src/game/ScreenEffect.cpp:440, binary DAT_00148adc); (b) emitter cull rewritten: m_RateScale=0 when remaining<0.8f, no destroy (src/game/ScreenEffect.cpp:500-502, binary @ 0x00148d24); (c) sound loop forward iteration with fired-marker m_StartT=100.0f, vol=0.6599f, Delegate1 overload (src/game/ScreenEffect.cpp:513-521, binary @ 0x00148d84). Residual divergence is CALLEE-GAP: binary list-iteration vs port vector-iteration codegen, inlined HUD spawn and PSP particle manager calls vs still-stubbed subsystems. Documented TODO at src/game/ScreenEffect.cpp:522 (0x00148e3c erase+m_EndT<0 corner). FIX-NEEDED: no. [score re-anchored 2026-06-14 post close-top-50 fixes: 67490/43300]",
-    "score": 69146,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "d70bcfe677ab0b6c",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (prior callee-gap rationale did not cover the whole delta): missing lazy AddControl block, standalone off-by-one frame, and 0.6599f vs 0.66f constant (binary @0x00148844). FIXED in 160f7121. Fresh sweep should confirm.",
+    "verdict": "MATCH-FIX-APPLIED"
   },
   "_ZN12ScreenEffect8ActivateEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4446,11 +4472,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN14GameOverScreen6UpdateEf": {
-    "decided_at": "2026-06-14T07:00Z",
-    "max_score": 102500,
-    "reason": "game_work offsets MATCH. FIXED 2026-06-18: removed port-only MortarGame guard and inlined RunStateMainDisplay (now goto fall-through matching binary). Residual: ARM 15-entry jump table (addls pc,pc,r2,lsl#2) vs port 15-entry tbh; binary vcvt animation tick at entry vs port after state table. Expected score reduction ~24415. Needs asm-verify re-sweep. [prior score 126915/102500]",
-    "score": 126915,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "fa666d19bfc6bfef",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (prior jump-table/codegen rationale did not cover the whole delta): banner tracked size.y instead of m_AnimPos.y, plus an invented m_OffsetPos write not in the binary (binary @0x00186c80). FIXED in 5746acf1. Fresh sweep should confirm.",
+    "verdict": "MATCH-FIX-APPLIED"
   },
   "_ZN14GameOverScreen7ReleaseEv": {
     "decided_at": "2026-06-14T07:00Z",
@@ -5204,6 +5229,12 @@
     "reason": "Port adds null checks on SpawnFruit results and SaveData; binary is more direct. Extra conditional around stat AddToTotal. Consistent with incomplete SuperFruitControl port.",
     "verdict": "ACCEPT-deferred"
   },
+  "_ZN17SuperFruitControl6UpdateEf": {
+    "asm_hash": "db9c4b373d4d55b6",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07: throw gate read m_SpinAxis.x instead of host->m_Gravity.x, and port always wrote m_TimeScale where the binary has a no-write arm (binary @0x001bca10). FIXED in 57b6a5fb. Fresh sweep should confirm.",
+    "verdict": "MATCH-FIX-APPLIED"
+  },
   "_ZN17SuperFruitControl9SpawnJibsEv": {
     "decided_at": "2026-07-01T00:00Z",
     "reason": "sig-mismatch: binary SuperFruitControl::SpawnJibs() vs port SpawnJibs(int). Port adds int param not in binary. Fix: drop the int param.",
@@ -5865,11 +5896,10 @@
     "verdict": "FIX-NEEDED"
   },
   "_ZN4Bomb6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 43000,
-    "reason": "Bomb::Update -- port uses MortarGame singleton guard vs binary blx GOT; fuse/activate TODO blocks. Score 63775/42500 [refreshed 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 63825/42500 -> 70145/43000]",
-    "score": 70145,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "a8df754672cf9792",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (was ACCEPT-deferred). ALIVE and MENU-HIT rotation branches were attached to the WRONG m_bHit arms -- 0x001d6654 plain int16 add = alive arm; 0x001d624c dt-scaled vmla = menu-hit arm (confirmed by asm-inspector); plus wrong WaveManager field, wrong RNG source, and missing Bomb-Fuse call (binary @0x001d6098). Fix in progress, NOT yet landed.",
+    "verdict": "FIX-NEEDED"
   },
   "_ZN4Bomb7MakeFatEb": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6326,11 +6356,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN5Fruit5SliceEv": {
-    "decided_at": "2026-06-18T01:41Z",
-    "max_score": 60000,
-    "reason": "Fruit::Slice -- branch fix/slice-juice-mechanics rewrote the function with RE-derived logic: angle-straddle cross-product (vnmls/vadd/fabsf), crit x1.75 (sl+=2 + vmul s19), rand-select via Math::Random::Rand32 vs binary blx f3650, sinf/cosf spread, SplatEntity::GetFree+MakeSplat juice loop. Score 128492->125113/73900 (slight improvement; still above max_score due to GOT chain vs direct-call structural diff and full function size). Branch changes are intentional RE-derived; not a regression. ACCEPT-deferred pending full Fruit::Slice RE pass to close remaining gap. [score updated 2026-05-31: branch fix/slice-juice-mechanics] [fresh-sweep 2026-06-14T05:19Z: score 125113/73900 -> 88987/60000]",
-    "score": 87852,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "79101c77f88446fd",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "False-accept mined 2026-07 (was ACCEPT-deferred on GOT-chain/structural rationale). Real gaps vs binary @0x001dcba0: missing m_SliceBounceTimer/m_SliceVelocity stores at 0x001dcbbc-d0; missing paused-crit clear at 0x001dcc70; super-fruit flipSide + crit-velocity-override gates absent; flip-path half angles rotated ~180 deg (binary re-adds 0x7ff8 before Sin/CosIdx at 0x001dd1f8-0x001dd30c); constant must be 10920.0f not 10912.0f; splat draw is Rand32(0xfff0) not Rand32(0x10000)&0xFFF0. Not yet fixed.",
+    "verdict": "FIX-NEEDED"
   },
   "_ZN5Fruit6UpdateEf": {
     "decided_at": "2026-06-14T06:00Z",
@@ -7592,6 +7621,12 @@
     "asm_hash": "57dade4603a2e833",
     "decided_at": "2026-06-21T00:00Z",
     "reason": "FALSE POSITIVE (re-analyst #90c, 2026-06-21): the SetGradient .cpp is already correct (rewritten + ASM-verified 2026-06-13): 4-byte Colour-word storage + change-detection at m_FillTop@0x7C/m_FillBottom@0x80/m_ColourMode@0x8C/m_MetallicFlag@0x90. The 'byte storage at ~0x4D' evidence does not match current source. Only divergence: the port omits the binary's perGlyph!=0 immediate FancyBakedString::ApplyGradient branch (port re-applies in Draw) -- intentional port-specific (no FancyBakedString). Header-comment offsets corrected + DIFFERS marker added in src.",
+    "verdict": "ACCEPT-cosmetic"
+  },
+  "_ZN6Mortar14BakedStringBox13RebuildMeshesEv": {
+    "asm_hash": "6ccc211ec8eac6c8",
+    "decided_at": "2026-07-26T00:00Z",
+    "reason": "Whole delta accounted for (binary @0x00246944): deliberate documented TTF re-architecture -- glyph pre-render + BuildPendingTextures, measure-only MeasureWrap, RebuildAlignments folded in. The binary path itself is present and correct. Accepted indefinitely as a documented // DIFFERS deviation.",
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14BakedStringBox13ReshapeBoundsEiiii": {

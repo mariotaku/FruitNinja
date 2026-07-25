@@ -124,3 +124,16 @@ Each verdict is sticky per `asm_hash` in `triage.json`; SUSPICIOUS/DIVERGE rows
 go to the `asm-triager` agent (ACCEPT-cosmetic / ACCEPT-deferred / FIX-NEEDED).
 Incremental runs are ~1.5s with no LLM calls. Triage definitions:
 `.claude/agents/asm-triager.md`.
+
+`MATCH-FIX-APPLIED` marks a row whose bug was fixed in a named commit. It is
+deliberately NOT one of the four sticky verdicts, so `asm-verify.py` ignores it
+for stickiness and the symbol re-scores from scratch on the next full sweep --
+the entry exists to preserve provenance, not to pin a verdict.
+
+**Systemic-rationale rule.** An ACCEPT whose rationale is a systemic cause
+(GOT/PIC encoding, register allocation, container swap, inlining, rate-split)
+must explicitly assert that the cause accounts for the WHOLE divergence, not
+merely its largest part. A systemic rationale on a large-body,
+high-unmatched-ratio symbol is exactly the shape that hides real bugs
+(calibration case: `ScrollingMenu::Update`, accepted at 65% unmatched, concealed
+a missing `m_SnapDist` store).
