@@ -470,29 +470,28 @@ void SuperFruitControl::Update(float dt)
     } else {
         // ===== Timer still < Lifetime: throw/anticipation phase =====
 
+        // DIFFERS: original = unconditional [this+0x7c] deref (v1.6.1 SuperFruitControl::Update
+        //   @0x001bca10, no null check at 0x001bd0c0), using a null-guard because a null host
+        //   deref is not worth reproducing.
         if (m_pHostFruit) {
-            // host-fruit time-scale (Fruit+0x98 = m_TimeScale) driven by a position
-            // clamp-ramp. Only the spin.x==0 arm is RE'd; it selects pos.y (when the
-            // fruit is descending) or pos.x (sign by vel.x) as the ramp input.
-            if (m_SpinAxis.x == 0.0f) {
+            // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10 (gate 0x001bd0c0-0x001bd124):
+            //   host-fruit time-scale (Fruit+0x98 = m_TimeScale) driven by a position clamp-ramp,
+            //   gated on host->m_Gravity.x (Fruit+0xA0, vldr s15,[r6,#0xA0]):
+            //     gravity.x != 0            -> ts = T_1616(pos.x, vel.x>=0 ? 216 : -216,
+            //                                                     vel.x>=0 ? 144 : -144)
+            //     gravity.x == 0 && vel.y<0 -> ts = T_1616(pos.y, -128, -96)
+            //     gravity.x == 0 && vel.y>=0 -> NO write (bpl 0x001bd124 skips the store)
+            if (m_pHostFruit->m_Gravity.x != 0.0f) {
                 float ts;
-                if (m_pHostFruit->vel.y < 0.0f) {
-                    ts = T_1616(m_pHostFruit->pos.y, -128.0f, -96.0f);
-                } else if (m_pHostFruit->vel.x < 0.0f) {
+                if (m_pHostFruit->vel.x < 0.0f) {
                     ts = T_1616(m_pHostFruit->pos.x, -216.0f, -144.0f);
                 } else {
                     ts = T_1616(m_pHostFruit->pos.x, 216.0f, 144.0f);
                 }
                 m_pHostFruit->m_TimeScale = ts;
+            } else if (m_pHostFruit->vel.y < 0.0f) {
+                m_pHostFruit->m_TimeScale = T_1616(m_pHostFruit->pos.y, -128.0f, -96.0f);
             }
-            // NOTE: v1.6.1 Update @0x001bd0f8: when this control's own m_SpinAxis.x != 0,
-            //   host Fruit m_TimeScale = T_1616(host->pos.x, host->vel.x>=0 ? 216 : -216,
-            //   host->vel.x>=0 ? 144 : -144). (Not the host Fruit's own m_SpinAxis -- Fruit
-            //   has no such member; the gate reads THIS control's +0xa8 field, which is only
-            //   ever non-zero after Sliced() rolls it via GetSliceDir, i.e. after the throw/
-            //   anticipation phase this branch runs in has already ended.) Dormant in the port:
-            //   during this phase m_SpinAxis is always (0,0,0) from the ctor, so this arm never
-            //   fires; the exact binary formula for the x!=0 case is otherwise unconfirmed.
             PushBombsAway(dt);
         }
 
