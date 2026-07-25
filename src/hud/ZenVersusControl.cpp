@@ -157,7 +157,11 @@ void ZenVersusControl::DrawOrder(float* hudScale, int layerMask) {
 
     if (layerMask & Mortar::HUD_LAYER_MENU_BG) {
         float barScale = m_IntroScale;
-        float barY = 158.0f + m_WobbleOffset;
+        // Approximate on-screen placement: the iOS DrawOrder lays the bar out
+        // in a texture-width-relative DrawString space that doesn't map 1:1 to
+        // the port ortho, so exact iOS coords render off-screen/tiny; keep the
+        // bar a fixed wide strip in the upper HUD band, fully on-screen.
+        float barY = 138.0f + m_WobbleOffset;
 
         // Backdrop bar -- full-width strip at the top of the screen.
         if (s_sliderBarWifi.IsValid()) {
@@ -200,18 +204,22 @@ void ZenVersusControl::DrawOrder(float* hudScale, int layerMask) {
         Colour p0NameColour(13, 49, 228, 255);
         Colour p1NameColour(126, 0, 255, 255);
 
+        // Scores just below the slider bar, spread left/right of centre.
         if (game_work.pFontNumbers.IsValid()) {
             game_work.pFontNumbers->DrawString(48.0f * m_ScoreScale[0], 1.0f, 0.0f,
-                m_ScoreStr0, _Vector3<float>(-100.0f, 138.0f, 0.0f), white, Mortar::FONT_ALIGN_CENTER);
+                m_ScoreStr0, _Vector3<float>(-95.0f, 95.0f, 0.0f), white, Mortar::FONT_ALIGN_CENTER);
             game_work.pFontNumbers->DrawString(48.0f * m_ScoreScale[1], 1.0f, 0.0f,
-                m_ScoreStr1, _Vector3<float>(100.0f, 138.0f, 0.0f), white, Mortar::FONT_ALIGN_CENTER);
+                m_ScoreStr1, _Vector3<float>(95.0f, 95.0f, 0.0f), white, Mortar::FONT_ALIGN_CENTER);
         }
 
+        // Player names at the slider bar ends, inset so both stay on-screen
+        // (iOS ±base_X maps off the port's [-240,240] field; ±185 keeps a
+        // ~10-char name fully visible).
         if (game_work.pFontMain.IsValid()) {
             game_work.pFontMain->DrawString(24.0f, 1.0f, 0.0f,
-                game_work.GetPlayerName(0), _Vector3<float>(-235.0f, 158.0f, 0.0f), p0NameColour, Mortar::FONT_ALIGN_CENTER);
+                game_work.GetPlayerName(0), _Vector3<float>(-185.0f, 138.0f, 0.0f), p0NameColour, Mortar::FONT_ALIGN_CENTER);
             game_work.pFontMain->DrawString(24.0f, 1.0f, 0.0f,
-                game_work.GetPlayerName(1), _Vector3<float>(235.0f, 158.0f, 0.0f), p1NameColour, Mortar::FONT_ALIGN_CENTER);
+                game_work.GetPlayerName(1), _Vector3<float>(185.0f, 138.0f, 0.0f), p1NameColour, Mortar::FONT_ALIGN_CENTER);
         }
     }
 
