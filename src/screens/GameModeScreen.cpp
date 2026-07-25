@@ -214,7 +214,7 @@ namespace {
     // (s_multiplayerConnect/s_multiplayerMode -- "multi_player_connect.tex" /
     // "multiplayer_iphone.tex"), English-only. The port uses NEITHER: it skins the
     // VS ring from the same blank ring + SetText() convention every other
-    // mode-select button uses (m_RingTex[15] red_skinny_ring.tex + a localised
+    // mode-select button uses (m_RingTex[16] red_ring.tex + a localised
     // TTF label, see UpdateOnlineMultiplayerButton) so the one ring that starts
     // matchmaking isn't the single untranslatable element on this screen.
 }
@@ -275,7 +275,7 @@ void GameModeScreen::LoadContent() {
     if (!s_connectingToGameCenter.IsValid())
         s_connectingToGameCenter = Mortar::TextureManager::LoadLocalisedTexture("gc_connecting.tex");
     // Port specific: no s_multiplayerConnect/s_multiplayerMode load here -- the VS
-    // ring uses game_work.m_RingTex[15] (already loaded by PreloadRings) + a
+    // ring uses game_work.m_RingTex[16] (already loaded by PreloadRings) + a
     // localised SetText label instead of baked English art (see the s_connectToGameCenter
     // block comment above and UpdateOnlineMultiplayerButton).
 }
@@ -1461,7 +1461,14 @@ void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
         m_pOnlineMpButton = new MenuButton();
         // Port specific: blank ring (see LSTR_GM_ONLINE/LSTR_GM_CONNECT comment
         // above) -- texture never changes with connection state, only the label does.
-        m_pOnlineMpButton->m_Texture = game_work.m_RingTex[15];  // red_skinny_ring.tex
+        // red_ring.tex, NOT red_skinny_ring.tex: the skinny variant's artwork
+        // only fills ~57% of its own canvas (opaque span 41..150 of 192 when
+        // normalised), whereas every mode ring -- green_dot, orange_star,
+        // blue_stripe, red_ring -- fills ~97% (span 3..188). Drawn at the same
+        // world size the skinny ring therefore renders ~60% the diameter of its
+        // neighbours and the label at radius 39.5 lands outside its band. Shared
+        // with the BACK button, which draws the same texture at 0.75 scale.
+        m_pOnlineMpButton->m_Texture = game_work.m_RingTex[16];  // red_ring.tex
         {
             MenuButton* btn = m_pOnlineMpButton;
             m_pOnlineMpButton->Init(
