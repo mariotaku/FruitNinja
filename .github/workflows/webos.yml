@@ -38,14 +38,19 @@ jobs:
         with:
           repository: "openlgtv/buildroot-nc4"
           latest: true
-          fileName: "arm-webos-linux-gnueabi_sdk-buildroot.tar.gz"
+          # Upstream renamed the SDK assets to be host-arch specific (release
+          # webos-a38c582 onwards): "<triple>_sdk-buildroot-<hostarch>.tar.gz".
+          # ubuntu-latest runners are x86_64. The tarball still extracts to
+          # arm-webos-linux-gnueabi_sdk-buildroot/ (WEBOS_SDK above) and still
+          # ships relocate-sdk.sh, so only the download name changes.
+          fileName: "arm-webos-linux-gnueabi_sdk-buildroot-x86_64.tar.gz"
           out-file-path: "/tmp"
 
       - name: Extract + Relocate webOS NDK
         shell: bash
         run: |
           sudo mkdir -p "$(dirname "$WEBOS_SDK")"
-          sudo tar xzf /tmp/arm-webos-linux-gnueabi_sdk-buildroot.tar.gz -C "$(dirname "$WEBOS_SDK")"
+          sudo tar xzf /tmp/arm-webos-linux-gnueabi_sdk-buildroot-x86_64.tar.gz -C "$(dirname "$WEBOS_SDK")"
           sudo "$WEBOS_SDK/relocate-sdk.sh"
 
       - name: Create Python venv (asset staging deps)
