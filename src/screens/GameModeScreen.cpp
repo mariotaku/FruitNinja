@@ -214,6 +214,14 @@ namespace {
 // lerp) and the VS button lifecycle (Update case 2 -> UpdateOnlineMultiplayerButton).
 static bool s_supportsP2P = false;
 
+// v1.6.1 file-static `_Vector3<float> scale` @0x00314ddc (mangled `_ZL5scale`;
+// adjacent to s_supportsP2P @0x00314dd9 and s_showConnectingTexture @0x00314de8,
+// matching the binary's field order). CreateControls writes
+// classicBtn->m_RestScale * SHARED_TARGET_SCALE here once; Zen, Arcade, and the
+// VS ring (UpdateOnlineMultiplayerButton @0x001825a8) all read it directly
+// instead of re-deriving it from m_pClassicButton.
+static _Vector3<float> s_SharedTargetScale(0.0f, 0.0f, 0.0f);
+
 // MP-revival: v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x0018234c --
 // latched true while retracting AND the transport is mid-connect-attempt;
 // DrawConnectTexture swaps to the "connecting..." texture while this is set.
@@ -281,7 +289,7 @@ void GameModeScreen::UnLoadContent() {
 GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     : m_pBackButton(nullptr)        // +0xa0
     , m_ButtonDelay(-1.0f)          // +0xa4 (binary init)
-    , m_TransitionTimer(-1.0f)      // +0xa8 (binary: set to -1 in state-0 transition)
+    , m_TransitionTimer(-1.0f)      // +0xa8 (binary: set to -1 in state-0 transition; dead field)
     , m_pClassicButton(nullptr)     // +0xac
     , m_pZenButton(nullptr)         // +0xb0
     , m_SecondaryAlpha(-2.5f)       // +0xb4 DAT_0013e5a0
@@ -291,7 +299,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pChallengeData(0)           // +0xc0
     , m_LayerFlagsAlt(0x80)         // +0xc4 DAT matches ctor write movs r2,#1; adds r2,#0x7f
     , m_FrameTimer(0.0f)            // +0xc8 DAT_0013e59c
-    , m_pArcadeButton(nullptr)      // +0xcc
+    , m_pOnlineMpButton(nullptr)    // +0xcc
     , m_pTitleBox(nullptr)          // +0xd0
     , m_pDescBox(nullptr)           // +0xd4
     , m_pInfoBox(nullptr)           // +0xd8
@@ -301,7 +309,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
 #if defined(FN_BLOCK_PRELOAD)
     , m_bLoading(false)
 #endif
-    , m_pOnlineMpButton(nullptr)
+    , m_pArcadeButton(nullptr)
 #endif
 {
 #if defined(__bada__)
@@ -513,13 +521,15 @@ void GameModeScreen::CreateControls() {
         m_pClassicButton->m_pTrackedFruit->scale =
             m_pClassicButton->m_pTrackedFruit->scale * CLASSIC_FRUIT_SCALE;
     }
-    // Binary computes classicBtn->m_RestScale * 0.85 and stores to a module-level
-    // global. Zen and Arcade buttons receive this as an absolute assignment (NOT
-    // a multiply of their own size).
-    _Vector3<float> sharedTargetSize = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
+    // Binary computes classicBtn->m_RestScale * 0.85 and stores it to the
+    // file-static `_Vector3<float> scale` (`_ZL5scale` @0x00314ddc, see
+    // s_SharedTargetScale below). Zen, Arcade, and (MP-revival) the VS ring
+    // all receive this as an absolute assignment (NOT a multiply of their own
+    // size); UpdateOnlineMultiplayerButton @0x001825a8 reads it directly.
+    s_SharedTargetScale = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
 
     // --- Button 3: ZEN (plain ring m_RingTex[6], apple_red, ZenModeCallback) ---
-    // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
+    // m_TargetSize = s_SharedTargetScale (absolute, NOT *= own size).
     m_pZenButton = new MenuButton();
     m_pZenButton->m_Texture = game_work.m_RingTex[6];
     {
@@ -533,7 +543,7 @@ void GameModeScreen::CreateControls() {
                            Fruit::FruitType(FRUIT_ZEN, false), _Vector3<float>(0, 0, 0),
                            Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
-    m_pZenButton->m_RestScale = sharedTargetSize;
+    m_pZenButton->m_RestScale = s_SharedTargetScale;
     if (m_pZenButton->m_pTrackedFruit) {
         m_pZenButton->m_pTrackedFruit->scale =
             m_pZenButton->m_pTrackedFruit->scale * ZEN_FRUIT_SCALE;
@@ -547,12 +557,17 @@ void GameModeScreen::CreateControls() {
 
     // --- Button 4: ARCADE (plain ring m_RingTex[0xd], banana, ArcadeModeCallback) ---
     // Binary: scale -> RotateFacingUp(false, Vec3(0,1,0)) -> AddControl.
-    // m_TargetSize = sharedTargetSize (absolute, NOT *= own size).
+    // m_TargetSize = s_SharedTargetScale (absolute, NOT *= own size).
     // spinVelAxis confirmed from DAT_0013ecbc=0.0f, literal 1.0, 0.0f.
-    m_pArcadeButton = new MenuButton();
-    m_pArcadeButton->m_Texture = game_work.m_RingTex[0xd];
+    // Binary CreateControls @0x001819bc constructs Arcade as a pure LOCAL --
+    // `this` in r5 is clobbered at 0x00182160 before this 4th button is built,
+    // proving no this-> store happens (unlike Back at +0xa0). The port uses a
+    // local here to match, and only caches it in m_pArcadeButton (port-only,
+    // no binary slot -- see class comment in the header) for its own bookkeeping.
+    MenuButton* arcadeBtn = new MenuButton();
+    arcadeBtn->m_Texture = game_work.m_RingTex[0xd];
     {
-        MenuButton* btn = m_pArcadeButton;
+        MenuButton* btn = arcadeBtn;
         // DIFFERS: opt-in widescreen -- MapX the ring-button anchor (proportional,
         // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
         // MODESELECT_RING_SPREAD in widescreen. Identity (spread=1) at 3:2/__bada__.
@@ -563,33 +578,38 @@ void GameModeScreen::CreateControls() {
 #ifndef __bada__
         arcadeX -= (Layout::HalfWidth() - 240.0f) * ARCADE_RECENTER;
 #endif
-        m_pArcadeButton->Init(_Vector3<float>(arcadeX, arcadeBase.y, arcadeBase.z),
-                              Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
-                              Fruit::FruitType(FRUIT_ARCADE, false),
-                              _Vector3<float>(0, 0, 0),
-                              Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
+        arcadeBtn->Init(_Vector3<float>(arcadeX, arcadeBase.y, arcadeBase.z),
+                        Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
+                        Fruit::FruitType(FRUIT_ARCADE, false),
+                        _Vector3<float>(0, 0, 0),
+                        Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
-    m_pArcadeButton->m_RestScale = sharedTargetSize;
-    if (m_pArcadeButton->m_pTrackedFruit) {
-        m_pArcadeButton->m_pTrackedFruit->scale =
-            m_pArcadeButton->m_pTrackedFruit->scale * ARCADE_FRUIT_SCALE;
-        m_pArcadeButton->m_pTrackedFruit->RotateFacingUp(
+    arcadeBtn->m_RestScale = s_SharedTargetScale;
+    if (arcadeBtn->m_pTrackedFruit) {
+        arcadeBtn->m_pTrackedFruit->scale =
+            arcadeBtn->m_pTrackedFruit->scale * ARCADE_FRUIT_SCALE;
+        arcadeBtn->m_pTrackedFruit->RotateFacingUp(
             false,
             _Vector3<float>(0.0f, 1.0f, 0.0f));
     }
-    m_pArcadeButton->SetText(
+    arcadeBtn->SetText(
         GETSTRING_CAST_0(LSTR_GM_ARCADE),
         game_work.m_RingColours[10],
         game_work.m_RingColours[11],
         41.0f, 12.0f, true, true);
-    game_work.mHud->AddControl(m_pArcadeButton);
+    game_work.mHud->AddControl(arcadeBtn);
+#if !defined(__bada__)
+    m_pArcadeButton = arcadeBtn;
+#endif
 }
 
 void GameModeScreen::RemoveButtons() {
     if (m_pBackButton)    { m_pBackButton->SetPendingRemoval();    m_pBackButton    = nullptr; }
     if (m_pClassicButton) { m_pClassicButton->SetPendingRemoval(); m_pClassicButton = nullptr; }
     if (m_pZenButton)     { m_pZenButton->SetPendingRemoval();     m_pZenButton     = nullptr; }
+#if !defined(__bada__)
     if (m_pArcadeButton)  { m_pArcadeButton->SetPendingRemoval();  m_pArcadeButton  = nullptr; }
+#endif
 }
 
 // ===================================================================
@@ -755,13 +775,9 @@ void GameModeScreen::Update(float dt) {
         // (~1.25s), then self-recover to state 1. The port has no native
         // matchmaker UI to drive P2PConnectCallback (-> state 8), so phase C is
         // what stops this state from spinning forever.
-#if !defined(__bada__)
-        // TODO: v1.6.1 GameModeScreen +0xcc -- a verification pass suggests the binary's
-        // online-MP button lives at +0xcc (where the port maps m_pArcadeButton) and that
-        // CreateControls never stores the Classic/Zen/Arcade pointers at all; needs its
-        // own RE+layout pass before acting.
+        // v1.6.1 GameModeScreen::Update @0x00182cac (case 7 entry): clears the
+        // +0xcc online-MP button pointer. Real binary field/branch in both builds.
         m_pOnlineMpButton = nullptr;
-#endif
 
         if (m_TransitionAlpha > 0.0f) {
             m_TransitionAlpha *= ALPHA_DECAY_MODE;
@@ -829,9 +845,9 @@ void GameModeScreen::Update(float dt) {
 
         if (fabsf(m_SecondaryAlpha) > SETTLE_EPSILON) break;
 
-#if !defined(__bada__)
+        // v1.6.1 GameModeScreen::Update @0x00182c84 (case 9 settle): clears the
+        // +0xcc online-MP button pointer. Real binary field/branch in both builds.
         m_pOnlineMpButton = nullptr;
-#endif
         m_FrameTimer = 0.0f;
         m_State = 1;
         break;
@@ -1269,27 +1285,33 @@ void GameModeScreen::CommingsSoonCallback() {
 }
 
 // Binary @ 0x00183814 (v1.6.1) — clears m_p*Button cache on HUDControl destroy;
-//                               online-MP slot also flings the orphan fruit off-screen.
+//                               online-MP slot (+0xcc) also flings the orphan fruit off-screen.
 void GameModeScreen::DeletedMenuButton(HUDControl* ctrl) {
     MenuButton* btn = static_cast<MenuButton*>(ctrl);
     // DIFFERS: port-specific back-button reap; v1.6.1 DeletedMenuButton @0x00183814
-    // does not null field_0xa0 (m_pBackButton) -- binary handles only classic/zen/arcade
-    // slots. Kept: guards against UAF if m_pBackButton is accessed after HUD reaps the
-    // button. Binary relies on HUD lifetime ordering the port may not fully replicate.
+    // does not null field_0xa0 (m_pBackButton) -- binary handles only the classic/zen
+    // slots (+0xac/+0xb0, permanently-dead branches -- CreateControls never actually
+    // stores into them, see the class-layout comment in the header) and the online-MP
+    // slot (+0xcc). Kept: guards against UAF if m_pBackButton is accessed after HUD
+    // reaps the button. Binary relies on HUD lifetime ordering the port may not fully
+    // replicate.
     if (btn == m_pBackButton)    { m_pBackButton    = nullptr; return; }
     if (btn == m_pClassicButton) { m_pClassicButton = nullptr; return; }
     if (btn == m_pZenButton)     { m_pZenButton     = nullptr; return; }
-    if (btn == m_pArcadeButton)  {
-        m_pArcadeButton = nullptr;
-        // TODO: v1.6.1 0x00183814 -- arcade fruit fling on button delete (reads +0x18 fruit ptr, writes offscreen pos) not ported
-        return;
-    }
 #if !defined(__bada__)
+    // Port-only convenience cache; the binary has no struct slot for Arcade at all
+    // (CreateControls uses a pure local -- see the class-layout comment in the
+    // header), so there is no real branch to match here. Guarded off __bada__
+    // where the member doesn't exist.
+    if (btn == m_pArcadeButton) { m_pArcadeButton = nullptr; return; }
+#endif
     if (btn == m_pOnlineMpButton) {
         m_pOnlineMpButton = nullptr;
-        // Defunct: online-MP detached fruit fling (v1.6.1 binary @ 0x00183814)
+        // TODO: v1.6.1 GameModeScreen::DeletedMenuButton @0x00183814 -- the +0xcc
+        // branch also flings the tracked fruit off-screen on delete; port only nulls
+        // the pointer. Needs the fling's exact Fruit-field offsets resolved before
+        // porting (fruit velocity/gravity target constants unconfirmed).
     }
-#endif
 }
 
 // Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x001810e8 sets gameMode=1, m_State=4 + NetworkManager flag
@@ -1347,8 +1369,9 @@ void GameModeScreen::UpsellFinished() {
 // UpdateOnlineMultiplayerButton's retract branch), snapshot its pose into the
 // slice-half fields and zero velocity/gravity so it settles in place instead
 // of drifting off with the outward slice velocity that was just applied.
-// __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc constraint); stays a
-// no-op there, matching retail (always !IsP2PSupported()) behaviour.
+// m_pOnlineMpButton (+0xcc) is a real binary slot in both builds; __bada__
+// stays a no-op here because IsP2PSupported() is hardcoded false there, so
+// the slot is never populated -- matching retail behaviour.
 void GameModeScreen::ShrinkedMultiplayerButton() {
 #if !defined(__bada__)
     Fruit* f = m_pOnlineMpButton ? m_pOnlineMpButton->m_pTrackedFruit : nullptr;
@@ -1365,9 +1388,9 @@ void GameModeScreen::ShrinkedMultiplayerButton() {
 // the transport is connected (IsP2POnline()), shrinks/removes it otherwise.
 // Called only from Update() case 2 (see the call site's doc comment) so this
 // never touches the HUD control list from UpdateRealtime.
-// __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc constraint); stays a
-// no-op there, matching retail (always !IsP2PSupported(), so the call site
-// itself never fires under __bada__ either).
+// m_pOnlineMpButton (+0xcc) is a real binary slot in both builds; __bada__
+// stays a no-op here because IsP2PSupported() is hardcoded false there, so
+// the call site itself never fires under __bada__ either (matching retail).
 void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
 #if !defined(__bada__)
     if (IsP2POnline()) {
@@ -1395,26 +1418,22 @@ void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
                 game_work.m_RingColours[10], game_work.m_RingColours[11],
                 39.5f, 12.0f, true, true);
 
-            // sharedTargetSize: same value CreateControls computes for
-            // Zen/Arcade (classicButton->m_RestScale * 0.85). Re-derived here
-            // from the live m_pClassicButton pointer rather than cached --
-            // the 220-byte (0xdc) binary struct has no spare field to cache
-            // it in, and the Classic button is guaranteed to still exist
-            // while GameModeScreen is in state 2 (idle, pre-pick).
-            if (m_pClassicButton) {
-                _Vector3<float> sharedTargetSize = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
-                if (!m_bIsFromPause) {
-                    m_pOnlineMpButton->m_RestScale = sharedTargetSize;
-                    if (m_pOnlineMpButton->m_pTrackedFruit) {
-                        m_pOnlineMpButton->m_pTrackedFruit->scale =
-                            m_pOnlineMpButton->m_pTrackedFruit->scale * 0.77f;
-                    }
-                } else {
-                    m_pOnlineMpButton->m_RestScale = m_pOnlineMpButton->m_RestScale * 0.75f;
-                    if (m_pOnlineMpButton->m_pTrackedFruit) {
-                        m_pOnlineMpButton->m_pTrackedFruit->scale =
-                            m_pOnlineMpButton->m_pTrackedFruit->scale * 0.7f;
-                    }
+            // v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x001825a8 reads
+            // the file-static `scale` (s_SharedTargetScale, see its declaration
+            // above) directly -- the same value CreateControls computed for
+            // Zen/Arcade (classicButton->m_RestScale * 0.85), rather than
+            // re-deriving it from m_pClassicButton.
+            if (!m_bIsFromPause) {
+                m_pOnlineMpButton->m_RestScale = s_SharedTargetScale;
+                if (m_pOnlineMpButton->m_pTrackedFruit) {
+                    m_pOnlineMpButton->m_pTrackedFruit->scale =
+                        m_pOnlineMpButton->m_pTrackedFruit->scale * 0.77f;
+                }
+            } else {
+                m_pOnlineMpButton->m_RestScale = m_pOnlineMpButton->m_RestScale * 0.75f;
+                if (m_pOnlineMpButton->m_pTrackedFruit) {
+                    m_pOnlineMpButton->m_pTrackedFruit->scale =
+                        m_pOnlineMpButton->m_pTrackedFruit->scale * 0.7f;
                 }
             }
 

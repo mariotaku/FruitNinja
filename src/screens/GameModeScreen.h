@@ -121,9 +121,13 @@ public:
     //   +0x94..+0x9F  12-byte gap (BaseScreen tail / alignment; Ghidra-confirmed)
     //   +0xa0  m_BtnBack          (back_icon.tex + bomb fruit, QuitCallback)
     //   +0xa4  m_ButtonDelay      (-1 = inactive, else decrements by dt)
-    //   +0xa8  m_TransitionTimer  (set to -1 in state 0 transition)
-    //   +0xac  m_pClassicButton   (classic.tex, watermelon)
-    //   +0xb0  m_pZenButton       (mode_2.tex, apple_red)
+    //   +0xa8  m_TransitionTimer  (set to -1 in state 0 transition; written, never
+    //          read again in v1.6.1 -- dead)
+    //   +0xac  m_pClassicButton   (real slot, but CreateControls @0x001819bc never
+    //          stores into it -- Classic is a pure local there; DeletedMenuButton's
+    //          classic check is a permanently-dead branch. Port populates this slot
+    //          for its own bookkeeping -- see DIFFERS below.)
+    //   +0xb0  m_pZenButton       (same story as +0xac, for Zen)
     //   +0xb4  m_SecondaryAlpha   (starts -2.5, lerped toward 1)
     //   +0xb8  m_bIsFromPause     (ctor bool param)
     //   +0xb9  m_bChallenge       (= 0; set by SetIsChallenge)
@@ -132,17 +136,32 @@ public:
     //   +0xc0  m_pChallengeData   (int; = 0)
     //   +0xc4  m_LayerFlagsAlt    (0x80; int32)
     //   +0xc8  m_FrameTimer       (drives DrawConnectTexture animation)
-    //   +0xcc  m_pArcadeButton    (arcade_mode.tex, banana)
+    //   +0xcc  m_pOnlineMpButton  (the "VS"/online-MP ring; ONLY MenuButton* the
+    //          binary actually stores from CreateControls' 4 constructed buttons --
+    //          see UpdateOnlineMultiplayerButton v1.6.1 @0x0018234c
+    //          `str r5,[r4,#0xcc]`. Real, non-dead: grown/shrunk by
+    //          UpdateOnlineMultiplayerButton, cleared by Update states 7/9,
+    //          SwitchToUpsell, and DeletedMenuButton.)
     //   +0xd0  m_pTitleBox  (BakedStringBox* from LocalizedString 0x3be/0x3bf/0x3c0)
     //   +0xd4  m_pDescBox   (BakedStringBox* from LocalizedString 0x3ba)
     //   +0xd8  m_pInfoBox   (BakedStringBox* from LocalizedString 0x39f)
+    //
+    // Arcade has NO slot at all in the binary: CreateControls constructs it as a
+    // pure local (`this` in r5 is clobbered at 0x00182160 before the 4th button
+    // is built, proving no later this-> store). The port's m_pArcadeButton is a
+    // port-only convenience cache with no home in the 220-byte layout, so it
+    // lives in the trailing port-specific block below, matching how CreateControls
+    // itself only uses a local for it.
 
     // +0x94: 12-byte gap between BaseScreen tail and first own member.
     uint8_t _pad_0x94[12];
 
     MenuButton* m_pBackButton;       // +0xa0: m_BtnBack (back_icon.tex, bomb, QuitCallback)
     float m_ButtonDelay;             // +0xa4: -1 = inactive, else decrements by dt
-    float m_TransitionTimer;         // +0xa8: set to -1 in state 0 transition
+    float m_TransitionTimer;         // +0xa8: set to -1 in state 0 transition; dead field in v1.6.1
+    // DIFFERS: v1.6.1 CreateControls never stores Classic/Zen into these slots
+    // (dead branches, always null in retail) -- the port populates them for its
+    // own button-lookup/reap bookkeeping (PickedModeButton, RemoveButtons, etc).
     MenuButton* m_pClassicButton;    // +0xac: classic.tex, watermelon, ClassicModeCallback
     MenuButton* m_pZenButton;        // +0xb0: mode_2.tex, apple_red, ZenModeCallback
     float m_SecondaryAlpha;          // +0xb4: starts -2.5, lerped toward 1
@@ -153,7 +172,7 @@ public:
     int     m_pChallengeData;        // +0xc0: challenge data (int, not ptr -- SetIsChallenge's 2nd param is int)
     int     m_LayerFlagsAlt;         // +0xc4: = 0x80
     float   m_FrameTimer;            // +0xc8: drives DrawConnectTexture animation
-    MenuButton* m_pArcadeButton;     // +0xcc: arcade_mode.tex, banana, ArcadeModeCallback
+    MenuButton* m_pOnlineMpButton;   // +0xcc: "VS" ring, UpdateOnlineMultiplayerButton v1.6.1 @0x0018234c
     Mortar::BakedStringBox* m_pTitleBox;  // +0xd0: mode text (LocalizedString 0x3be/0x3bf/0x3c0 three-liner)
     Mortar::BakedStringBox* m_pDescBox;   // +0xd4: desc text (LocalizedString 0x3ba = "MODE SELECT")
     Mortar::BakedStringBox* m_pInfoBox;   // +0xd8: info text (LocalizedString 0x39f = "MULTIPLAYER")
@@ -177,12 +196,11 @@ public:
     // spinner fix). Update state 3-6 only drains + disarms.
     bool m_bLoading;
 #endif
-    // MP-revival: the 5th "VS" ring MenuButton, grown/shrunk by
-    // UpdateOnlineMultiplayerButton. Port-only: the real 220-byte (0xdc)
-    // binary struct has no room for this slot, so it lives here rather than
-    // in the offsetof-asserted layout above; __bada__ excludes it entirely.
-    // DeletedMenuButton nulls it on HUD reap.
-    MenuButton* m_pOnlineMpButton;
+    // Port-only convenience cache for the Arcade button -- the binary has NO
+    // struct slot for it at all (CreateControls uses a pure local, see the
+    // class-layout comment above). __bada__ excludes it entirely; CreateControls
+    // there uses a genuine local, matching the binary exactly.
+    MenuButton* m_pArcadeButton;
 #endif // !defined(__bada__)
 
     void CreateControls();
@@ -239,19 +257,20 @@ public:
     // Defunct: upsell return path -- no-op stub; v1.6.1 binary @ 0x001811bc sets m_State=1
     void UpsellFinished();
 
-    // MP-revival: real body under !__bada__ (port-only m_pOnlineMpButton slot,
-    // see below) -- snapshots the sliced VS fruit's pose + zeroes vel/scale so
-    // it settles instead of drifting. v1.6.1 GameModeScreen::ShrinkedMultiplayerButton
-    // @0x00181160. __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc
-    // constraint) so stays a no-op there.
+    // MP-revival: real body under !__bada__ -- snapshots the sliced VS fruit's
+    // pose + zeroes vel/scale so it settles instead of drifting.
+    // v1.6.1 GameModeScreen::ShrinkedMultiplayerButton @0x00181160. m_pOnlineMpButton
+    // (+0xcc) is a real binary slot in both builds; __bada__ stays a no-op here
+    // because IsP2PSupported() is hardcoded false there, so the slot is never
+    // populated -- matching retail behaviour, not a missing struct field.
     void ShrinkedMultiplayerButton();
 
     // MP-revival: real body under !__bada__ -- grows/shrinks the 5th "VS"
-    // MenuButton based on live transport connectivity (IsP2POnline() /
-    // IsP2PConnecting()). v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton
-    // @0x0018234c. __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc
-    // constraint) so stays a no-op there, matching the retail (always
-    // !IsP2PSupported()) behaviour.
+    // MenuButton (m_pOnlineMpButton, +0xcc -- a real binary slot in both builds)
+    // based on live transport connectivity (IsP2POnline() / IsP2PConnecting()).
+    // v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x0018234c. __bada__
+    // stays a no-op here because IsP2PSupported() is hardcoded false there, so
+    // the call site itself never fires (matching retail, always !IsP2PSupported()).
     void UpdateOnlineMultiplayerButton(float dt);
 
 };
@@ -271,7 +290,7 @@ static_assert(offsetof(GameModeScreen, m_ChallengeId)        == 0xbc, "m_Challen
 static_assert(offsetof(GameModeScreen, m_pChallengeData)     == 0xc0, "m_pChallengeData offset");
 static_assert(offsetof(GameModeScreen, m_LayerFlagsAlt)      == 0xc4, "m_LayerFlagsAlt offset");
 static_assert(offsetof(GameModeScreen, m_FrameTimer)         == 0xc8, "m_FrameTimer offset");
-static_assert(offsetof(GameModeScreen, m_pArcadeButton)      == 0xcc, "m_pArcadeButton offset");
+static_assert(offsetof(GameModeScreen, m_pOnlineMpButton)    == 0xcc, "m_pOnlineMpButton offset");
 static_assert(offsetof(GameModeScreen, m_pTitleBox)          == 0xd0, "m_pTitleBox offset");
 static_assert(offsetof(GameModeScreen, m_pDescBox)           == 0xd4, "m_pDescBox offset");
 static_assert(offsetof(GameModeScreen, m_pInfoBox)           == 0xd8, "m_pInfoBox offset");
