@@ -206,6 +206,13 @@ namespace {
     // dump; the port loads them so the revived overlay has art.
     Mortar::SmartPtr<Mortar::Texture> s_connectToGameCenter;     // v1.6.1 file-static @0x00314DC8+0x30
     Mortar::SmartPtr<Mortar::Texture> s_connectingToGameCenter;  // v1.6.1 file-static @0x00314DC8+0x34
+    // DIFFERS: Bada v1.6.1 builds the VS ring from ring[0xb] (orange_checker_ring.tex)
+    // + SetText("ONLINE") but its versus texture loads were stripped (s_multiplayerMode/
+    // s_multiplayerConnect file-statics @0x00314DF4/@0x00314E04 are ctor/dtor-only,
+    // never assigned) so retail Bada never actually drew this button. Revived from
+    // iOS 1.6.1 GameModeScreen::LoadContent @0x0004e018 -- red baked-label art, no SetText.
+    Mortar::SmartPtr<Mortar::Texture> s_multiplayerConnect;      // iOS 1.6.1 s_multiplayerConnect -- "multi_player_connect.tex"
+    Mortar::SmartPtr<Mortar::Texture> s_multiplayerMode;         // iOS 1.6.1 s_multiplayerMode -- "multiplayer_iphone.tex"
 }
 
 // MP-revival: v1.6.1 file-static @0x00314DC8+0x11 -- cached once in
@@ -263,6 +270,12 @@ void GameModeScreen::LoadContent() {
         s_connectToGameCenter = Mortar::TextureManager::LoadLocalisedTexture("connect_game_center.tex");
     if (!s_connectingToGameCenter.IsValid())
         s_connectingToGameCenter = Mortar::TextureManager::LoadLocalisedTexture("gc_connecting.tex");
+    // DIFFERS: revived from iOS 1.6.1 LoadContent @0x0004e018 -- red baked-label
+    // VS ring art (see s_multiplayerConnect/s_multiplayerMode comment above).
+    if (!s_multiplayerConnect.IsValid())
+        s_multiplayerConnect = Mortar::TextureManager::LoadLocalisedTexture("multi_player_connect.tex");
+    if (!s_multiplayerMode.IsValid())
+        s_multiplayerMode = Mortar::TextureManager::LoadLocalisedTexture("multiplayer_iphone.tex");
 }
 
 // ===================================================================
@@ -279,6 +292,8 @@ void GameModeScreen::UnLoadContent() {
     s_TexBackIcon.SetNull();
     s_connectToGameCenter.SetNull();
     s_connectingToGameCenter.SetNull();
+    s_multiplayerConnect.SetNull();
+    s_multiplayerMode.SetNull();
 }
 
 // ===================================================================
@@ -1404,7 +1419,13 @@ void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
             float vsX = MapX(POS_CONNECT.x * spread, "modeselect.btn.vs");
 
             m_pOnlineMpButton = new MenuButton();
-            m_pOnlineMpButton->m_Texture = game_work.m_RingTex[0xb];  // orange_checker_ring.tex
+            // DIFFERS: Bada v1.6.1 skins this ring from game_work.m_RingTex[0xb]
+            // (orange_checker_ring.tex) + SetText("ONLINE"), but its versus art
+            // loads were stripped so retail never drew the button at all (see
+            // s_multiplayerMode comment above). Revived from iOS 1.6.1
+            // UpdateOnlineMultiplayerButton @0x000501fc -- red ring with
+            // "MULTIPLAYER" baked into the art, no SetText call.
+            m_pOnlineMpButton->m_Texture = s_multiplayerMode;
             {
                 MenuButton* btn = m_pOnlineMpButton;
                 m_pOnlineMpButton->Init(
@@ -1413,10 +1434,6 @@ void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
                     Fruit::FruitType("vs_watermelon", false), _Vector3<float>(0, 0, 0),
                     Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
             }
-            m_pOnlineMpButton->SetText(
-                GETSTRING_CAST_0((LocalizedString)0x3ca),  // "ONLINE"
-                game_work.m_RingColours[10], game_work.m_RingColours[11],
-                39.5f, 12.0f, true, true);
 
             // v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x001825a8 reads
             // the file-static `scale` (s_SharedTargetScale, see its declaration
