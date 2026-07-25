@@ -945,6 +945,11 @@ bool ScrollingMenu::ContainsPoint(float gx, float gy) const {
 // closest-item search (also `m_DragTargetIdx = -1` when no item collided)
 // takes back over as usual.
 void ScrollingMenu::ScrollByItems(int delta) {
+    // Port specific: ignore wheel scrolls while a finger/pointer is actively
+    // dragging the list (m_TouchId != -1) -- pinning m_DragTargetIdx here would
+    // fight the live drag physics. Wheel resumes once the drag is released.
+    if (m_TouchId != -1) return;
+
     int count = GetNumItems();
     if (count <= 0) return;
 
