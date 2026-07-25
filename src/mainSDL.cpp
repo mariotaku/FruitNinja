@@ -7,6 +7,7 @@
 #include "debug/Logger.h"
 #include "debug/DebugFlags.h"
 #include "game/SettingsSave.h"
+#include "game/GameTaskState.h"   // GameTaskSaveOnExit (save on window-close)
 #include "render/Layout.h"
 #include "platform/AppDirSDL.h"
 #include "platform/SaveDirSDL.h"
@@ -227,6 +228,18 @@ int main(int argc, char* argv[]) {
     }
 
     game.run();
+
+    // Port specific: save on normal window-close. run() returns when SDL_QUIT
+    // arrives, and Game::shutdown() only calls GameDestroy() -- NOT
+    // GameTaskExit() -- so GameExit()'s SaveCurrentData() never runs and
+    // anything changed outside a played round (audio toggles, settings, coins)
+    // was silently lost on exit. The binary saves on app suspend/exit via
+    // GameTaskSaveOnExit (v1.6.1 @0x001ce170), which persists without tearing
+    // the session down; the port already routes SDL_APP_WILLENTERBACKGROUND
+    // there (GameSDL.cpp), so do the same for a plain quit. It self-guards on
+    // the saving flag and a null HUD, so it is safe if the game never booted.
+    GameTaskSaveOnExit();
+
     game.shutdown();
 
     SDL_GL_DeleteContext(gl);
