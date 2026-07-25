@@ -1573,6 +1573,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
 // logic, special-fruit x1.5 impulse, and spin-boost loop on both halves.
 void Fruit::Slice() {
     m_SliceTimer = 0.0f;
+    // ASM-spec v1.6.1 Fruit::Slice @0x001dcba0: top-of-function stores
+    // @0x001dcbbc-0x001dcbd0 -- m_SliceBounceTimer (+0x88) = 0 and
+    // m_SliceVelocity (+0x8C) = vel (snapshot of the member velocity at +0x1C);
+    // the reverse-time un-slice in Update (@0x001df9d8) restores both.
+    m_SliceBounceTimer = 0.0f;
+    m_SliceVelocity = vel;
 
     // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
     // (was: 0x00176d78..0x00176db2 -- stale v1.5.x) -- two discarded select-pattern draws at
@@ -1601,6 +1607,15 @@ void Fruit::Slice() {
     slicePlane.x = rotMat.m[8];
     slicePlane.y = rotMat.m[9];
     slicePlane.z = rotMat.m[10];
+
+    // ASM-spec v1.6.1 Fruit::Slice @0x001dcba0 (inner 0x001dcc70-0x001dcc7c):
+    // paused game clears the crit flag -- if (game_work.bM_bPaused)
+    // m_bCritical = 0. Sits between the slicePlane computation and the
+    // flipSide gate, so every downstream m_bCritical read (isCritical
+    // snapshot, crit block, splat-loop bonus) sees the cleared value.
+    if (game_work.bM_bPaused != 0) {
+        m_bCritical = 0;
+    }
 
     bool flipSide = false;
     if (fabsf(slicePlane.x) + fabsf(slicePlane.y) > 0.0f) {

@@ -83,10 +83,12 @@ public:
     float    m_SpawnDelay;                 // +0x74  chuck countdown; Chuck sets; Update decrements -> fires m_OnExpired at <=0
     _Vector3<float> m_AccelTerm;                  // +0x78..+0x83  extra accel/jerk: Update unsliced pos += m_AccelTerm*dt; damped 0.9x in PostUpdate
     int32_t  m_PlayerIdx;                  // +0x84  SetForPlayer writes; Slice/Update read for trail-hash/MakeCritical
-    // +0x88: bounce timer for reverse-time un-slice. Update (sliced path): += dtScaled;
+    // +0x88: bounce timer for reverse-time un-slice. Zeroed at the top of
+    // Slice (v1.6.1 Fruit::Slice @0x001dcba0). Update (sliced path): += dtScaled;
     // if (dtScaled<0 && m_SliceBounceTimer<0) un-slice back to whole. Binary @0x001df9d8.
     float    m_SliceBounceTimer;           // +0x88  binary @0x001df9d8
-    // +0x8C..+0x97: velocity snapshot written by CollisionResponse on slice;
+    // +0x8C..+0x97: velocity snapshot written at the top of Slice
+    // (v1.6.1 Fruit::Slice @0x001dcba0, = vel at +0x1C);
     // copied back to vel by the reverse-time un-slice path (@0x001df9e8).
     _Vector3<float> m_SliceVelocity;              // +0x8C  (x=+0x8C, y=+0x90, z=+0x94)
     float    m_TimeScale;                  // +0x98  Update dt_eff = dt * m_TimeScale; SpawnFruit writes (p_pad+0x5c)
