@@ -408,6 +408,132 @@ int main() {
         ClearAllTouches();
     }
 
+    // --- Case 6: wheel scroll animates smoothly to the next item, settles,
+    // then a second wheel tick advances one more item. Regression guard for
+    // the ScrollByItems instant-jump bug: writing m_Velocity.y directly
+    // teleported the list in one frame; the fix pins m_DragTargetIdx and lets
+    // the existing Phase 5/7 snap-spring ease the position over many frames.
+    {
+        printf("[case6] wheel scroll animates smoothly and settles\n");
+        ClearAllTouches();
+        // 5 rows (heights 80 each) so there is room to scroll two items deep
+        // without clamping against either end.
+        ScrollingMenu* menu = new ScrollingMenu();
+        menu->SetWidth(290.0f);
+        menu->SetHeight(80.0f);
+        menu->SetItemHeight(80.0f);
+        menu->pos = _Vector3<float>(0.0f, 0.0f, 0.0f);
+        for (int i = 0; i < 5; ++i) {
+            ScrollingMenuItem* item = new ScrollingMenuItem();
+            item->SetHeight(80.0f);
+            menu->AddItem(item);
+        }
+        menu->m_Velocity        = _Vector3<float>(0.0f, 0.0f, 0.0f);
+        menu->m_PendingVelocity = _Vector3<float>(0.0f, 0.0f, 0.0f);
+        menu->m_DragTargetIdx   = -1;
+
+        // Settle Phase 5 once so m_ClosestIdx reflects the seeded position
+        // (item 0, since m_Velocity.y == 0).
+        menu->UpdateRealtime(1.0f / 60.0f);
+        int startIdx = menu->m_ClosestIdx;
+        if (startIdx != 0) {
+            fprintf(stderr, "FAIL [case6 start]: m_ClosestIdx=%d expected=0\n", startIdx);
+            ++failures;
+        }
+
+        menu->ScrollByItems(1);
+        if (menu->m_DragTargetIdx != startIdx + 1) {
+            fprintf(stderr, "FAIL [case6 target]: m_DragTargetIdx=%d expected=%d\n",
+                menu->m_DragTargetIdx, startIdx + 1);
+            ++failures;
+        }
+
+        // (1) Gradual, not instant: after ONE present the position must have
+        // moved only a FRACTION of one item row (m_Width==80), not jumped
+        // the full row in a single frame.
+        menu->UpdateRealtime(1.0f / 60.0f);
+        float afterOnePresent = fabsf(menu->m_Velocity.y);
+        if (afterOnePresent >= 80.0f) {
+            fprintf(stderr,
+                "FAIL [case6 gradual]: |m_Velocity.y|=%.4f after 1 present -- "
+                "jumped the full 80-unit row instantly instead of easing\n",
+                afterOnePresent);
+            ++failures;
+        } else {
+            printf("[PASS] case6 gradual: |m_Velocity.y|=%.4f after 1 present "
+                "(< 80 row height, eased not jumped)\n", afterOnePresent);
+        }
+
+        // Monotonically approach the target over ~10 more presents (spring,
+        // no overshoot/oscillation/runaway).
+        bool monotonic = true;
+        float prevAbs = afterOnePresent;
+        for (int i = 0; i < 10; ++i) {
+            menu->UpdateRealtime(1.0f / 60.0f);
+            float absVel = fabsf(menu->m_Velocity.y);
+            if (absVel < prevAbs - 1e-4f) {
+                fprintf(stderr,
+                    "FAIL [case6 monotonic]: iter=%d |vel.y|=%.5f dropped from %.5f "
+                    "(should approach target monotonically)\n",
+                    i, absVel, prevAbs);
+                monotonic = false;
+                ++failures;
+                break;
+            }
+            prevAbs = absVel;
+        }
+        if (monotonic) {
+            printf("[PASS] case6 monotonic: |m_Velocity.y| approached target "
+                "without dropping, reached %.5f\n", prevAbs);
+        }
+
+        // (2) Converges to the target item's snap position and settles (many
+        // more presents should leave it essentially unchanged).
+        for (int i = 0; i < 60; ++i) {
+            menu->UpdateRealtime(1.0f / 60.0f);
+        }
+        float settled = menu->m_Velocity.y;
+        menu->UpdateRealtime(1.0f / 60.0f);
+        if (!near_eq(menu->m_Velocity.y, settled, 0.05f)) {
+            fprintf(stderr,
+                "FAIL [case6 settle]: vel.y still moving after 60+ presents: "
+                "%.5f -> %.5f (expected convergence, not oscillation/runaway)\n",
+                settled, menu->m_Velocity.y);
+            ++failures;
+        } else {
+            printf("[PASS] case6 settle: vel.y converged and held at %.5f\n", settled);
+        }
+        if (menu->m_ClosestIdx != startIdx + 1) {
+            fprintf(stderr, "FAIL [case6 closest]: m_ClosestIdx=%d expected=%d\n",
+                menu->m_ClosestIdx, startIdx + 1);
+            ++failures;
+        } else {
+            printf("[PASS] case6 closest: m_ClosestIdx=%d matches target\n", menu->m_ClosestIdx);
+        }
+
+        // (3) A second ScrollByItems(+1) advances one more item.
+        menu->ScrollByItems(1);
+        if (menu->m_DragTargetIdx != startIdx + 2) {
+            fprintf(stderr, "FAIL [case6 target2]: m_DragTargetIdx=%d expected=%d\n",
+                menu->m_DragTargetIdx, startIdx + 2);
+            ++failures;
+        }
+        for (int i = 0; i < 60; ++i) {
+            menu->UpdateRealtime(1.0f / 60.0f);
+        }
+        if (menu->m_ClosestIdx != startIdx + 2) {
+            fprintf(stderr, "FAIL [case6 closest2]: m_ClosestIdx=%d expected=%d\n",
+                menu->m_ClosestIdx, startIdx + 2);
+            ++failures;
+        } else {
+            printf("[PASS] case6 closest2: second wheel tick advanced to m_ClosestIdx=%d\n",
+                menu->m_ClosestIdx);
+        }
+
+        delete menu;
+        ClearAllTouches();
+    }
+
     if (failures == 0) {
         printf("[PASS] All scrollingmenu_updaterealtime cases passed.\n");
         return 0;

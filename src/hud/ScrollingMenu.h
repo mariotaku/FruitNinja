@@ -270,12 +270,16 @@ public:
     bool ContainsPoint(float gx, float gy) const;
 
     // Port specific: no binary counterpart -- desktop mouse-wheel scroll.
-    // Nudges m_Velocity.y by one item row; Phase 5's closest-item search and
-    // Phase 7's snap-spring (already running every Update/UpdateRealtime
-    // call) then animate smoothly to the new closest item on their own --
-    // no separate snap/kick needed. delta>0 scrolls toward later items,
-    // delta<0 toward earlier items (see .cpp for the sign derivation
-    // against Phase 5's curY = pos.y - m_Velocity.y layout).
+    // Pins m_DragTargetIdx to (m_ClosestIdx + delta), clamped to
+    // [0, GetNumItems()-1). Does NOT touch m_Velocity.y directly (that field
+    // is the live scroll POSITION, not a physics velocity -- writing it
+    // teleports the list). Phase 5's `m_DragTargetIdx == i` arm and Phase 7's
+    // snap-spring (already running every Update/UpdateRealtime call) then
+    // animate the position to the target item over several frames and settle,
+    // exactly like a drag-release snap. delta>0 scrolls toward later items,
+    // delta<0 toward earlier items. m_DragTargetIdx is cleared back to -1 on
+    // the next touch press-edge acquire (Phase 2), so a subsequent drag is
+    // unaffected by a prior wheel scroll. See .cpp for the full derivation.
     void ScrollByItems(int delta);
 #endif
 };

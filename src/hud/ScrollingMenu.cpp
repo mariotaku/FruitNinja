@@ -922,15 +922,37 @@ bool ScrollingMenu::ContainsPoint(float gx, float gy) const {
 }
 
 // Port specific: no binary counterpart -- see ScrollingMenu.h.
-// Phase 5's layout cursor is `curY = pos.y - m_Velocity.y`, decreasing as the
-// item index increases (items are laid out downward). A LARGER m_Velocity.y
-// therefore brings an EARLIER (smaller-index) item to the focal point, so
-// scrolling toward LATER items (wheel-down) means DECREASING m_Velocity.y --
-// hence the minus sign below. Nudging m_Velocity.y directly (not snapping it)
-// lets the existing Phase 4/7 spring in Update()/UpdateRealtime() animate the
-// list smoothly to the new closest item, exactly like a small fling.
+// Directly writing m_Velocity.y (the true scroll position, binary field_0xd8)
+// TELEPORTS the list -- there is no physics field separate from position to
+// perturb. Instead this pins m_DragTargetIdx to the next/prev item, which is
+// the SAME mechanism a finger-drag uses to name its target row: Phase 5's
+// `m_DragTargetIdx == i` arm (both Update()'s 60Hz pass and UpdateRealtime())
+// refreshes m_SnapDist = curY - pos.y for that item every call, and Phase 7's
+// snap-step (`m_Velocity.y += snapDist * (spring factor)`) eases the position
+// toward it over several frames exactly like a drag-release settle -- no
+// separate impulse/velocity field needed.
+//
+// m_ClosestIdx (Phase 5's globally-closest-item result) is the current focal
+// row; delta shifts from there. Phase 5's layout cursor is
+// `curY = pos.y - m_Velocity.y`, decreasing as item index increases, so a
+// larger m_Velocity.y brings an EARLIER item to the focal point -- consistent
+// with the target-item spring below (no sign flip needed here, unlike the old
+// direct-velocity-nudge implementation).
+//
+// m_DragTargetIdx clears back to -1 on the NEXT touch press-edge acquire
+// (Phase 2: `m_DragTargetIdx = -1;`), so pinning it here does not lock out
+// dragging -- the next finger-down resets it and Phase 3A's release-time
+// closest-item search (also `m_DragTargetIdx = -1` when no item collided)
+// takes back over as usual.
 void ScrollingMenu::ScrollByItems(int delta) {
-    m_Velocity.y -= (float)delta * m_Width;   // m_Width = binary field_0x9c (item row height, see .h note)
+    int count = GetNumItems();
+    if (count <= 0) return;
+
+    int target = m_ClosestIdx + delta;
+    if (target < 0) target = 0;
+    if (target >= count) target = count - 1;
+
+    m_DragTargetIdx = target;
 }
 #endif
 
