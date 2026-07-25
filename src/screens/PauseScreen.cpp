@@ -740,16 +740,17 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_BOMB_FLASH:
-        // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00154d2a..0x00154d72 (re-analyst).
+        // ASM-spec v1.6.1 PauseScreen::Update @ 0x001a5ebc: case 1.
         // Hold m_Alpha = 1.0 / m_ButtonFadeAlpha = 0.0 each frame while
         // BombFlashFull() returns false (i.e. game_work.m_BombHitTimer >= 1.0).
         // When the bomb-hit timer crosses below 1.0 (half the 2.0s window),
-        // reset PowerUpManager, drop to HIDDEN, and pull m_TransitionTimer
-        // to -1.0 so the slide-back-to-menu animation kicks in via MainScreen.
+        // set m_Alpha = 0 / m_ButtonFadeAlpha = 1, reset PowerUpManager,
+        // drop to HIDDEN, and pull the pause amount to -1.0 so the
+        // slide-back-to-menu animation kicks in via MainScreen.
         m_ButtonFadeAlpha = 0.0f;
         m_Alpha           = 1.0f;
         if (BombFlashFull()) {
-            m_Alpha           = 1.0f;
+            m_Alpha           = 0.0f;
             m_ButtonFadeAlpha = 1.0f;
             PowerUpManager::GetInstance()->Reset(false);
             LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_HIDDEN), "Update/BOMB_FLASH complete");
@@ -944,7 +945,7 @@ void PauseScreen::Update(float dt) {
     }
 
     // 6. Resume + Retry button position recomputation.
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00154f8a..0x001550d6 (re-analyst+asm-inspector)
+    // ASM-spec v1.6.1 PauseScreen::Update @ 0x001a5ebc: post-switch button layout tail.
     //
     // PauseScreen post-switch tail. Three RE passes converged on this:
     //   - m_ButtonOriginPos.x is a per-session constant set ONCE at
@@ -958,8 +959,6 @@ void PauseScreen::Update(float dt) {
     //     offset child buttons.
     //   - Resume formula writes pos.x AND pos.y; pos.z untouched.
     //   - Retry formula writes pos.x, pos.y, pos.z.
-    //
-    // ASM-verified: 2026-05-08 v1.6.1 binary @ 0x00154fea..0x001551d2 (re-analyst).
     //
     // Two-phase Resume + Retry layout:
     //   Phase 1 (lines below): write the off-screen base positions.
@@ -981,10 +980,10 @@ void PauseScreen::Update(float dt) {
     const float OX = m_ButtonOriginPos.x;  // = 64
 
     // Phase 1: write the base positions.
-    // Resume base (binary @ 0x00154fea..0x00155106):
-    //   pos.x = -((244 - 0.5*OX) + |fade|*(10 + 0.75*OX))
+    // Resume base (v1.6.1 PauseScreen::Update @0x001a5ebc):
+    //   pos.x = -(OX * -0.375 + 240 + 4 + |fade|*(0.75*OX + 10))
+    //          = -((244 - 0.375*OX) + |fade|*(10 + 0.75*OX))
     //   pos.y = 0.375*OX - 165   (y unchanged by phase-2 lerp)
-    // (Previous port had 0.375*OX in term1 -- WRONG; binary has 0.5*OX.)
     // DIFFERS: opt-in widescreen -- MapX re-anchors the off-screen-left base X.
     // When IsEnabled()==false (menu / not the active pause overlay), absFade
     // eases to 1.0 and this formula pushes the button to x=-270 -- just past
@@ -994,7 +993,7 @@ void PauseScreen::Update(float dt) {
     // rescales it back past the widened edge. Identity when disabled/__bada__.
     if (m_ResumeButton) {
         const float absFade = std::fabs(m_ButtonFadeAlpha);
-        const float term1 = 244.0f - 0.5f * OX;
+        const float term1 = 244.0f - 0.375f * OX;
         const float term2 = absFade * (10.0f + 0.75f * OX);
         m_ResumeButton->pos.x = MapX(-(term1 + term2), "pause.resume");
         m_ResumeButton->pos.y = 0.375f * OX - 165.0f;
