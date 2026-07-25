@@ -27,6 +27,19 @@ public:
     // Defunct: P2P MP -- no-op stub; v1.6.1 NetworkPacket::NetworkPacket @ 0x002333a4
     NetworkPacket() : m_PacketSize(0), m_Reserved08(0), m_PacketType(0), m_Reserved10(0) {}
     virtual ~NetworkPacket() {}
+
+protected:
+    // Base-ctor overload matching the binary's real 2-arg
+    // NetworkPacket(this, int typeId, int byteSize) signature (see class
+    // comment above; v1.6.1 NetworkPacket::NetworkPacket @ 0x002333a4).
+    // Every concrete packet subclass delegates to this so each instance
+    // carries its documented m_PacketType / m_PacketSize wire values, exactly
+    // as the binary's concrete-packet ctors do -- the stub bodies stay
+    // no-ops, but the shape (ctor chain + field values) is faithful.
+    NetworkPacket(int32_t typeId, int32_t byteSize)
+        : m_PacketSize(byteSize), m_Reserved08(0), m_PacketType(typeId), m_Reserved10(0) {}
+
+public:
 };
 
 } // namespace Mortar
