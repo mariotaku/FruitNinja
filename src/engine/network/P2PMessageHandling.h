@@ -54,7 +54,9 @@ void DisconnectP2P(bool sendDisconnect);
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)
 bool IsP2POnline();
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)
+// MP-revival: real body -- true in the port build (IMpTransport is wired up),
+// false under __bada__ (retail fidelity). See P2PMessageHandling.cpp for the
+// full rationale. DIFFERS: revived -- retail stub @0x157640 (always false)
 bool IsP2PSupported();
 
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)

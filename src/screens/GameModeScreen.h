@@ -20,20 +20,23 @@
 //   CommingsSoonCallback     0x0013e124
 //   DeletedMenuButton        0x00183814
 //   CasinoModeCallback       0x0013dfdc
-//   VersusModeCallback       0x0013e01c
-//   P2PConnectCallback       0x0013dfd4
+//   VersusModeCallback       v1.6.1 @0x00181140
+//   P2PConnectCallback       v1.6.1 @0x001810dc
 //   BuyNow                   0x0013e10c
 //   SwitchToUpsell           0x0013e084
 //   UpsellFinished           0x0013e07c
-//   ShrinkedMultiplayerButton 0x0013e02c
-//   UpdateOnlineMultiplayerButton 0x0013ecdc
+//   ShrinkedMultiplayerButton      v1.6.1 @0x00181160
+//   UpdateOnlineMultiplayerButton  v1.6.1 @0x0018234c
+//   DrawConnectTexture             v1.6.1 @0x001838d8
 //
 // Child screen spawned by MainScreen state 0x0e/0x0f (STATE_MODE_SELECT)
 // when m_Timer2 crosses 0.25 downward (see MainScreen::Update @ 0x0014bf40).
-// Offers four buttons: Back, Classic, Zen, Arcade. Picking a mode fades
-// out and pushes MainScreen into STATE_CAMERA_FADE (0x11) which then
-// drops into the gameplay loop. Back button sets m_State = 0xF, triggering
-// MainScreen STATE_SLIDE_IN (8) after fade.
+// Offers four buttons: Back, Classic, Zen, Arcade -- plus a 5th "VS" ring
+// (m_pOnlineMpButton) that grows in only while an online-MP transport is
+// connected (see MP-revival note below). Picking a mode fades out and
+// pushes MainScreen into STATE_CAMERA_FADE (0x11) which then drops into the
+// gameplay loop. Back button sets m_State = 0xF, triggering MainScreen
+// STATE_SLIDE_IN (8) after fade.
 //
 // Internal sub-state map (v1.6.1):
 //   0  = transition-in
@@ -46,9 +49,16 @@
 //   0xe = Challenges (passive — re-analyst resolving ChallengeMenuScreen push)
 //   0xf = back-out (was 0xe in v1.5.1)
 //
-// Port omits:
-//   - Online-vs-offline position swap (always offline layout)
-//   - States 1, 7, 8, 9 (alternate-entry + matchmaker recovery)
+// MP-revival (feat/mp-revival, port-only): the mode-select VS button + online
+// ring layout are un-gated from IsP2PSupported() (see P2PMessageHandling.cpp)
+// so this screen now shows the fifth "VS" ring and the P2P button layout
+// under !__bada__. __bada__ (production/cross-build fidelity target) keeps
+// IsP2PSupported() hardcoded false, so it still takes the original stripped
+// (offline-only) code paths below.
+//
+// Port omits (still, even under the revival):
+//   - State 1 (alternate-entry from state-9 network recovery) -- unreachable,
+//     kept for a faithful state machine (same as v1.5.1).
 //
 
 #include "BaseScreen.h"
@@ -167,14 +177,18 @@ public:
     // spinner fix). Update state 3-6 only drains + disarms.
     bool m_bLoading;
 #endif
-    // Defunct online-MP button slot — kept so DeletedMenuButton can null it cleanly.
+    // MP-revival: the 5th "VS" ring MenuButton, grown/shrunk by
+    // UpdateOnlineMultiplayerButton. Port-only: the real 220-byte (0xdc)
+    // binary struct has no room for this slot, so it lives here rather than
+    // in the offsetof-asserted layout above; __bada__ excludes it entirely.
+    // DeletedMenuButton nulls it on HUD reap.
     MenuButton* m_pOnlineMpButton;
 #endif // !defined(__bada__)
 
     void CreateControls();
     void RemoveButtons();
 
-    void DrawConnectTexture(_Vector3<float> pos);  // 0x0013f754
+    void DrawConnectTexture(_Vector3<float> pos);  // v1.6.1 @0x001838d8
 
     // vtable[18] @ 0x0013e21c — prime the first wave once the camera fade
     // crosses -0.9. Calls PrepareForLevelStart().
@@ -205,10 +219,15 @@ public:
     // Defunct: online MP (Casino) -- no-op stub; v1.6.1 binary @ 0x001810e8 sets m_State=4
     void CasinoModeCallback();
 
-    // Defunct: online MP (Versus) -- no-op stub; v1.6.1 binary @ 0x00181140 sets m_State=7 + alpha=1.0
+    // MP-revival: real click handler -- the "VS" ring's m_ClickCallback (see
+    // UpdateOnlineMultiplayerButton). v1.6.1 GameModeScreen::VersusModeCallback
+    // @0x00181140 sets m_State=7 + alpha=1.0 (matchmaker entry).
     void VersusModeCallback();
 
-    // Defunct: P2P connect -- no-op stub; v1.6.1 binary @ 0x001810dc sets m_State=8 (GameCenter connect)
+    // Defunct: still unreachable -- no button/native-matchmaker completion calls
+    // this in the port (LaunchP2PMatchMaker has no real matchmaker UI to drive
+    // it); kept for a faithful state machine. v1.6.1 GameModeScreen::P2PConnectCallback
+    // @0x001810dc sets m_State=8 (GameCenter connect).
     void P2PConnectCallback();
 
     // Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x00181290 calls GotoFruitNinjaPage(1,-1) then m_State=0xd
@@ -220,10 +239,19 @@ public:
     // Defunct: upsell return path -- no-op stub; v1.6.1 binary @ 0x001811bc sets m_State=1
     void UpsellFinished();
 
-    // Defunct: online-MP shrink hook -- no-op stub; v1.6.1 binary @ 0x00181160 snapshots fruit pose + zeroes vel/scale
+    // MP-revival: real body under !__bada__ (port-only m_pOnlineMpButton slot,
+    // see below) -- snapshots the sliced VS fruit's pose + zeroes vel/scale so
+    // it settles instead of drifting. v1.6.1 GameModeScreen::ShrinkedMultiplayerButton
+    // @0x00181160. __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc
+    // constraint) so stays a no-op there.
     void ShrinkedMultiplayerButton();
 
-    // Defunct: online-MP button lifecycle -- no-op stub; v1.6.1 binary @ 0x0018234c
+    // MP-revival: real body under !__bada__ -- grows/shrinks the 5th "VS"
+    // MenuButton based on live transport connectivity (IsP2POnline() /
+    // IsP2PConnecting()). v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton
+    // @0x0018234c. __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc
+    // constraint) so stays a no-op there, matching the retail (always
+    // !IsP2PSupported()) behaviour.
     void UpdateOnlineMultiplayerButton(float dt);
 
 };

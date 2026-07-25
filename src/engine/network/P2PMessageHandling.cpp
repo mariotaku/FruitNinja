@@ -78,9 +78,23 @@ bool IsP2POnline() {
     return t && t->IsConnected();
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640
+// MP-revival: master gate -- the port build supports online MP via
+// IMpTransport (see MpTransport.h). This is a build-capability flag ("can
+// this build show/attempt MP UI"), independent of whether a session is
+// currently connected/connecting (see IsP2POnline/IsP2PConnecting below,
+// which stay transport-state-driven). GameModeScreen caches this once per
+// LoadContent (see GameModeScreen.cpp s_supportsP2P) to gate the mode-select
+// VS ring, online-layout position swap, and connect-texture overlay.
+// __bada__ (production/cross-build fidelity target) keeps the retail
+// binary's hardcoded false -- the real device build never had a live
+// transport wired, so nothing here regresses asm-verify parity.
+// DIFFERS: revived -- retail stub @0x157640 (always false)
 bool IsP2PSupported() {
+#if defined(__bada__)
     return false;
+#else
+    return true;
+#endif
 }
 
 // MP-revival: real body -- reflects the active transport's connecting state.

@@ -25,12 +25,16 @@
 #include "math/Matrix44.h"
 #include "math/Colour.h"
 #include "math/_Vector2.h"
+#include "math/MathUtil.h"
 #include "render/Layout.h"
 #include "debug/DebugFlags.h"
 #include "util/StringHash.h"
 #include "util/StringTable.h"
 #include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
+#include "engine/network/P2PMessageHandling.h"
+#include "engine/network/NetworkManager.h"
+#include "entities/ActorManager.h"
 #include <cmath>
 #include <cstdio>
 #include "game/GameWork.h"
@@ -53,12 +57,21 @@ struct BtnDeletedFn {
 
 // --- Binary constants (resolved from read_memory) ---
 
-// Button positions (offline layout only — P2P variants skipped)
+// Button positions (offline layout; see POS_*_P2P below for the
+// online-vs-offline swap, gated on s_supportsP2P).
 // Binary button order: back(1) / classic(2) / zen(3) / arcade(4)
 static const _Vector3<float> POS_BACK(195.0f, -110.0f, 0.0f);  // DAT_0013ea04/08/0c — button 1
 static const _Vector3<float> POS_CLASSIC(-70.0f, 71.0f, 0.0f);  // DAT_0013ea18/1c/0c — button 2
 static const _Vector3<float> POS_ZEN(88.0f, 48.0f, 0.0f);  // DAT_0013ea58/5c/60 — button 3
 static const _Vector3<float> POS_ARCADE(19.0f, -76.0f, 0.0f);  // DAT_0013ea__/__   — button 4
+
+// MP-revival: v1.6.1 button positions used when s_supportsP2P is true (the
+// online-vs-offline position swap the original offline-only layout above
+// skipped). Back stays put; Classic/Zen/Arcade shift to make room for the
+// 5th "VS" ring (see POS_CONNECT below, shared with DrawConnectTexture).
+static const _Vector3<float> POS_CLASSIC_P2P(-95.0f, 83.0f, 0.0f);
+static const _Vector3<float> POS_ZEN_P2P(50.0f, 60.0f, 0.0f);
+static const _Vector3<float> POS_ARCADE_P2P(90.0f, -75.0f, 0.0f);
 
 // Button scale multipliers
 static const float BACK_TARGET_SCALE    = 0.75f;  // DAT_0013e59c — button 1 m_TargetSize
@@ -81,6 +94,13 @@ static const float SECONDARY_CLAMP  = 0.1f;     // DAT_0013f474
 static const float SECONDARY_RATE   = 0.25f;
 static const float FRAMETIMER_RATE  = 0.15f;    // DAT_0013f48c
 
+// state 7 (matchmaker entry) constants -- v1.6.1 GameModeScreen::Update @0x001827d0.
+static const int   ARENA_DRAIN_COUNT      = 2;      // phase B launch gate: GetNumEntities(0)+GetNumEntities(1) < this
+static const float TRANSITION_LAUNCH_THRESH = -0.1f;  // phase A/B boundary
+static const float TRANSITION_HOLD_FLOOR    = -1.25f; // phase C self-recovery floor (~1.25s hold)
+// state 9 (settle) constant -- same binary function.
+static const float SETTLE_EPSILON = 0.01f;   // m_SecondaryAlpha settle gate
+
 // Draw constants — mode_sensei sits at bottom-left, same pattern as
 // DojoScreen's dojo_sensei. Slides in from left horizontally.
 static const _Vector3<float> POS_BG(-188.0f, -32.0f, 0.0f);    // DAT_0013fb84/88
@@ -93,6 +113,10 @@ static const _Vector3<float> POS_CONNECT(-40.0f, -53.0f, 0.0f);    // DAT_0013fb
 // Binary lerp: pos = src + (src - dst) * alpha
 static const _Vector3<float> POS_LOGO_SRC(314.0f, 14.0f, 10.0f);   // DAT_0013fb9c
 static const _Vector3<float> POS_LOGO_DST(194.0f, 29.0f, 10.0f);   // DAT_0013fba8
+// MP-revival: v1.6.1 online-branch zen-sign lerp endpoints (DAT_0013fba0/fba4,
+// previously network-gated-and-skipped). Selected when s_supportsP2P is true.
+static const _Vector3<float> POS_LOGO_SRC_P2P(314.0f, 19.0f, 10.0f);
+static const _Vector3<float> POS_LOGO_DST_P2P(162.0f, 38.0f, 10.0f);
 
 // Fruit type name strings resolved at runtime via Fruit::FruitType() — matches binary call.
 // Binary: DAT_0013ea50 = "watermelon" (button 2 classic),
@@ -176,7 +200,24 @@ namespace {
     Mortar::SmartPtr<Mortar::Texture> s_TexComingSoon;
     Mortar::SmartPtr<Mortar::Texture> s_TexZenSign;
     Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;
+    // MP-revival: connect/connecting overlay textures for DrawConnectTexture.
+    // Bada's retail LoadContent never assigns these (the P2P runtime was
+    // stripped before shipping) even though the .tex assets ship in the data
+    // dump; the port loads them so the revived overlay has art.
+    Mortar::SmartPtr<Mortar::Texture> s_connectToGameCenter;     // v1.6.1 file-static @0x00314DC8+0x30
+    Mortar::SmartPtr<Mortar::Texture> s_connectingToGameCenter;  // v1.6.1 file-static @0x00314DC8+0x34
 }
+
+// MP-revival: v1.6.1 file-static @0x00314DC8+0x11 -- cached once in
+// LoadContent (see GameModeScreen::LoadContent below), same as the binary.
+// Gates the online-vs-offline ring layout (CreateControls / Draw's zen-sign
+// lerp) and the VS button lifecycle (Update case 2 -> UpdateOnlineMultiplayerButton).
+static bool s_supportsP2P = false;
+
+// MP-revival: v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x0018234c --
+// latched true while retracting AND the transport is mid-connect-attempt;
+// DrawConnectTexture swaps to the "connecting..." texture while this is set.
+static bool s_showConnectingTexture = false;
 
 // ===================================================================
 // Matches GameModeScreen::LoadContent @ 0x13e330
@@ -185,6 +226,10 @@ namespace {
 // ===================================================================
 void GameModeScreen::LoadContent() {
     BaseScreen::LoadContent();
+    // MP-revival: v1.6.1 caches supportsP2P = IsP2PSupported() once here
+    // (file-static @0x00314DC8+0x11); re-read on every LoadContent call
+    // (idempotent, matches TextureManager's own IsValid() re-entrancy guards).
+    s_supportsP2P = IsP2PSupported();
     if (!s_TexModeSensei.IsValid())
         s_TexModeSensei = Mortar::TextureManager::LoadLocalisedTexture("mode_sensei.tex");
     if (!s_TexModeSelect.IsValid())
@@ -204,6 +249,12 @@ void GameModeScreen::LoadContent() {
     // it locally here until the Game+0x17c field is ported.
     if (!s_TexBackIcon.IsValid())
         s_TexBackIcon   = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
+    // MP-revival: connect/connecting overlay art (see s_connectToGameCenter
+    // comment above) -- not loaded by v1.6.1 retail LoadContent.
+    if (!s_connectToGameCenter.IsValid())
+        s_connectToGameCenter = Mortar::TextureManager::LoadLocalisedTexture("connect_game_center.tex");
+    if (!s_connectingToGameCenter.IsValid())
+        s_connectingToGameCenter = Mortar::TextureManager::LoadLocalisedTexture("gc_connecting.tex");
 }
 
 // ===================================================================
@@ -218,6 +269,8 @@ void GameModeScreen::UnLoadContent() {
     s_TexComingSoon.SetNull();
     s_TexZenSign.SetNull();
     s_TexBackIcon.SetNull();
+    s_connectToGameCenter.SetNull();
+    s_connectingToGameCenter.SetNull();
 }
 
 // ===================================================================
@@ -392,6 +445,13 @@ void GameModeScreen::CreateControls() {
     if (Layout::IsWideLayout()) spread = MODESELECT_RING_SPREAD;
 #endif
 
+    // MP-revival: online-vs-offline position swap (v1.6.1 CreateControls
+    // branches Classic/Zen/Arcade to make room for the 5th "VS" ring grown
+    // by UpdateOnlineMultiplayerButton; Back is unaffected either way).
+    const _Vector3<float>& classicBase = s_supportsP2P ? POS_CLASSIC_P2P : POS_CLASSIC;
+    const _Vector3<float>& zenBase     = s_supportsP2P ? POS_ZEN_P2P     : POS_ZEN;
+    const _Vector3<float>& arcadeBase  = s_supportsP2P ? POS_ARCADE_P2P  : POS_ARCADE;
+
     // --- Button 1: BACK (plain ring m_RingTex[0x10], bomb fruit, QuitCallback) ---
     // ASM-spec v1.6.1 GameModeScreen::CreateControls @0x001819bc: ring label =
     //   MenuButton::SetText(GETSTRING(...)) over plain m_RingTex[...].
@@ -434,7 +494,7 @@ void GameModeScreen::CreateControls() {
         // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
         // MODESELECT_RING_SPREAD in widescreen (see const comment above). Identity
         // (spread=1) at 3:2/__bada__.
-        m_pClassicButton->Init(_Vector3<float>(MapX(POS_CLASSIC.x * spread, "modeselect.btn.classic"), POS_CLASSIC.y, POS_CLASSIC.z),
+        m_pClassicButton->Init(_Vector3<float>(MapX(classicBase.x * spread, "modeselect.btn.classic"), classicBase.y, classicBase.z),
                                Mortar::Delegate0<void>::Make(this, &GameModeScreen::ClassicModeCallback),
                                Fruit::FruitType(FRUIT_CLASSIC, false), _Vector3<float>(0, 0, 0),
                                Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
@@ -468,7 +528,7 @@ void GameModeScreen::CreateControls() {
         // matching MainScreen's menu.play/menu.dojo convention), extra-spread by
         // MODESELECT_RING_SPREAD in widescreen so Zen sits closer to the right-side
         // description plate. Identity (spread=1) at 3:2/__bada__.
-        m_pZenButton->Init(_Vector3<float>(MapX(POS_ZEN.x * spread, "modeselect.btn.zen"), POS_ZEN.y, POS_ZEN.z),
+        m_pZenButton->Init(_Vector3<float>(MapX(zenBase.x * spread, "modeselect.btn.zen"), zenBase.y, zenBase.z),
                            Mortar::Delegate0<void>::Make(this, &GameModeScreen::ZenModeCallback),
                            Fruit::FruitType(FRUIT_ZEN, false), _Vector3<float>(0, 0, 0),
                            Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
@@ -499,11 +559,11 @@ void GameModeScreen::CreateControls() {
         // Port specific: ARCADE_RECENTER pulls the mapped X back toward the
         // Classic/Zen midpoint in widescreen only (0 at 3:2/__bada__, see
         // ARCADE_RECENTER comment above) -- Classic/Zen positions are untouched.
-        float arcadeX = MapX(POS_ARCADE.x * spread, "modeselect.btn.arcade");
+        float arcadeX = MapX(arcadeBase.x * spread, "modeselect.btn.arcade");
 #ifndef __bada__
         arcadeX -= (Layout::HalfWidth() - 240.0f) * ARCADE_RECENTER;
 #endif
-        m_pArcadeButton->Init(_Vector3<float>(arcadeX, POS_ARCADE.y, POS_ARCADE.z),
+        m_pArcadeButton->Init(_Vector3<float>(arcadeX, arcadeBase.y, arcadeBase.z),
                               Mortar::Delegate0<void>::Make(this, &GameModeScreen::ArcadeModeCallback),
                               Fruit::FruitType(FRUIT_ARCADE, false),
                               _Vector3<float>(0, 0, 0),
@@ -600,6 +660,17 @@ void GameModeScreen::Update(float dt) {
         } else {
             m_ButtonDelay = -1.0f;
         }
+
+        // MP-revival: v1.6.1 GameModeScreen::Update @0x001827d0 state 2:
+        // `if (supportsP2P && !m_bIsFromPause) UpdateOnlineMultiplayerButton(dt);`.
+        // Runs from the 60Hz Update() (not UpdateRealtime) because it calls
+        // HUD::AddControl on button grow-in, and UpdateRealtime must never
+        // mutate the HUD control list (see the UpdateRealtime() doc comment
+        // below). s_supportsP2P is false under __bada__ (see IsP2PSupported),
+        // so this is a no-op there.
+        if (s_supportsP2P && !m_bIsFromPause) {
+            UpdateOnlineMultiplayerButton(dt);
+        }
         break;
     }
 
@@ -673,12 +744,98 @@ void GameModeScreen::Update(float dt) {
         break;
     }
 
-    case 7:
-    case 8:
-    case 9:
-        // Online multiplayer flow — skipped (defunct network)
-        m_State = 1;  // fall back to idle
+    case 7: {
+        // ASM-spec v1.6.1 GameModeScreen::Update @0x001827d0 (case 7): matchmaker
+        // entry (VersusModeCallback set this + alpha=1.0). Three phases on
+        // m_TransitionAlpha: A) alpha>0 -- fade the screen out (ALPHA_DECAY_MODE
+        // decay, mirrored into m_SecondaryAlpha, snapped to 0 once negligible).
+        // B) alpha in [TRANSITION_LAUNCH_THRESH, 0] -- wait for the arena to
+        // (almost) drain, then fire the matchmaker once and drop alpha to -1.
+        // C) alpha < TRANSITION_LAUNCH_THRESH -- hold for TRANSITION_HOLD_FLOOR
+        // (~1.25s), then self-recover to state 1. The port has no native
+        // matchmaker UI to drive P2PConnectCallback (-> state 8), so phase C is
+        // what stops this state from spinning forever.
+#if !defined(__bada__)
+        // TODO: v1.6.1 GameModeScreen +0xcc -- a verification pass suggests the binary's
+        // online-MP button lives at +0xcc (where the port maps m_pArcadeButton) and that
+        // CreateControls never stores the Classic/Zen/Arcade pointers at all; needs its
+        // own RE+layout pass before acting.
+        m_pOnlineMpButton = nullptr;
+#endif
+
+        if (m_TransitionAlpha > 0.0f) {
+            m_TransitionAlpha *= ALPHA_DECAY_MODE;
+            m_SecondaryAlpha = m_TransitionAlpha;
+            if (fabsf(m_TransitionAlpha) < ALPHA_OUT_DONE) m_TransitionAlpha = 0.0f;
+            break;
+        }
+
+        if (m_TransitionAlpha >= TRANSITION_LAUNCH_THRESH) {
+            Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+            int n = am ? am->GetNumEntities(0) + am->GetNumEntities(1) : 0;
+            if (n < ARENA_DRAIN_COUNT) {
+                LaunchP2PMatchMaker();
+                m_TransitionAlpha = -1.0f;
+            }
+            break;
+        }
+
+        m_TransitionAlpha -= dt;
+        if (m_TransitionAlpha >= TRANSITION_HOLD_FLOOR) break;
+        m_TransitionAlpha = 0.0f;
+        m_State = 1;
         break;
+    }
+
+    case 8: {
+        // ASM-spec v1.6.1 GameModeScreen::Update @0x001827d0 (case 8): P2PConnectCallback
+        // entry. m_SecondaryAlpha eases toward 0 every tick (same rate/clamp as the
+        // toward-1 lerp in state 2 above, mirrored to target 0). Once the type-0
+        // arena is empty, gate the connect attempt on
+        // AreGameCenterConnectionAttemptsAllowed and fall through to state 9
+        // unconditionally -- the state advance does not depend on `allowed`.
+        {
+            float step = -m_SecondaryAlpha * SECONDARY_RATE;
+            if (step >  SECONDARY_CLAMP) step =  SECONDARY_CLAMP;
+            if (step < -SECONDARY_CLAMP) step = -SECONDARY_CLAMP;
+            m_SecondaryAlpha += step;
+        }
+
+        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+        int n0 = am ? am->GetNumEntities(0) : 0;
+        if (n0 != 0) break;
+
+        bool allowed = Mortar::NetworkManager::GetInstance()->AreGameCenterConnectionAttemptsAllowed(true);
+        if (allowed) {
+            game_work.m_bP2PConnecting = 1;
+            P2PConnect(true);
+        }
+        m_State = 9;
+        break;
+    }
+
+    case 9: {
+        // ASM-spec v1.6.1 GameModeScreen::Update @0x001827d0 (case 9): settle.
+        // m_SecondaryAlpha eases toward 0 every tick (same lerp as case 8); once
+        // it has settled below SETTLE_EPSILON, drop the VS button preview and
+        // fall back into state 1 (alternate transition-in, "network recovery" --
+        // see that case's doc comment above).
+        {
+            float step = -m_SecondaryAlpha * SECONDARY_RATE;
+            if (step >  SECONDARY_CLAMP) step =  SECONDARY_CLAMP;
+            if (step < -SECONDARY_CLAMP) step = -SECONDARY_CLAMP;
+            m_SecondaryAlpha += step;
+        }
+
+        if (fabsf(m_SecondaryAlpha) > SETTLE_EPSILON) break;
+
+#if !defined(__bada__)
+        m_pOnlineMpButton = nullptr;
+#endif
+        m_FrameTimer = 0.0f;
+        m_State = 1;
+        break;
+    }
 
     case 0xe: {
         // Defunct: Challenges (SocialLib ChallengeMenuScreen) -- no-op stub; v1.6.1 binary @ 0x1827d0 case 0xe.
@@ -815,15 +972,35 @@ void GameModeScreen::UpdateRealtime(float dtSeconds) {
 #endif
 
 // ===================================================================
-// Matches GameModeScreen::DrawConnectTexture @ 0x0013f754
-// Binary: P2P-only animation (matchmaker connection indicator).
-// Guards on isP2PSupported flag — port has no P2P, always no-op.
-// Texture at g_instance+0x34 (primary) / +0x38 (alt) — NOT zen_sign.
+// MP-revival: real body. Matches GameModeScreen::DrawConnectTexture v1.6.1
+// @0x001838d8 -- ease-out pop-in/out pulse of the "connect to online" plate
+// while m_FrameTimer is retracting (< 0, driven by UpdateOnlineMultiplayerButton's
+// !IsP2POnline() branch). Swaps to the "connecting..." texture while
+// s_showConnectingTexture is armed (IsP2PConnecting()).
+// Texture at file-static base 0x00314DC8 +0x30 (connect) / +0x34 (connecting)
+// -- NOT zen_sign.
 // ===================================================================
 void GameModeScreen::DrawConnectTexture(_Vector3<float> pos) {
-    (void)pos;
-    // Port: no P2P network support — skip entirely.
-    // Binary: if (m_FrameTimer <= 0 || !isP2PSupported) return;
+    if (!(m_FrameTimer < 0.0f)) return;
+    if (!s_supportsP2P) return;
+
+    float s = SinIdx((uint16_t)(uint32_t)(-(m_FrameTimer * SIN_SCALE)));
+    Mortar::Texture* base = s_connectToGameCenter.Get();
+    if (!base) return;
+
+    MatrixManager& mm = MatrixManager::GetInstance();
+    mm.GetWorldStack().Reset();
+    Matrix44 mat = Matrix44::MakeScale(
+        (float)base->GetWidth() * s, (float)base->GetHeight() * s, 1.0f);
+    mat.GlobalTranslate44(pos);
+    mm.GetWorldStack().SetCurrentMatrix(mat);
+    mm.UploadModelViewOnly();
+
+    Mortar::Texture* t = (s_showConnectingTexture && s_connectingToGameCenter.IsValid())
+        ? s_connectingToGameCenter.Get() : base;
+    t->Set();
+    Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
+    t->UnSet(true);
 }
 
 // ===================================================================
@@ -907,8 +1084,12 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     // logoPos below, so it tracks the plate automatically. Identity when
     // disabled/__bada__.
     if (s_TexZenSign.IsValid()) {
-        _Vector3<float> src(MapX(POS_LOGO_SRC.x, "modeselect.plate"), POS_LOGO_SRC.y, POS_LOGO_SRC.z);
-        _Vector3<float> dst(MapX(POS_LOGO_DST.x, "modeselect.plate"), POS_LOGO_DST.y, POS_LOGO_DST.z);
+        // MP-revival: v1.6.1 online-branch lerp endpoints (previously
+        // network-gated-and-skipped) when s_supportsP2P is true.
+        const _Vector3<float>& logoSrcBase = s_supportsP2P ? POS_LOGO_SRC_P2P : POS_LOGO_SRC;
+        const _Vector3<float>& logoDstBase = s_supportsP2P ? POS_LOGO_DST_P2P : POS_LOGO_DST;
+        _Vector3<float> src(MapX(logoSrcBase.x, "modeselect.plate"), logoSrcBase.y, logoSrcBase.z);
+        _Vector3<float> dst(MapX(logoDstBase.x, "modeselect.plate"), logoDstBase.y, logoDstBase.z);
         _Vector3<float> logoPos = src + (dst - src) * m_TransitionAlpha;
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
@@ -1118,17 +1299,21 @@ void GameModeScreen::CasinoModeCallback() {
     // Defunct: NetworkManager online-MP flag omitted
 }
 
-// Defunct: online MP (Versus) -- no-op stub; v1.6.1 binary @ 0x00181140 sets m_State=7 + alpha=1.0 to enter matchmaker
+// MP-revival: real click handler, now reachable via the grown VS ring's
+// m_ClickCallback (see UpdateOnlineMultiplayerButton). v1.6.1
+// GameModeScreen::VersusModeCallback @0x00181140 sets m_State=7 + alpha=1.0
+// to enter matchmaker.
 void GameModeScreen::VersusModeCallback() {
     m_State = 7;
     m_TransitionAlpha = 1.0f;
-    // Defunct: matchmaker entry omitted
 }
 
-// Defunct: P2P connect -- no-op stub; v1.6.1 binary @ 0x001810dc sets m_State=8 (GameCenter connect)
+// Defunct: still unreachable -- no native matchmaker UI exists in this build
+// to call it (see Update case 7's doc comment); kept for a faithful state
+// machine. v1.6.1 GameModeScreen::P2PConnectCallback @0x001810dc sets
+// m_State=8 (GameCenter connect).
 void GameModeScreen::P2PConnectCallback() {
     m_State = 8;
-    // Defunct: GameCenter/P2P connect omitted
 }
 
 // Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x00181290 calls GotoFruitNinjaPage(1,-1) then m_State=0xd
@@ -1157,12 +1342,104 @@ void GameModeScreen::UpsellFinished() {
     // Defunct: upsell return path omitted (UpsellScreen is Phantom)
 }
 
-// Defunct: online-MP shrink hook -- no-op stub; v1.6.1 binary @ 0x00181160 snapshots fruit pose + zeroes vel/scale
+// MP-revival: real body under !__bada__. v1.6.1 GameModeScreen::ShrinkedMultiplayerButton
+// @0x00181160 -- once the VS ring's fruit is force-sliced (see
+// UpdateOnlineMultiplayerButton's retract branch), snapshot its pose into the
+// slice-half fields and zero velocity/gravity so it settles in place instead
+// of drifting off with the outward slice velocity that was just applied.
+// __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc constraint); stays a
+// no-op there, matching retail (always !IsP2PSupported()) behaviour.
 void GameModeScreen::ShrinkedMultiplayerButton() {
-    // Defunct: online-MP fruit snapshot omitted
+#if !defined(__bada__)
+    Fruit* f = m_pOnlineMpButton ? m_pOnlineMpButton->m_pTrackedFruit : nullptr;
+    if (!f) return;
+    f->m_SecondPos = f->pos;
+    f->vel         = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    f->m_SecondVel = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    f->m_Gravity   = _Vector3<float>(0.0f, 0.0f, 0.0f);
+#endif
 }
 
-// Defunct: online-MP button lifecycle -- no-op stub; v1.6.1 binary @ 0x0018234c grows/shrinks the 4th MenuButton based on connectivity
-void GameModeScreen::UpdateOnlineMultiplayerButton(float /*dt*/) {
-    // Defunct: online-MP button grow/shrink based on connectivity omitted
+// MP-revival: real body under !__bada__. v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton
+// @0x0018234c -- grows a 5th "VS" MenuButton onto the mode-select ring while
+// the transport is connected (IsP2POnline()), shrinks/removes it otherwise.
+// Called only from Update() case 2 (see the call site's doc comment) so this
+// never touches the HUD control list from UpdateRealtime.
+// __bada__ has no m_pOnlineMpButton slot (sizeof==0xdc constraint); stays a
+// no-op there, matching retail (always !IsP2PSupported(), so the call site
+// itself never fires under __bada__ either).
+void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
+#if !defined(__bada__)
+    if (IsP2POnline()) {
+        m_FrameTimer += dt / FRAMETIMER_RATE;
+        if (m_FrameTimer > 1.0f) m_FrameTimer = 1.0f;
+
+        if (m_FrameTimer > 0.0f && m_pOnlineMpButton == nullptr) {
+            float spread = 1.0f;
+            if (Layout::IsWideLayout()) spread = MODESELECT_RING_SPREAD;
+            // MP-revival: same anchor DrawConnectTexture pulses at (POS_CONNECT).
+            float vsX = MapX(POS_CONNECT.x * spread, "modeselect.btn.vs");
+
+            m_pOnlineMpButton = new MenuButton();
+            m_pOnlineMpButton->m_Texture = game_work.m_RingTex[0xb];  // orange_checker_ring.tex
+            {
+                MenuButton* btn = m_pOnlineMpButton;
+                m_pOnlineMpButton->Init(
+                    _Vector3<float>(vsX, POS_CONNECT.y, POS_CONNECT.z),
+                    Mortar::Delegate0<void>::Make(this, &GameModeScreen::VersusModeCallback),
+                    Fruit::FruitType("vs_watermelon", false), _Vector3<float>(0, 0, 0),
+                    Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
+            }
+            m_pOnlineMpButton->SetText(
+                GETSTRING_CAST_0((LocalizedString)0x3ca),  // "ONLINE"
+                game_work.m_RingColours[10], game_work.m_RingColours[11],
+                39.5f, 12.0f, true, true);
+
+            // sharedTargetSize: same value CreateControls computes for
+            // Zen/Arcade (classicButton->m_RestScale * 0.85). Re-derived here
+            // from the live m_pClassicButton pointer rather than cached --
+            // the 220-byte (0xdc) binary struct has no spare field to cache
+            // it in, and the Classic button is guaranteed to still exist
+            // while GameModeScreen is in state 2 (idle, pre-pick).
+            if (m_pClassicButton) {
+                _Vector3<float> sharedTargetSize = m_pClassicButton->m_RestScale * SHARED_TARGET_SCALE;
+                if (!m_bIsFromPause) {
+                    m_pOnlineMpButton->m_RestScale = sharedTargetSize;
+                    if (m_pOnlineMpButton->m_pTrackedFruit) {
+                        m_pOnlineMpButton->m_pTrackedFruit->scale =
+                            m_pOnlineMpButton->m_pTrackedFruit->scale * 0.77f;
+                    }
+                } else {
+                    m_pOnlineMpButton->m_RestScale = m_pOnlineMpButton->m_RestScale * 0.75f;
+                    if (m_pOnlineMpButton->m_pTrackedFruit) {
+                        m_pOnlineMpButton->m_pTrackedFruit->scale =
+                            m_pOnlineMpButton->m_pTrackedFruit->scale * 0.7f;
+                    }
+                }
+            }
+
+            game_work.mHud->AddControl(m_pOnlineMpButton);
+            if (m_pOnlineMpButton->m_pTrackedFruit) {
+                m_pOnlineMpButton->m_pTrackedFruit->RotateFacingUp(
+                    true, _Vector3<float>(0.0f, 1.0f, 0.0f));
+            }
+        }
+    } else {
+        s_showConnectingTexture = IsP2PConnecting();
+        m_FrameTimer -= dt / FRAMETIMER_RATE;
+        if (m_FrameTimer < -1.0f) m_FrameTimer = -1.0f;
+
+        if (m_pOnlineMpButton && m_pOnlineMpButton->m_pTrackedFruit &&
+            !m_pOnlineMpButton->m_pTrackedFruit->Sliced()) {
+            Fruit* f = m_pOnlineMpButton->m_pTrackedFruit;
+            f->m_bSliced = 1;
+            m_pOnlineMpButton->m_bClearsMenuItems = false;
+            f->m_SecondVel = _Vector3<float>(1.0f, 1.0f, 1.0f);
+            m_pOnlineMpButton->SetCallback(
+                Mortar::Delegate0<void>::Make(this, &GameModeScreen::ShrinkedMultiplayerButton));
+        }
+    }
+#else
+    (void)dt;
+#endif
 }
