@@ -77,14 +77,17 @@ struct EffectImage : public Mortar::ReloadableTexture {
     //               ScreenEffect::Activate @0x00148f08 (disasm @0x0014900c) reads
     //               m_DeferKind at loop entry and unconditionally creates a HUD
     //               control per image; it never reads this byte as a skip
-    //               condition. The only observed write is `strbeq r0,[r4,#0xc]`
-    //               (@0x00149184), which zeroes it ONLY when game_work.pM_pHud is
-    //               NULL -- i.e. this is a write-only "HUD was null" breadcrumb,
-    //               not a "already added" flag. A prior port revision added a
-    //               `if (img.m_bAddedToHUD) continue;` guard here that has no
-    //               binary counterpart and silently skipped every image (since
-    //               the ctor default below is true); that guard has been removed
-    //               from Activate. See tmp/asm-verify/screeneffect-pipeline-re.md.
+    //               condition. Activate's only write is `strbeq r0,[r4,#0xc]`
+    //               (@0x00149184), which zeroes it ONLY when game_work's HUD is
+    //               NULL -- a "HUD was null at Activate" breadcrumb. The CONSUMER
+    //               is v1.6.1 ScreenEffect::Update @0x001488bc: if the HUD exists
+    //               and this byte is 0, Update sets it to 1 and lazily
+    //               AddControl()s the image's control (so effects activated
+    //               before the HUD exists still display). A prior port revision
+    //               misread it as an `if (img.m_bAddedToHUD) continue;` guard in
+    //               Activate, which has no binary counterpart and silently
+    //               skipped every image (ctor default below is true); that guard
+    //               has been removed.
     bool         m_bAddedToHUD;      // +0x0c
     // +0x0d  uint8_t  defer kind: 0=none, 1=points (ScoreMultiplyerBoard / Arcade x2),
     //               2=time (TimeSinkControl / Berry-Blast time-sink). XML

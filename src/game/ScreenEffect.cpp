@@ -340,11 +340,11 @@ ScreenEffect::ScreenEffect(const ScreenEffect& rhs)
         m_Sounds[i].m_VoiceHandle = nullptr;
 }
 
-// Binary @ 0x00148728 -- "compact push/pop" = just member destruction.
-// Deactivate() is called by external callers (PowerUpManager) before destruction;
-// the dtor trusts member destructors for std::vector and SmartPtr cleanup.
-// Complete-object dtor (D1); base/deleting variant is the sibling at 0x00148794.
-// ASM-spec v1.6.1 ScreenEffect::~ScreenEffect @0x00148728
+// TODO: v1.6.1 0x00148728 (ScreenEffect::~ScreenEffect) — binary D1 body is 108
+//   bytes; port body is empty (implicit member destruction only) and has not been
+//   verified against it. Deactivate() is called by external callers
+//   (PowerUpManager) before destruction; deleting variant is the sibling
+//   @0x00148794.
 ScreenEffect::~ScreenEffect() {
 }
 
@@ -540,10 +540,14 @@ void ScreenEffect::Activate() {
 void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     // Standalone-mode override: when m_TotalDuration > 0, this effect manages
     // its own timeline rather than inheriting the PowerUp's.
+    // v1.6.1 ScreenEffect::Update @0x00148844 prologue: currentLongest takes the
+    // PRE-decrement m_RemainingTime (s16 is loaded before the subtract; only the
+    // decremented value is stored back). Using the post-decrement value fired
+    // every threshold/fade/SFX one frame early.
     if (m_RemainingTime > 0.0f) {
+        currentLongest  = m_RemainingTime;
         m_RemainingTime -= dt;
-        currentLongest = m_RemainingTime;
-        maxTotal       = m_TotalDuration;
+        maxTotal        = m_TotalDuration;
     }
 
     // Per-image fade + slide + size logic
@@ -551,6 +555,14 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
         if (!img.m_pHudCtrl) continue;
+
+        // v1.6.1 ScreenEffect::Update @0x001488bc: lazy re-add. If the HUD now
+        // exists but Activate() ran while it was null (m_bAddedToHUD breadcrumb
+        // zeroed @0x00149184), set the flag and AddControl(ctrl, false).
+        if (game_work.mHud && !img.m_bAddedToHUD) {
+            img.m_bAddedToHUD = true;
+            game_work.mHud->AddControl(img.m_pHudCtrl, false);
+        }
 
         float wStart = maxTotal * img.m_StartT;
         float wEnd   = maxTotal * img.m_EndT;
@@ -729,7 +741,9 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
 
             if (!sfx.m_VoiceHandle) {
                 Mortar::Delegate1<bool, Mortar::MortarSound*> emptyDelegate;
-                sfx.m_VoiceHandle = gs->SFXPlay(sfx.m_SoundName, 0.6599f, 1.0f, emptyDelegate);
+                // v1.6.1 ScreenEffect::Update @0x00148e04: volume constant is
+                // 0x3f28f5c3 = 0.66f exactly.
+                sfx.m_VoiceHandle = gs->SFXPlay(sfx.m_SoundName, 0.66f, 1.0f, emptyDelegate);
             }
             ++si;
         }
