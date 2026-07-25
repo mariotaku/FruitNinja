@@ -509,8 +509,8 @@ void BonusScreen::Update(float dt) {
 
     // -----------------------------------------------------------------------
     // Rush-loop SFX start gate (binary @0x00163e40-0163ef8).
-    // ASM-verified: 2026-07-24T00:00Z v1.6.1 BonusScreen::Update drum-roll SFXPlay+SetVolume(0) @0x00163e94..0x00163ef4 (asm-inspector)
-    // "Bonus-drum-roll" (s0=0,s1=1,s2=0) starts at FULL vol, then SetVolume(0.0f) forces the channel silent -- genuine binary behaviour, not a bug. Drum-roll is deliberately inaudible.
+    // Starts "Bonus-drum-roll" at volume 0; the per-frame ramp below (after the
+    // stop gate) raises it to 0.5..1.166 while the handle is live.
     // -----------------------------------------------------------------------
     if (m_RushLoopSFX == 0 && m_Timer > 0.0f && m_Timer < revealEnd) {
         Game* game = Game::GetInstance();
@@ -658,6 +658,21 @@ void BonusScreen::Update(float dt) {
             game_work.mGameSound->Release(m_RushLoopSFX, "Bonus-drum-roll");
         }
         m_RushLoopSFX = 0;
+    }
+
+    // -----------------------------------------------------------------------
+    // Rush-loop per-frame volume ramp. Binary order is stop-then-ramp: once the
+    // handle is released past revealEnd, no SetVolume happens. The 2.0f is
+    // hardcoded in the binary (NOT the award count); pool constants 0x001642a8 =
+    // 0.666f, 0x001642ac = 1.166f. SetVolume takes a GAIN (vol*255 -> u8).
+    // ASM-verified: 2026-07-26T04:30Z v1.6.1 BonusScreen::Update drum-roll ramp @ 0x0016423c..0x001642e4 + SetVolume(s18) @ 0x001646a4..0x001646b4 (asm-inspector)
+    // -----------------------------------------------------------------------
+    if (m_RushLoopSFX) {
+        float ratio = m_Timer / (FIRST_AWARD + 2.0f * TIME_PER_AWARD);
+        float vol = (ratio <= 0.0f) ? 0.5f
+                  : (ratio < 1.0f) ? 0.5f + ratio * 0.666f
+                  : 1.166f;
+        m_RushLoopSFX->SetVolume(vol);
     }
 
     // -----------------------------------------------------------------------

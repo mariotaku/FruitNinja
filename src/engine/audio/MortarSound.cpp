@@ -101,10 +101,17 @@ void MortarSound::Stop(float /*fadeTime*/) {
     }
 }
 
-// 0x0018c7b4
-// SetVolume clamp: (0.0 < vol*255.0f) * (uint8)(int)(vol*255.0f)
-// Produces 0 for negative inputs; byte truncation clamps at 255.
-// Constant DAT_0018c7ec = 255.0f
+// ASM-verified: 2026-07-26T04:30Z v1.6.1 MortarSound::SetVolume @ 0x00230228 (asm-inspector)
+// vol is a GAIN, not an attenuation: `s15 = vol * 255.0f` (pool @0x00230278 = 255.0f),
+// `vcvt.u32.f32`, `uxtb`, tail-call MAMAudioController::SetSoundVolume(handle, byte).
+// 0.0 -> byte 0 -> silent; 1.0 -> 255 -> full.
+//
+// The byte conversion TRUNCATES, it does not clamp -- `vcvt.u32.f32` saturates only at
+// 32 bits, so vol > 1.0 survives as a value above 255 and `uxtb` keeps its low byte.
+// e.g. BonusScreen's drum-roll ramp tops out at vol = 1.166 -> 297 -> byte 41, and
+// vol = 1.004 -> 256 -> byte 0. That wrap-around is genuine v1.6.1 behaviour and the
+// port reproduces it deliberately -- do NOT "fix" it into a clamp.
+// The `(0.0f < scaled) *` term reproduces vcvt.u32's saturation of negatives to 0.
 void MortarSound::SetVolume(float vol) {
     MortarSound_HandleGuard(this);
     if (m_Handle != 0) {
