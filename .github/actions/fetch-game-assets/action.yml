@@ -80,6 +80,14 @@ runs:
     - name: Extract Data/ from Fruit Ninja asset archive
       shell: bash
       run: |
+        # Composite-action steps run as `bash -eo pipefail`, whereas the plain
+        # workflow `run:` steps this logic came from ran as `bash -e` (no
+        # pipefail). Several `... | head -N` pipelines below make head exit
+        # early, which SIGPIPEs the producer -- harmless before, but fatal
+        # under pipefail. Restore the original semantics; real failures are
+        # still caught by the explicit checks + `exit 1` below.
+        set +o pipefail
+
         EXPECTED_BIN_MD5="${{ inputs.expected-bin-md5 }}"
         DESTINATION="${{ inputs.destination }}"
 
