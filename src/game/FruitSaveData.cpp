@@ -998,6 +998,17 @@ void SaveCurrentData(bool /*fullSave*/) {
     // simplicity.
     snapshot.m_BombHitTimer = game_work.m_BombHitTimer;
 
+    // ASM-spec v1.6.1 SaveCurrentData @0x001cde20: persist the sound/music-off
+    // preference as a keyed total; InitialiseData consumes it back to 0 on next boot.
+    if (!game_work.m_bSoundOn) {
+        const unsigned int hSoundOff = StringHash("soundOff");
+        snapshot.AddToTotal("soundOff", hSoundOff, 1, false, true);
+    }
+    if (!game_work.m_bMusicOn) {
+        const unsigned int hMusicOff = StringHash("musicOff");
+        snapshot.AddToTotal("musicOff", hMusicOff, 1, false, true);
+    }
+
     SaveGame(&snapshot);
     *GetIsSavingBool() = false;
 }

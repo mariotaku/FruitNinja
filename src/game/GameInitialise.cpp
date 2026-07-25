@@ -217,7 +217,7 @@ void GameInitialise(void* window, const char* config) {
     game->actorManager->RegisterFactory(&CreateEntity);
 
     // Step 5 (binary): operator_new(0x238) + FruitSaveData ctor. Binary
-    // InitialiseData @ 0x0010b66c follows the ctor with a LoadGame call
+    // InitialiseData @ 0x0011c3f0 follows the ctor with a LoadGame call
     // so persistent state is restored before the rest of init runs.
     game_work.m_SaveData = new FruitSaveData();
     LoadGame(game_work.m_SaveData);
@@ -230,16 +230,16 @@ void GameInitialise(void* window, const char* config) {
 
     // InitialiseData steps 9-11: sound/music on/off from save totals, then reset flags
     {
-        const unsigned int hSoundOff = StringHash("sound_off");
-        const unsigned int hMusicOff = StringHash("music_off");
+        const unsigned int hSoundOff = StringHash("soundOff");
+        const unsigned int hMusicOff = StringHash("musicOff");
         game_work.m_bSoundOn = (game_work.m_SaveData->GetTotal(hSoundOff) == 0);
         game_work.m_bMusicOn = (game_work.m_SaveData->GetTotal(hMusicOff) == 0);
         const int soundOffCount = game_work.m_SaveData->GetTotal(hSoundOff);
         const int musicOffCount = game_work.m_SaveData->GetTotal(hMusicOff);
         if (soundOffCount != 0)
-            game_work.m_SaveData->AddToTotal("sound_off", hSoundOff, -soundOffCount, false, true);
+            game_work.m_SaveData->AddToTotal("soundOff", hSoundOff, -soundOffCount, false, true);
         if (musicOffCount != 0)
-            game_work.m_SaveData->AddToTotal("music_off", hMusicOff, -musicOffCount, false, true);
+            game_work.m_SaveData->AddToTotal("musicOff", hMusicOff, -musicOffCount, false, true);
     }
 #ifdef __EMSCRIPTEN__
     // Port specific: web audio init -- SFX shows ON from boot so the sound
