@@ -65,7 +65,11 @@ jobs:
         with:
           repository: "webosbrew/ares-cli-rs"
           latest: true
-          fileName: "ares-package_*.deb"
+          # Pin the host arch: releases ship both _amd64 and _arm64 .deb, and a
+          # bare "ares-package_*.deb" glob pulls BOTH -- the later
+          # "apt-get install ./temp/*.deb" then fails on the foreign-arch package.
+          # ubuntu-latest runners are amd64.
+          fileName: "ares-package_*_amd64.deb"
           out-file-path: "temp"
 
       - name: Download Homebrew Toolbox (webosbrew-ipk-verify)
@@ -73,7 +77,9 @@ jobs:
         with:
           repository: "webosbrew/dev-toolbox-cli"
           latest: true
-          fileName: "webosbrew-toolbox-*.deb"
+          # Same arch pin as above (this repo currently publishes amd64 only,
+          # but keep it explicit so an added arm64 build can't break the job).
+          fileName: "webosbrew-toolbox-*_amd64.deb"
           out-file-path: "temp"
 
       - name: Install webOS Packaging Tools
