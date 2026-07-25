@@ -1344,9 +1344,11 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     }
 
                     // Pick a random type from the spawner's list.
-                    int typeIdx = (spawner.m_FruitTypeCount > 1)
-                        ? (int)m_Random.Rand32((uint32_t)spawner.m_FruitTypeCount)
-                        : 0;
+                    // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c (pick 0x00125e9c): Rand32(m_FruitTypeCount)
+                    // is called UNCONDITIONALLY — a draw is consumed even when count==1 (result trivially 0).
+                    // Do not special-case count==1: skipping the draw desyncs the seeded RNG stream from the
+                    // binary (and between MP peers sharing a spawn seed) on every single-type spawn.
+                    int typeIdx = (int)m_Random.Rand32((uint32_t)spawner.m_FruitTypeCount);
                     int fruitType = spawner.m_pFruitTypeHashes
                         ? spawner.m_pFruitTypeHashes[typeIdx]
                         : -1;
