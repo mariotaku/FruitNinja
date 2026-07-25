@@ -86,17 +86,41 @@ void RegisterSocial() {
 void DefaultButtonCallback() {
 }
 
-// MP-revival: real body -- pumps the active transport's inbound queue.
-// Peeks each message's wire header to learn its type, allocates the matching
+// MP-revival: real body -- drains the active transport's EVENT queue first
+// (session-setup handshake signals: CONNECTED/NAMES/DISCONNECTED -- see
+// IMpTransport::PollEvent), then its inbound DATA queue. Peeks each data
+// message's wire header to learn its type, allocates the matching
 // NetworkPacket subclass via PacketFactory, deserialises the full payload,
-// and dispatches it through Mortar::GlobalP2PMessageHandler. Drains the whole
-// queue each tick (Poll() returns 0 when empty).
+// and dispatches it through Mortar::GlobalP2PMessageHandler tagged
+// P2PMSG_DATA. Drains both queues fully each tick (Poll()/PollEvent() return
+// 0/MP_EVT_NONE when empty).
 // DIFFERS: revived -- no binary body, retail stub @0x2310c8.
 void NetworkManager::Update(float /*dt*/) {
     IMpTransport* t = GetMpTransport();
     if (t == 0) {
         return;
     }
+
+    int ev;
+    while ((ev = t->PollEvent()) != MP_EVT_NONE) {
+        switch (ev) {
+            case MP_EVT_CONNECTED:
+                // Qualified call: see the data-pump note below for why this
+                // must be the free-function GlobalP2PMessageHandler, not
+                // NetworkManager's own defunct member of the same name.
+                ::GlobalP2PMessageHandler(Mortar::P2PMSG_CONNECTED, 0);
+                break;
+            case MP_EVT_NAMES:
+                ::GlobalP2PMessageHandler(Mortar::P2PMSG_NAMES, 0);
+                break;
+            case MP_EVT_DISCONNECTED:
+                HandleDisconnection(t->DisconnectCode());
+                break;
+            default:
+                break;
+        }
+    }
+
     uint8_t buf[512];
     int n;
     while ((n = t->Poll(buf, sizeof buf)) > 0) {
@@ -119,7 +143,7 @@ void NetworkManager::Update(float /*dt*/) {
         // GlobalP2PMessageHandler member (see NetworkManager.h) that would
         // otherwise shadow this free function during unqualified lookup from
         // inside a NetworkManager member function.
-        ::GlobalP2PMessageHandler(Mortar::P2PMSG_NONE, pkt);
+        ::GlobalP2PMessageHandler(Mortar::P2PMSG_DATA, pkt);
         delete pkt;
     }
 }

@@ -16,6 +16,21 @@
 
 namespace Mortar {
 
+// MP-revival: transport-level session events, distinct from in-band data
+// packets (NetworkPacket subclasses carried by Send()/Poll()). Mirrors the
+// iOS 1.5 msgCode values 8/9 that GlobalP2PMessageHandler switches on before
+// falling into its data-packet dispatch (see P2PMessageHandling.cpp's
+// two-level switch: Mortar::P2PMessage msg first -- P2PMSG_CONNECTED/NAMES
+// match these same numeric values -- then packet->m_PacketType for
+// P2PMSG_DATA).
+// ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8 / case 9).
+enum MpTransportEvent {
+    MP_EVT_NONE         = 0,
+    MP_EVT_CONNECTED    = 8, // session established -- mirrors iOS msgCode 8
+    MP_EVT_NAMES        = 9, // peer names available -- mirrors iOS msgCode 9
+    MP_EVT_DISCONNECTED = 10
+};
+
 // Contract:
 //  - Host()/Join() are async-starting: they may return true immediately
 //    (queued/connecting) or once actually connected, depending on the
@@ -45,9 +60,14 @@ public:
     virtual bool IsConnected() const = 0;
     virtual bool IsConnecting() const = 0;
 
-    // 0 for the host, 1 for the joining peer -- maps to the binary's
+    // 1 for the host, 2 for the joining peer -- maps to the binary's
     // m_PlayerIdx P2P/EntityTracker partition (see docs/engine/
     // online-services-audit.md and the input-path audit, #158).
+    // MP-revival: guest==2 is load-bearing -- StartGamePacket cmd2's RNG
+    // reseed gate (WaveManager::SetOnlineSeed) fires only when
+    // NetworkManager::GetLocalPlayerNumber()==2, mirroring the iOS 1.5
+    // session-setup handshake where the host keeps its own seed and only the
+    // joining peer reseeds from the host's broadcast seed.
     virtual int LocalPlayerNumber() const = 0;
 
     // Enqueue one whole message [data, data+len) for delivery to the peer.
@@ -56,6 +76,20 @@ public:
     // Pop the next queued incoming message into `out` (up to `cap` bytes).
     // Returns the message length, or 0 if no message is queued.
     virtual int Poll(uint8_t* out, int cap) = 0;
+
+    // MP-revival: pop the next queued transport EVENT (session-setup
+    // handshake signal -- MP_EVT_CONNECTED/MP_EVT_NAMES/MP_EVT_DISCONNECTED),
+    // as opposed to a data packet. Returns MP_EVT_NONE when no event is
+    // queued. Callers loop PollEvent() until MP_EVT_NONE, same drain pattern
+    // as Poll(). Events and data messages are queued/drained independently
+    // (separate queues) -- draining one does not affect the other.
+    virtual int PollEvent() = 0;
+
+    // MP-revival: reason code for the most recent MP_EVT_DISCONNECTED event
+    // (see HandleDisconnection's `code` param in P2PMessageHandling.h for the
+    // code->reason-string mapping). Default 1 ("peer left") when the backend
+    // has no richer classification.
+    virtual int DisconnectCode() const { return 1; }
 };
 
 } // namespace Mortar

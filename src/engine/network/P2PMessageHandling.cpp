@@ -15,11 +15,14 @@
 #include "game/WaveManager.h"
 #include "game/GameOver.h"
 #include "game/GameWork.h"
+#include "game/GameMode.h"
 #include "game/GameTaskState.h"
+#include "game/BombHit.h"
 #include "engine/network/NetworkManager.h"
 #include "entities/Entity.h"
 #include "entities/Fruit.h"
 #include "engine/math/MathUtil.h"
+#include "hud/HUD.h"
 
 namespace Mortar {
 
@@ -105,24 +108,72 @@ void SendP2PPacket(Mortar::NetworkPacket& packet, bool reliable) {
 void LaunchP2PMatchMaker() {
 }
 
-// MP-revival: real dispatch -- routes an inbound packet (already
-// Deserialize'd by the caller, see NetworkManager::Update's pump) to its
-// handler by packet->m_PacketType. `msg` carries no dispatch info in the
-// port (P2PMessage has only P2PMSG_NONE -- the binary's real enum values
-// were never recovered); the type id on the packet itself is authoritative.
-//
-// ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0: iOS 1.5 (the build
-// that shipped working MP) APPLIES each received packet to live gameplay
-// state instead of merely recording it. The Bada v1.6.1 retail body at
-// 0x15761c is an empty stub (P2P runtime compiled out); this keeps the
-// Bada wire format (packet type IDs 100-104, packet field layouts) but
-// runs the iOS 1.5 algorithm against them.
-// DIFFERS: revived -- no binary body, retail stub @0x15761c EMPTY {}
-void GlobalP2PMessageHandler(Mortar::P2PMessage msg, Mortar::NetworkPacket* packet) {
-    (void)msg;
-    if (packet == 0) {
-        return;
+// MP-revival: msgCode 8 (CONNECTED / session-start) handler.
+// ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8).
+// Resets per-session gameplay state so a freshly-established connection
+// starts from a clean slate, same as iOS 1.5's case-8 body.
+static void HandleP2PConnected() {
+    // TODO: iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8) -- iOS clears
+    // fixed MP player-name buffers on game_work before the NAMES event fills
+    // them in. The port's GameWork struct has no dedicated MP name-buffer
+    // fields (see GameWork.h -- no RE'd offset for them), so there is nothing
+    // to clear here yet; msgCode 9's handler (HandleP2PNames below) has the
+    // matching gap.
+
+    InstantLevelDestroy(); // real port function -- see game/BombHit.h
+
+    // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8): sets the
+    // session to online-versus mode. The port's existing GAME_MODE mapping
+    // (GameModeScreen::CasinoModeCallback, GameMode.h) already uses
+    // GAME_MODE_COMBO(1) as the "online MP" gameMode value -- reuse that
+    // established binary-faithful mapping rather than inventing a new mode
+    // index (the spec's literal iOS mode value 4 does not correspond to any
+    // mode this port's GAME_MODE enum defines).
+    game_work.gameMode = GAME_MODE_COMBO;
+
+    // TODO: iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 8) -- iOS clears
+    // FruitSaveData's "blueWins"/"redWins" versus-mode win totals here.
+    // FruitSaveData.h has no blueWins/redWins fields in this port (no RE'd
+    // offset for them); nothing to clear yet.
+
+    WaveManager::GetInstance()->Reset(true);
+
+    if (game_work.mHud) {
+        game_work.mHud->SetToMultiplayerState();
     }
+
+    CreateMultiplayerTutorialControl();
+
+    // Mark the session as an active online-MP match. m_bMPRetryPending is the
+    // port's existing "MP session active" gate (read by TimeControl's
+    // suppress check and cleared by QuitToMenu/GameOverScreen -- see
+    // GameWork.h +0x174); reuse it rather than inventing a new flag.
+    game_work.m_bMPRetryPending = 1;
+}
+
+// MP-revival: msgCode 9 (NAMES) handler.
+// ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 9).
+static void HandleP2PNames() {
+    char buf0[256];
+    char buf1[256];
+    Mortar::NetworkManager::GetInstance()->GetPlayerName(0, buf0, sizeof buf0);
+    Mortar::NetworkManager::GetInstance()->GetPlayerName(1, buf1, sizeof buf1);
+
+    // TODO: iOS1.5 GlobalP2PMessageHandler @0x000389a0 (case 9) -- iOS copies
+    // buf0/buf1 into fixed MP name buffers on game_work, uppercasing and
+    // truncating to 10 chars + "..." if longer. The port's GameWork struct
+    // has no RE'd offset for these buffers (see HandleP2PConnected's
+    // matching TODO above), so buf0/buf1 are fetched (NetworkManager::
+    // GetPlayerName is itself a stub returning "") but not stored anywhere
+    // yet. Wire this up once the name-buffer offsets are RE'd.
+    (void)buf0;
+    (void)buf1;
+}
+
+// MP-revival: msgCode 7 (DATA) sub-dispatch -- the original single-level
+// packet-type switch, unchanged from the pre-two-level-dispatch version.
+// ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (data cases 100-103).
+static void HandleP2PData(Mortar::NetworkPacket* packet) {
     switch (packet->m_PacketType) {
         // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (data case 100: PointsPacket)
         case 100: { // PointsPacket
@@ -195,13 +246,59 @@ void GlobalP2PMessageHandler(Mortar::P2PMessage msg, Mortar::NetworkPacket* pack
             break;
         }
         // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (data case 103: StartGamePacket)
+        // MP-revival: StartGamePacket now carries a SUB-COMMAND (m_Cmd) instead
+        // of a flags/seed pair -- see StartGamePacket.h for the cmd/value rework.
         case 103: { // StartGamePacket
             StartGamePacket* p = static_cast<StartGamePacket*>(packet);
-            WaveManager::GetInstance()->SetOnlineSeed(static_cast<uint32_t>(p->m_GameSeed));
-            // Mark the session started: this is the flag WaveManager::Update
-            // actually gates the online-MP wave-tick dt on (see GameWork.h
-            // +0x1A1 comment) -- +0x199 (m_bP2PReady) is a separate checkpoint.
-            game_work.m_bP2POpponentReady = 1;
+            switch (p->m_Cmd) {
+                // cmd 1: ready handshake.
+                case 1: {
+                    if (!game_work.m_bP2PReady) {
+                        // We haven't sent ours yet in this exchange -- record
+                        // that the PEER is ready and wait for our own ready
+                        // send (RetryOnlineMultiplayerGame / session-start
+                        // path drives that side).
+                        game_work.m_bP2PPeerReady = 1;
+                    } else {
+                        // We were already waiting on the peer -- this ready
+                        // closes the handshake: clear both latches and start
+                        // the multiplayer tutorial/HUD state.
+                        game_work.m_bP2PReady = 0;
+                        game_work.m_bP2PPeerReady = 0;
+                        CreateMultiplayerTutorialControl();
+                    }
+                    break;
+                }
+                // cmd 2: seed + go. Only the GUEST (LocalPlayerNumber()==2)
+                // reseeds -- the host keeps its own seed (see WaveManager.h
+                // SetOnlineSeed comment / IMpTransport.h LocalPlayerNumber doc).
+                case 2: {
+                    if (Mortar::NetworkManager::GetInstance()->GetLocalPlayerNumber() == 2) {
+                        WaveManager::GetInstance()->SetOnlineSeed(static_cast<uint32_t>(p->m_Value));
+                    }
+                    // "GO" flag: match is actually starting now. Set on the
+                    // MultiplayerTutorialControl installed at session-start
+                    // (HandleP2PConnected/CreateMultiplayerTutorialControl)
+                    // if present; also set the WaveManager-visible
+                    // m_bP2POpponentReady checkpoint (the flag
+                    // WaveManager::Update actually gates the online-MP
+                    // wave-tick dt on -- see GameWork.h +0x1A1 comment).
+                    if (game_work.m_TutorialControl != 0) {
+                        static_cast<MultiplayerTutorialControl*>(game_work.m_TutorialControl)->m_bGo = true;
+                    }
+                    game_work.m_bP2POpponentReady = 1;
+                    break;
+                }
+                // cmd 3: mode. Stores the peer-broadcast game mode into the
+                // session's mode field (mirrors HandleP2PConnected's
+                // game_work.gameMode assignment for the session-start path).
+                case 3: {
+                    game_work.gameMode = static_cast<uint8_t>(p->m_Value);
+                    break;
+                }
+                default:
+                    break;
+            }
             break;
         }
         // 104 PlayerDisconnectGamePacket: REMOVED from the data dispatch.
@@ -210,6 +307,39 @@ void GlobalP2PMessageHandler(Mortar::P2PMessage msg, Mortar::NetworkPacket* pack
         // DisconnectP2P), not a data case here. PlayerDisconnectGamePacket
         // stays a Bada-relic class (stub-don't-skip) but is no longer routed.
         default:
+            break;
+    }
+}
+
+// MP-revival: TWO-LEVEL dispatch -- `msg` (transport event vs. in-band data,
+// see P2PMessage/MpTransportEvent) is checked FIRST, then (for msg==DATA)
+// the packet's own m_PacketType selects the concrete handler. Earlier port
+// revisions dispatched on packet->m_PacketType alone because P2PMessage had
+// only P2PMSG_NONE; now that NetworkManager::Update's event pump (see
+// NetworkManager.cpp) produces real CONNECTED/NAMES/DATA values, `msg` is
+// authoritative for the top-level routing.
+//
+// ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0: iOS 1.5 (the build
+// that shipped working MP) APPLIES each received packet to live gameplay
+// state instead of merely recording it. The Bada v1.6.1 retail body at
+// 0x15761c is an empty stub (P2P runtime compiled out); this keeps the
+// Bada wire format (packet type IDs 100-104, packet field layouts) but
+// runs the iOS 1.5 algorithm against them.
+// DIFFERS: revived -- no binary body, retail stub @0x15761c EMPTY {}
+void GlobalP2PMessageHandler(Mortar::P2PMessage msg, Mortar::NetworkPacket* packet) {
+    switch (msg) {
+        case Mortar::P2PMSG_CONNECTED:
+            HandleP2PConnected();
+            break;
+        case Mortar::P2PMSG_NAMES:
+            HandleP2PNames();
+            break;
+        case Mortar::P2PMSG_DATA:
+        case Mortar::P2PMSG_NONE: // back-compat: callers that don't yet tag DATA
+        default:
+            if (packet != 0) {
+                HandleP2PData(packet);
+            }
             break;
     }
 }
@@ -247,8 +377,29 @@ bool IsSameScreenMultiplayer() {
     return false;
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RetryOnlineMultiplayerGame @0x001053e4
+// MP-revival: real body -- re-arms the ready handshake for a Retry-after-death
+// on an online-MP game. ASM-spec iOS1.5 RetryOnlineMultiplayerGame @0x00035bd4:
+//   game_work +0x170 = 1 (MP-active)   -> port: m_bMPRetryPending = 1
+//   game_work +0x195 = 0 (our-ready)   -> port: m_bP2PReady = 0
+//   game_work +0x196 = 1 (retry armed) -> port: no distinct "retry armed" byte
+//     exists in the port's GameWork layout beyond m_bMPRetryPending itself
+//     (which this function already sets to 1); folded into that one flag.
+//   send StartGamePacket(cmd=1 ready) reliable
+//   if peer not yet ready (+0x197==0): arm ready-timeout (+0x19c = 12.0f)
+//   else: CreateMultiplayerTutorialControl()
+// DIFFERS: revived -- no binary body, retail stub @0x001053e4.
 void RetryOnlineMultiplayerGame() {
+    game_work.m_bMPRetryPending = 1;
+    game_work.m_bP2PReady = 0;
+
+    StartGamePacket ready(1, 0);
+    SendP2PPacket(ready, true);
+
+    if (!game_work.m_bP2PPeerReady) {
+        game_work.m_P2PReadyTimeout = 12.0f;
+    } else {
+        CreateMultiplayerTutorialControl();
+    }
 }
 
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 AcceptCallback @0x001053ec
@@ -277,6 +428,11 @@ void HandleDisconnection(int code) {
     game_work.m_reserved1a4 = 0;
     game_work.m_reserved1a5 = 0;
     game_work.m_reserved1a6 = 0;
+    // MP-revival: session-setup handshake latches (port-only fields, see
+    // GameWork.h) -- clear alongside the other MP session flags above.
+    game_work.m_bMPRetryPending = 0;
+    game_work.m_bP2PPeerReady   = 0;
+    game_work.m_P2PReadyTimeout = 0.0f;
 
     const char* reason;
     switch (code) {
@@ -289,5 +445,20 @@ void HandleDisconnection(int code) {
     if (IsOnlineMultiplayer()) {
         CleanupAndReturnToMainMenu();
         Mortar::NetworkManager::GetInstance()->PopupAlert("Disconnected", reason);
+    }
+}
+
+// MP-revival: allocates a MultiplayerTutorialControl into
+// game_work.m_TutorialControl and adds it to the HUD, replacing whatever
+// TutorialControl* was already installed (matches the GameInit.cpp /
+// GameInitialise.cpp pattern for the plain TutorialControl -- see
+// `new TutorialControl()` call sites there -- but installs the online-MP
+// subclass instead).
+// ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 / RetryOnlineMultiplayerGame @0x00035bd4.
+void CreateMultiplayerTutorialControl() {
+    MultiplayerTutorialControl* ctrl = new MultiplayerTutorialControl();
+    game_work.m_TutorialControl = ctrl;
+    if (game_work.mHud) {
+        game_work.mHud->AddControl(ctrl, false);
     }
 }

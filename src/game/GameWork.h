@@ -218,6 +218,25 @@ struct GameWork {
     Colour  m_RingColours[13];      // +0x668..+0x69B  v1.6.1 PreloadRings@0x0011cd00 writes pM_Colours[0..12]
     Colour  m_Colour69C;            // +0x69C  spare standalone Colour (PreloadRings sets 0x5C5C5C grey)
     Colour  m_TitleColour;          // +0x6A0  Zen-plate metallic title colour (PreloadRings sets 0x6F461E)
+
+    // --- MP-revival: session-setup handshake state (port-only, not in binary
+    // layout) -- appended past the layout-asserted tail so the __bada__
+    // offsets above are unaffected, same pattern as WaveManager's
+    // m_OnlineSeed/m_SyncCounter fields. ---------------------------------
+
+    // Peer has sent a StartGamePacket(cmd=1 ready). Distinct from
+    // m_bP2PReady (+0x199, "we are ready" latch): this is the paired
+    // "they are ready" flag RetryOnlineMultiplayerGame/cmd1's handler check
+    // before deciding to arm the ready-timeout vs. proceed immediately.
+    // ASM-spec iOS1.5 GlobalP2PMessageHandler @0x000389a0 (StartGamePacket cmd 1).
+    uint8_t m_bP2PPeerReady;
+
+    // Counts down while waiting for the peer's ready ack after we've sent
+    // ours; RetryOnlineMultiplayerGame arms it to 12.0f. Port-only -- no
+    // binary counterpart at any offset (iOS or Bada); iOS 1.5's own timer
+    // field was never resolved to a game_work offset.
+    // ASM-spec iOS1.5 RetryOnlineMultiplayerGame @0x00035bd4.
+    float   m_P2PReadyTimeout;
 };
 
 extern "C" GameWork game_work;  // C-linkage global at .bss 0x002d931c, zero-initialised
@@ -278,7 +297,12 @@ static_assert(offsetof(GameWork, m_RingTex)             == 0x624, "GameWork::m_R
 static_assert(offsetof(GameWork, m_RingColours)         == 0x668, "GameWork::m_RingColours");
 static_assert(offsetof(GameWork, m_Colour69C)           == 0x69c, "GameWork::m_Colour69C");
 static_assert(offsetof(GameWork, m_TitleColour)         == 0x6a0, "GameWork::m_TitleColour");
-static_assert(sizeof(GameWork) == 0x6a4, "GameWork must be 1700 bytes (binary @ 0x002d931c)");
+// Binary-faithful region ends at 0x6a4 (1700 bytes); m_bP2PPeerReady/
+// m_P2PReadyTimeout are MP-revival-only fields appended past it (feat/mp-revival
+// branch), same pattern as WaveManager.h's m_OnlineSeed tail -- sizeof grows
+// beyond retail's 0x6a4 by design.
+static_assert(offsetof(GameWork, m_bP2PPeerReady)       == 0x6a4, "GameWork::m_bP2PPeerReady");
+static_assert(sizeof(GameWork) > 0x6a4, "GameWork must be at least 1700 bytes (binary @ 0x002d931c)");
 #endif
 
 #endif // FN_GAME_GAMEWORK_H

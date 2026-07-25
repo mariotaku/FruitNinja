@@ -37,8 +37,12 @@ LoopbackTransport::~LoopbackTransport() {
 bool LoopbackTransport::Host() {
     if (m_End == 0) {
         m_Channel->connectedA = true;
+        m_Channel->eventsA.push_back(MP_EVT_CONNECTED);
+        m_Channel->eventsA.push_back(MP_EVT_NAMES);
     } else {
         m_Channel->connectedB = true;
+        m_Channel->eventsB.push_back(MP_EVT_CONNECTED);
+        m_Channel->eventsB.push_back(MP_EVT_NAMES);
     }
     return true;
 }
@@ -47,8 +51,12 @@ bool LoopbackTransport::Join(const char* endpoint) {
     (void)endpoint;
     if (m_End == 0) {
         m_Channel->connectedA = true;
+        m_Channel->eventsA.push_back(MP_EVT_CONNECTED);
+        m_Channel->eventsA.push_back(MP_EVT_NAMES);
     } else {
         m_Channel->connectedB = true;
+        m_Channel->eventsB.push_back(MP_EVT_CONNECTED);
+        m_Channel->eventsB.push_back(MP_EVT_NAMES);
     }
     return true;
 }
@@ -56,8 +64,10 @@ bool LoopbackTransport::Join(const char* endpoint) {
 void LoopbackTransport::Disconnect() {
     if (m_End == 0) {
         m_Channel->connectedA = false;
+        m_Channel->eventsA.push_back(MP_EVT_DISCONNECTED);
     } else {
         m_Channel->connectedB = false;
+        m_Channel->eventsB.push_back(MP_EVT_DISCONNECTED);
     }
 }
 
@@ -72,7 +82,9 @@ bool LoopbackTransport::IsConnecting() const {
 }
 
 int LoopbackTransport::LocalPlayerNumber() const {
-    return m_End;
+    // MP-revival: host==1, guest==2 (see IMpTransport::LocalPlayerNumber --
+    // guest==2 is load-bearing for the StartGamePacket cmd2 RNG reseed gate).
+    return m_End == 0 ? 1 : 2;
 }
 
 void LoopbackTransport::Send(const uint8_t* data, int len, bool reliable) {
@@ -102,6 +114,20 @@ int LoopbackTransport::Poll(uint8_t* out, int cap) {
     }
     inQueue.pop_front();
     return copyLen;
+}
+
+int LoopbackTransport::PollEvent() {
+    std::deque<int>& evQueue = (m_End == 0) ? m_Channel->eventsA : m_Channel->eventsB;
+    if (evQueue.empty()) {
+        return MP_EVT_NONE;
+    }
+    int e = evQueue.front();
+    evQueue.pop_front();
+    return e;
+}
+
+int LoopbackTransport::DisconnectCode() const {
+    return 1; // loopback has no richer classification -- "peer left" always
 }
 
 } // namespace Mortar

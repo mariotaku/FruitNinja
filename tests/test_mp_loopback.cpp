@@ -11,6 +11,11 @@
 //                      NetworkManager::Update() drains the transport and
 //                      dispatches through GlobalP2PMessageHandler, landing in
 //                      the expected NetworkManager/WaveManager side effect.
+//                      NOTE: Host()/Join() also queue the MP_EVT_CONNECTED/
+//                      MP_EVT_NAMES session-setup events (see IMpTransport.h);
+//                      the first Update() call in this test drains those too,
+//                      exercising HandleP2PConnected/HandleP2PNames
+//                      (P2PMessageHandling.cpp) as a side effect.
 //   4. SEED        -- two independently-seeded Math::Random instances (same
 //                      seed = same type WaveManager::m_Random uses) produce
 //                      identical sequences -- the core parity guarantee behind
@@ -20,6 +25,17 @@
 //                      m_SyncCounter (no hard barrier -- see WaveManager.h);
 //                      RecievedSync records the peer's report and clears the
 //                      retry timer/counter.
+//   6. FULL SESSION -- drives the complete online-versus session-setup
+//                      handshake end-to-end over a single LoopbackTransport
+//                      pair by swapping the active transport
+//                      (Mortar::SetMpTransport) between peer steps, same
+//                      pattern as case 3's guest-side install: CONNECTED+NAMES
+//                      on both ends, cmd1 ready handshake, then cmd2 seed+go
+//                      with the guest==2 reseed gate proven both positive and
+//                      negative. See the case-6 comment block below for which
+//                      steps are driven organically (real code path) vs.
+//                      manually constructed (receiver-only, sender side not
+//                      yet auto-wired).
 //
 // Pure in-process: no GPU, no audio, no SDL/window. Links fruit-ninja-game
 // directly (same pattern as test_scrollingmenu_updaterealtime.cpp) since
@@ -45,6 +61,8 @@
 #include "game/PlayerDisconnectGamePacket.h"
 #include "game/PacketFactory.h"
 #include "game/WaveManager.h"
+#include "game/GameWork.h"
+#include "game/GameMode.h"
 
 #include <cstdio>
 #include <cstring>
@@ -70,9 +88,10 @@ static void test_transport_basics() {
     Mortar::LoopbackTransport::CreatePair(a, b);
     CHECK(a != 0 && b != 0);
 
-    // Player numbers: a=host=0, b=peer=1.
-    CHECK(a->LocalPlayerNumber() == 0);
-    CHECK(b->LocalPlayerNumber() == 1);
+    // Player numbers: a=host=1, b=guest=2 (MP-revival: see IMpTransport.h --
+    // guest==2 is load-bearing for the StartGamePacket cmd2 RNG reseed gate).
+    CHECK(a->LocalPlayerNumber() == 1);
+    CHECK(b->LocalPlayerNumber() == 2);
 
     // Not connected until Host()/Join().
     CHECK(!a->IsConnected());
@@ -169,15 +188,16 @@ static void test_packet_roundtrip() {
         CHECK(dst.m_Flag24 == 0);
     }
 
-    // StartGamePacket (type 103 / 0x67)
+    // StartGamePacket (type 103 / 0x67) -- MP-revival cmd/value rework
+    // (see StartGamePacket.h): cmd=2 (seed+go) carries the online seed as m_Value.
     {
-        StartGamePacket src((int)0xABCD1234);
+        StartGamePacket src(2, (int)0xABCD1234);
         CHECK(src.m_PacketType == 103);
         StartGamePacket dst;
         RoundTrip(src, dst);
         CHECK(dst.m_PacketType == 103);
-        CHECK(dst.m_Flags == 0x18bb8);
-        CHECK(dst.m_GameSeed == (int)0xABCD1234);
+        CHECK(dst.m_Cmd == 2);
+        CHECK(dst.m_Value == (int)0xABCD1234);
     }
 
     // PlayerDisconnectGamePacket (type 104)
@@ -280,12 +300,24 @@ static void test_seam_dispatch() {
         CHECK(nm->GetLastPeerSlicePlayerIdx() == 1);
     }
 
-    // -- StartGamePacket -> WaveManager online seed --
+    // -- StartGamePacket cmd2 (seed+go) -> WaveManager online seed --
+    // MP-revival: the reseed only fires for the GUEST (LocalPlayerNumber()==2,
+    // see IMpTransport.h) -- `a` is the HOST end (LocalPlayerNumber()==1) and
+    // is currently the installed transport, so temporarily install `b` (the
+    // guest end) to exercise the guest-side reseed path, then restore `a`.
     {
         WaveManager* wm = WaveManager::GetInstance();
-        StartGamePacket pkt((int)0xABCD1234);
-        SendFromPeer(b, pkt);
-        nm->Update(1.0f / 60.0f);
+        Mortar::SetMpTransport(b);
+        StartGamePacket pkt(2, (int)0xABCD1234);
+        // Send from the host (`a`) to the guest (`b`)'s inbound queue.
+        {
+            uint8_t buf[512];
+            Mortar::ByteWriter w(buf, sizeof buf);
+            pkt.Serialize(w);
+            a->Send(buf, w.Written(), true);
+        }
+        Mortar::NetworkManager::GetInstance()->Update(1.0f / 60.0f);
+        Mortar::SetMpTransport(a);
         CHECK(wm->m_HaveOnlineSeed);
         CHECK(wm->m_OnlineSeed == 0xABCD1234u);
     }
@@ -424,6 +456,152 @@ static void test_wave_sync_handshake() {
     delete b;
 }
 
+// ---------------------------------------------------------------------------
+// 6. FULL SESSION HANDSHAKE -- host+guest over one LoopbackTransport pair,
+//    driven end-to-end through the real dispatch path (NetworkManager::Update
+//    -> GlobalP2PMessageHandler), swapping Mortar::SetMpTransport between
+//    peer steps (same technique test_seam_dispatch's cmd2 sub-case uses to
+//    install the guest end -- see case 3 above).
+//
+// MANUAL vs. ORGANIC split:
+//   - CONNECTED/NAMES (step 2) and cmd1 ready (step 3): fully organic. Host()/
+//     Join() queue the real transport events; RetryOnlineMultiplayerGame()
+//     sends the real StartGamePacket(cmd1) via SendP2PPacket -> the installed
+//     transport. Nothing is hand-constructed on the wire.
+//   - cmd2 seed+go (step 4): the RECEIVE side (HandleP2PData case 103 cmd2)
+//     is organic -- exercised by delivering a real, wire-serialized
+//     StartGamePacket through NetworkManager::Update(). The SEND side is
+//     MANUAL: there is no implemented "host broadcasts cmd2 once both peers
+//     are ready" trigger yet (RetryOnlineMultiplayerGame only sends cmd1 --
+//     see P2PMessageHandling.cpp; nothing currently calls
+//     SendP2PPacket(StartGamePacket(2, seed))). This test constructs and
+//     sends the cmd2 packet directly from the host's transport end to prove
+//     the guest-side reseed handler, without asserting an auto-send sequence
+//     that doesn't exist in the impl yet.
+// ---------------------------------------------------------------------------
+static void test_full_session_handshake() {
+    Mortar::LoopbackTransport* host = 0;
+    Mortar::LoopbackTransport* guest = 0;
+    Mortar::LoopbackTransport::CreatePair(host, guest);
+
+    CHECK(host->Host() == true);
+    CHECK(guest->Join("") == true);
+    CHECK(host->LocalPlayerNumber() == 1);
+    CHECK(guest->LocalPlayerNumber() == 2);
+
+    Mortar::NetworkManager* nm = Mortar::NetworkManager::GetInstance();
+
+    // -- Step 2: CONNECT + NAMES, organic (Host()/Join() queued MP_EVT_CONNECTED
+    // then MP_EVT_NAMES on each end; NetworkManager::Update drains them and
+    // dispatches through HandleP2PConnected/HandleP2PNames). Observable effect
+    // for HandleP2PConnected: sets game_work.gameMode = GAME_MODE_COMBO (the
+    // online-versus mode) and game_work.m_bMPRetryPending = 1 (session-active
+    // gate) -- see P2PMessageHandling.cpp. Baseline both fields first since
+    // game_work is a process-wide global that earlier cases may have touched.
+    game_work.gameMode = 0;
+    game_work.m_bMPRetryPending = 0;
+
+    Mortar::SetMpTransport(host);
+    nm->Update(1.0f / 60.0f);
+    CHECK(game_work.gameMode == GAME_MODE_COMBO);
+    CHECK(game_work.m_bMPRetryPending == 1);
+
+    // Guest end: same CONNECTED/NAMES drain, same observable effect.
+    game_work.gameMode = 0;
+    game_work.m_bMPRetryPending = 0;
+    Mortar::SetMpTransport(guest);
+    nm->Update(1.0f / 60.0f);
+    CHECK(game_work.gameMode == GAME_MODE_COMBO);
+    CHECK(game_work.m_bMPRetryPending == 1);
+
+    // -- Step 3: cmd1 ready handshake, organic.
+    // RetryOnlineMultiplayerGame() (called as the host) sets m_bMPRetryPending
+    // = 1 (already 1 from step 2) and m_bP2PReady = 0, then sends a real
+    // StartGamePacket(cmd=1) to the peer via SendP2PPacket -> the currently
+    // installed transport (host).
+    game_work.m_bP2PReady = 1; // baseline non-zero so the "0" assert below is meaningful
+    Mortar::SetMpTransport(host);
+    RetryOnlineMultiplayerGame();
+    CHECK(game_work.m_bMPRetryPending == 1);
+    CHECK(game_work.m_bP2PReady == 0);
+    // Peer not yet ready (guest hasn't sent anything) -- ready-timeout armed.
+    CHECK(game_work.m_P2PReadyTimeout == 12.0f);
+
+    // Guest drains its inbound queue -> receives cmd1 -> HandleP2PData case
+    // 103 cmd1: guest's own m_bP2PReady is 0 (never set on the guest), so the
+    // "we haven't sent ours yet" branch runs and records the peer (host) as
+    // ready.
+    game_work.m_bP2PPeerReady = 0;
+    Mortar::SetMpTransport(guest);
+    nm->Update(1.0f / 60.0f);
+    CHECK(game_work.m_bP2PPeerReady == 1);
+
+    // -- Step 4: cmd2 seed+go -- the KEY assertion.
+    // MANUAL: construct + send the packet directly from the host's transport
+    // end (no organic "host auto-broadcasts cmd2" call site exists yet --
+    // see the case-6 header comment above).
+    const uint32_t SEED = 0xABCD1234u;
+    {
+        StartGamePacket pkt(2, (int32_t)SEED);
+        uint8_t buf[512];
+        Mortar::ByteWriter w(buf, sizeof buf);
+        pkt.Serialize(w);
+        host->Send(buf, w.Written(), true); // lands in guest's inbound queue
+    }
+
+    // Receive as the GUEST (LocalPlayerNumber()==2) -- organic dispatch:
+    // NetworkManager::Update -> GlobalP2PMessageHandler -> HandleP2PData case
+    // 103 cmd2 -> WaveManager::SetOnlineSeed (gated on GetLocalPlayerNumber()==2)
+    // + the "GO" flags.
+    WaveManager* wm = WaveManager::GetInstance();
+    wm->m_HaveOnlineSeed = false;
+    wm->m_OnlineSeed = 0;
+    game_work.m_bP2POpponentReady = 0;
+    Mortar::SetMpTransport(guest);
+    nm->Update(1.0f / 60.0f);
+    CHECK(wm->m_HaveOnlineSeed == true);
+    CHECK(wm->m_OnlineSeed == SEED);
+    // "GO" latch: game_work.m_bP2POpponentReady is the WaveManager-visible
+    // checkpoint cmd2's handler always sets (see P2PMessageHandling.cpp's
+    // cmd2 case); m_TutorialControl's MultiplayerTutorialControl::m_bGo is
+    // the other half but is only reachable if a MultiplayerTutorialControl
+    // was installed with a live HUD (game_work.mHud is null in this
+    // pure-logic test, so CreateMultiplayerTutorialControl's AddControl call
+    // is skipped, but the control itself IS still allocated into
+    // m_TutorialControl by HandleP2PConnected in step 2 above -- so m_bGo is
+    // reachable too).
+    CHECK(game_work.m_bP2POpponentReady == 1);
+    CHECK(game_work.m_TutorialControl != 0);
+    if (game_work.m_TutorialControl != 0) {
+        CHECK(static_cast<MultiplayerTutorialControl*>(game_work.m_TutorialControl)->m_bGo == true);
+    }
+
+    // -- Negative: as the HOST (LocalPlayerNumber()==1), delivering cmd2 must
+    // NOT reseed -- the host keeps its own seed (guest==2 gate in
+    // HandleP2PData case 103 cmd2). Clear m_HaveOnlineSeed, deliver the same
+    // cmd2 packet to the host's inbound queue, confirm it stays false.
+    wm->m_HaveOnlineSeed = false;
+    wm->m_OnlineSeed = 0;
+    {
+        StartGamePacket pkt(2, (int32_t)SEED);
+        uint8_t buf[512];
+        Mortar::ByteWriter w(buf, sizeof buf);
+        pkt.Serialize(w);
+        guest->Send(buf, w.Written(), true); // lands in host's inbound queue
+    }
+    Mortar::SetMpTransport(host);
+    nm->Update(1.0f / 60.0f);
+    CHECK(wm->m_HaveOnlineSeed == false); // host does NOT reseed from its own broadcast
+    // The "GO" flag itself is cmd-unconditional (set for either LocalPlayerNumber),
+    // so it still flips here -- only the WaveManager reseed is guest-gated.
+    CHECK(game_work.m_bP2POpponentReady == 1);
+
+    // -- Step 5: reset so other cases are unaffected.
+    Mortar::SetMpTransport(0);
+    delete host;
+    delete guest;
+}
+
 int main() {
     std::printf("test_mp_loopback: start\n");
 
@@ -445,6 +623,10 @@ int main() {
     int before5 = g_failures;
     test_wave_sync_handshake();
     std::printf("  [5] wave-sync soft handshake: %s\n", g_failures == before5 ? "OK" : "FAIL");
+
+    int before6 = g_failures;
+    test_full_session_handshake();
+    std::printf("  [6] full session handshake (connect/names/ready/seed): %s\n", g_failures == before6 ? "OK" : "FAIL");
 
     if (g_failures != 0) {
         std::printf("test_mp_loopback: FAIL (%d assertion(s) failed)\n", g_failures);

@@ -23,6 +23,12 @@ namespace Mortar {
 struct LoopbackChannel {
     std::deque<std::vector<uint8_t> > qAtoB;
     std::deque<std::vector<uint8_t> > qBtoA;
+    // MP-revival: per-end transport event queues (session-setup handshake
+    // signals -- MP_EVT_CONNECTED/MP_EVT_NAMES/MP_EVT_DISCONNECTED), separate
+    // from the data-message queues above. eventsA is drained by end 0 (host),
+    // eventsB by end 1 (guest).
+    std::deque<int> eventsA;
+    std::deque<int> eventsB;
     bool connectedA;
     bool connectedB;
     int refCount;
@@ -34,13 +40,18 @@ struct LoopbackChannel {
 // Host()/Join() resolve instantly (no real handshake exists for a
 // same-process loopback): calling either marks this end connected and
 // returns true immediately.
+//
+// MP-revival: Host()/Join() also QUEUE the session-setup event sequence for
+// that end -- MP_EVT_CONNECTED then MP_EVT_NAMES, popped one at a time via
+// successive PollEvent() calls (mirrors iOS 1.5 msgCodes 8/9; see
+// IMpTransport.h). Disconnect() queues MP_EVT_DISCONNECTED.
 class LoopbackTransport : public IMpTransport {
 public:
     // Creates a shared channel and returns its two ends. `a` is end 0
-    // (LocalPlayerNumber() == 0, the "host" side), `b` is end 1 (the "peer"
-    // side). Caller owns the returned pointers and must delete both; the
-    // shared LoopbackChannel is refcounted and freed when the second end is
-    // destroyed.
+    // (LocalPlayerNumber() == 1, the "host" side), `b` is end 1
+    // (LocalPlayerNumber() == 2, the "guest"/joining side). Caller owns the
+    // returned pointers and must delete both; the shared LoopbackChannel is
+    // refcounted and freed when the second end is destroyed.
     static void CreatePair(LoopbackTransport*& a, LoopbackTransport*& b);
 
     virtual ~LoopbackTransport();
@@ -52,10 +63,15 @@ public:
     virtual bool IsConnected() const;
     virtual bool IsConnecting() const;
 
+    // 1 for end 0 (host), 2 for end 1 (guest) -- see IMpTransport::LocalPlayerNumber.
     virtual int LocalPlayerNumber() const;
 
     virtual void Send(const uint8_t* data, int len, bool reliable);
     virtual int Poll(uint8_t* out, int cap);
+
+    // MP-revival: pops this end's next queued session event, or MP_EVT_NONE.
+    virtual int PollEvent();
+    virtual int DisconnectCode() const;
 
 private:
     LoopbackTransport(LoopbackChannel* channel, int end);
