@@ -15,49 +15,12 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
-# ---------------------------------------------------------------------------
-# Asset source (archive.org)
-# ---------------------------------------------------------------------------
-# Item  : https://archive.org/details/badaappsgamescollection
-# File  : FruitNinja.zip  (20 MB, 971 files -- the largest/most complete copy)
-# MD5   : 76844370f4c50b5f2bdc113b0664c4ce
-# SHA1  : 8cc000f5843f60d445169a6e175cb0ab60905340
+# Game asset source (archive.org download/extract/hash-pin) is documented in
+# .github/actions/fetch-game-assets/action.yml.
 #
-# Internal structure (VERIFY if the download changes):
-#   FruitNinja.zip  (no .bar wrapper -- the package dirs are at the root)
-#     Bin/  Data/  Info/  Res/  Share/  Signature*.xml  TrustShare/
-#   Data/ is what we need; mount path /FruitNinjaBada/Data.
-#   (The "Fruit Ninja.zip" / "Fruit Ninja(2).zip" copies DO wrap the package in
-#    a .bar -- itself a zip. The extract step handles both .bar and no-.bar.)
-#
-# Pinned game version (anti-drift): the package's Bin/FruitNinja.exe is the game
-# v1.6.1 binary. The workflow asserts its MD5 == EXPECTED_BIN_MD5 (below), so if
-# archive.org re-zips or swaps the build, the web deploy fails loudly instead of
-# silently shipping the wrong assets.
-#   Bin/FruitNinja.exe  MD5 : ab60ff54a272abed1cbd403c5dcb7c55
-#                       SHA1: a4669367a91c0e115b7dddfc127cebc00fee3089
-#
-# The workflow:
-#   1. Downloads FruitNinja.zip
-#   2. Unzips it to tmp-outer/ (a .bar inside, if any, is unzipped to tmp-inner/)
-#   3. Asserts Bin/FruitNinja.exe MD5 == EXPECTED_BIN_MD5
-#   4. Moves Data/ -> FruitNinjaBada/Data
-#
-# To use a different file, change the env vars below.
-env:
-  ASSET_IDENTIFIER: badaappsgamescollection
-  # "FruitNinja.zip" (no space) = the game v1.6.1 build (20 MB, the largest/most
-  # complete copy in the collection). The "Fruit Ninja.zip" (space) and
-  # "Fruit Ninja(2).zip" copies are EARLIER builds (1.5.x, reflowed fonts) -- do
-  # NOT use them for the 1.6.1 port. No space => no %20 encoding needed.
-  ASSET_FILENAME: "FruitNinja.zip"
-  # Anti-drift: asserted against the extracted Bin/FruitNinja.exe (game v1.6.1).
-  # If archive.org swaps the build, the extract step fails -- update this (and the
-  # ASSET_FILENAME/header hashes) only after confirming the new build is correct.
-  EXPECTED_BIN_MD5: "ab60ff54a272abed1cbd403c5dcb7c55"
-  # EMSDK_VERSION (the pinned emsdk version) is loaded from tools/web/config.sh
-  # at runtime (the "Load pinned emsdk version" step below) so the version lives
-  # in ONE place, shared with tools/web/rebuild-web.sh. See config.sh for rationale.
+# EMSDK_VERSION (the pinned emsdk version) is loaded from tools/web/config.sh
+# at runtime (the "Load pinned emsdk version" step below) so the version lives
+# in ONE place, shared with tools/web/rebuild-web.sh. See config.sh for rationale.
 
 jobs:
   # -------------------------------------------------------------------------
@@ -90,81 +53,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build ffmpeg fonttools python3-pil
 
-      # ---- Download game assets from archive.org --------------------------
-      - name: Download Fruit Ninja assets from archive.org
-        run: |
-          DOWNLOAD_URL="https://archive.org/download/${ASSET_IDENTIFIER}/${ASSET_FILENAME// /%20}"
-          echo "Downloading: $DOWNLOAD_URL"
-          curl -L --retry 5 --retry-delay 10 --fail \
-               -o fruit-ninja-assets.zip \
-               "$DOWNLOAD_URL"
-          echo "Download complete. Size: $(wc -c < fruit-ninja-assets.zip) bytes"
-
-      - name: Extract Data/ from Fruit Ninja asset archive
-        run: |
-          mkdir -p tmp-outer tmp-inner FruitNinjaBada
-
-          # Step 1: unzip the outer archive (FruitNinja.zip)
-          unzip -q fruit-ninja-assets.zip -d tmp-outer
-          echo "=== Contents of outer archive ==="
-          ls -la tmp-outer/
-
-          # Step 2: find a .bar file (the Bada application package)
-          BAR_FILE=$(find tmp-outer -maxdepth 2 -name "*.bar" | head -1)
-
-          if [ -n "$BAR_FILE" ]; then
-            echo "Found .bar: $BAR_FILE"
-            # .bar is a zip -- unzip it
-            unzip -q "$BAR_FILE" -d tmp-inner
-            echo "=== Contents of .bar ==="
-            ls -la tmp-inner/
-            DATA_SRC="tmp-inner/Data"
-          else
-            echo "No .bar file found -- checking if Data/ is directly in outer archive"
-            DATA_SRC="tmp-outer/Data"
-          fi
-
-          # Step 3: verify and move Data/
-          if [ ! -d "$DATA_SRC" ]; then
-            # Last resort: search anywhere in extracted tree
-            DATA_SRC=$(find tmp-outer tmp-inner -maxdepth 4 -type d -name "Data" | head -1)
-            echo "Searched for Data/ -- found: $DATA_SRC"
-          fi
-
-          if [ ! -d "$DATA_SRC" ]; then
-            echo "ERROR: Could not locate Data/ directory in the downloaded archive."
-            echo "Archive structure:"
-            find tmp-outer tmp-inner -maxdepth 4 | sort
-            exit 1
-          fi
-
-          # Step 3.5: ASSERT the game binary hash (anti-drift version pin).
-          # Bin/ sits beside Data/ (both under tmp-inner if a .bar was found,
-          # else tmp-outer). If archive.org swaps the build, fail loudly.
-          BIN_SRC="$(dirname "$DATA_SRC")/Bin/FruitNinja.exe"
-          if [ ! -f "$BIN_SRC" ]; then
-            BIN_SRC=$(find tmp-outer tmp-inner -maxdepth 4 -type f -name "FruitNinja.exe" | head -1)
-          fi
-          if [ ! -f "$BIN_SRC" ]; then
-            echo "ERROR: could not find Bin/FruitNinja.exe to verify the binary hash."
-            exit 1
-          fi
-          ACTUAL_BIN_MD5=$(md5sum "$BIN_SRC" | cut -d' ' -f1)
-          echo "Binary: $BIN_SRC  MD5: $ACTUAL_BIN_MD5"
-          if [ "$ACTUAL_BIN_MD5" != "$EXPECTED_BIN_MD5" ]; then
-            echo "ERROR: game binary hash drift -- archive.org asset changed."
-            echo "  expected $EXPECTED_BIN_MD5 (game v1.6.1)"
-            echo "  got      $ACTUAL_BIN_MD5"
-            exit 1
-          fi
-          echo "Binary hash OK (game v1.6.1)."
-
-          mv "$DATA_SRC" FruitNinjaBada/Data
-          echo "=== FruitNinjaBada/Data ready ==="
-          find FruitNinjaBada/Data -maxdepth 2 | sort | head -40
-
-          # Cleanup
-          rm -rf tmp-outer tmp-inner fruit-ninja-assets.zip
+      # ---- Download + extract game assets from archive.org -----------------
+      - name: Fetch game assets
+        uses: ./.github/actions/fetch-game-assets
 
       # ---- Build web target with native Emscripten -------------------------
       # Single entrypoint shared with local dev (tools/web/rebuild-web.sh calls

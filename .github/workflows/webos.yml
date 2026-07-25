@@ -85,6 +85,11 @@ jobs:
       - name: Install webOS Packaging Tools
         run: sudo apt-get install ./temp/*.deb
 
+      # tools/webos/build.sh's staging step needs the original game asset
+      # dump (FruitNinjaBada/Data) -- same fetch used by the Pages workflow.
+      - name: Fetch game assets
+        uses: ./.github/actions/fetch-game-assets
+
       - name: Build + Package
         shell: bash
         run: bash tools/webos/build.sh
