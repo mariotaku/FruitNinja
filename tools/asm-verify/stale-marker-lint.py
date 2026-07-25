@@ -549,7 +549,6 @@ def load_binary_symbols(binary_path: pathlib.Path):
         raw_val = sym.value
         if raw_val == 0:
             continue
-        addr = raw_val + GHIDRA_IMAGE_BASE
         name = sym.name
         if not name:
             continue
@@ -560,6 +559,18 @@ def load_binary_symbols(binary_path: pathlib.Path):
         sym_type_str = str(sym.type)
         if sym_type_str in ('TYPE.FILE', 'TYPE.SECTION'):
             continue
+        # ARM/Thumb: an STT_FUNC symbol value carries the Thumb bit in bit 0, so
+        # a Thumb function at 0x0022e544 has symbol value 0x0022e545. Source
+        # markers (and asm-verify's report.json) cite the real, even function
+        # start. Without masking, every such marker misses addr_to_mangled and
+        # then lands inside the PRECEDING function's [start, start+size) range,
+        # producing a bogus MID-SYMBOL-MISMATCH whose "correct" address is the
+        # Thumb-tagged one -- applying that suggestion would corrupt a correct
+        # marker. Mask it off so both the lookup map and the containment ranges
+        # below use true function starts.
+        if sym_type_str == 'TYPE.FUNC':
+            raw_val &= ~1
+        addr = raw_val + GHIDRA_IMAGE_BASE
 
         dem = _demangle(name)
 
