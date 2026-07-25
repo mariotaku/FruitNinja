@@ -106,6 +106,12 @@ enum LocalizedString {
     LSTR_GM_ARCADE        = 0x379, // Arcade mode ring label (街机模式)
     LSTR_GM_CLASSIC       = 0x37a, // Classic mode ring label (经典模式)
     LSTR_GM_ZEN           = 0x37b, // Zen mode ring label (禅模式)
+    LSTR_GM_ONLINE        = 0x3ca, // "ONLINE" (MENU_TEXTURE_58) -- VS ring label, connected state
+    // MP-revival: no LSTR key is literally "CONNECT TO PLAY ONLINE"'s own id (that's
+    // 0x2f4, too long for a ring label); GAME_TEXTURE_115 is the standalone "CONNECT"
+    // in the same cluster (113 CONNECTING / 114 CONNECT TO PLAY ONLINE / 115 CONNECT),
+    // confirmed by decoding translations_header.str + translations_english_us.str.
+    LSTR_GM_CONNECT       = 0x2f5, // "CONNECT" (GAME_TEXTURE_115) -- VS ring label, disconnected state
 
     // PauseScreen v1.6.1 string IDs (PauseScreen ctor @0x001a7204 / Update @0x001a5ebc)
     LSTR_PAUSED          = 0x3c8, // "PAUSED" -- m_PausedText label (ctor @0x001a7204)

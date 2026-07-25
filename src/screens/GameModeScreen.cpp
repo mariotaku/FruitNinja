@@ -209,10 +209,14 @@ namespace {
     // DIFFERS: Bada v1.6.1 builds the VS ring from ring[0xb] (orange_checker_ring.tex)
     // + SetText("ONLINE") but its versus texture loads were stripped (s_multiplayerMode/
     // s_multiplayerConnect file-statics @0x00314DF4/@0x00314E04 are ctor/dtor-only,
-    // never assigned) so retail Bada never actually drew this button. Revived from
-    // iOS 1.6.1 GameModeScreen::LoadContent @0x0004e018 -- red baked-label art, no SetText.
-    Mortar::SmartPtr<Mortar::Texture> s_multiplayerConnect;      // iOS 1.6.1 s_multiplayerConnect -- "multi_player_connect.tex"
-    Mortar::SmartPtr<Mortar::Texture> s_multiplayerMode;         // iOS 1.6.1 s_multiplayerMode -- "multiplayer_iphone.tex"
+    // never assigned) so retail Bada never actually drew this button. iOS 1.6.1
+    // GameModeScreen::LoadContent @0x0004e018 instead loads baked-label art
+    // (s_multiplayerConnect/s_multiplayerMode -- "multi_player_connect.tex" /
+    // "multiplayer_iphone.tex"), English-only. The port uses NEITHER: it skins the
+    // VS ring from the same blank ring + SetText() convention every other
+    // mode-select button uses (m_RingTex[15] red_skinny_ring.tex + a localised
+    // TTF label, see UpdateOnlineMultiplayerButton) so the one ring that starts
+    // matchmaking isn't the single untranslatable element on this screen.
 }
 
 // MP-revival: v1.6.1 file-static @0x00314DC8+0x11 -- cached once in
@@ -270,12 +274,10 @@ void GameModeScreen::LoadContent() {
         s_connectToGameCenter = Mortar::TextureManager::LoadLocalisedTexture("connect_game_center.tex");
     if (!s_connectingToGameCenter.IsValid())
         s_connectingToGameCenter = Mortar::TextureManager::LoadLocalisedTexture("gc_connecting.tex");
-    // DIFFERS: revived from iOS 1.6.1 LoadContent @0x0004e018 -- red baked-label
-    // VS ring art (see s_multiplayerConnect/s_multiplayerMode comment above).
-    if (!s_multiplayerConnect.IsValid())
-        s_multiplayerConnect = Mortar::TextureManager::LoadLocalisedTexture("multi_player_connect.tex");
-    if (!s_multiplayerMode.IsValid())
-        s_multiplayerMode = Mortar::TextureManager::LoadLocalisedTexture("multiplayer_iphone.tex");
+    // Port specific: no s_multiplayerConnect/s_multiplayerMode load here -- the VS
+    // ring uses game_work.m_RingTex[15] (already loaded by PreloadRings) + a
+    // localised SetText label instead of baked English art (see the s_connectToGameCenter
+    // block comment above and UpdateOnlineMultiplayerButton).
 }
 
 // ===================================================================
@@ -292,8 +294,6 @@ void GameModeScreen::UnLoadContent() {
     s_TexBackIcon.SetNull();
     s_connectToGameCenter.SetNull();
     s_connectingToGameCenter.SetNull();
-    s_multiplayerConnect.SetNull();
-    s_multiplayerMode.SetNull();
 }
 
 // ===================================================================
@@ -325,6 +325,7 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_bLoading(false)
 #endif
     , m_pArcadeButton(nullptr)
+    , m_bOnlineMpButtonSkinOnline(false)
 #endif
 {
 #if defined(__bada__)
@@ -1003,11 +1004,16 @@ void GameModeScreen::UpdateRealtime(float dtSeconds) {
 #endif
 
 // ===================================================================
-// MP-revival: real body. Matches GameModeScreen::DrawConnectTexture v1.6.1
-// @0x001838d8 -- ease-out pop-in/out pulse of the "connect to online" plate
-// while m_FrameTimer is retracting (< 0, driven by UpdateOnlineMultiplayerButton's
-// !IsP2POnline() branch). Swaps to the "connecting..." texture while
-// s_showConnectingTexture is armed (IsP2PConnecting()).
+// MP-revival: real body. Matches GameModeScreen::DrawConnectTexture Bada v1.6.1
+// @0x001838d8 / iOS 1.6.1 @0x0004ffac (decompiled both -- iOS's gate is the same
+// bare `m_FrameTimer < 0`, no change needed here) -- ease-out pop-in/out pulse of
+// the "connect to online" plate while m_FrameTimer is retracting (< 0). Since
+// UpdateOnlineMultiplayerButton only drives m_FrameTimer negative while
+// IsP2PConnecting() (see its DIFFERS comment), this never overlaps the VS
+// ring itself: the ring only vacates POS_CONNECT for the actual connect
+// attempt, which is exactly the window this plate pulses in. Swaps to the
+// "connecting..." texture while s_showConnectingTexture is armed
+// (IsP2PConnecting()).
 // Texture at file-static base 0x00314DC8 +0x30 (connect) / +0x34 (connecting)
 // -- NOT zen_sign.
 // ===================================================================
@@ -1399,69 +1405,34 @@ void GameModeScreen::ShrinkedMultiplayerButton() {
 }
 
 // MP-revival: real body under !__bada__. v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton
-// @0x0018234c -- grows a 5th "VS" MenuButton onto the mode-select ring while
-// the transport is connected (IsP2POnline()), shrinks/removes it otherwise.
-// Called only from Update() case 2 (see the call site's doc comment) so this
-// never touches the HUD control list from UpdateRealtime.
-// m_pOnlineMpButton (+0xcc) is a real binary slot in both builds; __bada__
-// stays a no-op here because IsP2PSupported() is hardcoded false there, so
-// the call site itself never fires under __bada__ either (matching retail).
+// Bada @0x0018234c only ever grew this ring while IsP2POnline() and force-sliced
+// it away for any other tick (retail never drew it at all -- see the s_connectToGameCenter
+// block comment above). Decompiling iOS 1.6.1 UpdateOnlineMultiplayerButton @0x000501fc
+// (asm-inspector-grade read via GhidraMCP, not inferred) shows a materially different
+// design: the ring is built as soon as it's eligible to show at ALL (online OR idle
+// offline) and is only retracted (real slice via ShrinkedMultiplayerButton, same
+// mechanism Bada already had) while game_work's "actively connecting" flag is set --
+// so the idle-offline resting state keeps the ring on screen instead of hiding it.
+// That's the behaviour ported below: grown whenever not actively connecting, skinned
+// (label + callback only -- see DIFFERS on the header decl) by IsP2POnline(), and
+// retracted only for the actual connect attempt. Port simplification: iOS's retract
+// gate is actually `(!online && !X) || connecting` for an unresolved secondary
+// condition X (`*(char*)(*(int*)(game_work+0x5c)+0x3c)`); only the `connecting` half
+// is ported (TODO iOS 1.6.1 UpdateOnlineMultiplayerButton @0x000501fc -- resolve X if
+// closer fidelity is wanted). DrawConnectTexture is unchanged from iOS (gates purely
+// on m_FrameTimer<0) -- no overlay/ring overlap results, because the ring only
+// vacates POS_CONNECT (driving m_FrameTimer negative) during that same retract.
+// Called only from Update() case 2 (see the call site's doc comment) so this never
+// touches the HUD control list from UpdateRealtime.
+// m_pOnlineMpButton (+0xcc) is a real binary slot in both builds; __bada__ stays a
+// no-op here because IsP2PSupported() is hardcoded false there, so the call site
+// itself never fires under __bada__ either (matching retail).
 void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
 #if !defined(__bada__)
-    if (IsP2POnline()) {
-        m_FrameTimer += dt / FRAMETIMER_RATE;
-        if (m_FrameTimer > 1.0f) m_FrameTimer = 1.0f;
+    const bool online = IsP2POnline();
 
-        if (m_FrameTimer > 0.0f && m_pOnlineMpButton == nullptr) {
-            float spread = 1.0f;
-            if (Layout::IsWideLayout()) spread = MODESELECT_RING_SPREAD;
-            // MP-revival: same anchor DrawConnectTexture pulses at (POS_CONNECT).
-            float vsX = MapX(POS_CONNECT.x * spread, "modeselect.btn.vs");
-
-            m_pOnlineMpButton = new MenuButton();
-            // DIFFERS: Bada v1.6.1 skins this ring from game_work.m_RingTex[0xb]
-            // (orange_checker_ring.tex) + SetText("ONLINE"), but its versus art
-            // loads were stripped so retail never drew the button at all (see
-            // s_multiplayerMode comment above). Revived from iOS 1.6.1
-            // UpdateOnlineMultiplayerButton @0x000501fc -- red ring with
-            // "MULTIPLAYER" baked into the art, no SetText call.
-            m_pOnlineMpButton->m_Texture = s_multiplayerMode;
-            {
-                MenuButton* btn = m_pOnlineMpButton;
-                m_pOnlineMpButton->Init(
-                    _Vector3<float>(vsX, POS_CONNECT.y, POS_CONNECT.z),
-                    Mortar::Delegate0<void>::Make(this, &GameModeScreen::VersusModeCallback),
-                    Fruit::FruitType("vs_watermelon", false), _Vector3<float>(0, 0, 0),
-                    Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
-            }
-
-            // v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x001825a8 reads
-            // the file-static `scale` (s_SharedTargetScale, see its declaration
-            // above) directly -- the same value CreateControls computed for
-            // Zen/Arcade (classicButton->m_RestScale * 0.85), rather than
-            // re-deriving it from m_pClassicButton.
-            if (!m_bIsFromPause) {
-                m_pOnlineMpButton->m_RestScale = s_SharedTargetScale;
-                if (m_pOnlineMpButton->m_pTrackedFruit) {
-                    m_pOnlineMpButton->m_pTrackedFruit->scale =
-                        m_pOnlineMpButton->m_pTrackedFruit->scale * 0.77f;
-                }
-            } else {
-                m_pOnlineMpButton->m_RestScale = m_pOnlineMpButton->m_RestScale * 0.75f;
-                if (m_pOnlineMpButton->m_pTrackedFruit) {
-                    m_pOnlineMpButton->m_pTrackedFruit->scale =
-                        m_pOnlineMpButton->m_pTrackedFruit->scale * 0.7f;
-                }
-            }
-
-            game_work.mHud->AddControl(m_pOnlineMpButton);
-            if (m_pOnlineMpButton->m_pTrackedFruit) {
-                m_pOnlineMpButton->m_pTrackedFruit->RotateFacingUp(
-                    true, _Vector3<float>(0.0f, 1.0f, 0.0f));
-            }
-        }
-    } else {
-        s_showConnectingTexture = IsP2PConnecting();
+    if (IsP2PConnecting()) {
+        s_showConnectingTexture = true;
         m_FrameTimer -= dt / FRAMETIMER_RATE;
         if (m_FrameTimer < -1.0f) m_FrameTimer = -1.0f;
 
@@ -1474,6 +1445,81 @@ void GameModeScreen::UpdateOnlineMultiplayerButton(float dt) {
             m_pOnlineMpButton->SetCallback(
                 Mortar::Delegate0<void>::Make(this, &GameModeScreen::ShrinkedMultiplayerButton));
         }
+        return;
+    }
+
+    s_showConnectingTexture = false;
+    m_FrameTimer += dt / FRAMETIMER_RATE;
+    if (m_FrameTimer > 1.0f) m_FrameTimer = 1.0f;
+
+    if (m_FrameTimer > 0.0f && m_pOnlineMpButton == nullptr) {
+        float spread = 1.0f;
+        if (Layout::IsWideLayout()) spread = MODESELECT_RING_SPREAD;
+        // MP-revival: same anchor DrawConnectTexture pulses at (POS_CONNECT).
+        float vsX = MapX(POS_CONNECT.x * spread, "modeselect.btn.vs");
+
+        m_pOnlineMpButton = new MenuButton();
+        // Port specific: blank ring (see LSTR_GM_ONLINE/LSTR_GM_CONNECT comment
+        // above) -- texture never changes with connection state, only the label does.
+        m_pOnlineMpButton->m_Texture = game_work.m_RingTex[15];  // red_skinny_ring.tex
+        {
+            MenuButton* btn = m_pOnlineMpButton;
+            m_pOnlineMpButton->Init(
+                _Vector3<float>(vsX, POS_CONNECT.y, POS_CONNECT.z),
+                online ? Mortar::Delegate0<void>::Make(this, &GameModeScreen::VersusModeCallback)
+                       : Mortar::Delegate0<void>::Make(this, &GameModeScreen::P2PConnectCallback),
+                Fruit::FruitType("vs_watermelon", false), _Vector3<float>(0, 0, 0),
+                Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
+        }
+        // Port specific: SetText radius/font size match Bada's (never-drawn) SetText("ONLINE")
+        // call at UpdateOnlineMultiplayerButton @0x0018234c; colours are the RED pair
+        // (m_RingColours[0]/[1], same as the BACK button's red_ring) to match the red
+        // ring, not Bada's yellow [10]/[11] pair (that went with the orange ring it
+        // never actually drew).
+        m_pOnlineMpButton->SetText(
+            GETSTRING_CAST_0(online ? LSTR_GM_ONLINE : LSTR_GM_CONNECT),
+            game_work.m_RingColours[0], game_work.m_RingColours[1],
+            39.5f, 12.0f, true, true);
+        m_bOnlineMpButtonSkinOnline = online;
+
+        // v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x001825a8 reads
+        // the file-static `scale` (s_SharedTargetScale, see its declaration
+        // above) directly -- the same value CreateControls computed for
+        // Zen/Arcade (classicButton->m_RestScale * 0.85), rather than
+        // re-deriving it from m_pClassicButton.
+        if (!m_bIsFromPause) {
+            m_pOnlineMpButton->m_RestScale = s_SharedTargetScale;
+            if (m_pOnlineMpButton->m_pTrackedFruit) {
+                m_pOnlineMpButton->m_pTrackedFruit->scale =
+                    m_pOnlineMpButton->m_pTrackedFruit->scale * 0.77f;
+            }
+        } else {
+            m_pOnlineMpButton->m_RestScale = m_pOnlineMpButton->m_RestScale * 0.75f;
+            if (m_pOnlineMpButton->m_pTrackedFruit) {
+                m_pOnlineMpButton->m_pTrackedFruit->scale =
+                    m_pOnlineMpButton->m_pTrackedFruit->scale * 0.7f;
+            }
+        }
+
+        game_work.mHud->AddControl(m_pOnlineMpButton);
+        if (m_pOnlineMpButton->m_pTrackedFruit) {
+            m_pOnlineMpButton->m_pTrackedFruit->RotateFacingUp(
+                true, _Vector3<float>(0.0f, 1.0f, 0.0f));
+        }
+    } else if (m_pOnlineMpButton != nullptr && online != m_bOnlineMpButtonSkinOnline) {
+        // Port specific: iOS only ever re-derives the skin at construction time
+        // (destroy+rebuild per transition, see the header doc comment); the port
+        // re-skins the live button in place here instead, tracked via
+        // m_bOnlineMpButtonSkinOnline, to avoid a delete/recreate cycle for the
+        // same-tick reassignment. Same observable label/callback result.
+        m_pOnlineMpButton->SetText(
+            GETSTRING_CAST_0(online ? LSTR_GM_ONLINE : LSTR_GM_CONNECT),
+            game_work.m_RingColours[0], game_work.m_RingColours[1],
+            39.5f, 12.0f, true, true);
+        m_pOnlineMpButton->SetCallback(
+            online ? Mortar::Delegate0<void>::Make(this, &GameModeScreen::VersusModeCallback)
+                   : Mortar::Delegate0<void>::Make(this, &GameModeScreen::P2PConnectCallback));
+        m_bOnlineMpButtonSkinOnline = online;
     }
 #else
     (void)dt;

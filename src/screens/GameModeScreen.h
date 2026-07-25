@@ -26,14 +26,17 @@
 //   SwitchToUpsell           0x0013e084
 //   UpsellFinished           0x0013e07c
 //   ShrinkedMultiplayerButton      v1.6.1 @0x00181160
-//   UpdateOnlineMultiplayerButton  v1.6.1 @0x0018234c
-//   DrawConnectTexture             v1.6.1 @0x001838d8
+//   UpdateOnlineMultiplayerButton  v1.6.1 Bada @0x0018234c / iOS 1.6.1 @0x000501fc
+//   DrawConnectTexture             v1.6.1 Bada @0x001838d8 / iOS 1.6.1 @0x0004ffac
 //
 // Child screen spawned by MainScreen state 0x0e/0x0f (STATE_MODE_SELECT)
 // when m_Timer2 crosses 0.25 downward (see MainScreen::Update @ 0x0014bf40).
 // Offers four buttons: Back, Classic, Zen, Arcade -- plus a 5th "VS" ring
-// (m_pOnlineMpButton) that grows in only while an online-MP transport is
-// connected (see MP-revival note below). Picking a mode fades out and
+// (m_pOnlineMpButton) that grows in whenever P2P is supported and no connect
+// attempt is in flight -- CONNECT-skinned (P2PConnectCallback) while offline,
+// ONLINE-skinned (VersusModeCallback) once connected -- and only retracts
+// while a connect attempt is actively in progress (see MP-revival note below).
+// Picking a mode fades out and
 // pushes MainScreen into STATE_CAMERA_FADE (0x11) which then drops into the
 // gameplay loop. Back button sets m_State = 0xF, triggering MainScreen
 // STATE_SLIDE_IN (8) after fade.
@@ -201,6 +204,15 @@ public:
     // class-layout comment above). __bada__ excludes it entirely; CreateControls
     // there uses a genuine local, matching the binary exactly.
     MenuButton* m_pArcadeButton;
+    // MP-revival, port-only: connection-state skin last applied to
+    // m_pOnlineMpButton (true = ONLINE label/VersusModeCallback, false = CONNECT
+    // label/P2PConnectCallback). iOS 1.6.1 UpdateOnlineMultiplayerButton
+    // @0x000501fc only ever picks the skin at MenuButton construction time (the
+    // button is destroyed+rebuilt on every connection-state change via the
+    // retract path below); the port instead re-skins the live button in place
+    // on a state change, tracked here, to avoid a delete/recreate cycle for a
+    // same-tick reassignment. Only meaningful while m_pOnlineMpButton != nullptr.
+    bool m_bOnlineMpButtonSkinOnline;
 #endif // !defined(__bada__)
 
     void CreateControls();
@@ -242,10 +254,11 @@ public:
     // @0x00181140 sets m_State=7 + alpha=1.0 (matchmaker entry).
     void VersusModeCallback();
 
-    // Defunct: still unreachable -- no button/native-matchmaker completion calls
-    // this in the port (LaunchP2PMatchMaker has no real matchmaker UI to drive
-    // it); kept for a faithful state machine. v1.6.1 GameModeScreen::P2PConnectCallback
-    // @0x001810dc sets m_State=8 (GameCenter connect).
+    // MP-revival: real click handler -- the "VS" ring's m_ClickCallback while
+    // offline (see UpdateOnlineMultiplayerButton). Closes the prior functional
+    // dead end: slicing the CONNECT-skinned ring is what STARTS matchmaking.
+    // v1.6.1 GameModeScreen::P2PConnectCallback @0x001810dc sets m_State=8
+    // (GameCenter connect).
     void P2PConnectCallback();
 
     // Defunct: upsell store handoff -- no-op stub; v1.6.1 binary @ 0x00181290 calls GotoFruitNinjaPage(1,-1) then m_State=0xd
@@ -263,14 +276,42 @@ public:
     // (+0xcc) is a real binary slot in both builds; __bada__ stays a no-op here
     // because IsP2PSupported() is hardcoded false there, so the slot is never
     // populated -- matching retail behaviour, not a missing struct field.
+    //
+    // DIFFERS: revived from iOS 1.6.1 -- Bada force-slices the button away
+    // when offline; iOS keeps it present with the CONNECT skin because slicing
+    // it is what STARTS matchmaking (P2PConnectCallback). This callback now
+    // only fires the button's retract while the transport is ACTIVELY
+    // connecting (IsP2PConnecting()), matching iOS 1.6.1
+    // UpdateOnlineMultiplayerButton @0x000501fc, not merely being offline.
     void ShrinkedMultiplayerButton();
 
-    // MP-revival: real body under !__bada__ -- grows/shrinks the 5th "VS"
-    // MenuButton (m_pOnlineMpButton, +0xcc -- a real binary slot in both builds)
-    // based on live transport connectivity (IsP2POnline() / IsP2PConnecting()).
-    // v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton @0x0018234c. __bada__
-    // stays a no-op here because IsP2PSupported() is hardcoded false there, so
-    // the call site itself never fires (matching retail, always !IsP2PSupported()).
+    // MP-revival: real body under !__bada__ -- owns the 5th "VS" MenuButton
+    // (m_pOnlineMpButton, +0xcc -- a real binary slot in both builds) based on
+    // live transport connectivity (IsP2POnline() / IsP2PConnecting()).
+    // v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton Bada @0x0018234c.
+    // __bada__ stays a no-op here because IsP2PSupported() is hardcoded false
+    // there, so the call site itself never fires (matching retail, always
+    // !IsP2PSupported()).
+    //
+    // DIFFERS: revived from iOS 1.6.1 UpdateOnlineMultiplayerButton @0x000501fc
+    // (decompiled to settle this), not Bada's stripped-art @0x0018234c. iOS
+    // builds the ring ONCE it's eligible to show at all (online OR idle
+    // offline) and only retracts it (real slice via ShrinkedMultiplayerButton)
+    // while game_work's "actively connecting" flag is set -- so idle-offline
+    // keeps the ring on screen (blank red ring, CONNECT label, P2PConnectCallback)
+    // instead of Bada's "never shown unless already online". Port simplification:
+    // iOS additionally retracts on an unresolved secondary condition
+    // (`*(char*)(*(int*)(game_work+0x5c)+0x3c)`, un-RE'd -- TODO iOS 1.6.1
+    // UpdateOnlineMultiplayerButton @0x000501fc) the port does not replicate;
+    // only the IsP2PConnecting() gate is ported. iOS also re-derives the skin
+    // solely at MenuButton construction time (destroy+rebuild per transition);
+    // the port instead re-skins the live button in place on a state change
+    // (m_bOnlineMpButtonSkinOnline) to avoid Delegate churn -- same observable
+    // result, no delete/recreate cycle. DrawConnectTexture itself is unchanged
+    // from iOS (gates purely on m_FrameTimer<0) -- the "connecting..." overlay
+    // and the ring naturally never overlap because the ring only vacates
+    // POS_CONNECT (driving m_FrameTimer negative) during the retract, i.e.
+    // exactly the actively-connecting window.
     void UpdateOnlineMultiplayerButton(float dt);
 
 };

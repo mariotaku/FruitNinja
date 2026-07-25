@@ -7,9 +7,13 @@
 //     - 3 BakedStringBox title/desc/info boxes built in ctor (TTF path)
 //     - 4 mode buttons (back, classic, zen, arcade) created via CreateControls
 //       after state 0 -> state 2 alpha transition
-//     - the 5th "VS" ring (m_pOnlineMpButton) grows in via
-//       UpdateOnlineMultiplayerButton once a LoopbackTransport connects --
-//       first exercise of that create path (v1.6.1 @0x0018234c)
+//     - the 5th "VS" ring (m_pOnlineMpButton) is present OFFLINE (no transport
+//       installed) with the CONNECT skin -- MP-revival: closes the mode-select
+//       dead end, since slicing this ring is what starts matchmaking
+//       (P2PConnectCallback). Re-skins to ONLINE (VersusModeCallback) in place
+//       once a LoopbackTransport connects -- see
+//       GameModeScreen::UpdateOnlineMultiplayerButton's DIFFERS comment
+//       (v1.6.1 Bada @0x0018234c / iOS 1.6.1 @0x000501fc)
 //
 // --screenshot: renders GameModeScreen to stable state and writes:
 //   tmp/test/screenshots/gamemode/<lang>.png  (e.g. gamemode/en.png, gamemode/zh.png)
@@ -172,7 +176,42 @@ int main(int argc, char* argv[]) {
                screen->m_pArcadeButton->pos.x, screen->m_pArcadeButton->pos.y);
     }
 
+    // --- Assertion 2.5: VS ring present OFFLINE with the CONNECT skin ---
+    // MP-revival: closes the mode-select dead end -- matchmaking can only ever
+    // be initiated by SLICING this ring (P2PConnectCallback), so it must exist
+    // and be slice-able before any transport connects, not only after. No
+    // transport is installed yet, so IsP2POnline()/IsP2PConnecting() are both
+    // false; the create path in UpdateOnlineMultiplayerButton (v1.6.1 Bada
+    // @0x0018234c / iOS 1.6.1 @0x000501fc) now runs whenever
+    // s_supportsP2P && !m_bIsFromPause (true for this screen on host builds)
+    // regardless of connection state -- see its DIFFERS comment.
+    if (!screen->m_pOnlineMpButton) {
+        fprintf(stderr,
+            "FAIL: m_pOnlineMpButton null OFFLINE -- UpdateOnlineMultiplayerButton no longer "
+            "creates the VS ring while disconnected (mode-select dead end regression)\n");
+        ++failures;
+    } else {
+        printf("PASS: m_pOnlineMpButton non-null OFFLINE (pos=%.1f,%.1f)\n",
+               screen->m_pOnlineMpButton->pos.x, screen->m_pOnlineMpButton->pos.y);
+
+        if (screen->m_bOnlineMpButtonSkinOnline) {
+            fprintf(stderr, "FAIL: m_bOnlineMpButtonSkinOnline true while offline (should be CONNECT skin)\n");
+            ++failures;
+        } else {
+            printf("PASS: m_bOnlineMpButtonSkinOnline false (CONNECT skin) while offline\n");
+        }
+
+        if (!screen->m_pOnlineMpButton->m_pTrackedFruit) {
+            fprintf(stderr,
+                "FAIL: m_pOnlineMpButton->m_pTrackedFruit null OFFLINE (vs_watermelon not created)\n");
+            ++failures;
+        } else {
+            printf("PASS: m_pOnlineMpButton->m_pTrackedFruit non-null OFFLINE (vs_watermelon)\n");
+        }
+    }
+
     // --- Screenshot (only when --screenshot flag is present) ---
+    // Now includes the offline VS ring (CONNECT skin) in the default capture.
     if (h.IsScreenshot()) {
         if (!h.ScreenshotPng(shotLabel)) {
             fprintf(stderr, "FAIL: ScreenshotPng('%s') failed\n", shotLabel);
@@ -182,16 +221,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // --- Assertion 3: VERSUS RING (m_pOnlineMpButton) grows in once a
-    // transport connects. First execution of UpdateOnlineMultiplayerButton's
-    // create path (v1.6.1 GameModeScreen::UpdateOnlineMultiplayerButton
-    // @0x0018234c), called from Update() case 2 (gated
-    // s_supportsP2P && !m_bIsFromPause -- this test's screen has
-    // isFromPause=false, and s_supportsP2P is true on host builds; see
-    // IsP2PSupported() in P2PMessageHandling.cpp).
-    //
-    // The default screenshot above already ran+captured with NO transport
-    // installed, so it is untouched by anything below.
+    // --- Assertion 3: VERSUS RING (m_pOnlineMpButton) re-skins to ONLINE in
+    // place once a transport connects (m_bOnlineMpButtonSkinOnline flips
+    // true, callback becomes VersusModeCallback) -- see
+    // GameModeScreen::UpdateOnlineMultiplayerButton's DIFFERS comment. The
+    // ring itself is the SAME instance grown above OFFLINE; this section no
+    // longer exercises first-creation (that's Assertion 2.5).
     {
         Mortar::LoopbackTransport* a = 0;
         Mortar::LoopbackTransport* b = 0;
@@ -223,8 +258,8 @@ int main(int argc, char* argv[]) {
         }
 
         // Drive Update() (case 2 -> UpdateOnlineMultiplayerButton) enough
-        // frames for m_FrameTimer to ramp past 0 and the button to grow in,
-        // then settle its scale animation for the screenshot.
+        // frames to observe the in-place re-skin to ONLINE (the ring is
+        // already grown in from the OFFLINE assertion above).
         for (int i = 0; i < 90; ++i) {
             h.RunComponentHeadlessMultiPass(1);
         }
@@ -264,6 +299,13 @@ int main(int argc, char* argv[]) {
                 ++failures;
             } else {
                 printf("PASS: m_pOnlineMpButton->m_pTrackedFruit non-null (vs_watermelon)\n");
+            }
+
+            if (!screen->m_bOnlineMpButtonSkinOnline) {
+                fprintf(stderr, "FAIL: m_bOnlineMpButtonSkinOnline still false after transport connect\n");
+                ++failures;
+            } else {
+                printf("PASS: m_bOnlineMpButtonSkinOnline true (ONLINE skin) after transport connect\n");
             }
         }
 
