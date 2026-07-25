@@ -1127,14 +1127,11 @@ void GameOverScreen::Update(float dt) {
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBonusScreen, false);
                 BonusManager::GetInstance()->SetUpBonusScreen(m_pBonusScreen);
             } else {
-                // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80
-                // ny = bonus[+0xC] + bonus[+0xE0] + 135.0  (BonusScreen::m_AnimPos.y @0xE0)
+                // ASM-spec v1.6.1 GameOverScreen::Update @0x00186c80:
+                // pos.y = max(pos.y, bonus->pos.y[+0xC] + bonus->m_AnimPos.y[+0xE4] + 135.0)
                 float ny = m_pBonusScreen->pos.y + m_pBonusScreen->m_AnimPos.y + 135.0f;
-                m_OffsetPos.y = std::max(m_OffsetPos.y, ny);
-
-                float newPosY = m_pBonusScreen->size.y + m_pBonusScreen->pos.y + 135.0f;
-                if (newPosY < pos.y) newPosY = pos.y;
-                pos.y = newPosY;
+                if (ny < pos.y) ny = pos.y;
+                pos.y = ny;
                 const float sf = pos.y / -224.0f + 1.0f;
                 size = m_TitleSize * sf;
             }
@@ -1344,12 +1341,13 @@ void GameOverScreen::Update(float dt) {
             }
         }
 
-        // (Removed: a per-frame LoadLocalisedTexture("comming_soon_highscore.tex"). That
-        //  string is absent from the v1.6.1 binary -- a cut asset, never loaded; the prior
-        //  @0x0018781c/@0x002829E9 spec was bogus (no function there). The load failed every
-        //  frame and clobbered the mode-title m_TitleTex set in Initialise()
-        //  (g_GameOverTitleTex / g_TimeUpTitleTex / g_ArcadeTimeUpTitleTex), killing the
-        //  title-overlay draw. m_TitleTex is already correct from Initialise.)
+        // TODO: v1.6.1 0x0018782c (GameOverScreen::Update) — binary calls
+        // LoadLocalisedTexture("comming_soon_highscore.tex" @0x002829E9) once inside the
+        // m_StarCount==10 one-shot. The port previously mis-ported it as a per-frame load
+        // that clobbered the mode-title m_TitleTex set in Initialise()
+        // (g_GameOverTitleTex / g_TimeUpTitleTex / g_ArcadeTimeUpTitleTex), so it was
+        // removed. Restoring the faithful one-shot call is pending an HLE check of the
+        // user-visible behaviour.
 
         // 8) Settle (always): if(pos.y < 212.8)
         if (pos.y < 212.8f) {
