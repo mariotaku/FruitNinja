@@ -365,6 +365,19 @@ void Game::pollInput() {
                                 stepY = -stepY;
                             }
 #endif
+#ifdef __EMSCRIPTEN__
+                            // Port specific: Chrome bakes the OS scroll-lines
+                            // setting * 33.3px into deltaY, and SDL-emscripten's
+                            // /100 normalisation assumes 3 lines, so one notch
+                            // can arrive as 1.0-2.0 depending on the user's OS
+                            // setting (WheelScrollLines=5 -> 1.667). Desktop SDL
+                            // normalises by WHEEL_DELTA and always yields +/-1
+                            // per notch; ceiling-clamp the magnitude to restore
+                            // parity. Trackpad deltas (~0.03/event) stay below
+                            // 1.0 and pass through untouched.
+                            if (stepY > 1.0f) stepY = 1.0f;
+                            else if (stepY < -1.0f) stepY = -1.0f;
+#endif
                             if (usePrecise) {
                                 // Map notches to scroll-position units: one
                                 // notch (preciseY == 1.0) ~= one row. Derive
