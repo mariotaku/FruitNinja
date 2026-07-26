@@ -447,7 +447,16 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
     try {
         var txt = FS.readFile(sfxDir + 'sfx-loops.json', { encoding: 'utf8' });
         FN.loops = JSON.parse(txt);
-    } catch (e) {}
+    } catch (e) {
+        // A missing/corrupt loop table silently degrades every looping SFX
+        // (Bomb-Fuse etc.) to a one-shot; the fuse then ends mid-session and
+        // GameUpdate's raw m_pBombFuseSound pointer dangles, force-muting
+        // whatever GameSound slot recycles it. Fail loud, no fallback table.
+        console.error('FNAudio: failed to load ' + sfxDir + 'sfx-loops.json (' + e +
+            '); loop table is EMPTY -- all looping SFX (e.g. Bomb-Fuse) will play as ' +
+            'one-shots and the bomb-fuse voice will dangle. Fix the build/deploy: ' +
+            'sfx-loops.json must be present in the preloaded FS.');
+    }
 });
 
 EM_JS(void, fnaudio_decode, (const char* namePtr), {

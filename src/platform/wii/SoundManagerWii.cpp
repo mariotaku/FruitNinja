@@ -496,24 +496,20 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     uint32_t newId = m_NextSoundId++;
     if (m_NextSoundId == 0) m_NextSoundId = 1;
 
-    // Find a free SoundManager voice slot (mirrors SDL's idle-first-then-
-    // evict-oldest policy). ASND voices [0..14] are reserved for SFX; slot i
-    // maps directly onto ASND voice index i (m_MusicVoice, slot 15, is
-    // never part of this loop -- see the class comment above).
+    // Find a free SoundManager voice slot. ASND voices [0..14] are reserved
+    // for SFX; slot i maps directly onto ASND voice index i (m_MusicVoice,
+    // slot 15, is never part of this loop -- see the class comment above).
     //
     // Port specific: a slot's id is never cleared when its one-shot ASND
     // voice finishes naturally (no per-frame SFX reap/tick exists, unlike
     // AudioStreamPump for music) -- SFXStop/SFXPause are the only writers
-    // that used to touch id, and neither fires on natural completion. Without
+    // that touch id, and neither fires on natural completion. Without
     // reclaiming finished voices here, every slot fills permanently after
-    // VOICE_COUNT distinct SFX have each played once, and every later
-    // SFXPlay falls into the evict branch and always killed voice[0] --
-    // whatever happened to be playing there -- causing audible truncation
-    // under normal gameplay (many concurrent SFX). Fix: treat a slot as free
-    // if either id==0 OR its ASND voice already finished playing (mirrors
-    // SFXIsActive's own ASND_StatusVoice check below), and when no slot is
-    // idle, evict the OLDEST active SFX voice (smallest m_NextSoundId,
-    // wrap-aware) instead of unconditionally voice[0].
+    // VOICE_COUNT distinct SFX have each played once and no SFX could ever
+    // play again. Fix: treat a slot as free if either id==0 OR its ASND
+    // voice already finished playing (mirrors SFXIsActive's own
+    // ASND_StatusVoice check below). This reclaim substitutes for the
+    // missing reap only -- it never touches a voice that is still playing.
     Voice* slot = nullptr;
     for (int i = 0; i < VOICE_COUNT; i++) {
         if (m_Voices[i].id == 0) { slot = &m_Voices[i]; break; }
@@ -527,29 +523,14 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
             break;
         }
     }
-    int asndVoice;
-    if (slot) {
-        asndVoice = (int)(slot - m_Voices);
-    } else {
-        // All VOICE_COUNT SFX SoundManager slots busy and none idle -- evict
-        // the oldest active voice (smallest monotonic id), not always
-        // voice[0]. m_NextSoundId wraps 0 -> 1 (see ++m_NextSoundId below
-        // and the wrap-to-1 line above), so treat ids past the wrap as
-        // "newer" than ids from just before it by comparing distance from
-        // the current m_NextSoundId rather than raw id value.
-        uint32_t oldestAge = 0;
-        int oldestIdx = 0;
-        for (int i = 0; i < VOICE_COUNT; i++) {
-            uint32_t age = m_NextSoundId - m_Voices[i].id;  // unsigned wraparound-safe distance
-            if (age > oldestAge) {
-                oldestAge = age;
-                oldestIdx = i;
-            }
-        }
-        slot = &m_Voices[oldestIdx];
-        asndVoice = oldestIdx;
-        ASND_StopVoice(asndVoice);
-    }
+    // ASM-spec v1.6.1 MAMAudioThread::PlayNewSound @0x0022f6c4: all voices
+    // busy -> new sound is dropped (SendSoundStoppedCmd), never steals a
+    // playing voice; FindFreeVoice @0x0022f330. Load-bearing invariant:
+    // GameUpdate's bomb-fuse block holds a raw MortarSound* with no IsValid
+    // guard, correct only because a playing voice (the looping fuse) can
+    // never be killed by another play.
+    if (!slot) return 0;
+    int asndVoice = (int)(slot - m_Voices);
 
     int vol255 = (int)(1.0f * 255.0f);  // freshly (re)armed voice starts at full volume, matches SDL's slot->volume = 1.0f
 

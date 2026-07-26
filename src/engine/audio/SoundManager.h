@@ -75,7 +75,15 @@ public:
     virtual void PreLoadSoundEx(const char* name, bool preload);
 
     // SFX playback -- delegates to SFXPlayInternal (0x0018d388 / 0x0018d39c)
-    // Returns new monotonic voice handle. If sound != NULL, stores handle into sound->m_Handle.
+    // Returns new monotonic voice handle, or 0 when the sound cannot play
+    // (no audio device, load failure, or ALL voices busy -- the binary DROPS
+    // the new sound rather than stealing a playing voice; see
+    // MAMAudioThread::PlayNewSound @0x0022f6c4 in SoundManagerSDL.cpp).
+    // On drop, sound (if non-NULL) is left untouched: m_Handle stays 0 so
+    // GameSound::Update reaps the slot on its next poll. Never kills a
+    // playing voice -- callers (e.g. the bomb-fuse block in GameInit.cpp)
+    // rely on this to hold raw MortarSound* without IsValid guards.
+    // If the sound plays and sound != NULL, stores handle into sound->m_Handle.
     virtual uint32_t SFXPlay(const char* name, MortarSound* sound = nullptr);
 
     // Backend voice commands -- SDL2 backend implements these.

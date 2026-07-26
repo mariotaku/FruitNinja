@@ -551,9 +551,11 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     }
 
     // Port specific: dev-tool SFX readout -- when FN::g_bOsdSfx is ON, toast
-    // "[tick] <name>" for every SFX that actually plays. Display-only; the
-    // audio path below is never gated. OSD stacks up to 6 toasts (oldest
-    // evicted), so several SFX in one frame remain visible in sequence.
+    // "[tick] <name>" for every SFX play request that reaches voice
+    // allocation (a request dropped below because all voices are busy still
+    // toasts). Display-only; the audio path below is never gated. OSD stacks
+    // up to 6 toasts (oldest evicted), so several SFX in one frame remain
+    // visible in sequence.
     if (FN::g_bOsdSfx) {
         char osd[64];
         snprintf(osd, sizeof(osd), "[%06u] %s", Debug::g_LogTick, name);
@@ -572,14 +574,15 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
         for (int i = 0; i < VOICE_COUNT; i++) {
             if (m_Voices[i].id == 0) { slot = &m_Voices[i]; break; }
         }
+        // ASM-spec v1.6.1 MAMAudioThread::PlayNewSound @0x0022f6c4: all
+        // voices busy -> new sound is dropped (SendSoundStoppedCmd), never
+        // steals a playing voice; FindFreeVoice @0x0022f330. This invariant
+        // is load-bearing: GameUpdate's bomb-fuse block holds a raw
+        // MortarSound* with no IsValid guard, correct only because a playing
+        // voice is never killed by another play.
         if (!slot) {
-            // DIFFERS: binary drops the new sound when all 16 voices are busy
-            // (v1.6.1 MAMAudioThread::PlayNewSound @0x0022f6c4 calls
-            // SendSoundStoppedCmd and never plays it; v1.6.1
-            // MAMAudioThread::FindFreeVoice @0x0022f330 just scans for a free
-            // slot); the port steals voice 0 instead so the newest sound is
-            // always audible.
-            slot = &m_Voices[0];
+            SDL_UnlockAudioDevice(m_AudioDevice);
+            return 0;
         }
         slot->id      = newId;
         slot->buf     = buf;
