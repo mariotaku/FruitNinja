@@ -46,7 +46,7 @@ const char* GetVersionString();
 FruitSaveData::FruitSaveData()
     : m_reserved30(0)
     , m_bHasActiveGame(0)
-    , m_bDojoBGUnlocked(0)
+    , m_bRated(0)
     , m_bP2PCancelled(0)
     , m_highscore(0)
     , m_CurrentScore(0)
@@ -469,7 +469,7 @@ void SaveGame(FruitSaveData* save) {
     }
 
     root.SetAttribute("critical_chance", save->m_CriticalChance);
-    root.SetAttribute("rated",         save->m_bDojoBGUnlocked ? "true" : "false");
+    root.SetAttribute("rated",         save->m_bRated          ? "true" : "false");
     root.SetAttribute("p2pCancelled",  save->m_bP2PCancelled   ? "true" : "false");
     root.SetAttribute("appLicensedState", game_work.m_gameDataLicensedState);
 
@@ -771,7 +771,7 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
         self.QueryIntAttribute("critical_chance",  &data->m_CriticalChance);
         self.QueryIntAttribute("appLicensedState", &game_work.m_gameDataLicensedState);
         const char* rated = self.Attribute("rated");
-        if (rated) data->m_bDojoBGUnlocked = (strcmp(rated, "true") == 0) ? 1 : 0;
+        if (rated) data->m_bRated = (strcmp(rated, "true") == 0) ? 1 : 0;
         const char* p2p = self.Attribute("p2pCancelled");
         if (p2p) data->m_bP2PCancelled = (strcmp(p2p, "true") == 0) ? 1 : 0;
         char an[40];
@@ -936,7 +936,7 @@ bool LoadGame(FruitSaveData* save) {
     if (save->m_VersionInfo != GetVersionTotal()) {
         save->ClearTotal(StringHash("unrated_games"));
         for (int m = 0; m < 4; m++) save->m_ModeScoreHistory[m].clear();
-        save->m_bDojoBGUnlocked = 0;
+        save->m_bRated = 0;
     }
 
     // Validate game mode (clamp to 0..3).

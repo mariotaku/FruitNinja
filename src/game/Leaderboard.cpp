@@ -1,3 +1,5 @@
+#include "Leaderboard.h"
+
 // Defunct: online leaderboard ID helpers -- no-op stubs.
 // These free functions map game mode to leaderboard board IDs for the online
 // leaderboard service (GameSpy/GameCenter). All defunct in port.

@@ -148,8 +148,12 @@ public:
     // <que> ActiveGame block in SaveGame.
     uint8_t  m_bHasActiveGame;
 
-    // +0x32: dojo background unlock flag (XML attr "rated").
-    uint8_t  m_bDojoBGUnlocked;
+    // +0x32: rate-app prompt flag (XML attr "rated"). Set once by the rating-
+    // dialog gate in GameOverScreen::SetStateWait (v1.6.1 @0x00184e04) so the
+    // prompt only ever fires once; cleared with "unrated_games" on the
+    // LoadGame version-mismatch reset. (Older RE mislabelled this
+    // "DojoBGUnlocked" -- no dojo-background reader exists.)
+    uint8_t  m_bRated;
 
     // +0x34: list of saved entity states for resume.
     std::list<EntityState> m_EntityStates;

@@ -45,6 +45,7 @@
 #include "game/GameWork.h"
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
+#include "game/Leaderboard.h"
 #include "screens/MainScreen.h"
 #include "engine/util/StringHash.h"
 #include "engine/util/StringTable.h"
@@ -682,15 +683,30 @@ void GameOverScreen::SetTerminate() {
 }
 
 // ---------------------------------------------------------------------------
-// SetStateWait (0x00140688)
+// SetStateWait -- v1.6.1 GameOverScreen::SetStateWait @0x00184e04
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::SetStateWait() {
-    Game* game = Game::GetInstance();
-    if (game && game_work.m_SaveData) {
-        game_work.m_SaveData->AddToTotal("HighScoresAchieved", 1);
+    int score = GetCurrentScore(0);
+    int unrated = game_work.m_SaveData->AddToTotal(
+        "unrated_games", StringHash("unrated_games"), 1, true, true);
+    if (game_work.m_SaveData->m_bRated == 0 &&
+        score > 50 && unrated > 5 &&
+        GetCurrentModeHighscore() - 10 < score) {
+        game_work.m_SaveData->m_bRated = 1;
+        // Defunct: NetworkManager::SetLeaderboardScore -- no-op stub; v1.6.1 @0x0018d698
+        Mortar::NetworkManager::GetInstance()->SetLeaderboardScore(
+            (const char*)(intptr_t)GetCurrentModeLeaderboardID(-1),
+            (long long)score, 0, 0);
+        // TODO: v1.6.1 0x00184e04 (GameOverScreen::SetStateWait) -- rate-app dialog
+        //   unported: DialogManager::GetInstance() vtable slot 3 with
+        //   (GETSTRING 177, GETSTRING 181, GETSTRING 180, Delegate1<void,int>(RejectCallback),
+        //    GETSTRING 182, Delegate1<void,int>(AcceptCallback), 1); the binary
+        //   early-returns here WITHOUT setting m_State -- the state advance is
+        //   deferred to the dialog's Accept/Reject callbacks. DialogManager and
+        //   the two callbacks are not ported yet; until then fall through to
+        //   STATE_MAIN_DISPLAY so the game-over screen cannot hang.
     }
-    // Defunct: leaderboard sign-in dialog gate -- no-op stub; always go to state 6.
     m_State = STATE_MAIN_DISPLAY;
 }
 

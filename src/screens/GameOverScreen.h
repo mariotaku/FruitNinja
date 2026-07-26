@@ -177,7 +177,13 @@ private:
     void CreateRetryButton();   // v1.6.1 @ 0x00185f98 -- writes +0xA4
     void CreateQuitButton();    // v1.6.1 @ 0x00186220 -- writes +0xB0
     void FindMostOfFruit();     // v1.6.1 @ 0x00141a18
-    void SetStateWait();        // v1.6.1 @ 0x00140688
+    // Runs once when the game-over wait state finishes: bumps the
+    // "unrated_games" save total, and if the rate-app gate passes
+    // (not yet rated, score > 50, unrated_games > 5, score within 10 of the
+    // mode highscore) sets FruitSaveData::m_bRated + posts the score to the
+    // (defunct) leaderboard, then advances to STATE_MAIN_DISPLAY. The
+    // binary's rate-app dialog is still unported (see TODO in the .cpp).
+    void SetStateWait();        // v1.6.1 @ 0x00184e04
     void SetTerminate();        // v1.6.1 @ 0x00140604
 
     // Defunct: ProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::StartProgressionTimer @ 0x00184d48

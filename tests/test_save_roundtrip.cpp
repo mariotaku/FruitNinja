@@ -88,7 +88,7 @@ int main() {
     src.m_LastPlayedDay[0] = 40001; src.m_LastPlayedDay[1] = 40002;
     src.m_LastPlayedDay[2] = 40003; src.m_LastPlayedDay[3] = 40004;
     src.m_CriticalChance = 55;
-    src.m_bDojoBGUnlocked = 1;
+    src.m_bRated = 1;
     src.m_bP2PCancelled = 1;
 
     // Totals: two cumulative-only (apple/banana) + one session-only (sess_combo).
@@ -202,7 +202,7 @@ int main() {
     CHECK_EQ(dst.m_ModeBestCombos[2], 7);    CHECK_EQ(dst.m_ModeBestCombos[3], 0);
     CHECK_EQ(dst.m_LastPlayedDay[0], 40001); CHECK_EQ(dst.m_LastPlayedDay[3], 40004);
     CHECK_EQ(dst.m_CriticalChance, 55);
-    CHECK_EQ(dst.m_bDojoBGUnlocked, 1);
+    CHECK_EQ(dst.m_bRated, 1);
     CHECK_EQ(dst.m_bP2PCancelled, 1);
 
     // game_work-backed <save_file>/<state> fields.
