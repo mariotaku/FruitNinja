@@ -51,6 +51,32 @@ static inline void fn_gl_drawable_size(SDL_Window* w, int* pw, int* ph) {
 #endif
 }
 
+// Port specific: cached runtime probe for SDL mouse-wheel capabilities.
+// webOS links the SDK's SYSTEM SDL2 via pkg-config, so the runtime library
+// can be OLDER than the build headers (lowest supported target ships SDL
+// 2.0.1). Struct fields the runtime never writes read as stale event-queue
+// memory, NOT zero -- so reading them must be gated by BOTH a compile-time
+// SDL_VERSION_ATLEAST guard (so old headers still build) AND this runtime
+// check:
+//   SDL_MouseWheelEvent::preciseX/preciseY -- added in 2.0.18
+//   SDL_MouseWheelEvent::direction (SDL_MOUSEWHEEL_FLIPPED) -- added in 2.0.4
+// Emscripten statically links its own SDL (no skew) but goes through the same
+// path; the probe simply always reports true there.
+static void fn_wheel_caps(bool* hasPrecise, bool* hasDirection) {
+    static bool probed = false;
+    static bool sPrecise = false;
+    static bool sDirection = false;
+    if (!probed) {
+        SDL_version v;
+        SDL_GetVersion(&v);
+        sPrecise   = (v.major > 2) || (v.major == 2 && (v.minor > 0 || v.patch >= 18));
+        sDirection = (v.major > 2) || (v.major == 2 && (v.minor > 0 || v.patch >= 4));
+        probed = true;
+    }
+    *hasPrecise   = sPrecise;
+    *hasDirection = sDirection;
+}
+
 // Port specific: screenshot capture flag. Set from the F12 key handler and
 // read+cleared in frameTick before SDL_GL_SwapWindow (same thread, no signal).
 static bool g_takeScreenshot = false;
@@ -282,9 +308,13 @@ void Game::pollInput() {
             // Port specific: screenshot on F12.
             g_takeScreenshot = true;
         } else if (ev.type == SDL_MOUSEWHEEL) {
-            // Port specific: desktop mouse-wheel scrolls a hovered
-            // ScrollingMenu by +/-1 item (smooth spring, no binary
-            // counterpart -- the binary is touch-only Bada hardware).
+            // Port specific: desktop/web mouse-wheel scrolls a hovered
+            // ScrollingMenu (no binary counterpart -- the binary is
+            // touch-only Bada hardware). When the RUNTIME SDL provides
+            // fractional deltas (>= 2.0.18, see fn_wheel_caps) the wheel
+            // drives ScrollByPixels for smooth sub-row motion (trackpads
+            // emit many ~0.03-step events); otherwise it falls back to the
+            // discrete one-row-per-notch ScrollByItems path.
             // Guard: don't scroll a screen mid-transition (same shape as
             // the in-game m_PauseAmount guard below -- see GetTransitionAlpha).
             if (game_work.mHud) {
@@ -311,7 +341,48 @@ void Game::pollInput() {
                         float gx, gy;
                         Layout::TouchToGame(nx, ny, &gx, &gy);
                         if (activeList->ContainsPoint(gx, gy)) {
-                            activeList->ScrollByItems(-ev.wheel.y);
+                            bool hasPrecise = false, hasDirection = false;
+                            fn_wheel_caps(&hasPrecise, &hasDirection);
+
+                            // Wheel delta in notch units. On an old runtime
+                            // (< 2.0.4 / < 2.0.18) the direction/precise
+                            // fields are never written -- do not even read
+                            // them (stale queue memory, not zero).
+                            float stepY = (float)ev.wheel.y;
+                            bool usePrecise = false;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+                            if (hasPrecise) {
+                                stepY = ev.wheel.preciseY;
+                                usePrecise = true;
+                            }
+#endif
+#if SDL_VERSION_ATLEAST(2, 0, 4)
+                            // Natural-scroll flip (macOS/X11): SDL reports
+                            // deltas pre-inverted; undo so hover-scroll
+                            // matches the platform's scroll direction.
+                            if (hasDirection &&
+                                ev.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) {
+                                stepY = -stepY;
+                            }
+#endif
+                            if (usePrecise) {
+                                // Map notches to scroll-position units: one
+                                // notch (preciseY == 1.0) ~= one row. Derive
+                                // the row height from the focal item; the
+                                // shop list's rows are 80 (SetItemHeight(80)),
+                                // kept as the fallback for an empty focus.
+                                float rowH = 80.0f;
+                                ScrollingMenuItem* row = activeList->GetItemClosestToZero();
+                                if (row && row->GetHeight() > 0.0f) {
+                                    rowH = row->GetHeight();
+                                }
+                                // +preciseY (wheel up) scrolls toward earlier
+                                // items = larger m_Velocity.y, so no negation
+                                // here (unlike ScrollByItems' index delta).
+                                activeList->ScrollByPixels(stepY * rowH);
+                            } else {
+                                activeList->ScrollByItems(-(int)stepY);
+                            }
                         }
                     }
                 }

@@ -117,6 +117,8 @@ ScrollingMenu::ScrollingMenu()
 #ifndef __bada__
     , m_pClickTarget(nullptr)
     , m_ClosestSnapDelta(0.0f)
+    , m_WheelTargetY(0.0f)
+    , m_bWheelActive(0)
 #endif
 {
     // Binary ctor helper @ 0x0015b2bc writes { -120, +320, +120, -320 } for both
@@ -254,6 +256,12 @@ void ScrollingMenu::Update(float /*dt*/) {
             m_AnchorOffset = m_Velocity;
 
             m_pCollidedItem = hitItem;
+
+#ifndef __bada__
+            // Port specific: a real finger takes over -- cancel any in-flight
+            // wheel servo so it can't fight the live drag (see ScrollByPixels).
+            m_bWheelActive = 0;
+#endif
 
             // Binary @ 0x0015b7cc: GOT[0x7740] |= 0x40 (re-analyst 2026-05-17).
             // GOT[0x7740] resolves to SlashEntity::s_ModPowerMask. Bit 0x40
@@ -649,6 +657,17 @@ void ScrollingMenu::UpdateRealtime(float dtSeconds) {
                                   * DRAG_DELTA_FACTOR;
             recomputedThisPresent = true;
         }
+    } else if (m_bWheelActive) {
+        // Port specific: wheel servo (see ScrollByPixels) -- no touch owns the
+        // list, so drive m_PendingVelocity.y toward the accumulated wheel
+        // target with the SAME drag-delta servo formula the finger path above
+        // uses. Phase 4's friction+integrate below then applies it untouched
+        // (integrateRan is true on the m_TouchId == -1 arm), and Phase 7's
+        // row-snap takes over once the servo converges and deactivates.
+        m_PendingVelocity.y = (m_Velocity.y - m_WheelTargetY) * DRAG_DELTA_FACTOR;
+        float wheelErr = m_Velocity.y - m_WheelTargetY;
+        if (wheelErr < 0.0f) wheelErr = -wheelErr;
+        if (wheelErr < CLICK_VEL_GATE) m_bWheelActive = 0;
     }
 
     // --- Phase 4: velocity integration + friction (decaying IMPULSE) ---
@@ -903,6 +922,11 @@ void ScrollingMenu::Reset() {
     m_PendingVelocity   = _Vector3<float>(0.0f, 0.0f, 0.0f);
     // Note: binary does NOT clear m_bDragging (+0xc8) in Reset.
     // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0015aeb8 (re-analyst)
+#ifndef __bada__
+    // Port specific: clear the wheel-servo state (see ScrollByPixels).
+    m_WheelTargetY = 0.0f;
+    m_bWheelActive = 0;
+#endif
 }
 
 // Binary @ 0x0015af38 -- no-op stub (single bx lr).
@@ -958,6 +982,41 @@ void ScrollingMenu::ScrollByItems(int delta) {
     if (target >= count) target = count - 1;
 
     m_DragTargetIdx = target;
+}
+
+// Port specific: no binary counterpart -- see ScrollingMenu.h. Fractional
+// wheel/trackpad scroll: accumulate into a clamped servo target instead of
+// pinning a row index (row pins quantise to notch targets, killing
+// sub-row continuity). UpdateRealtime()'s wheel-servo arm (above) drives
+// m_PendingVelocity.y toward the target with the drag's exact servo formula,
+// so the coast/settle feel is frame-rate consistent and identical to a drag.
+void ScrollingMenu::ScrollByPixels(float dy) {
+    // A real finger owns the list -- wheel is ignored until release (same
+    // early-out as ScrollByItems; pinning a target here would fight the
+    // live drag physics).
+    if (m_TouchId != -1) return;
+    if (GetNumItems() <= 0) return;
+
+    // Clear any stale notch pin: Phase 5's closest arm and Phase 7's bounds
+    // springs both require m_DragTargetIdx < 0.
+    m_DragTargetIdx = -1;
+
+    // Re-anchor to the live position when no servo is in flight -- the
+    // target is stale after a drag/fling/snap moved the list without us.
+    if (!m_bWheelActive) m_WheelTargetY = m_Velocity.y;
+
+    m_WheelTargetY += dy;
+
+    // Clamp to the valid scroll range [m_Height - m_TotalHeight, 0]
+    // (Phase 7's in-range band); without the clamp the servo fights the
+    // overscroll springs. When content fits the window (lo > 0) the only
+    // valid position is 0.
+    float lo = m_Height - m_TotalHeight;
+    if (lo > 0.0f) lo = 0.0f;
+    if (m_WheelTargetY < lo)   m_WheelTargetY = lo;
+    if (m_WheelTargetY > 0.0f) m_WheelTargetY = 0.0f;
+
+    m_bWheelActive = 1;
 }
 #endif
 

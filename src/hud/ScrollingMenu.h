@@ -236,6 +236,16 @@ public:
     // these members do not exist at all under __bada__.
     ScrollingMenuItem* m_pClickTarget;  // Phase-5 dragTargetItem (binary local pSVar4)
     float m_ClosestSnapDelta;          // Phase-5 fVar7 = _Stack_6c.y - (pos.y - m_Velocity.y), SIGNED
+
+    // Port specific: wheel-servo state for ScrollByPixels (no binary
+    // counterpart). m_WheelTargetY is the clamped servo target scroll
+    // position (same units as m_Velocity.y, the true scroll offset);
+    // m_bWheelActive gates UpdateRealtime()'s wheel-servo arm and clears on
+    // convergence or a Phase-2 finger press-edge acquire. Like the other
+    // bridge members these do not exist at all under __bada__, so the
+    // faithful layout/sizeof is unaffected.
+    float   m_WheelTargetY;
+    uint8_t m_bWheelActive;
 #endif
 
 public:
@@ -281,6 +291,24 @@ public:
     // the next touch press-edge acquire (Phase 2), so a subsequent drag is
     // unaffected by a prior wheel scroll. See .cpp for the full derivation.
     void ScrollByItems(int delta);
+
+    // Port specific: no binary counterpart -- high-precision (fractional)
+    // wheel/trackpad scroll for desktop and web. `dy` is in scroll-position
+    // units (same units as m_Velocity.y, the true scroll offset); dy > 0
+    // scrolls toward the top of the list (earlier items -- m_Velocity.y's
+    // valid range is [m_Height - m_TotalHeight, 0], top = 0). Accumulates
+    // into a range-clamped servo target (m_WheelTargetY); UpdateRealtime()
+    // then drives m_PendingVelocity.y with the SAME drag-delta servo formula
+    // a live finger-drag uses ((position - target) * DRAG_DELTA_FACTOR), so
+    // friction (Phase 4), layout (Phase 5) and row-snap settle (Phase 7) all
+    // come from the existing physics untouched, frame-rate consistent.
+    // Clears any stale m_DragTargetIdx notch pin (Phase 5's closest arm and
+    // Phase 7's bounds springs both require m_DragTargetIdx < 0). Ignored
+    // while a finger is actively dragging (m_TouchId != -1); a new finger
+    // press-edge (Phase 2) cancels the servo so the drag takes over cleanly.
+    // Caller maps wheel deltas to units (GameSDL: one notch ~= one row
+    // height, derived from GetItemClosestToZero()->GetHeight()).
+    void ScrollByPixels(float dy);
 #endif
 };
 
