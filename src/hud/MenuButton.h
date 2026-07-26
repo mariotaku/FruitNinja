@@ -121,15 +121,22 @@ public:
     float           m_TouchY;             // +0xE0
     float           m_TouchPhase;         // +0xE4
 
-    // +0xE8: backdrop Vec3 x component (exact use not yet fully RE'd)
+    // +0xE8: write-only in v1.6.1 -- no reader anywhere (Update and Draw fully
+    // decompiled, program-wide xref search found none). Rolled in CreateFruit
+    // purely to keep the g_Random draw sequence byte-faithful.
+    // ASM-spec v1.6.1 MenuButton::CreateFruit @0x0019b634: = (float)(uint32_t)(Rand32(0x28) - 0x14).
     float           m_BackdropOffsetX;     // +0xE8
 
     // +0xEC: per-frame backdrop scale: curScale.x * 1.125 * m_ShakeScale.x
     // Written every Update @ 0x19af70; read by Draw phase-A layer0 to scale scratchs.tex quad.
     float           m_BackdropScale;       // +0xEC
 
-    // +0xF0: Init = 0.0 (random horizontal flip / offset seed; Draw reads sign for flip)
-    float           m_RandomOffset;        // +0xF0
+    // +0xF0: ONE byte (strb/ldrb), not a float. Random backdrop-mirror flag.
+    // ASM-spec v1.6.1 MenuButton::CreateFruit @0x0019b634: = (Rand32(2) != 0) ? 1 : 0.
+    // ASM-spec v1.6.1 MenuButton::Draw @0x0019c39c: ldrb; sx = byte ? -1.0f : 1.0f
+    // (8-bit integer compare, never a float sign test). Init zeroes it.
+    // +0xF1..+0xF3 padding.
+    uint8_t         m_RandomOffset;        // +0xF0
 
     // +0xF4: quad spin speed (NOT the sparkle-ring gate; Draw gates the ring on
     // m_SparkleTimer +0xF8). Init = -1.0.
@@ -390,7 +397,9 @@ static_assert(__builtin_offsetof(MenuButton, m_pEntity)           == 0x80,  "Men
 static_assert(__builtin_offsetof(MenuButton, m_FruitType)         == 0x84,  "MenuButton m_FruitType offset");
 static_assert(__builtin_offsetof(MenuButton, m_AnimPhase)         == 0xD0,  "MenuButton m_AnimPhase offset");
 static_assert(__builtin_offsetof(MenuButton, m_TouchSlot)         == 0xD8,  "MenuButton m_TouchSlot offset");
+static_assert(__builtin_offsetof(MenuButton, m_BackdropOffsetX)   == 0xE8,  "MenuButton m_BackdropOffsetX offset");
 static_assert(__builtin_offsetof(MenuButton, m_BackdropScale)     == 0xEC,  "MenuButton m_BackdropScale offset");
+static_assert(__builtin_offsetof(MenuButton, m_RandomOffset)      == 0xF0,  "MenuButton m_RandomOffset offset");
 static_assert(__builtin_offsetof(MenuButton, m_RotationSpeed)     == 0xF4,  "MenuButton m_RotationSpeed offset");
 static_assert(__builtin_offsetof(MenuButton, m_SparkleTimer)      == 0xF8,  "MenuButton m_SparkleTimer offset");
 static_assert(__builtin_offsetof(MenuButton, m_NewIndicatorTimer) == 0xFC,  "MenuButton m_NewIndicatorTimer offset");

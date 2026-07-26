@@ -130,7 +130,7 @@ MenuButton::MenuButton()
       m_TouchX(0.0f), m_TouchY(0.0f), m_TouchPhase(0.0f),
       m_BackdropOffsetX(0.0f),
       m_BackdropScale(0.0f),
-      m_RandomOffset(0.0f),
+      m_RandomOffset(0),
       m_RotationSpeed(0.0f),
       m_SparkleTimer(-1.0f),
       m_NewIndicatorTimer(-1.0f),
@@ -227,7 +227,7 @@ void MenuButton::Init(_Vector3<float> buttonPos, Mortar::Delegate0<void> clickCb
     // v1.6.1 MenuButton::Init @0x0019b994: +0xF4 = 0.0f (the -1.0f literals go to
     // m_SparkleTimer/m_NewIndicatorTimer +0xF8/+0xFC). CreateFruit re-rolls this random per spawn.
     m_RotationSpeed  = 0.0f;
-    m_RandomOffset   = 0.0f;
+    m_RandomOffset   = 0;
     m_BaseScale      = _Vector3<float>(0.0f, 0.0f, 0.0f);
     // v1.6.1 MenuButton::Init @0x0019ba50: size (+0x20) <- Vector3::Zero (0,0,0).
     // Without this, a freshly-new'd button's size is garbage; the new-items badge
@@ -270,6 +270,15 @@ void MenuButton::CreateFruit() {
         return;
     }
 
+    // ASM-spec v1.6.1 MenuButton::CreateFruit @0x0019b634: two g_Random draws BEFORE
+    // ActorManager::GetInstance(), in this order (flag first, then offset).
+    m_RandomOffset = (Math::g_Random.Rand32(2) != 0) ? 1 : 0;   // strb, one byte
+    // (float)(uint32_t) is deliberate -- reproduces vcvt.f32.u32 on the UNSIGNED
+    // subtraction Rand32(0x28) - 0x14, including the wrap to a huge float for
+    // results below 0x14. Do NOT "clean up" to a signed cast. Field is write-only;
+    // rolled purely to keep the RNG draw sequence faithful.
+    m_BackdropOffsetX = (float)(uint32_t)(Math::g_Random.Rand32(0x28) - 0x14);
+
     Game* game = Game::GetInstance();
     if (!game || !game->actorManager) return;
 
@@ -292,12 +301,6 @@ void MenuButton::CreateFruit() {
     m_pTrackedFruit = reinterpret_cast<Fruit*>(e);
     LOG_DEBUG("MENUBTN", "CreateFruit: m_pEntity=%p entityType=%d pos=(%.1f,%.1f)",
               static_cast<void*>(m_pEntity), entityType, pos.x, pos.y);
-
-    // TODO: v1.6.1 0x0019b6fc (MenuButton::CreateFruit) -- binary also rolls
-    // m_BackdropOffsetX(+0xE8) = Rand32(0x28) and an m_RandomOffset(+0xF0) sign
-    // flip = Rand32(2) here, BEFORE the rotation-speed roll below. Order vs the
-    // rotation-speed roll not yet confirmed from disasm; add once verified so the
-    // RNG draw sequence stays byte-faithful.
 
     // v1.6.1 MenuButton::CreateFruit @0x0019b704: random icon-spin speed +/-[8,12) deg/sec.
     m_RotationSpeed = 8.0f + Math::g_Random.RandF(4.0f);
@@ -933,7 +936,9 @@ void MenuButton::Draw(float* hudScaleRaw) {
         m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
         if (s_TexScratchs.IsValid()) {
             MatrixManager& mm = MatrixManager::GetInstance();
-            const float sx = (m_RandomOffset < 0.0f) ? -1.0f : 1.0f;  // flip via RandomOffset sign
+            // ASM-spec v1.6.1 MenuButton::Draw @0x0019c39c: ldrb +0xF0; cmp #0;
+            // vmov.f32 s0,#-1.0; vmoveq.f32 s0,#1.0 -- byte compare, not a float sign test.
+            const float sx = m_RandomOffset ? -1.0f : 1.0f;
             Matrix44 mat = Matrix44::MakeScale(sx * m_BackdropScale,
                                                m_BackdropScale,
                                                m_BackdropScale);
