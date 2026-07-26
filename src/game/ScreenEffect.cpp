@@ -525,8 +525,12 @@ void ScreenEffect::Activate() {
         img.m_pHudCtrl    = ctrl;
         img.m_CurrentVis  = 0.0f;
 
-        // @0x00149174-94: HUD null -> zero the breadcrumb byte; otherwise
-        // AddControl (binary never writes m_bAddedToHUD=true here).
+        // ASM-verified: 2026-07-26T00:00Z v1.6.1 ScreenEffect::Activate @ 0x00149174..0x00149194 (asm-inspector)
+        // HUD null -> zero the breadcrumb byte (strbeq, r0 is 0 in that arm) and
+        // skip the add; otherwise AddControl and leave the flag at its ctor
+        // default of 1. The binary never writes m_bAddedToHUD = true here, and
+        // never writes it unconditionally -- Update's lazy-add block relies on
+        // that, since a zero here is what tells it an add is still pending.
         if (hud) {
             hud->AddControl(ctrl, false);
         } else {
@@ -556,9 +560,13 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         EffectImage& img = m_Images[i];
         if (!img.m_pHudCtrl) continue;
 
-        // v1.6.1 ScreenEffect::Update @0x001488bc: lazy re-add. If the HUD now
-        // exists but Activate() ran while it was null (m_bAddedToHUD breadcrumb
-        // zeroed @0x00149184), set the flag and AddControl(ctrl, false).
+        // ASM-verified: 2026-07-26T00:00Z v1.6.1 ScreenEffect::Update @ 0x001488a8..0x001488d4 (asm-inspector)
+        // Lazy HUD add. m_bAddedToHUD (+0x0c) is an inverted "add pending" latch,
+        // not an "is added" flag: the ctor defaults it to 1, and Activate zeroes
+        // it ONLY on its HUD-was-null arm (strbeq @0x00149184). So 0 means "the
+        // control exists but Activate could not add it", and this block is the
+        // one that adds it once the HUD appears. On the normal HUD-present path
+        // the flag stays 1 and this never fires -- it cannot double-add.
         if (game_work.mHud && !img.m_bAddedToHUD) {
             img.m_bAddedToHUD = true;
             game_work.mHud->AddControl(img.m_pHudCtrl, false);
