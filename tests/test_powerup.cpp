@@ -31,6 +31,9 @@
 #include "game/PowerUpManager.h"
 #include "game/PowerUp.h"
 #include "game/GameWork.h"
+#include "game/GameMode.h"
+#include "game/WaveManager.h"
+#include "audio/GameSound.h"
 #include "Game.h"
 #include "engine/asset/FileManager.h"
 #include "engine/asset/FileSystem_Direct.h"
@@ -55,6 +58,23 @@ int main() {
         fs->Initialise(game->data_dir.c_str(), /*writable=*/false);
         FileManager::GetInstance().AddSystem(fs, /*id=*/0, /*priority=*/0);
     }
+
+    // Freeze's <wave_mod waveOveride="-100"> makes WaveModifier::ApplyModifier
+    // (v1.6.1 @0x001282d4) rewind the wave via WaveManager::SetCurrentWave(-100)
+    // -> GetNextWave, which seeds m_pCurrentWave from m_WaveInfo[gameMode].front()
+    // UNCONDITIONALLY (ASM-verified v1.6.1 WaveManager::GetNextWave @0x00125884 --
+    // the binary has no empty-list guard; GameInit step 12 always runs
+    // WaveManager::Init() before any power can activate). Mirror that guarantee
+    // here: arcade mode (freeze is an arcade banana) + wave lists loaded.
+    // Without this, front() on the empty vector aborts (MSVC debug STL).
+    game_work.gameMode = GAME_MODE_ARCADE;
+    WaveManager::GetInstance()->Init();
+
+    // ScreenEffect::Update's SFX tail (v1.6.1 @0x00148d84) derefs
+    // game_work.mGameSound unguarded, exactly like the binary (GameInitialise
+    // always creates it before gameplay). SoundManager has no audio device in
+    // this headless test, so SFXPlay is a silent no-op -- no audio is played.
+    game_work.mGameSound = new GameSound();
 
     PowerUpManager* pum = PowerUpManager::GetInstance();
     pum->Load();
