@@ -2252,6 +2252,12 @@ float WaveManager::GetWavedt(int playerIdx) {
     return result;
 }
 
+// ASM-spec v1.6.1 WaveManager::SetAbsoluteDtMod @0x001bee08: vstr s0,[r0,#0x80] --
+// single store to m_ComboSpeedDivisor (+0x80).
+void WaveManager::SetAbsoluteDtMod(float v) {
+    m_ComboSpeedDivisor = v;
+}
+
 float WaveManager::GetCriticalChance(int playerIdx) {
     // v1.6.1 @0x00123174: waveCritChance * m_CritChanceMult (+0x74)
     WAVE_INFO* w = m_pCurrentWave[playerIdx];

@@ -342,7 +342,7 @@ void SuperFruitControl::Update(float dt)
 
     // pre-roll slowdown: while Timer < Lifetime+0.5
     if (m_Timer < m_Lifetime + 0.5f) {
-        WaveManager::GetInstance()->m_SpeedScale = 0.1f;  // DAT_001bcd98 = 0.1; SetAbsoluteDtMod
+        WaveManager::GetInstance()->SetAbsoluteDtMod(0.1f);  // DAT_001bcd98 = 0.1
         MissControl::MakeEmAllDissappear();
     }
 
@@ -457,7 +457,7 @@ void SuperFruitControl::Update(float dt)
         float modeBias2 = (game_work.gameMode == 2) ? 1.5f : 0.5f;
         float tEnd = m_Lifetime + 0.5f + 0.35f + 0.55f + 0.65f + 0.25f + modeBias2 + 0.15f;  // DAT_001bcda8=0.15
         if (m_Timer > tEnd) {
-            WaveManager::GetInstance()->m_SpeedScale = 1.0f;  // SetAbsoluteDtMod(1.0)
+            WaveManager::GetInstance()->SetAbsoluteDtMod(1.0f);
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: finale end byte-clears WaveManager+0x00
             //   (m_SpeedControl[0] spawn gate).
 #if defined(__bada__)
@@ -1312,7 +1312,7 @@ void SuperFruitControl::SaveSuperFruitState(Fruit* fruit, TiXmlElement* parent)
 // with the HUDControl3d-inherited virtual void Reset() (GCC 4.4.1 error).
 void SuperFruitControl::ResetAll()
 {
-    WaveManager::GetInstance()->m_SpeedScale = 1.0f;   // SetAbsoluteDtMod(1.0)
+    WaveManager::GetInstance()->SetAbsoluteDtMod(1.0f);
     // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: byte-clears WaveManager+0x00
     //   (m_SpeedControl[0] spawn gate).
 #if defined(__bada__)
@@ -1439,13 +1439,18 @@ void SuperFruitControl::StopAllFruit()
 
 // ASM-spec v1.6.1 SuperFruitControl::UpdateExplosion @0x001baeb8. Per-frame
 // shockwave: grows the inner/outer radii from T_1616 ramps, writes the particle-
-// manager globals, eases the wave dt-mod, then radially pushes Actor types 0/1/5
-// outward from the epicenter. R = sqrt(384000)*1.2 ~= 743.61.
+// manager globals, eases the wave dt-mod (SetAbsoluteDtMod @0x001bee08), then
+// radially pushes Actor types 0/1/5 outward from the epicenter.
+// R = sqrt(384000)*1.2 ~= 743.61.
 //
-// NOTE: the radial-push formula (dir*(outerR-dist)*dt*mult, mults 4.0 fruit /
-// 5.0 bomb+jib) and the inner-radius force-explode branch are ported from the RE
-// spec + the prior TODO; the exact clamp/condition still wants asm-inspector
-// confirmation. The mgr+0x00 write (m_GlobalPullRadius = m_InnerRadius*1.6) is wired below.
+// Body ranges: push scale k = dt*GetWavedt(0) computed once @0x001baff4;
+// early-out (Timer > Lifetime+2.55) @0x001bb01c; fruit loop (mult 4.0)
+// @0x001bb048-0x001bb36c incl. host freeze @0x001bb358, m_TimeScale restore
+// @0x001bb058-74, sliced second-half push @0x001bb098-0x001bb154, SliceTimer
+// choreography + first-half push @0x001bb158-0x001bb298, unsliced force-explode
+// @0x001bb29c-0x001bb338; bomb loop (mult 5.0, m_SpeedMult restore @0x001bb3c8)
+// @0x001bb3c8-0x001bb434; jib loop (mult 5.0, no restore) @0x001bb494-.
+// All pushes are gated dist < m_OuterRadius -- (outerR-dist) is never negative.
 void SuperFruitControl::UpdateExplosion(float dt)
 {
     PSPParticleManager& mgr = PSPParticleManager::GetInstance();
@@ -1457,9 +1462,9 @@ void SuperFruitControl::UpdateExplosion(float dt)
     // Inner shockwave radius: ramp 0->R across [Lifetime+0.5, Lifetime+0.85].
     m_InnerRadius = T_1616(m_Timer, m_Lifetime + 0.5f, m_Lifetime + 0.85f) * R;
 
-    // Ease the wave dt-mod (binary: SetAbsoluteDtMod).
-    WaveManager::GetInstance()->m_SpeedScale =
-        T_1629(0.1f, T_1616(m_Timer, m_Lifetime + 1.25f, m_Lifetime + 1.45f));
+    // Ease the wave dt-mod back from 0.1 toward 1.0.
+    WaveManager::GetInstance()->SetAbsoluteDtMod(
+        T_1629(0.1f, T_1616(m_Timer, m_Lifetime + 1.25f, m_Lifetime + 1.45f)));
 
     // Outer shockwave radius: ramp 0->R across [Lifetime+1.4, Lifetime+2.05].
     m_OuterRadius = T_1616(m_Timer, m_Lifetime + 1.4f, m_Lifetime + 2.05f) * R;
@@ -1475,57 +1480,92 @@ void SuperFruitControl::UpdateExplosion(float dt)
     mgr.m_GlobalTimeScale =
         T_1616(m_Timer, m_Lifetime + 2.3f + modeBias, m_Lifetime + 2.05f);
 
-    // Bounded window for the radial push / force-explode.
-    if (m_Timer <= m_Lifetime + 2.55f) {
-        Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-        if (am) {
-            const _Vector3<float>& origin = m_ExplodeOrigin;
-            std::list<Mortar::Entity*>::iterator it;
+    // Push scale, computed ONCE (@0x001baff4) -- same idiom as PushBombsAway.
+    const float k = dt * WaveManager::GetInstance()->GetWavedt(0);
 
-            // -------- type 0: fruits (push mult 4.0) --------
-            Mortar::Entity* e = am->GetEntityFirst(0, it);
-            while (e != NULL) {
-                Fruit* f = static_cast<Fruit*>(e);
-                if (f == m_pHostFruit) {
-                    // Host fruit special-case: freeze in place.
-                    f->m_SliceTimer = 0.5f;
-                    f->vel = _Vector3<float>(0.0f, 0.0f, 0.0f);
-                    f->m_SecondVel = _Vector3<float>(0.0f, 0.0f, 0.0f);
-                } else {
-                    _Vector3<float> dir = f->pos - origin;
-                    float dist = dir.Normalise();
-                    f->vel += dir * ((m_OuterRadius - dist) * dt * 4.0f);
-                    if (f->Sliced()) {
-                        _Vector3<float> dir2 = f->m_SecondPos - origin;
-                        float dist2 = dir2.Normalise();
-                        f->m_SecondVel += dir2 * ((m_OuterRadius - dist2) * dt * 4.0f);
-                    } else if (dist < m_InnerRadius) {
-                        // Inner ring force-explodes still-whole fruit and scores 1.
-                        f->CollisionResponse(NULL, 0, 0, NULL);
-                        AddToCurrentScore(1, 0, true, true);
-                    }
+    // @0x001bb01c: no entity pushes past Lifetime+2.55.
+    if (m_Timer > m_Lifetime + 2.55f) return;
+
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    const _Vector3<float>& origin = m_ExplodeOrigin;
+    std::list<Mortar::Entity*>::iterator it;
+
+    // -------- type 0: fruits (push mult 4.0) --------
+    Mortar::Entity* e = am->GetEntityFirst(0, it);
+    while (e != NULL) {
+        Fruit* f = static_cast<Fruit*>(e);
+        if (f == m_pHostFruit) {
+            // @0x001bb358-6c: host fruit special-case -- freeze in place.
+            f->m_SliceTimer = 0.5f;
+            f->vel = _Vector3<float>(0.0f, 0.0f, 0.0f);
+            f->m_SecondVel = _Vector3<float>(0.0f, 0.0f, 0.0f);
+        } else {
+            // @0x001bb058-74: restore the StopAllFruit physics freeze once the
+            // shockwave is live.
+            if (m_InnerRadius > 0.0f) f->m_TimeScale = 1.0f;
+
+            _Vector3<float> dir = f->pos - origin;
+            float dist = dir.Normalise();
+
+            if (f->Sliced()) {
+                // Second half FIRST (@0x001bb098-0x001bb154).
+                _Vector3<float> dir2 = f->m_SecondPos - origin;
+                float dist2 = dir2.Normalise();
+                if (dist2 < m_OuterRadius && m_Timer > m_Lifetime + 1.1f) {
+                    float a = m_OuterRadius - dist2;
+                    if (a < 0.0f) a = 0.0f;   // @0x001bb10c (unreachable, kept for parity)
+                    f->m_SecondVel += dir2 * (a * k * 4.0f);
                 }
-                e = am->GetEntityNext(0, it);
-            }
-
-            // -------- type 1: bombs (push mult 5.0) --------
-            e = am->GetEntityFirst(1, it);
-            while (e != NULL) {
-                _Vector3<float> dir = e->pos - origin;
-                float dist = dir.Normalise();
-                e->vel += dir * ((m_OuterRadius - dist) * dt * 5.0f);
-                e = am->GetEntityNext(1, it);
-            }
-
-            // -------- type 5: jibs (push mult 5.0) --------
-            e = am->GetEntityFirst(5, it);
-            while (e != NULL) {
-                _Vector3<float> dir = e->pos - origin;
-                float dist = dir.Normalise();
-                e->vel += dir * ((m_OuterRadius - dist) * dt * 5.0f);
-                e = am->GetEntityNext(5, it);
+                // SliceTimer choreography + first half (@0x001bb158).
+                if (dist < m_OuterRadius) {
+                    if (f->m_SliceTimer > 1.0e-4f) f->m_SliceTimer = 1.0e-4f;  // @0x001bb170
+                    if (m_Timer > m_Lifetime + 1.1f) {                         // @0x001bb19c
+                        float b = m_OuterRadius - dist;
+                        if (b < 0.0f) b = 0.0f;                                // @0x001bb1c8
+                        f->vel += dir * (b * k * 4.0f);
+                    }
+                } else {                                                       // @0x001bb218
+                    if (f->m_SliceTimer > 0.0f && m_Timer < m_Lifetime + 2.05f)
+                        f->m_SliceTimer = 0.5f;
+                }
+            } else {
+                // Force-explode, unsliced only (@0x001bb29c); unsliced fruit
+                // get NO radial push at all.
+                if (f->IsActive()                          // @0x001bb2a0
+                    && dist < m_InnerRadius                // @0x001bb2b0
+                    && m_InnerRadius < R                   // @0x001bb2bc
+                    && m_Timer < m_Lifetime + 1.1f) {      // @0x001bb2e8
+                    dir *= 2.0f;                           // @0x001bb2f8
+                    f->CollisionResponse(NULL, 0, 0, &dir);  // @0x001bb30c
+                    AddToCurrentScore(1, 0, true, true);     // @0x001bb324
+                    f->m_SliceTimer = 1.0e-5f;               // @0x001bb338
+                }
             }
         }
+        e = am->GetEntityNext(0, it);
+    }
+
+    // -------- type 1: bombs (push mult 5.0) --------
+    e = am->GetEntityFirst(1, it);
+    while (e != NULL) {
+        Bomb* bomb = static_cast<Bomb*>(e);
+        _Vector3<float> dir = bomb->pos - origin;
+        float dist = dir.Normalise();
+        // @0x001bb3c8: restore the StopAllFruit physics freeze.
+        if (m_InnerRadius > 0.0f) bomb->m_SpeedMult = 1.0f;
+        if (dist < m_OuterRadius)                          // @0x001bb3d4
+            bomb->vel += dir * ((m_OuterRadius - dist) * k * 5.0f);
+        e = am->GetEntityNext(1, it);
+    }
+
+    // -------- type 5: jibs (push mult 5.0, no restore) --------
+    e = am->GetEntityFirst(5, it);
+    while (e != NULL) {
+        _Vector3<float> dir = e->pos - origin;
+        float dist = dir.Normalise();
+        if (dist < m_OuterRadius)                          // @0x001bb494
+            e->vel += dir * ((m_OuterRadius - dist) * k * 5.0f);
+        e = am->GetEntityNext(5, it);
     }
 }
 

@@ -129,7 +129,9 @@ public:
     // v1.6.1 WaveManager field @ 0x001267a0
     float m_SpeedScale;           // +0x7c
 
-    // +0x80: dt * combo divisor for PowerUpManager::Update.
+    // +0x80: dt * combo divisor for PowerUpManager::Update; also the target of
+    // SetAbsoluteDtMod @0x001bee08 (super-fruit finale slow-mo: 0.1 during
+    // pre-roll, eased back to 1.0 by UpdateExplosion, 1.0 on finale end/reset).
     // v1.6.1 WaveManager field @ 0x001267a0
     float m_ComboSpeedDivisor;    // +0x80
 
@@ -365,6 +367,13 @@ public:
 
     // 0x00123510: add to combo speed; triggers blitz SFX/score.
     void AddSpeed(float amount, int playerIdx);
+
+    // v1.6.1 WaveManager::SetAbsoluteDtMod @0x001bee08: writes +0x80
+    // (m_ComboSpeedDivisor) -- NOT m_SpeedScale (+0x7c), which Update overwrites
+    // from PowerUpManager::m_DtMod every frame. GetWavedt multiplies its result
+    // by this field, so the super-fruit finale's 0.1 write is what actually
+    // slows/speeds global wave time.
+    void SetAbsoluteDtMod(float v);
 
     // 0x00122af8: network sync receive (multiplayer).
     void RecievedSync(int waveIdx, float score);
