@@ -17,6 +17,10 @@
 //     tools/assets/stage-assets.py --web, plus a sfx/sfx-loops.json loop map.
 //   - SFX handles stay a monotonic uint32 + JS-side active[] map for API
 //     compatibility with MortarSound / GameSound (which are unchanged).
+//   - A play for a not-yet-decoded name is queued on its async decode
+//     (pendingSfx) and starts on completion instead of being dropped; the
+//     handle stays live meanwhile (stop/pause cancel it, setVolume retargets
+//     it, isActive reports it). Failed decodes drop queued plays, warn once.
 //
 // Both backends play SFX/music at full scale (unity gain). Bada's own SFX path
 // (MAMAudioController::LoadSound @0x0022f46c) applied a >>4 shift, but that was
@@ -125,6 +129,9 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         sfxDir: sfxDir,  // '<GetDataDir()>/sfx/'
         buffers: {},     // name -> AudioBuffer
         inflight: {},    // name -> true while decoding
+        pendingCb: {},   // name -> [cb] queued on an in-flight decode
+        pendingSfx: {},  // handle -> {name, gain}: play waiting on a decode
+        failed: {},      // name -> true after missing/failed decode (warn once, no retry)
         active: {},      // handle -> sfx entry
         loops: {},       // name -> loopStart (seconds)
         song: null,      // current song entry
@@ -135,15 +142,36 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
 
         nm: function(name) { return String(name).toLowerCase(); },
 
+        // decode(name, cb): ensure <name> is decoded, then cb(buffer) -- or
+        // cb(null) when the file is missing/undecodable (callers null-check).
+        // A cb arriving while a decode is already in flight is QUEUED onto it
+        // (pendingCb), not dropped; failure flushes the whole queue with null
+        // and warns once per name (failed[] short-circuits retries).
         decode: function(name, cb) {
             name = this.nm(name);
             var self = this;
             if (this.buffers[name]) { if (cb) cb(this.buffers[name]); return; }
-            if (this.inflight[name]) { return; }
+            if (this.failed[name]) { if (cb) cb(null); return; }
+            if (this.inflight[name]) {
+                if (cb) (this.pendingCb[name] = this.pendingCb[name] || []).push(cb);
+                return;
+            }
             var path = this.sfxDir + name + '.ogg';
             var data;
-            try { data = FS.readFile(path); } catch (e) { return; }
+            try { data = FS.readFile(path); } catch (e) {
+                this.failed[name] = true;
+                console.warn('FNAudio missing sfx: ' + path);
+                if (cb) cb(null);
+                return;
+            }
             this.inflight[name] = true;
+            if (cb) this.pendingCb[name] = [cb];
+            var flush = function(buf) {
+                delete self.inflight[name];
+                var cbs = self.pendingCb[name];
+                delete self.pendingCb[name];
+                if (cbs) for (var i = 0; i < cbs.length; ++i) cbs[i](buf);
+            };
             // decodeAudioData detaches its ArrayBuffer; hand it a private copy
             // so the wasm HEAP that FS.readFile viewed is never detached. Also
             // guards against FS.readFile returning a Uint8Array VIEW into a
@@ -153,13 +181,13 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
             var ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             var decodePromise = this.ctx.decodeAudioData(ab, function(decoded) {
                 self.buffers[name] = decoded;
-                delete self.inflight[name];
-                if (cb) cb(decoded);
+                flush(decoded);
             }, function(err) {
-                delete self.inflight[name];
+                self.failed[name] = true;
                 console.warn('FNAudio decode failed: ' + name, err);
-                // Failed/undecoded sound: playSfx/playSong below no-op (no
-                // cached buffer) rather than throw. Non-fatal by design.
+                // Flush queued cbs with null so decode-pending plays are
+                // dropped (never left hanging). Non-fatal by design.
+                flush(null);
             });
             // decodeAudioData ALSO returns a Promise (spec, even in callback
             // form) that rejects on the same failure the error callback above
@@ -177,7 +205,24 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         playSfx: function(name, handle, gain) {
             name = this.nm(name);
             var b = this.buffers[name];
-            if (!b) { this.decode(name); return; }   // drop this instance
+            if (!b) {
+                // Not decoded yet (name outside PreloadSounds' list, or a
+                // retrigger while its decode is in flight): queue the play on
+                // the decode instead of dropping it, so a cold sound's first
+                // play arrives a few hundred ms late rather than never.
+                // pendingSfx keeps the handle honest meanwhile: stop()/pause()
+                // cancel it, setVolume() retargets it, isActive() reports it.
+                var outer = this;
+                var p = { name: name, gain: gain };
+                this.pendingSfx[handle] = p;
+                this.decode(name, function(decoded) {
+                    if (outer.pendingSfx[handle] !== p) return;  // stopped/stale
+                    delete outer.pendingSfx[handle];
+                    if (!decoded) return;                        // failed: drop
+                    outer.playSfx(name, handle, p.gain);         // fast path now
+                });
+                return;
+            }
             var self = this;
             var src = this.ctx.createBufferSource();
             src.buffer = b;
@@ -202,11 +247,14 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         },
 
         setVolume: function(handle, gain) {
+            var p = this.pendingSfx[handle];
+            if (p) { p.gain = gain; return; }   // decode-pending: retarget the queued play
             var e = this.active[handle];
             if (e) e.gain.gain.value = gain;
         },
 
         stop: function(handle) {
+            delete this.pendingSfx[handle];   // cancel a decode-pending play
             var e = this.active[handle];
             if (!e) return;
             if (e.src) { try { e.src.onended = null; e.src.stop(0); } catch (x) {} }
@@ -214,6 +262,9 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         },
 
         pause: function(handle) {
+            // A decode-pending play is dropped on pause: starting it later,
+            // mid-pause, would leak sound into the pause screen.
+            if (this.pendingSfx[handle]) { delete this.pendingSfx[handle]; return; }
             var e = this.active[handle];
             if (!e || e.paused || !e.src) return;
             var played = this.ctx.currentTime - e.startTime;
@@ -251,6 +302,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         },
 
         isActive: function(handle) {
+            if (this.pendingSfx[handle]) return 1;   // decode-pending counts as playing
             var e = this.active[handle];
             return (e && !e.paused) ? 1 : 0;
         },
@@ -261,6 +313,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         },
 
         pauseAllSfx: function() {
+            this.pendingSfx = {};   // drop decode-pending plays (see pause())
             var keys = Object.keys(this.active);
             for (var i = 0; i < keys.length; ++i) this.pause(keys[i]);
         },
@@ -279,6 +332,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
             var self = this;
             this.songName = name;
             var startSong = function(b) {
+                if (!b) return;                       // decode failed/missing
                 if (self.songName !== name) return;   // superseded by a newer playSong
                 var src = self.ctx.createBufferSource();
                 src.buffer = b;
@@ -358,6 +412,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         // silent regardless. Called from mainEmscripten.cpp
         // StopWebAudioAndShutdown before ctx.suspend().
         stopAll: function() {
+            this.pendingSfx = {};   // cancel decode-pending plays
             var keys = Object.keys(this.active);
             for (var i = 0; i < keys.length; ++i) this.stop(keys[i]);
             this.songStop();

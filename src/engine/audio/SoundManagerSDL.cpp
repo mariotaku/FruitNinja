@@ -573,8 +573,12 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
             if (m_Voices[i].id == 0) { slot = &m_Voices[i]; break; }
         }
         if (!slot) {
-            // All voices busy -- drop the oldest (voice[0], wrap-around)
-            // Matches MAMAudioThread behaviour: oldest voice is evicted
+            // DIFFERS: binary drops the new sound when all 16 voices are busy
+            // (v1.6.1 MAMAudioThread::PlayNewSound @0x0022f6c4 calls
+            // SendSoundStoppedCmd and never plays it; v1.6.1
+            // MAMAudioThread::FindFreeVoice @0x0022f330 just scans for a free
+            // slot); the port steals voice 0 instead so the newest sound is
+            // always audible.
             slot = &m_Voices[0];
         }
         slot->id      = newId;
