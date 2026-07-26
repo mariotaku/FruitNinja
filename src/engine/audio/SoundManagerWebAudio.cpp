@@ -575,7 +575,8 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
 }
 
 // Assign monotonic handle, kick a JS source. Volume arrives right after via
-// SFXSetVolume (GameSound::SFXPlay computes the final per-play gain).
+// SFXSetVolume (GameSound::SFXPlay computes the per-play byte; it gates,
+// never scales -- see SFXSetVolume below).
 uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     if (!name || !*name) return 0;
 
@@ -620,10 +621,15 @@ void SoundManager::SFXResume(uint32_t handle) {
     fnaudio_resume(handle);
 }
 
-// vol is 0-255 byte (from MortarSound::SetVolume clamp) -> 0.0..1.0 gain.
+// vol is the raw 0-255 byte from MortarSound::SetVolume. It is a GATE, not a
+// gain (see SoundManager.h Voice doc / v1.6.1 MAMAudioThread::FillBuffer
+// @0x0022f7f0): audible iff vol > 5, at full amplitude. Expressed as
+// GainNode gain 1-or-0 rather than raw int accumulation -- a zero-gain
+// source keeps playing (silent, not paused), so a gated sound still runs to
+// completion and its onended handler still retires the handle.
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (handle == 0) return;
-    fnaudio_set_volume(handle, vol / 255.0);
+    fnaudio_set_volume(handle, (vol > 5) ? 1.0 : 0.0);
 }
 
 bool SoundManager::SFXIsActive(uint32_t handle) {

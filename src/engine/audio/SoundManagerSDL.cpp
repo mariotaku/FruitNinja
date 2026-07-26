@@ -83,13 +83,13 @@ SoundManager::SoundManager()
         m_Voices[i].id      = 0;
         m_Voices[i].buf     = nullptr;
         m_Voices[i].cursor  = 0;
-        m_Voices[i].volume  = 1.0f;
+        m_Voices[i].volume  = 255;
         m_Voices[i].playing = false;
     }
     m_MusicVoice.id      = 0;
     m_MusicVoice.buf     = nullptr;
     m_MusicVoice.cursor  = 0;
-    m_MusicVoice.volume  = s_MusicVolume;
+    m_MusicVoice.volume  = 255;  // unused for music -- s_MusicVolume scales in callback
     m_MusicVoice.playing = false;
 }
 
@@ -293,7 +293,7 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
 
     // hdr[0] = type (1), hdr[1] = sampleRate (16000), hdr[2] = bitDepth (16),
     // hdr[3] = sampleCount, hdr[4] = loop-start sample offset (0 = no loop).
-    // ASM-verified: MAMAudioController::LoadSound v1.6.1 binary @ 0x0018c468.
+    // ASM-verified: 2026-07-26T09:09Z v1.6.1 MAMAudioController::LoadSound @ 0x0022f46c (asm-inspector)
     // Bomb-Fuse hdr[4] = 12736: skip the 0.8s ignition intro, loop the 5.4s
     // burn tail forever. Matches the binary's MAMAudioThread::FillBuffer
     // rewind-to-loopStart behaviour.
@@ -320,16 +320,15 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     // Clamp if file was shorter than header claimed
     if (read < sampleCount) sampleCount = read;
 
-    // Bada played SFX through Osp::Media::AudioOut (raw PCM, software-mixed).
-    // The binary's >>4 shift here (MAMAudioController::LoadSound @0x0022f46c)
-    // was only its internal 16-voice mix headroom -- NOT the final output
-    // level; AudioOut::SetVolume (device media-volume slider) was the real
-    // output stage, applied after this shift. The port has no equivalent
-    // make-up stage, so any pre-attenuation just plays quieter than the
-    // original felt on-device. Play samples at full scale (unity, 1.0x --
-    // matching the Wii backend, which also omits the cut); the saturating
-    // clamp below handles the rare 16-voice pile-up, same role ASND/hardware
-    // plays on Wii.
+    // DIFFERS: original = fixed asr #4 pre-attenuation at load (v1.6.1
+    // MAMAudioController::LoadSound @0x0022f46c: `ldrsh / mov r1,r1,asr #0x4 /
+    // strh` on every sample -- constant, never volume-dependent) relying on
+    // device amp compensation (Osp::Media::AudioOut::SetVolume was the real
+    // output stage, applied after the shift); port mixes full-scale behind a
+    // soft limiter (SoftClipSample below) because it has no make-up gain
+    // stage -- adopting >>4 verbatim would play ~24 dB quieter than the game
+    // felt on-device, and the limiter already covers the 16-voice pile-up
+    // headroom the shift existed for.
     static const int kSfxHeadroomShift = 0;  // unity: no pre-attenuation (full scale)
     if (kSfxHeadroomShift > 0) {
         for (int i = 0; i < sampleCount; i++) {
@@ -414,24 +413,21 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
     if (mixSamples > kMaxCallbackSamples) mixSamples = kMaxCallbackSamples;
     SDL_memset(s_MixAccum, 0, sizeof(int32_t) * (size_t)mixSamples);
 
-    // Mix each SFX voice. Matches MAMAudioThread::FillBuffer (0x0018c020):
-    // samples were attenuated >>4 in LoadSound to leave headroom for 16
-    // simultaneous voices, then mixed RAW (out += src). s_SFXMuted /
-    // s_MusicMuted preserve the master mute gating.
+    // Mix each SFX voice.
+    // ASM-verified: 2026-07-26T09:09Z v1.6.1 MAMAudioThread::FillBuffer @ 0x0022f7f0 (asm-inspector)
+    // The per-voice volume byte (voice+0xf) is a pure ON/OFF GATE, never a
+    // gain: the binary reads it exactly once, as `cmp r3,#0x5 / bls skip` --
+    // byte <= 5 takes the skip-mix path, byte >= 6 mixes RAW at full
+    // amplitude (`mixbuf[i] += src[i]`, no multiply/shift/table anywhere in
+    // the function). The category flag (voice+0x42) selects which mute byte
+    // applies (this+0xc / this+0xd) -- that is the SFX-vs-music mute split,
+    // mapped here onto s_SFXMuted / s_MusicMuted.
     //
-    // DIFFERS: port additionally multiplies each voice by v.volume in the
-    // mix. The binary's MAMAudioThread::FillBuffer skipped per-voice
-    // attenuation -- its Voice struct used byte mute flags
-    // (field_0xc/field_0xd) instead, so MortarSound::SetVolume(handle, 0)
-    // produced an unconditional silence via that flag, and any non-zero
-    // volume restored full-amplitude playback. The port stores volume as
-    // a float in Voice::volume; without applying it in the mixer,
-    // SFXSetVolume() becomes a no-op and persistent-loop SFX (e.g.
-    // Bomb-Fuse, controlled by GameUpdate's SetVolume(0)-on-no-bomb mute
-    // pattern at 0x0016c4c8..0x0016c5ca) never actually go silent.
-    // Port-side multiply is the lossless equivalent of the binary's
-    // boolean mute when volume is 0 or 1; intermediate values produce
-    // smoother fades than the binary supported, which is harmless.
+    // A gated voice is NOT paused: the binary's skip path (@0x0022f950-58)
+    // still advances the play cursor by the full chunk and still runs
+    // loop-wrap + finished handling, so muting never stalls playback or
+    // defers completion. The loop below matches: cursor/loop/completion
+    // bookkeeping runs unconditionally; only the accumulate is gated.
     //
     // Accumulates into s_MixAccum (int32, unclamped) instead of out[]
     // directly -- see SoftClipSample rationale above.
@@ -441,14 +437,14 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
 
         int16_t* src = v.buf->samples;
         int total    = v.buf->sampleCount;
-        bool muted   = s_SFXMuted;
-        const float voiceVol = v.volume;   // 0.0..1.0; 1.0 = passthrough.
+        // Gate: audible iff volume byte > 5 AND the SFX category isn't muted.
+        const bool audible = !s_SFXMuted && v.volume > 5;
 
         for (int s = 0; s < nSamples; ) {
             if (v.cursor >= total) {
                 if (v.buf->loop) {
                     // Rewind to loopStart, not 0. Matches binary's
-                    // MAMAudioThread::FillBuffer @ 0x0018c020.
+                    // MAMAudioThread::FillBuffer @ 0x0022f7f0.
                     v.cursor = v.buf->loopStart;
                 } else {
                     v.id      = 0;
@@ -456,22 +452,22 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
                     break;
                 }
             }
-            if (!muted && voiceVol > 0.0f && s < mixSamples) {
-                int32_t scaled = (int32_t)((float)src[v.cursor] * voiceVol);
-                s_MixAccum[s] += scaled;
+            if (audible && s < mixSamples) {
+                s_MixAccum[s] += src[v.cursor];
             }
             v.cursor++;
             s++;
         }
     }
 
-    // Mix music voice. Port specific: applies s_MusicVolume the same way the
-    // SFX loop above applies per-voice v.volume (float multiply into the
-    // shared int32 accumulator) so music actually responds to
-    // SetMusicVolume(). Previously this branch mixed src[] raw and ignored
-    // s_MusicVolume entirely -- SongPlay's existing "global s_MusicVolume
-    // scales in callback" comment (see the m_MusicVoice.volume = 1.0f init)
-    // documents this as the intended design that was never wired up.
+    // Mix music voice.
+    // DIFFERS: original = music voices mixed raw at full amplitude like SFX,
+    // gated only by the music mute byte (v1.6.1 MAMAudioThread::FillBuffer
+    // @0x0022f7f0 -- same gate-only mixer, category flag routes the mute),
+    // with the device media-volume stage providing the actual level; using a
+    // float s_MusicVolume multiply because the port has no device output
+    // stage and full-scale music would change perceived loudness (music has
+    // always played scaled by s_MusicVolume here).
     {
         Voice& mv = self->m_MusicVoice;
         if (mv.id != 0 && mv.playing && mv.buf) {
@@ -587,7 +583,7 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
         slot->id      = newId;
         slot->buf     = buf;
         slot->cursor  = 0;
-        slot->volume  = 1.0f;
+        slot->volume  = 255;  // fresh voice starts audible (gate byte, see AudioCallback)
         slot->playing = true;
     }
     SDL_UnlockAudioDevice(m_AudioDevice);
@@ -637,13 +633,15 @@ void SoundManager::SFXResume(uint32_t handle) {
     SDL_UnlockAudioDevice(m_AudioDevice);
 }
 
-// SetVolume: vol is 0-255 byte (from MortarSound::SetVolume clamp)
+// SetVolume: vol is the raw 0-255 byte from MortarSound::SetVolume. Plain
+// byte store, no arithmetic -- the mixer treats it as a >5 gate.
+// ASM-verified: 2026-07-26T09:09Z v1.6.1 MAMAudioThread::SetSoundVolume @ 0x0022f3ec (asm-inspector)
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (!m_AudioDevice || handle == 0) return;
     SDL_LockAudioDevice(m_AudioDevice);
     Voice* v = FindVoice(handle);
     if (v) {
-        v->volume = vol / 255.0f;
+        v->volume = vol;
     }
     SDL_UnlockAudioDevice(m_AudioDevice);
 }
@@ -742,7 +740,7 @@ void SoundManager::SongPlay(const char* name) {
     m_MusicVoice.id      = ++m_NextSoundId;
     m_MusicVoice.buf     = buf;
     m_MusicVoice.cursor  = 0;
-    m_MusicVoice.volume  = 1.0f;  // global s_MusicVolume scales in callback
+    m_MusicVoice.volume  = 255;   // unused for music -- s_MusicVolume scales in callback
     m_MusicVoice.playing = true;
     SDL_UnlockAudioDevice(m_AudioDevice);
 
@@ -791,14 +789,8 @@ void SoundManager::SongSetMemorySize(int size) { (void)size; }
 
 // 0x0018ca78
 void SoundManager::SetMusicVolume(float vol) {
-    s_MusicVolume = vol;
+    s_MusicVolume = vol;   // AudioCallback reads this directly for the music mix
     SyncMutes();
-    // Update music voice volume
-    if (m_AudioDevice) {
-        SDL_LockAudioDevice(m_AudioDevice);
-        m_MusicVoice.volume = vol;
-        SDL_UnlockAudioDevice(m_AudioDevice);
-    }
 }
 
 // Binary: SoundManager::Initialise(this, const char* basePath) @ 0x0010557c (PLT thunk).

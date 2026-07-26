@@ -25,8 +25,12 @@ public:
     bool IsPaused();
     bool IsIdle() { return m_State == 0; }
 
-    // Maps 0-1 float to 0-255 byte, calls backend SetSoundVolume (0x0018c7b4)
-    // DAT_0018c7ec = 255.0f
+    // Maps float to a 0-255 byte (vol*255, TRUNCATED -- wraps above 1.0, see
+    // MortarSound.cpp) and calls backend SFXSetVolume. Downstream the byte is
+    // a THRESHOLD GATE, not a gain: the voice plays at full amplitude iff
+    // byte > 5, else silent (v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0).
+    // So SetVolume(0.0f) mutes and any vol >= ~0.024 is full volume; a muted
+    // sound keeps playing (cursor advances, loops wrap, completion fires).
     void SetVolume(float vol);
 
     // If m_State==0: calls SoundManager::SFXPlay, m_State=2 (0x0018c850)

@@ -20,7 +20,8 @@ namespace Mortar {
 
 // Loaded sound buffer (replaces MAMSound / SoundEffectBada)
 struct SoundBuffer {
-    int16_t* samples;     // heap-allocated, after >>4 shift (LoadSound)
+    int16_t* samples;     // heap-allocated, full scale (no pre-attenuation --
+                          // see the DIFFERS marker in SoundManagerSDL.cpp LoadSound)
     int      sampleCount; // total samples (not bytes)
     bool     loop;
     int      loopStart;   // sample to rewind to when looping (0 = file start)
@@ -28,13 +29,21 @@ struct SoundBuffer {
 };
 
 // 16-voice table (matches MAMAudioThread voice count)
+//
+// volume is the raw voice byte (voice+0xf in the binary) and is a THRESHOLD
+// GATE, not a gain: v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0 reads it
+// exactly once, as `cmp #5` -- byte <= 5 mixes NOTHING, byte >= 6 mixes the
+// raw samples at FULL amplitude. There is no multiply/shift/table anywhere in
+// the mixer, so intermediate values (6..255) are indistinguishable from 255.
+// A gated (silent) voice is NOT paused: its cursor keeps advancing, loops
+// wrap, and completion is still detected -- muting never stalls playback.
 struct Voice {
     uint32_t   id;           // monotonic ID; 0 = idle
     SoundBuffer* buf;        // pointer into s_soundCache
     int        cursor;       // current sample position
-    float      volume;       // 0.0-1.0
+    uint8_t    volume;       // raw 0-255 volume byte; audible iff > 5 (gate, see above)
     bool       playing;      // true = active; false = paused or idle
-    Voice() : id(0), buf(nullptr), cursor(0), volume(1.0f), playing(false) {}
+    Voice() : id(0), buf(nullptr), cursor(0), volume(255), playing(false) {}
 };
 
 static const int VOICE_COUNT = 16;
@@ -91,7 +100,12 @@ public:
     virtual void SFXStop(uint32_t handle);
     virtual void SFXPause(uint32_t handle);
     virtual void SFXResume(uint32_t handle);
-    virtual void SFXSetVolume(uint32_t handle, uint8_t vol);   // 0-255
+    // vol is the raw 0-255 byte from MortarSound::SetVolume (truncated
+    // vol*255, wraps above 1.0 -- see MortarSound.cpp). It is a GATE, not a
+    // gain: the voice is audible iff vol > 5, at full amplitude (v1.6.1
+    // MAMAudioThread::FillBuffer @0x0022f7f0 / SetSoundVolume @0x0022f3ec).
+    // A gated voice keeps playing silently to completion on every backend.
+    virtual void SFXSetVolume(uint32_t handle, uint8_t vol);   // 0-255 gate byte
 
     // Query whether a voice is still active (not finished, not stopped).
     // Used by MortarSound::IsPlaying/IsPaused to detect voice completion.
@@ -143,7 +157,8 @@ private:
     // DIFFERS: music path uses same PCM voice rather than streaming (mp3 TODO)
     Voice m_MusicVoice;
 
-    // Load .wav.pcm file into SoundBuffer. Applies >>4 sample shift per spec.
+    // Load .wav.pcm file into SoundBuffer, full scale (see the DIFFERS marker
+    // in SoundManagerSDL.cpp LoadSound about the binary's fixed >>4).
     // Returns nullptr on failure (logs to stderr).
     SoundBuffer* LoadSound(const char* name);
 

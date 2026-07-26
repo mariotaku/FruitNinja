@@ -19,7 +19,10 @@
 //
 // PCM format: S16, 16kHz mono .wav.pcm assets, staged uncompressed and
 // verbatim on Wii (see src/platform/wii/README.md "Assets -- uncompressed").
-// No >>4 sample shift (see "Amplitude" below -- DIFFERS from SDL/WebAudio).
+// No >>4 sample shift -- full scale like SDL/WebAudio (see the DIFFERS
+// marker in SoundManagerSDL.cpp LoadSound for the binary rationale).
+// Per-voice volume is the binary's >5 threshold GATE, not a gain (see
+// SoundManager.h Voice doc), expressed as ASND volume 255-or-0.
 //
 // Endianness: libogc's asndlib DOES have a little-endian mono voice format --
 // VOICE_MONO_16BIT_LE -- which consumes 16-bit samples as-is with no DSP-side
@@ -296,13 +299,13 @@ SoundManager::SoundManager()
         m_Voices[i].id      = 0;
         m_Voices[i].buf     = nullptr;
         m_Voices[i].cursor  = 0;   // repurposed on Wii as the ASND voice index
-        m_Voices[i].volume  = 1.0f;
+        m_Voices[i].volume  = 255;
         m_Voices[i].playing = false;
     }
     m_MusicVoice.id      = 0;
     m_MusicVoice.buf     = nullptr;
     m_MusicVoice.cursor  = MUSIC_ASND_VOICE;
-    m_MusicVoice.volume  = s_MusicVolume;
+    m_MusicVoice.volume  = 255;  // unused for music -- s_MusicVolume drives the ASND volume
     m_MusicVoice.playing = false;
 }
 
@@ -370,11 +373,9 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
 }
 
 // Load .wav.pcm file fully into a heap buffer via the engine File seam
-// (see file-header "File access" note). Unlike SoundManagerSDL.cpp, no >>4
-// sample shift is applied here (see "Amplitude" file-header note) -- ASND
-// mixes voices in its own DSP and exposes a per-voice hardware volume, so
-// headroom is managed via ASND_ChangeVolumeVoice / ASND_SetVoice's vol
-// argument rather than by pre-attenuating the source samples. PCM sample
+// (see file-header "File access" note). No >>4 sample shift, matching
+// SoundManagerSDL.cpp's LoadSound (see its DIFFERS marker) -- ASND mixes
+// voices in its own DSP, which provides the pile-up headroom. PCM sample
 // payload is read verbatim (no byteswap) -- VOICE_MONO_16BIT_LE consumes
 // little-endian samples directly (see file-header "Endianness" note); only
 // the 20-byte header's int32 fields need byteswapping on this big-endian
@@ -532,12 +533,15 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     if (!slot) return 0;
     int asndVoice = (int)(slot - m_Voices);
 
-    int vol255 = (int)(1.0f * 255.0f);  // freshly (re)armed voice starts at full volume, matches SDL's slot->volume = 1.0f
+    // Fresh voice starts audible (gate byte 255, matches SDL); express the
+    // live SFX-category mute as ASND volume 0 -- ASND has no separate mute,
+    // and the gated voice must keep playing to completion, not pause.
+    int vol255 = s_SFXMuted ? 0 : 255;
 
     slot->id      = newId;
     slot->buf     = buf;
     slot->cursor  = asndVoice;
-    slot->volume  = 1.0f;
+    slot->volume  = 255;
     slot->playing = true;
 
     s_LoopInfo[asndVoice].armed = false;  // disarm any stale loop-continuation from a prior occupant
@@ -607,13 +611,22 @@ void SoundManager::SFXResume(uint32_t handle) {
     }
 }
 
-// SetVolume: vol is 0-255 byte (from MortarSound::SetVolume clamp).
+// SetVolume: vol is the raw 0-255 byte from MortarSound::SetVolume. It is a
+// GATE, not a gain (see SoundManager.h Voice doc / v1.6.1
+// MAMAudioThread::FillBuffer @0x0022f7f0): audible iff vol > 5, at full
+// amplitude. Expressed as ASND volume 255-or-0 -- a zero-volume ASND voice
+// keeps consuming samples (silent, not paused), so a gated voice still
+// completes and its loop tail still arms via FinishLoopCallback. The
+// LoopInfo vol is updated too so the tail armed AFTER a mute doesn't come
+// back audible.
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (!m_AudioDevice || handle == 0) return;
     Voice* v = FindVoice(handle);
     if (v) {
-        v->volume = vol / 255.0f;
-        ASND_ChangeVolumeVoice(v->cursor, vol, vol);
+        v->volume = vol;
+        int vol255 = (s_SFXMuted || vol <= 5) ? 0 : 255;
+        s_LoopInfo[v->cursor].vol = vol255;
+        ASND_ChangeVolumeVoice(v->cursor, vol255, vol255);
     }
 }
 
@@ -753,7 +766,7 @@ void SoundManager::SongPlay(const char* name) {
     m_MusicVoice.id      = ++m_NextSoundId;
     m_MusicVoice.buf     = nullptr;   // streamed -- no RAM-resident SoundBuffer
     m_MusicVoice.cursor  = MUSIC_ASND_VOICE;
-    m_MusicVoice.volume  = 1.0f;      // s_MusicVolume applied via ASND volume, not this float
+    m_MusicVoice.volume  = 255;       // unused for music -- s_MusicVolume applied via ASND volume
     m_MusicVoice.playing = true;
     s_Music.streaming    = true;
 
@@ -854,9 +867,9 @@ void SoundManager::SyncMutes() {
     if (s_SFXMuted != wasSFXMuted) {
         for (int i = 0; i < VOICE_COUNT; i++) {
             if (m_Voices[i].id == 0) continue;
-            int vol255 = s_SFXMuted ? 0 : (int)(m_Voices[i].volume * 255.0f);
-            if (vol255 < 0) vol255 = 0;
-            if (vol255 > 255) vol255 = 255;
+            // volume is the raw gate byte: audible iff > 5 (see SFXSetVolume).
+            int vol255 = (s_SFXMuted || m_Voices[i].volume <= 5) ? 0 : 255;
+            s_LoopInfo[m_Voices[i].cursor].vol = vol255;
             ASND_ChangeVolumeVoice(m_Voices[i].cursor, vol255, vol255);
         }
     }
