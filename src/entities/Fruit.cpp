@@ -1869,7 +1869,7 @@ void Fruit::Slice() {
 //   derives spin magnitudes from m_RotVel magnitudes + sign coins, stores into m_RotVel.
 // SUPER path  (isSuperFruit!=0): builds axes from blade direction (m_SliceArcAngle),
 //   derives spin magnitudes from the same RandF/Rand32 pattern.
-// Both paths: build m_Rot[idx] = (qx*qy)*qz from fixed 0x3FC0 angles + m_SliceArcAngle.
+// Both paths: build m_Rot[idx] = (q1*q2)*q3 from fixed 0x3FFC angles + m_SliceArcAngle.
 void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
 
@@ -1944,11 +1944,12 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
                 m_SliceAxes[idx * 3 + 2] = _Vector3<float>(CosIdx(a2), SinIdx(a2), 0.0f);
             }
 
-            // For half1: flip the m_RotVel components.
+            // For half1: flip this half's three axes (this+0x13c/+0x148/+0x154,
+            // _Vector3::operator*=(-1.0) @0x001dab10..0x001dab3c).
             if (idx == 1) {
-                m_RotVel1 = m_RotVel1 * -1.0f;
-                m_RotVel2 = m_RotVel2 * -1.0f;
-                m_SliceAxes[0] = m_SliceAxes[0] * -1.0f;
+                m_SliceAxes[3] = m_SliceAxes[3] * -1.0f;
+                m_SliceAxes[4] = m_SliceAxes[4] * -1.0f;
+                m_SliceAxes[5] = m_SliceAxes[5] * -1.0f;
             }
 
             // Spin magnitudes (same RandF(0.5)+0.75 pattern, 3 values).
@@ -1968,15 +1969,16 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
         *rv = _Vector3<float>(angX, angY, angZ);
 
         // Build initial m_Rot from the slice arc angle.
-        // Binary: three CreateFromAxisAngle calls with angle 0x3FC0 then m_SliceArcAngle.
-        // Product: m_Rot[idx] = (qx*qy)*qz; axis layout: (1,0,0)/(0,1,0)/(0,0,1).
+        // Binary @0x001dad40..0x001dadf0: three CreateFromAxisAngle calls with
+        // angle 0x3FFC, 0x3FFC, then m_SliceArcAngle; axes (0,0,1)/(0,1,0)/(0,0,1).
+        // Product: m_Rot[idx] = (q1*q2)*q3, stored WITHOUT normalize.
+        // ASM-verified: 2026-07-26T06:00Z v1.6.1 Fruit::SetupSliceRotations @ 0x001da968..0x001dae54 (asm-inspector)
         Quaternion* q = (idx == 0) ? &m_Rot1 : &m_Rot2;
-        Quaternion qx, qy, qz;
-        qx.CreateFromAxisAngle(1.0f, 0.0f, 0.0f, 0x3FC0u);
-        qy.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, 0x3FC0u);
-        qz.CreateFromAxisAngle(0.0f, 0.0f, 1.0f, (uint32_t)m_SliceArcAngle);
-        *q = ((qx * qy) * qz);
-        *q = q->normalized();
+        Quaternion q1, q2, q3;
+        q1.CreateFromAxisAngle(0.0f, 0.0f, 1.0f, 0x3FFCu);
+        q2.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, 0x3FFCu);
+        q3.CreateFromAxisAngle(0.0f, 0.0f, 1.0f, (uint32_t)m_SliceArcAngle);
+        *q = ((q1 * q2) * q3);
     }
 }
 
