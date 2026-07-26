@@ -146,7 +146,11 @@ void FruitFactControl::Init() {
     m_GameStateSnapshot = (uint8_t)game_work.gameMode;
 
     // 8. Seed current fact string.
-    m_FactText = Fruit::GetFact(NULL, (int*)&m_ComboB, (int)m_ComboA, (int)m_ComboB);
+    // ASM-spec v1.6.1 FruitFactControl::Init @0x0017160c: passes &m_ComboA as
+    // outType so the fruit GetFact picked (random for classic/arcade where
+    // m_ComboA is still the -1 ctor sentinel) is written back and steps 9/10
+    // below read the chosen fruit, not the stale sentinel.
+    m_FactText = Fruit::GetFact((int*)&m_ComboA, (int*)&m_ComboB, (int)m_ComboA, (int)m_ComboB);
 
     // 9. Fact colour.
     m_FactColour = Fruit::FruitFactColour((int)m_ComboA);

@@ -2865,51 +2865,55 @@ void Fruit::Release() {
 // Chunk C: GetFact + SetTrailParticles
 // ============================================================
 
-// v1.6.1 Fruit::GetFact @0x001db7b4 — fact-of-the-day picker with save-data round-robin
-// and exclude-special-fruits remap.
+// ASM-spec v1.6.1 Fruit::GetFact @0x001db7b4: fruitType < 0 draws a fresh
+// Rand32(MAX_FRUIT_TYPES) each call (@0x001db7d4); the type is then clamped to
+// [0, count-2] (top 2 special types excluded) and apple_red remaps to apple
+// (cached FruitType statics behind __cxa_guard, string @0x00283513). The fact
+// WITHIN the chosen fruit is a persisted round-robin: bump the "facts" global
+// counter (@0x001db844) and the per-fruit "<name>_facts" counter, then
+// factIdx = (newTotal - 1) % m_FactCount (__aeabi_idivmod). If the chosen
+// fruit has no facts, re-roll via recursion GetFact(outType, outFactIdx, -1, -1).
+// Both AddToTotal calls pass trackSession=true, achievementGate=true.
 const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int factIdx) {
     const int count = FruitInfo_GetCount();
     if (count <= 0) return nullptr;
 
-    // Remap fruitType: skip special-fruit entries (m_bSpecial != 0).
-    // Binary walks the array and builds a non-special subset for indexing.
     int ft = fruitType;
-    if (ft < 0 || ft >= count) ft = 0;
+    if (ft < 0) ft = (int)Math::g_Random.Rand32((uint32_t)count);
+    if (ft < 1) ft = 0;
+    else if (ft >= count - 2) ft = count - 2;
 
-    // Advance to a fruit that has facts.
-    int attempts = 0;
-    while (attempts < count) {
-        const FruitInfoData* info = FruitInfo_Get(ft);
-        if (info && !info->m_bSpecial && info->m_FactCount > 0) break;
-        ft = (ft + 1) % count;
-        ++attempts;
-    }
+    // Binary caches these two lookups as function-local statics (__cxa_guard).
+    static const int s_appleRedType = Fruit::FruitType("apple_red", false);
+    static const int s_appleType    = Fruit::FruitType("apple", false);
+    if (ft == s_appleRedType) ft = s_appleType;
+
+    if (outType) *outType = ft;
 
     const FruitInfoData* chosen = FruitInfo_Get(ft);
-    if (!chosen || chosen->m_FactCount <= 0) return nullptr;
+    if (!chosen) return nullptr;
 
-    // ASM-spec v1.6.1 Fruit::GetFact @0x001db7b4
-    // Fact-tracking AddToTotal pair drives deterministic fact rotation (NOT Rand32):
-    // per-fruit `<Name>_facts` count modulo m_FactCount picks the index.
-    // Both calls use trackSession=true, unlockAchievement=true.
     int fi = factIdx;
-    if (fi < 0) {  // pick-random path
+    if (fi < 0) {  // round-robin path
+        if (chosen->m_FactCount < 1) {
+            return GetFact(outType, outFactIdx, -1, -1);  // re-roll
+        }
         if (game_work.m_SaveData) {
-            static const uint32_t hFactsGlobal = StringHash("_facts");
-            game_work.m_SaveData->AddToTotal("_facts", hFactsGlobal, 1, true, true);
+            static const uint32_t hFactsGlobal = StringHash("facts");
+            game_work.m_SaveData->AddToTotal("facts", hFactsGlobal, 1, true, true);
 
             char buf[64];
             snprintf(buf, sizeof(buf), "%s_facts", chosen->m_Name);
             int newTotal = game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
             fi = (newTotal - 1) % chosen->m_FactCount;
         } else {
-            fi = 0;
+            fi = 0;  // Port specific: unit tests run without save data
         }
     } else {
+        if (chosen->m_FactCount <= 0) return nullptr;
         fi = fi % chosen->m_FactCount;
     }
 
-    if (outType)    *outType    = ft;
     if (outFactIdx) *outFactIdx = fi;
 
     // fruitlist.xml stores localisation keys (e.g. "FRUIT_FACT_07") in

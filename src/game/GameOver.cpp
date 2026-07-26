@@ -59,8 +59,14 @@ void GameOver(int endReason, float endScore, int endParam) {
     // cross-toolchain (GCC 4.4.1) doesn't support C++11 lambdas.
     int expressionIdx = (save && save->m_GameOverField2 > 0) ? save->m_GameOverField2 : 1;
     int bgPatternIdx  = (save && save->m_GameOverField1 > 0) ? save->m_GameOverField1 : 1;
-    int tabIndex      = save ? std::max(0, save->m_GameOverField3) : 0;
-    int starCount     = save ? std::max(0, save->m_GameOverField4) : 0;
+    // ASM-spec v1.6.1 GameOver @0x001cb788: +0x124/+0x128 are passed RAW.
+    // Every v1.6.1 writer stores -1 (FruitSaveData ctors, GameOverScreen::Release,
+    // GameOver @0x001cb83c, EndRetryLevel @0x001cbc70) — dead override fields —
+    // so the -1 sentinel must reach FruitFactControl/Fruit::GetFact, which uses
+    // it to draw a fresh random fruit fact. Clamping to 0 pinned the fact to
+    // fruit 0 every game-over.
+    int tabIndex      = save ? save->m_GameOverField3 : -1;
+    int starCount     = save ? save->m_GameOverField4 : -1;
 
     GameOverScreen* gos = new GameOverScreen(
         "GameOver", endReason, endScore,
