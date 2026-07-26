@@ -11,6 +11,7 @@
 #include "ActorManager.h"
 #include "Entity.h"
 #include "hud/HUDControl.h"
+#include "hud/HUD.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
 #include "asset/Mesh.h"
@@ -523,26 +524,38 @@ void SlashEntity::PreUpdate(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-08 v1.6.1 binary @ 0x17CCDC (re-analyst).
-// Binary path:
-//   if (ItemManager::PlayAlternateSwipeSound(1.0, 1.0) == 0) {
-//       int idx = Math::Random::Rand32(g_GlobalRng, 6) + 1;  // [1,6]
-//       snprintf(buf, "Sword-swipe-%d", idx);                // literal @ 0x1BCFE3
-//       Game::pGameSound->SFXPlay(buf, 1.0, 1.0);
+// ASM-spec v1.6.1 SlashEntity::PlaySwipe @0x001e8550:
+//   if (ItemManager::PlayAlternateSwipeSound(1.0, 1.0) == 0) {   // gate @0x1e857c -- alternate
+//       idx  = Math::Random::Rand32(g_random, 6) + 1;            // swipe SUPPRESSES sword swipe
+//       OS_SPrintf(buf, 0x40, "Sword-swipe-%d", idx);
+//       gain = 0.4f + 0.6f * hud->m_globalTimeScale;             // vmla @0x1e85cc; pool literals
+//                                    // 0.4f=0x3ECCCCCD @0x1e8660, 0.6f=0x3F19999A @0x1e8664; no clamp
+//       SFXPlay(buf, /*atten*/1.0f, /*gain*/gain, {}, /*pitch 0.0f @0x1e8668*/);
 //   }
-//   m_SwipeSoundTimer = 6.0f;
+//   RandF(0.5);                          // result discarded -- advances the shared g_Random stream
+//   ActorManager::GetNumEntities(0);     // result discarded
+//   ActorManager::GetNumEntities(1);     // result discarded (@0x1e862c-0x1e8648)
+//   m_SwipeSoundTimer = 6.0f;            // +0x144 @0x1e8650
+// Trailing discarded calls are kept for RNG-stream / call-ordering fidelity.
 void SlashEntity::PlaySwipe() {
     ItemManager* im = ItemManager::GetInstance();
-    if (im) {
-        im->PlayAlternateSwipeSound(1.0f, 1.0f);
+    if (!im || !im->PlayAlternateSwipeSound(1.0f, 1.0f)) {
+        char buf[0x40];
+        const int idx = (int)Math::g_Random.Rand32(6) + 1;
+        snprintf(buf, sizeof(buf), "Sword-swipe-%d", idx);
+        // Binary derefs mHud unguarded (boot guarantees it; PlaySwipe only fires
+        // during live slash input, after GameInit created the HUD).
+        const float gain = 0.4f + 0.6f * game_work.mHud->m_globalTimeScale;
+        if (game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay(buf, 1.0f, gain);
+        }
     }
 
-    Game* game = Game::GetInstance();
-    if (game && game_work.mGameSound) {
-        char buf[20];
-        const int idx = (rand() % 6) + 1;
-        snprintf(buf, sizeof(buf), "Sword-swipe-%d", idx);
-        game_work.mGameSound->SFXPlay(buf, 1.0f, 1.0f);
+    (void)Math::g_Random.RandF(0.5f);
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
+    if (am) {
+        (void)am->GetNumEntities(0);
+        (void)am->GetNumEntities(1);
     }
 
     m_SwipeSoundTimer = 6.0f;
