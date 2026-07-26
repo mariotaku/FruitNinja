@@ -18,6 +18,7 @@
 #include "game/StartupEffects.h"
 #include "audio/SoundManager.h"
 #include "render/Layout.h"
+#include "platform/SaveDirSDL.h"  // Mortar_ResolveSaveDir: pre-init save_dir (see BootWait)
 #include <cstdio>
 #include <cstring>
 
@@ -503,11 +504,27 @@ static void BootWait(void* arg) {
 
     BootArgs* ba = static_cast<BootArgs*>(arg);
 
+    // Port specific: resolve save_dir BEFORE LoadSettings() below (mirrors
+    // mainSDL.cpp's pre-init resolution -- see its comment block). LoadSettings
+    // runs deliberately before g_game.init() (so GameInitialise's
+    // Localisation::Load sees the saved languageFlag), but GetSettingsSavePath()
+    // reads Game::GetInstance()->save_dir -- which Game::init() hasn't set yet
+    // at this point. Without this line the load path resolved to
+    // "/SettingsSave.xml" at MEMFS root (not IDBFS-backed, never written), so
+    // settings silently never loaded on web while saves went to
+    // "/save/SettingsSave.xml" -- i.e. settings never persisted. g_game is a
+    // file-scope static (Game ctor sets the singleton), so GetInstance() is
+    // already valid here. Same shared resolver as Game::init()
+    // (GameSDL.cpp), whose later re-assignment yields the identical value --
+    // the Emscripten branch of Mortar_ResolveSaveDir ignores appDir and
+    // always returns "/save" (the IDBFS mount), so "" is passed here.
+    g_game.save_dir = Mortar_ResolveSaveDir("");
+
     // Port specific: load persisted settings. Language, motion mode,
     // sensitivity, and the FPS counter are user-settable via the in-game
     // Settings UI and persisted through SettingsSave/LoadSettings. Runs
     // before g_game.init() so GameInitialise's Localisation::Load step
-    // sees the right languageFlag.
+    // sees the right languageFlag. Requires save_dir resolved above.
     LoadSettings();
 
     // Port specific: mirrors mainSDL.cpp's desktop widescreen-window default
