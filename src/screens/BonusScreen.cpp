@@ -458,10 +458,30 @@ void BonusScreen::Update(float dt) {
         float f = (m_Timer - TOTAL_TIME) / TRANSITION_OUT_TIME;
         m_AnimPos = _Vector3<float>(0.0f, 240.0f * f * f, 0.0f);
     } else if (m_Timer < 0.0f) {
-        // Pre-show slide-in @0x16405c: linear from -240 (offscreen) to 0 as m_Timer goes
-        // -TRANSITION_IN_TIME..0. fp = m_Timer/TRANSITION_IN_TIME + 1 (0->1);
-        // AnimPos = (0,-240,0)*(1-fp) == (0, 240*m_Timer/TRANSITION_IN_TIME, 0).
-        m_AnimPos = _Vector3<float>(0.0f, 240.0f * m_Timer / TRANSITION_IN_TIME, 0.0f);
+        // Slide-in one-shot SFX @0x00163fb4 (SFXPlay @0x0016401c): fires the single
+        // frame m_Timer crosses (0.2f - TRANSITION_IN_TIME) upward -- prev <= thr < cur
+        // with prev = m_Timer - dt. Sound "Pause" (string @0x27F971), args
+        // (s0=0, s1=1, s2=0); return value discarded (nothing stored to +0xB4).
+        // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+        {
+            float thr = 0.2f - TRANSITION_IN_TIME;
+            if (m_Timer - dt <= thr && thr < m_Timer && game_work.mGameSound) {
+                game_work.mGameSound->SFXPlay(
+                    "Pause", 0.0f, 1.0f,
+                    Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
+            }
+        }
+
+        // Pre-show slide-in @0x0016405c: SINE ease from -240 (offscreen) to 0.
+        // fp = m_Timer/TRANSITION_IN_TIME + 1 (0->1 since m_Timer<0);
+        // e = SinIdx(fp*100deg)/SinIdx(100deg) (182 = 65536/360, 18200 = 100*182);
+        // AnimPos = (0,-240,0)*(1-e). 240.0f from pool @0x164270, negated via
+        // _Vector3 unary operator- @0x0010e9f4.
+        // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+        float fp = m_Timer / TRANSITION_IN_TIME + 1.0f;
+        float e = Math::SinIdx((uint16_t)(fp * 100.0f * 182.0f)) /
+                  Math::SinIdx((uint16_t)18200);
+        m_AnimPos = (-_Vector3<float>(0.0f, 240.0f, 0.0f)) * (1.0f - e);
 
         // NOTE: binary's rush-loop SFX start/stop gate (m_RushLoopSFX, "Bonus-drum-roll")
         // requires m_Timer>0, so it never fires during this slide-in phase; the m_Timer>0
@@ -479,7 +499,11 @@ void BonusScreen::Update(float dt) {
             float f = 1.0f - (m_Timer - TOTAL_TIME) / TRANSITION_OUT_TIME;
             for (int k = 3; k < 6; ++k) s[k] += (0.5f - s[k]) * f;
         } else if (m_Timer < 0.0f) {
-            float f = -m_Timer / TRANSITION_IN_TIME;   // abs, 0..1
+            // Co-lerp factor is fp = m_Timer/TRANSITION_IN_TIME + 1 (0->1), the same
+            // driver as the slide-in ease -- NOT -m_Timer/TRANSITION_IN_TIME (1->0,
+            // inverted). The transition-OUT arm above (1-f) already matches the binary.
+            // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+            float f = m_Timer / TRANSITION_IN_TIME + 1.0f;   // 0..1
             for (int k = 3; k < 6; ++k) s[k] += (0.5f - s[k]) * f;
         } else {
             s[3] = s[4] = s[5] = 0.5f;                 // settle: hard-set
@@ -531,17 +555,25 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // Phase B: per-award reveal (0 <= timer < revealEnd)
     // -----------------------------------------------------------------------
-    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0 -- per-award reveal timing:
+    // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+    // Per-award reveal timing -- TWO animation channels, both driven by
+    //   ph   = fmod(m_Timer - FIRST_AWARD, TIME_PER_AWARD)  -- position within CURRENT slot
     //   FIRST_AWARD    = 0.666667f          (initial delay before award 0's slot)
     //   TIME_PER_AWARD = 0.6f               (each award gets its own 0.6s slot,
     //                                         staggered i*0.6s after FIRST_AWARD)
-    //   ph  = fmod(m_Timer - FIRST_AWARD, TIME_PER_AWARD)   -- position within CURRENT slot
-    //   s15 = clamp((ph - 0.2f) / 0.1f, 0, 1)               -- this-frame alpha driver
-    //   s16 = clamp((ph - dt - 0.2f) / 0.1f, 0, 1)          -- prev-frame alpha driver
-    //   one-shot gate (emitters + Shake + Bonus-Explosion SFX) fires when s16<=0 && s15>0,
+    // Channel 1 -- text/star fade (entry.m_Colour.a, entry+0x53 = Colour{b,g,r,a}+3):
+    //   aRamp = clamp(ph / 0.1f, 0, 1)                      -- @0x164358-0x1643a4, NO -0.2 bias
+    //   m_Colour.a = (uint8_t)(aRamp * 255.0f)
+    // Channel 2 -- value-box pop scale (entry.m_Alpha, entry+0x54):
+    //   cur  = clamp((ph - 0.2f) / 0.1f, 0, 1)              -- @0x1643c8 this-frame driver
+    //   prev = clamp((ph - dt - 0.2f) / 0.1f, 0, 1)         -- @0x1643b0 prev-frame driver
+    //   one-shot gate (emitters + Shake + Bonus-Explosion SFX) fires when prev<=0 && cur>0,
     //     i.e. exactly the frame ph first crosses 0.2s UPWARD into award i's slot.
-    //   alpha  = s15                                        (linear 0->1 over [0.2s,0.3s))
-    //   score  = (s16<=0) ? 0 : (0.5f + s16*0.5f) * TierBase*Multiplier
+    //   m_Alpha = SinIdx((uint16_t)(cur*120.0f*182.0f)) / SinIdx((uint16_t)21840)
+    //             -- @0x16460c-0x164660, sine arc over 120deg, peaks ~1.155. This is the
+    //             value-box Draw SCALE (BakedStringBox::Draw(Vec2(a,a), 0, 1)), NOT an
+    //             alpha multiplier.
+    //   score   = (cur<=0) ? 0 : (0.5f + cur*0.5f) * TierBase*Multiplier   -- cur driver
     // Each award's own slot is independent of the others -- this is what staggers the
     // reveal instead of firing all 3 awards' effects together.
     // ASM-spec v1.6.1 BonusScreen::Update @0x001642e8: the per-award loop runs
@@ -554,39 +586,46 @@ void BonusScreen::Update(float dt) {
     // @0x164640). The revealEnd gate that IS real lives in the tail below
     // (m_DisplayedScore/m_NamePulseScale), not around this loop.
     {
-        int totalDisplayed = 0;
         for (int i = 0; i < (int)m_Awards.size(); ++i) {
             BonusAwardHud& entry = m_Awards[i];
             float localFrac = (m_Timer - FIRST_AWARD - (float)i * TIME_PER_AWARD) / TIME_PER_AWARD;
 
-            if (localFrac < 0.0f) {
-                // Not yet revealed.
-                entry.m_Alpha          = 0.0f;
-                entry.m_DisplayedScore = 0;
-                continue;
-            }
-
-            if (localFrac > 1.0f) {
-                // Fully revealed (this award's slot is behind us).
+            if (localFrac < 0.0f || localFrac > 1.0f) {
+                // Out-of-range converge arm @0x164640: taken BOTH before this award's
+                // slot (localFrac < 0) and after it (localFrac > 1). Not-yet-revealed
+                // rows are hidden by Draw's per-row reveal gate, NOT by alpha/score
+                // (a previous port arm zeroed m_Alpha/score pre-reveal -- wrong).
+                // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+                entry.m_Colour.a       = 0xFF;
                 entry.m_Alpha          = 1.0f;
                 entry.m_DisplayedScore = entry.m_TierBase * entry.m_Multiplier;
-                totalDisplayed += entry.m_DisplayedScore;
                 continue;
             }
 
-            float ph  = fmodf(m_Timer - FIRST_AWARD, TIME_PER_AWARD);
-            float s15 = (ph - 0.2f) / 0.1f;
-            if (s15 < 0.0f) s15 = 0.0f;
-            if (s15 > 1.0f) s15 = 1.0f;
-            float s16 = ((ph - dt) - 0.2f) / 0.1f;
-            if (s16 < 0.0f) s16 = 0.0f;
-            if (s16 > 1.0f) s16 = 1.0f;
+            // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+            float ph = fmodf(m_Timer - FIRST_AWARD, TIME_PER_AWARD);
+
+            // Channel 1: text/star fade -- ramps m_Colour.a over [0s, 0.1s) of the
+            // slot (no -0.2 bias; @0x164358-0x1643a4).
+            float aRamp = ph / 0.1f;
+            if (aRamp < 0.0f) aRamp = 0.0f;
+            if (aRamp > 1.0f) aRamp = 1.0f;
+            entry.m_Colour.a = (uint8_t)(aRamp * 255.0f);
+
+            // Channel 2 drivers (binary regs; port previously had these two swapped
+            // as s15/s16).
+            float cur = (ph - 0.2f) / 0.1f;          // @0x1643c8 this-frame
+            if (cur < 0.0f) cur = 0.0f;
+            if (cur > 1.0f) cur = 1.0f;
+            float prev = ((ph - dt) - 0.2f) / 0.1f;  // @0x1643b0 prev-frame
+            if (prev < 0.0f) prev = 0.0f;
+            if (prev > 1.0f) prev = 1.0f;
 
             // One-shot reveal gate: fires the single frame ph first crosses 0.2s
-            // UPWARD into award i's slot -- prev frame below 0.2 (s16<=0), this
-            // frame at/above 0.2 (s15>0). ph increases monotonically within the
+            // UPWARD into award i's slot -- prev frame below 0.2 (prev<=0), this
+            // frame at/above 0.2 (cur>0). ph increases monotonically within the
             // slot, so this pair is true for exactly one frame per award.
-            if (s16 <= 0.0f && s15 > 0.0f) {
+            if (prev <= 0.0f && cur > 0.0f) {
                 // ASM-spec v1.6.1 BonusScreen::Update @0x00164534: memory-verified
                 // literals s0=0.1f (@0x1642bc), s1=10.0f (@0x41200000).
                 Shake(0.1f, 10.0f);
@@ -632,17 +671,22 @@ void BonusScreen::Update(float dt) {
                 }
             }
 
-            // Alpha ramp: linear 0->1 across [0.2s, 0.3s) of this award's slot.
-            entry.m_Alpha = s15;
+            // Value-box pop scale: sine arc over 120deg across [0.2s, 0.3s) of this
+            // award's slot, peaks ~1.155 then settles to 1.0. Consumed as the
+            // value-box Draw SCALE, not an alpha (@0x16460c-0x164660; 182 = 65536/360,
+            // 21840 = 120*182).
+            // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+            entry.m_Alpha = Math::SinIdx((uint16_t)(cur * 120.0f * 182.0f)) /
+                            Math::SinIdx((uint16_t)21840);
 
             // Score counter ramp-up: 0 before the gate fires, then 0.5->1.0 of
-            // TierBase*Multiplier across the same [0.2s, 0.3s) window.
-            entry.m_DisplayedScore = (s16 <= 0.0f) ? 0 :
-                (int)((float)(entry.m_TierBase * entry.m_Multiplier) * (0.5f + s16 * 0.5f));
-
-            totalDisplayed += entry.m_DisplayedScore;
+            // TierBase*Multiplier across the same [0.2s, 0.3s) window -- driven by
+            // cur (the port previously used the prev-frame driver here).
+            entry.m_DisplayedScore = (cur <= 0.0f) ? 0 :
+                (int)((float)(entry.m_TierBase * entry.m_Multiplier) * (0.5f + cur * 0.5f));
         }
-        m_DisplayedScore = totalDisplayed;
+        // NOTE: the binary loop does NOT accumulate a displayed total here; the
+        // screen total (m_DisplayedScore) is computed in the tail @0x001646b8 below.
     }
 
     // -----------------------------------------------------------------------

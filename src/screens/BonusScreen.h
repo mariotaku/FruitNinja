@@ -25,8 +25,11 @@ struct BonusAwardHud {
     int        m_Multiplier;      // +0x44
     int        _pad48;            // +0x48
     int        m_DisplayedScore;  // +0x4C
-    Colour     m_Colour;          // +0x50 (4 bytes, BGRA) -- star tint + text-box colour
-    float      m_Alpha;           // +0x54 -- per-award draw alpha (passed to BakedStringBox::Draw as s0)
+    Colour     m_Colour;          // +0x50 (4 bytes, BGRA) -- star tint + text-box colour;
+                                  //   .a (+0x53) is the per-award reveal FADE, animated by
+                                  //   Update (0->255 over the slot's first 0.1s)
+    float      m_Alpha;           // +0x54 -- value-box pop SCALE (BakedStringBox::Draw(Vec2(a,a),0,1)),
+                                  //   NOT an alpha multiplier; sine arc peaking ~1.155 in Update
     Colour     m_Colour2;         // +0x58 -- second palette colour (populated by AddAward, unread by Draw)
     Mortar::SmartPtr<Mortar::Texture> m_StarTex; // +0x5C (binary: m_Icon; 4 bytes on ARM SmartPtr)
 
