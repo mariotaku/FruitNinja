@@ -175,6 +175,9 @@ public:
 
     // Button delegate callbacks (press-action targets)
     // No-op while m_ButtonFadeAlpha != 0 (mid-fade taps swallowed);
+    // the debounce releases because Update()/UpdateRealtime()'s decay clamps
+    // m_ButtonFadeAlpha to exact 0.0 once it drops below 0.001 (EXIT_THRESHOLD)
+    // while IsEnabled() -- ~0.4s after the fade starts.
     // v1.6.1 PauseScreen::PauseGameCallback @0x001a5978
     void PauseGameCallback();
     void PauseGameCallback2();    // v1.6.1 @0x001a5b38 -- wraps PauseGameCallback, sets m_PressIndex=1

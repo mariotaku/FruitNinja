@@ -889,11 +889,16 @@ void PauseScreen::Update(float dt) {
 
     // 1. m_ButtonFadeAlpha decay / restore
     // IsEnabled() reads g_GameData fields (binary @ 0x00153e4c).
+    // v1.6.1 PauseScreen::Update @0x001a5ebc post-switch block: decay clamps to
+    // exact 0.0 once the DECAYED value drops below 0.001 (EXIT_THRESHOLD,
+    // DAT_00154fc0) -- NOT a <0 clamp. The exact 0.0 is load-bearing: it is
+    // what releases PauseGameCallback's `m_ButtonFadeAlpha != 0.0f` debounce
+    // (an exponential decay never reaches 0.0 on its own).
 #ifdef __bada__
     const bool isEnabled = IsEnabled();
     if (isEnabled) {
         PS_DECAY_F(m_ButtonFadeAlpha, FADE_DECAY);
-        if (m_ButtonFadeAlpha < 0.0f) m_ButtonFadeAlpha = 0.0f;
+        if (m_ButtonFadeAlpha < EXIT_THRESHOLD) m_ButtonFadeAlpha = 0.0f;
     } else {
         PS_APPROACH_F(m_ButtonFadeAlpha, 1.0f, FADE_IN_RATE);
     }
@@ -1125,9 +1130,12 @@ void PauseScreen::UpdateRealtime(float dtSeconds) {
     }
 
     // Post-switch unconditional m_ButtonFadeAlpha ramp (mirrors Update() block 1).
+    // Binary clamps the decayed value to exact 0.0 below 0.001 (EXIT_THRESHOLD,
+    // v1.6.1 PauseScreen::Update @0x001a5ebc) -- required so PauseGameCallback's
+    // `!= 0.0f` debounce releases; a <0 clamp never fires on exponential decay.
     if (IsEnabled()) {
         PS_DECAY_F(m_ButtonFadeAlpha, FADE_DECAY);
-        if (m_ButtonFadeAlpha < 0.0f) m_ButtonFadeAlpha = 0.0f;
+        if (m_ButtonFadeAlpha < EXIT_THRESHOLD) m_ButtonFadeAlpha = 0.0f;
     } else {
         PS_APPROACH_F(m_ButtonFadeAlpha, 1.0f, FADE_IN_RATE);
     }
