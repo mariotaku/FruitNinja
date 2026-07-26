@@ -9,6 +9,9 @@
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "audio/GameSound.h"
+#include "particle/PSPParticleManager.h"
+#include "util/StringHash.h"
+#include "math/Random.h"
 #include <cstdio>
 #include <cstring>
 #include <cctype>
@@ -32,10 +35,6 @@ static const float NOTIF_X = -95.0f;
 // Per-NotificationType Y constants (v1.6.1 NotificationControl::Update @0x001a3c7c).
 // Type_Numeric offscreen/settled/delta = 184.0f / 147.0f / -37.0f
 // Type_Named   offscreen/settled/delta = 192.0f / 128.0f / -64.0f
-
-// Interval between particle spawns during unlock flash (binary: every 0.125s, first 0.5s)
-static const float NOTIF_PARTICLE_INTERVAL = 0.125f;
-static const float NOTIF_PARTICLE_WINDOW   = 0.5f;
 
 // v1.6.1 NotificationControl::NotificationControl @0x001a4428
 NotificationControl::NotificationControl(const char* name, int points,
@@ -151,18 +150,33 @@ void NotificationControl::Update(float dt) {
         pos.y = offscreenY + t * t * deltaY;
     }
 
-    // Type_Named only: spawn "confetti" particle emitter on each 1/8s tick crossing
+    // Type_Named only: spawn "confettif" particle emitter on each 1/8s tick crossing
     // within the first 0.5s (floor(oldTimer*8) != floor(newTimer*8) && floor(newTimer*8) < 4).
     if (m_NotifType == Type_Named) {
         int oldTick = (int)(oldTimer * 8.0f);
         int newTick = (int)(m_StateTimer * 8.0f);
         if (oldTick != newTick && newTick < 4) {
-            // TODO: v1.6.1 0x001a3c7c (NotificationControl::Update) — spawn "confetti" particle
-            // emitter (StringHash("confetti",9)) at pos ~= ((rand/524287*20-10-100)+idx*100, 160-rand5-25, 0),
-            // alpha=1.0, some flag byte set; then burns one more Rand32() call (0xe38) regardless.
-            // Requires Mortar::PSPParticleManager / ParticleEmitter to be ported.
-            (void)NOTIF_PARTICLE_INTERVAL;
-            (void)NOTIF_PARTICLE_WINDOW;
+            // ASM-spec v1.6.1 NotificationControl::Update @0x001a3c7c: confetti spawn block.
+            // Particle name is "confettif" (9 chars, string @0x0028258f; defined in
+            // Data/particles/particles_fast.xml / particles_slow.xml). X base uses
+            // oldTick (binary r6) so the three spawns walk -110/-10/+90 across the
+            // 257-wide banner. RNG draw ORDER is load-bearing for global-stream
+            // fidelity: Rand32(0x7FFFF), Rand32(5), field writes, then Rand32(0xe38).
+            // Pool constants: 524287.0f @0x001a3fbc, 160.0f @0x001a3fc0, 100.0f @0x001a3fc4.
+            static const uint32_t s_ConfettiHash = StringHash("confettif");
+            PSPParticleEmitter* em = PSPParticleManager::GetInstance().AddEmitter(s_ConfettiHash, 0, false);
+            if (em) {
+                float rx = (float)Math::g_Random.Rand32(0x7FFFF);
+                float ry = (float)Math::g_Random.Rand32(5);
+                em->m_Pos = _Vector3<float>((rx / 524287.0f) * 20.0f - 10.0f - 100.0f + (float)(oldTick * 100),
+                                            160.0f - ry - 25.0f, 0.0f);
+                em->m_bUpdateWhenPaused = 1;   // +0x4C
+                em->m_SpinScale = 1.0f;        // +0x28
+            }
+            // Deliberate RNG burn @0x001a3f74, result discarded -- runs even when
+            // AddEmitter returns null (binary beq @0x001a3ecc jumps straight here).
+            // NOT dead code: keeps the global RNG stream in step with the binary.
+            Math::g_Random.Rand32(0xe38);
         }
     }
 }

@@ -399,6 +399,16 @@ public:
     // Returns pointer into m_pEmitterTemplates blob (or null if idx out of range).
     uint8_t* GetEmitterTemplate(int idx);
 
+    // Port specific: test-only introspection -- number of live emitters on the
+    // m_pActiveEmitters list (unit tests assert emitter spawn counts, e.g. the
+    // achievement-banner confetti burst). Inline on purpose: no emitted symbol,
+    // so symbol-diff never pairs it against the binary (which has no counterpart).
+    int CountActiveEmitters() const {
+        int n = 0;
+        for (const PSPParticleEmitter* e = m_pActiveEmitters; e; e = e->m_Next) ++n;
+        return n;
+    }
+
     // Accessor: get particle template blob record i (stride 0xB8).
     PSPParticleTemplate* GetParticleTemplate(int i) {
         if (!m_pTemplates || i < 0 || i >= m_NumParticleTemplates) return 0;

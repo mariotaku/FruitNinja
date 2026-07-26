@@ -33,6 +33,10 @@ public:
     ~NotificationControl() override;
 
     // v1.6.1 NotificationControl::Update @0x001a3c7c
+    // Animates the slide-in/settle/slide-out state machine. Type_Named also
+    // spawns three fire-and-forget "confettif" PSPParticleManager emitters
+    // (at t crossing 0.125/0.25/0.375s) and burns one extra g_Random draw per
+    // spawn tick -- both affect the global RNG stream.
     void Update(float dt) override;
 
     // v1.6.1 NotificationControl::Draw @0x001a4860
