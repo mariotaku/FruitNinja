@@ -110,16 +110,13 @@ public:
     Mortar::SmartPtr<Mortar::Texture>* GetTexture() { return &m_Texture; }
 
     // Bind this texture for rendering (equivalent to Texture::Set()).
-    void Set() const {
-        if (m_Texture.IsValid()) {
-            glBindTexture(GL_TEXTURE_2D, m_Texture->GetTexId());
-        }
-    }
+    // Port specific: routed through Renderer::BindTexture2D (lazy sampling
+    // bind); body out-of-line in ReloadableTexture.cpp to keep Renderer.h out
+    // of this widely-included header.
+    void Set() const;
 
-    // Unbind (bind texture 0).
-    void UnSet() const {
-        glBindTexture(GL_TEXTURE_2D, 0);
-    }
+    // Unbind (bind texture 0). Same lazy routing as Set().
+    void UnSet() const;
 
     // True if a valid texture is loaded.
     bool IsLoaded() const { return m_Texture.IsValid(); }

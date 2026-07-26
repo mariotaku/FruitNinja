@@ -7,6 +7,7 @@
 #include "render/ShaderProgram.h"
 #include "math/Colour.h"
 #include "core/MortarTypes.h"
+#include <vector>
 
 #if defined(FRUIT_PLATFORM_WII)
 #include <gccore.h>  // GXTexObj (m_WhiteTexObj)
@@ -21,9 +22,26 @@
 // rides the shader path with them.
 // Phase 3: the 3D mesh path (Geometry::Render) renders through the Mesh3D
 // program via DrawMesh3D (same unlit texture2D * v_color modulate -- all
-// meshes are IsLit=false). Both shader draws restore glUseProgram(0),
-// disable their generic attrib arrays and unbind buffers after EVERY draw
-// so any still-fixed-function path in the frame coexists.
+// meshes are IsLit=false).
+//
+// Port specific: GL state cache + persistent ring VBO (performance; output is
+// pixel-identical). No fixed-function path remains, so the draws no longer
+// tear the pipeline down after every call. Instead:
+//   - Redundant GL state calls (program, texture bind, blend/cull enable,
+//     MVP upload) are elided through a shadow copy of the GL state
+//     (m_GLState). Blend FUNC is (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+//     everywhere in the binary (set once at init / DisplayManager frame top;
+//     draws only toggle the GL_BLEND enable) so it is never re-issued
+//     per draw.
+//   - 2D vertex data streams through a persistent ring inside m_QuadVBO via
+//     glBufferSubData (orphan + rewind on wrap); attribs 0/1/2 stay
+//     configured for the canonical Shaded2DVertex layout between 2D draws.
+//   - RULE: any code that binds unit-0 GL_TEXTURE_2D directly must go
+//     through BindTexture2D (sampling intent, lazy) or BindTextureForUpload
+//     (texture create/upload, immediate) so the shadow never desyncs; any
+//     code that glDeleteTextures a texture the shadow may consider bound
+//     calls NotifyTextureDeleted. External GL churn between frames is
+//     absorbed by DisplayManager::BeginFrame -> InvalidateStateCache().
 struct Renderer {
     static Renderer* s_instance;
     static Renderer* GetInstance() { return s_instance; }
@@ -77,10 +95,48 @@ struct Renderer {
     // Disables GL_SCISSOR_TEST (undoes SetClipRect). No-op on __bada__ / FN_GL_STUB.
     void ClearClipRect();
 
-    // Port specific: no binary counterpart. glActiveTexture(GL_TEXTURE0) +
-    // glBindTexture(GL_TEXTURE_2D, texId) -- thin wrapper so debug-overlay code
-    // (raw GLuint textures, not Mortar::Texture) doesn't call raw GL directly.
+    // Port specific: no binary counterpart. Records `texId` as the requested
+    // unit-0 sampling texture WITHOUT calling GL; the actual glBindTexture is
+    // issued lazily at the next draw (and only if it differs from what is
+    // really bound). This is the required entry point for EVERY sampling bind
+    // (Texture::Set/UnSet, font atlas pages, particles, debug overlays);
+    // texId == 0 is meaningful and, at draw time, still binds 0 -- preserving
+    // the incomplete-texture sampling semantics of the old eager path.
+    // A draw that passes its own non-zero texture (DrawQuad white-substitute,
+    // DrawColorQuad, draw_fullscreen_quad, DrawMesh3D) overwrites the
+    // requested value with it, exactly mirroring what the old eager bind left
+    // on unit 0. On Wii this stays an immediate shim bind (RendererGX.cpp).
     void BindTexture2D(uint32_t texId);
+
+    // Port specific: immediate glBindTexture(GL_TEXTURE_2D, texId) + shadow
+    // sync. Use for texture CREATE/UPLOAD paths (glTexImage2D /
+    // glTexSubImage2D need the real binding now); sampling paths use
+    // BindTexture2D instead. Keeps m_GLState.boundTex exact so lazy draws
+    // never skip a needed re-bind after an upload touched unit 0.
+    void BindTextureForUpload(uint32_t texId);
+
+    // Port specific: call right after glDeleteTextures(texId). Mirrors the GL
+    // rule that deleting the currently-bound texture rebinds 0, so the shadow
+    // (and the lazily-requested sampling texture) never point at a dead --
+    // or worse, recycled -- texture name.
+    void NotifyTextureDeleted(uint32_t texId);
+
+    // Port specific: shadowed glEnable/glDisable(GL_BLEND) / (GL_CULL_FACE).
+    // All per-draw blend/cull toggles go through these so redundant GL calls
+    // are elided. On Wii they forward straight to the GX shim.
+    void SetBlendEnabled(bool enabled);
+    void SetCullFaceEnabled(bool enabled);
+
+    // Port specific: forget everything the GL state shadow believes (program,
+    // texture binding, blend/cull, uploaded MVPs, ring attrib config) and
+    // re-assert glActiveTexture(GL_TEXTURE0). Called once per frame from
+    // DisplayManager::BeginFrame (which also covers the test harness -- every
+    // test render loop goes through BeginFrame) and from code that touches GL
+    // buffer bindings directly (MeshManager VBO/IBO uploads), so externally-
+    // touched GL state cannot desync the shadow. Does NOT clear the requested
+    // sampling texture -- the legacy eager binding persisted across frames
+    // and the mirror must too.
+    void InvalidateStateCache();
 
     // Port specific: no binary counterpart. Wraps glPolygonMode(GL_FRONT_AND_BACK,
     // GL_LINE/GL_FILL) for the F2 wireframe debug toggle. No-op where glPolygonMode
@@ -89,11 +145,11 @@ struct Renderer {
 
     // Path B rendering with QUADCUSTOMVERTEX (stride 0x24).
     // Matches original DrawTriList (0x00240e34) / DrawTriStrip.
-    // setBlendFunc: binary Mesh::DrawTris @0x240c30 never touches glBlendFunc --
-    // only the per-template Material sets it, before the draw call, and it must
-    // survive the draw. Most callers don't set their own func and rely on the
-    // default alpha blend below; pass false when the caller (e.g. additive
-    // particle templates) has already set its own glBlendFunc.
+    // setBlendFunc: retained for API stability but now INERT -- glBlendFunc is
+    // (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) everywhere in the v1.6.1 binary
+    // (glBlendFunc @0x0010c088 is xref'd only from init/frame-top; Mesh::
+    // DrawTris @0x240c30 toggles the GL_BLEND enable, never the func), so the
+    // func is set once and never per draw.
     void DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlendFunc = true);
     void DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount);
 
@@ -109,25 +165,31 @@ struct Renderer {
     // fixed-function default colour this path replaces was white).
     // tex == 0 binds m_WhiteTex so texture2D samples 1.0 (untextured FF
     // behaviour). Blend / cull / depth state is the CALLER's responsibility.
-    // Coexistence guarantee: exits via attrib 0/1/2 disable, both buffer
-    // bindings cleared, glUseProgram(0) -- same contract as DrawShaded2D.
+    // Port specific: no trailing restore (nothing fixed-function is left to
+    // coexist with; MatrixManager no longer issues GL). Leaves its own
+    // program / buffer / attrib config in place and flags the ring attrib
+    // config dirty so the next 2D draw restores its bindings.
     void DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount, GLenum prim,
                     int stride, int posOff, int uvOff, int colOff, int uvSize, int colSize,
                     GLuint tex, const Matrix44& mvp);
 
 private:
-    // Shared GLES2 draw for the 2D paths. Uploads `mvp` to u_mvp, streams
-    // `verts` (vertCount * stride bytes) into m_QuadVBO (orphan + upload),
-    // points attribs 0/1/2 (pos 3xfloat @posOff, uv 2xfloat @uvOff, colour
-    // 4x normalized ubyte @colOff) and glDrawArrays(prim).
-    // tex != 0: binds it on unit 0. tex == 0: keeps the caller's current
-    // unit-0 binding (Texture::Set / draw_sprite's raw glBindTexture own it —
-    // same contract the fixed-function path had).
+    // Shared GLES2 draw for the 2D paths. Uploads `mvp` to u_mvp (skipped
+    // when identical to the last upload), repacks `verts` (vertCount *
+    // stride bytes; pos 3xfloat @posOff, uv 2xfloat @uvOff, colour 4x
+    // normalized ubyte @colOff) into the canonical 24-byte Shaded2DVertex
+    // layout, streams them into the m_QuadVBO ring via glBufferSubData
+    // (orphan + rewind on wrap; one-shot glBufferData fallback for draws
+    // larger than the ring) and glDrawArrays(prim, ringBase/24, vertCount).
+    // tex != 0: resolves to it. tex == 0: resolves to the lazily-requested
+    // BindTexture2D texture (Texture::Set / draw_sprite own it -- same
+    // contract the eager path had; requested 0 still binds 0). The bind is
+    // only issued when it differs from what is actually bound.
     // Blend / cull / scissor state is the CALLER's responsibility, set before
     // calling (matches the old per-draw FF state decisions).
-    // Coexistence guarantee: always exits via glUseProgram(0) + attrib 0/1/2
-    // disable + GL_ARRAY_BUFFER unbind so the still-fixed-function paths
-    // (Geometry::Render, matrix-stack uploads) see clean state.
+    // Port specific: no trailing restore -- program / ring binding / attrib
+    // config persist between 2D draws (see the state-cache note in the class
+    // comment).
     void DrawShaded2D(const void* verts, int vertCount, int stride,
                       int posOff, int uvOff, int colOff,
                       GLenum prim, GLuint tex, const Matrix44& mvp);
@@ -154,8 +216,32 @@ private:
 #else
     ShaderProgram m_Quad2D;  // the Shaders.h Quad2D program
     ShaderProgram m_Mesh3D;  // the Shaders.h Mesh3D program (3D mesh path)
-    GLuint m_QuadVBO;        // streaming VBO for DrawShaded2D
+    GLuint m_QuadVBO;        // persistent ring VBO for DrawShaded2D
     GLuint m_WhiteTex;       // 1x1 opaque white — lets DrawColorQuad reuse the textured shader
+
+    // Port specific: GL state shadow + 2D ring bookkeeping (see class
+    // comment). All `*Valid` flags are cleared by InvalidateStateCache();
+    // `requestedTex` mirrors what the legacy eager scheme would have left
+    // bound on unit 0 and survives invalidation.
+    struct GLStateShadow {
+        GLuint   program;       // current glUseProgram
+        bool     programValid;
+        uint32_t requestedTex;  // lazily-requested unit-0 sampling texture
+        GLuint   boundTex;      // actually bound on unit 0
+        bool     boundTexValid;
+        bool     blendOn;
+        bool     blendValid;
+        bool     cullOn;
+        bool     cullValid;
+        bool     ringReady;     // ring bound as GL_ARRAY_BUFFER + attribs 0/1/2 configured
+        float    mvp2D[16];     // last MVP uploaded to the Quad2D program
+        bool     mvp2DValid;
+        float    mvp3D[16];     // last MVP uploaded to the Mesh3D program
+        bool     mvp3DValid;
+    };
+    GLStateShadow m_GLState;
+    GLsizeiptr m_RingCursor;              // next free byte in the ring (24-aligned)
+    std::vector<unsigned char> m_Staging2D;  // repack scratch (reused across draws)
 #endif
 };
 

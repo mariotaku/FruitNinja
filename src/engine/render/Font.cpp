@@ -1021,12 +1021,12 @@ static void DrawStringTTF(FontCacheObjectTTF* ttf, float scale,
             GLuint curTex = pageTexIDs[gIdx];
             int runStart = gIdx;
             while (gIdx < vertCount && pageTexIDs[gIdx] == curTex) gIdx++;
-            glBindTexture(GL_TEXTURE_2D, curTex);
+            renderer->BindTexture2D((uint32_t)curTex);
             renderer->DrawTriStrip(verts + runStart * 6, (gIdx - runStart) * 6);
         }
     }
 
-    glBindTexture(GL_TEXTURE_2D, 0);
+    if (renderer) renderer->BindTexture2D(0);
 
     world.Pop();
 

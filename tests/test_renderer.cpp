@@ -118,13 +118,15 @@ struct FBO {
 
     bool Create() {
         // Color attachment: RGBA8 texture with NEAREST filter.
+        // Upload binds go through BindTextureForUpload so the Renderer's
+        // texture shadow stays in sync (see Renderer.h state-cache doc).
         glGenTextures(1, &colorTex);
-        glBindTexture(GL_TEXTURE_2D, colorTex);
+        Renderer::GetInstance()->BindTextureForUpload(colorTex);
         glTexImage2D(GL_TEXTURE_2D, 0, (GLint)GL_RGBA8_, FBO_W, FBO_H, 0,
                      GL_RGBA, GL_UNSIGNED_BYTE, NULL);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        Renderer::GetInstance()->BindTextureForUpload(0);
 
         // Depth renderbuffer.
         fn_glGenRenderbuffers(1, &depthRbo);
@@ -208,20 +210,20 @@ static bool assertPixel(const unsigned char* buf, int x, int y,
 static GLuint makeTex(int w, int h, const unsigned char* rgba) {
     GLuint id = 0;
     glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
+    Renderer::GetInstance()->BindTextureForUpload(id);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    Renderer::GetInstance()->BindTextureForUpload(0);
     return id;
 }
 
 // After makeTex, call this to tell Renderer::DrawQuad a texture is bound.
+// BindTexture2D is the lazy sampling bind (resolved at the next draw).
 static void bindTestTex(GLuint id) {
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, id);
+    Renderer::GetInstance()->BindTexture2D(id);
     Mortar::Texture::s_LastBoundTexId = id;
 }
 
@@ -720,8 +722,7 @@ static bool caseF_DrawTriList(FBO& fbo, bool updateGolden) {
     fbo.Bind();
     clearFBO(0.0f, 0.0f, 0.0f);
     setupPixelOrtho();
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    Renderer::GetInstance()->BindTexture2D(tex);
 
     // Build 6 verts (2 triangles) covering the FBO.
     QUADCUSTOMVERTEX verts[6];

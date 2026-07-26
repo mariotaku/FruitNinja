@@ -1,5 +1,6 @@
 #include "render/FontInterface.h"
 #include "render/FontCacheObjectTTF.h"   // kFontSupersample (inter-glyph margin)
+#include "render/Renderer.h"
 #include "render/gl_funcs.h"
 #include "debug/Logger.h"
 #include <cstring>
@@ -69,6 +70,10 @@ void FontInterface::Clear() {
         FontAtlasPage* page = m_Pages[i];
         if (page->m_TextureID) {
             glDeleteTextures(1, &page->m_TextureID);
+            // Port specific: keep the Renderer's texture shadow off the dead name.
+            if (Renderer* r = Renderer::GetInstance()) {
+                r->NotifyTextureDeleted(page->m_TextureID);
+            }
             page->m_TextureID = 0;
         }
         free(page->m_Pixels);
@@ -78,10 +83,22 @@ void FontInterface::Clear() {
     m_Pages.clear();
 }
 
+// Port specific: the raw upload binds here and in BuildPendingTextures go
+// through Renderer::BindTextureForUpload so the Renderer's texture shadow
+// stays exact even when a page is created/uploaded mid-frame (between two
+// text draws). One note for both functions.
+static void BindAtlasPageForUpload(GLuint texId) {
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->BindTextureForUpload((uint32_t)texId);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, texId);
+    }
+}
+
 void FontInterface::EnsurePageTexture(FontAtlasPage* page) {
     if (page->m_TextureID) return;
     glGenTextures(1, &page->m_TextureID);
-    glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
+    BindAtlasPageForUpload(page->m_TextureID);
 #ifdef FRUIT_PLATFORM_WII
     // The atlas is the only glTexSubImage2D consumer -- opt it into keeping
     // its linear CPU copy (see Wii_KeepTextureLinear's header doc). Must be
@@ -98,7 +115,7 @@ void FontInterface::EnsurePageTexture(FontAtlasPage* page) {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, kAtlasGLFormat, m_Size, m_Size, 0,
                  kAtlasGLFormat, GL_UNSIGNED_BYTE, page->m_Pixels);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    BindAtlasPageForUpload(0);
 }
 
 FontAtlasPage* FontInterface::AllocatePage() {
@@ -271,7 +288,7 @@ void FontInterface::BuildPendingTextures() {
         FontAtlasPage* page = m_Pages[pi];
         if (!page->m_Dirty || !page->m_Pixels || !page->m_TextureID) continue;
 
-        glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
+        BindAtlasPageForUpload(page->m_TextureID);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         const int dw = page->m_DirtyX1 - page->m_DirtyX0;
@@ -316,7 +333,7 @@ void FontInterface::BuildPendingTextures() {
             // w/h <= 0) -- treat as nothing-to-do rather than a stuck retry.
             uploaded = true;
         }
-        glBindTexture(GL_TEXTURE_2D, 0);
+        BindAtlasPageForUpload(0);
         if (uploaded) page->m_Dirty = false;
     }
 }

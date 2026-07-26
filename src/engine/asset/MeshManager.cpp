@@ -8,6 +8,7 @@
 #include "util/Immutable.h"
 #include "util/PathFunctions.h"
 #include "util/Endian.h"
+#include "render/Renderer.h"
 #include "debug/Logger.h"
 #include <cstring>
 #include <string>
@@ -243,6 +244,9 @@ SmartPtr<IVertexStream> LoadVertexStreamPSP(ResourceLoader& rl)
     glBindBuffer(GL_ARRAY_BUFFER, vs->m_Vbo);
     glBufferData(GL_ARRAY_BUFFER, (GLsizeiptr)vertDataSize, uploadData, GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // Port specific: this raw GL_ARRAY_BUFFER churn invalidates the
+    // Renderer's ring-VBO binding shadow (same in LoadIndexStreamPSP below).
+    if (Renderer* r = Renderer::GetInstance()) r->InvalidateStateCache();
     vs->m_VertCount = (int)vertCount;
     vs->m_Layout = layout;
 
@@ -325,6 +329,7 @@ SmartPtr<IIndexStream> LoadIndexStreamPSP(ResourceLoader& rl)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, is->m_Ibo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)idxDataSize, uploadIdxData, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    if (Renderer* r = Renderer::GetInstance()) r->InvalidateStateCache();
     is->m_IndexCount = (int)idxCount;
 
     // Advance the loader cursor past the index data.

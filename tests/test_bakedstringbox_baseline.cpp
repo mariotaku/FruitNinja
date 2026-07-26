@@ -89,6 +89,7 @@ extern "C" {
     void glDeleteBuffers(GLsizei, const GLuint*) {}
     void glBindBuffer(GLenum, GLuint) {}
     void glBufferData(GLenum, GLsizeiptr, const void*, GLenum) {}
+    void glBufferSubData(GLenum, GLintptr, GLsizeiptr, const void*) {}
     void glDrawElements(GLenum, GLsizei, GLenum, const void*) {}
     void glDepthFunc(GLenum) {}
     void glDepthMask(GLboolean) {}
@@ -159,6 +160,7 @@ void MatrixManager::SetupPerspective(float, float, float, float, float, Matrix44
 Renderer* Renderer::s_instance = nullptr;
 void Renderer::DrawTriStrip(QUADCUSTOMVERTEX*, int) {}
 void Renderer::DrawColorQuad(const Colour&) {}
+void Renderer::BindTexture2D(uint32_t) {}
 // Link-only stub: BakedStringTTF::Draw calls this; never invoked here (s_instance is
 // null and this test never calls BakedStringBox::Draw / FancyBakedString::Draw).
 void Renderer::DrawTriList(QUADCUSTOMVERTEX*, int, bool) {}

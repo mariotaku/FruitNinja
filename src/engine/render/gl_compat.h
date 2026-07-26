@@ -118,6 +118,7 @@
         void glDeleteBuffers(GLsizei, const GLuint*);
         void glBindBuffer(GLenum, GLuint);
         void glBufferData(GLenum, GLsizeiptr, const void*, GLenum);
+        void glBufferSubData(GLenum, GLintptr, GLsizeiptr, const void*);
         void glDrawElements(GLenum, GLsizei, GLenum, const void*);
         void glDepthFunc(GLenum);
         void glDepthMask(GLboolean);

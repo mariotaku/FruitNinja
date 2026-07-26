@@ -4,6 +4,7 @@
 #include "asset/TextureFileFormat.h"
 #include "asset/File.h"
 #include "render/DisplayManager.h"
+#include "render/Renderer.h"
 #include "debug/Logger.h"
 #include "util/Endian.h"
 #include <cstring>
@@ -134,8 +135,14 @@ void Texture2D_Bada::Set() {
         Texture::s_CurrentlySetTexture = 0;
         return;
     }
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_TexId);
+    // Port specific: sampling bind goes through the Renderer's lazy shadow
+    // (real glBindTexture happens at the next draw). Bookkeeping unchanged.
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->BindTexture2D((uint32_t)m_TexId);
+    } else {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, m_TexId);
+    }
     Texture::s_LastBoundTexId = m_TexId;
     Texture::s_CurrentlySetTexture = this;
 #endif
@@ -144,7 +151,11 @@ void Texture2D_Bada::Set() {
 // Vtable slot 4 @0x002296ac -- unbind.
 void Texture2D_Bada::UnSet(bool /*flag*/) {
 #if !defined(__bada__)
-    glBindTexture(GL_TEXTURE_2D, 0);
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->BindTexture2D(0);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, 0);
+    }
     Texture::s_LastBoundTexId = 0;
     Texture::s_CurrentlySetTexture = 0;
 #endif
@@ -173,6 +184,10 @@ void Texture2D_Bada::ReleaseCache() {
 #if !defined(__bada__)
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
+        // Port specific: keep the Renderer's texture shadow off the dead name.
+        if (Renderer* r = Renderer::GetInstance()) {
+            r->NotifyTextureDeleted((uint32_t)m_TexId);
+        }
         m_TexId = 0;
     }
 #endif
@@ -212,7 +227,12 @@ void Texture2D_Bada::Cache() {
         if (m_TexId == 0) {
             glGenTextures(1, &m_TexId);
         }
-        glBindTexture(GL_TEXTURE_2D, m_TexId);
+        // Port specific: upload bind -- immediate, with Renderer shadow sync.
+        if (Renderer* r = Renderer::GetInstance()) {
+            r->BindTextureForUpload((uint32_t)m_TexId);
+        } else {
+            glBindTexture(GL_TEXTURE_2D, m_TexId);
+        }
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, dm.GetPlatformMagFilter());
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, dm.GetPlatformMinFilter());
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, dm.GetPlatformWrapS());
@@ -333,7 +353,12 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
     if (tex->m_TexId == 0) {
         glGenTextures(1, &tex->m_TexId);
     }
-    glBindTexture(GL_TEXTURE_2D, tex->m_TexId);
+    // Port specific: upload bind -- immediate, with Renderer shadow sync.
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->BindTextureForUpload((uint32_t)tex->m_TexId);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, tex->m_TexId);
+    }
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, dm.GetPlatformMagFilter());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, dm.GetPlatformMinFilter());
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, dm.GetPlatformWrapS());

@@ -1126,13 +1126,13 @@ void BakedStringTTF::Draw(const _Vector3<float>& anchor, _Vector2<float> scale, 
         FontAtlasPage* page = s->m_PageKey;
         if (!page || !page->m_TextureID) continue;
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, page->m_TextureID);
+        Renderer* renderer = Renderer::GetInstance();
+        renderer->BindTexture2D(page->m_TextureID);
         // DIFFERS: v1.6.1 Mesh::DrawTriList @0x00240e34 -> port Renderer::DrawTriList
         //   (the only platform boundary). DrawTriList sets GL_MODULATE tex-env itself
         //   and consumes the baked local verts as-is; the world matrix does the
         //   transform the old CPU loop performed per vertex.
-        Renderer::GetInstance()->DrawTriList(s->m_Verts, (int)s->m_VertCount);
+        renderer->DrawTriList(s->m_Verts, (int)s->m_VertCount);
     }
 }
 

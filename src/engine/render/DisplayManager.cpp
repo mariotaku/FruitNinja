@@ -1,4 +1,5 @@
 #include "render/DisplayManager.h"
+#include "render/Renderer.h"
 #include "asset/AlternativeTextureLoader.h"
 #include "asset/Texture.h"
 #include <cstring>
@@ -41,6 +42,14 @@ DisplayManager::DisplayManager()
 // clear is transparent black. Port diverged by setting white clear color,
 // causing a white flash during/after the splash phase.
 void DisplayManager::BeginFrame() {
+    // Port specific: forget the Renderer's GL state shadow once per frame so
+    // GL state touched outside the shadowed paths (SDL, tests, tools) can
+    // never desync it. Covers the test harness too -- every test render loop
+    // goes through BeginFrame.
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->InvalidateStateCache();
+    }
+
     // ASM-spec v1.6.1 GlClientStates::Reset @0x00258000: frame top disables GL_BLEND
     // (+ CULL_FACE, TEXTURE_2D, client arrays) and sets glBlendFunc(SRC_ALPHA,
     // ONE_MINUS_SRC_ALPHA) once. Every draw path owns its own blend enable

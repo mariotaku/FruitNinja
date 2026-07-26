@@ -5,6 +5,7 @@
 #include "debug/Logger.h"
 #include <cstddef>
 #include <cstdio>
+#include <cstring>
 #include <cmath>
 
 // 2D draws (DrawQuad / DrawTriList / DrawTriStrip / DrawColorQuad /
@@ -30,8 +31,83 @@ Renderer* Renderer::s_instance = nullptr;
 #if defined(FRUIT_PLATFORM_WII)
 Renderer::Renderer() : m_WhiteTexBuf(nullptr), m_WhiteTex(kWhiteTexSentinel) {}
 #else
-Renderer::Renderer() : m_QuadVBO(0), m_WhiteTex(0) {}
+Renderer::Renderer() : m_QuadVBO(0), m_WhiteTex(0), m_RingCursor(0) {
+    memset(&m_GLState, 0, sizeof(m_GLState));
+}
 #endif
+
+// ---------------------------------------------------------------------------
+// Port specific: GL state shadow helpers (see Renderer.h "state cache" doc).
+// Portable bodies so shared call sites (Geometry, particles, texture/font
+// upload paths) link on every backend; on Wii they forward to the GX shim
+// exactly as the raw calls they replaced did.
+// ---------------------------------------------------------------------------
+
+void Renderer::SetBlendEnabled(bool enabled) {
+#if defined(FRUIT_PLATFORM_WII)
+    if (enabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+#else
+    if (!m_GLState.blendValid || m_GLState.blendOn != enabled) {
+        if (enabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+        m_GLState.blendOn = enabled;
+        m_GLState.blendValid = true;
+    }
+#endif
+}
+
+void Renderer::SetCullFaceEnabled(bool enabled) {
+#if defined(FRUIT_PLATFORM_WII)
+    if (enabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+#else
+    if (!m_GLState.cullValid || m_GLState.cullOn != enabled) {
+        if (enabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+        m_GLState.cullOn = enabled;
+        m_GLState.cullValid = true;
+    }
+#endif
+}
+
+void Renderer::BindTextureForUpload(uint32_t texId) {
+#if defined(FRUIT_PLATFORM_WII)
+    glBindTexture(GL_TEXTURE_2D, (GLuint)texId);
+#else
+    glBindTexture(GL_TEXTURE_2D, (GLuint)texId);
+    m_GLState.boundTex = (GLuint)texId;
+    m_GLState.boundTexValid = true;
+    m_GLState.requestedTex = texId;   // mirror the legacy eager binding
+#endif
+}
+
+void Renderer::NotifyTextureDeleted(uint32_t texId) {
+#if defined(FRUIT_PLATFORM_WII)
+    (void)texId;
+#else
+    // GL rebinds 0 when the currently-bound texture is deleted; mirror that,
+    // and never leave the requested sampling texture pointing at a name that
+    // may get recycled by a later glGenTextures.
+    if (m_GLState.boundTexValid && m_GLState.boundTex == (GLuint)texId) {
+        m_GLState.boundTex = 0;
+    }
+    if (m_GLState.requestedTex == texId) {
+        m_GLState.requestedTex = 0;
+    }
+#endif
+}
+
+void Renderer::InvalidateStateCache() {
+#if !defined(FRUIT_PLATFORM_WII)
+    m_GLState.programValid  = false;
+    m_GLState.boundTexValid = false;
+    m_GLState.blendValid    = false;
+    m_GLState.cullValid     = false;
+    m_GLState.mvp2DValid    = false;
+    m_GLState.mvp3DValid    = false;
+    m_GLState.ringReady     = false;
+    // The only texture unit the port ever samples from; re-assert in case
+    // external GL code moved it.
+    glActiveTexture(GL_TEXTURE0);
+#endif
+}
 
 void Renderer::SetupGameOrtho() {
     // Verified from binary: SetupOrtho(160, -160, -240, 240, 2000, -6000)
@@ -55,8 +131,7 @@ void Renderer::draw_fullscreen_quad(GLuint tex, float alpha) {
 
     // Port specific: fullscreen quad, no binary counterpart -- enable blend explicitly.
     // Relies on no ambient GL_BLEND state (per-draw DrawQuad no longer leaves it on).
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    SetBlendEnabled(true);
 
     DrawShaded2D(verts, 4, (int)sizeof(Shaded2DVertex),
                  (int)offsetof(Shaded2DVertex, x),
@@ -96,18 +171,13 @@ void Renderer::DrawQuad(const Colour& tint, float uMin, float uMax, float vMin, 
     // else ON. No trailing restore -- every draw path owns its own state (this replaces
     // relying on a global BeginFrame-time glEnable(GL_BLEND) that other draws, e.g.
     // Geometry::Render, correctly disable per-draw and would otherwise leak into here).
-    glDisable(GL_CULL_FACE);
-    if (tint.a == 255 && (!Mortar::Texture::s_CurrentlySetTexture ||
-                          !Mortar::Texture::s_CurrentlySetTexture->m_HasAlpha)) {
-        glDisable(GL_BLEND);
-    } else {
-        glEnable(GL_BLEND);
-    }
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    SetCullFaceEnabled(false);
+    SetBlendEnabled(!(tint.a == 255 && (!Mortar::Texture::s_CurrentlySetTexture ||
+                                        !Mortar::Texture::s_CurrentlySetTexture->m_HasAlpha)));
 
     // quadTex != 0 (i.e. no texture bound): m_WhiteTex forces flat colour.
-    // quadTex == 0: sample whatever the caller bound on unit 0 (Texture::Set,
-    // or draw_sprite's raw glBindTexture) -- same contract as the FF path.
+    // quadTex == 0: sample whatever the caller requested via BindTexture2D
+    // (Texture::Set, draw_sprite) -- same contract as the FF path.
     DrawShaded2D(verts, 4, (int)sizeof(Shaded2DVertex),
                  (int)offsetof(Shaded2DVertex, x),
                  (int)offsetof(Shaded2DVertex, u),
@@ -128,9 +198,8 @@ void Renderer::DrawColorQuad(const Colour& tint) {
     };
     Matrix44 mvp = MatrixManager::GetInstance().GetMVP();
 
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    SetCullFaceEnabled(false);
+    SetBlendEnabled(true);
 
     DrawShaded2D(verts, 4, (int)sizeof(Shaded2DVertex),
                  (int)offsetof(Shaded2DVertex, x),
@@ -150,8 +219,7 @@ void Renderer::draw_sprite(GLuint tex, float x, float y, float w, float h,
     mat.GlobalTranslate44(_Vector3<float>(x + w * 0.5f, y + h * 0.5f, 0.0f));
     stack.SetCurrentMatrix(mat);
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, tex);
+    BindTexture2D((uint32_t)tex);
     DrawQuad(Colour(255, 255, 255, (uint8_t)(alpha * 255.0f)));
 }
 
@@ -163,13 +231,11 @@ void Renderer::DrawTriList(QUADCUSTOMVERTEX* verts, int vertCount, bool setBlend
     // Binary Mesh::DrawTris @0x240c30: glState<2884,false> (cull off) + glState<3042,true>
     // (blend on, primType!=0). Blade/2D-layer alpha blend; opaque geometry (vertex/texel
     // alpha=255) is unaffected by enabling blend.
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
-    // v1.6.1 Mesh::DrawTris @0x240c30 toggles GL_BLEND only, never glBlendFunc;
-    // particle caller owns the func (Material::Set).
-    if (setBlendFunc) {
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    }
+    SetCullFaceEnabled(false);
+    SetBlendEnabled(true);
+    // setBlendFunc is inert: the func is the init-time constant everywhere
+    // (see the Renderer.h doc for this method).
+    (void)setBlendFunc;
 
     // tex=0: sample the caller's unit-0 binding (Texture::Set) -- the FF
     // path never re-bound here either.
@@ -195,9 +261,8 @@ void Renderer::DrawTriStrip(QUADCUSTOMVERTEX* verts, int vertCount) {
     // Binary Mesh::DrawTris @0x240c30: glState<2884,false> (cull off) + glState<3042,true>
     // (blend on, primType!=0). Blade/2D-layer alpha blend; opaque geometry (vertex/texel
     // alpha=255) is unaffected by enabling blend.
-    glDisable(GL_CULL_FACE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    SetCullFaceEnabled(false);
+    SetBlendEnabled(true);
 
     DrawShaded2D(verts, vertCount, (int)sizeof(QUADCUSTOMVERTEX),
                  (int)offsetof(QUADCUSTOMVERTEX, x),

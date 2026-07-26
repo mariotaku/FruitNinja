@@ -962,8 +962,7 @@ void BakedStringBox::Draw(_Vector2<float> scale, float rotation, bool center) {
                               hasBox,
                               bx0, by0, bx1, by1,
                               false, 0.0f, 0.0f, 0.0f, 0.0f);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        if (Renderer* r = Renderer::GetInstance()) r->BindTexture2D(0);
     }
 #endif
 

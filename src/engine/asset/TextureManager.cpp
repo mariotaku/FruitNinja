@@ -2,6 +2,7 @@
 #include "asset/File.h"
 #include "debug/Logger.h"
 #include "game/GameWork.h"
+#include "render/Renderer.h"
 #include "render/gl_funcs.h"
 #include <cstdio>
 #include <cstring>
@@ -253,7 +254,13 @@ uint32_t TextureManager::CreateSolidTexture(uint8_t r, uint8_t g, uint8_t b, uin
 #else
     GLuint id = 0;
     glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
+    // Port specific: upload bind -- immediate, with Renderer shadow sync
+    // (same in CreateTextureFromRGBA below).
+    if (Renderer* rend = Renderer::GetInstance()) {
+        rend->BindTextureForUpload((uint32_t)id);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, id);
+    }
     const uint8_t px[4] = { r, g, b, a };
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -274,12 +281,15 @@ uint32_t TextureManager::CreateTextureFromRGBA(const uint8_t* rgba, int w, int h
 #else
     GLuint id = 0;
     glGenTextures(1, &id);
-    glBindTexture(GL_TEXTURE_2D, id);
+    Renderer* rend = Renderer::GetInstance();
+    if (rend) rend->BindTextureForUpload((uint32_t)id);
+    else      glBindTexture(GL_TEXTURE_2D, id);
     const GLint filter = linearFilter ? GL_LINEAR : GL_NEAREST;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    if (rend) rend->BindTextureForUpload(0);
+    else      glBindTexture(GL_TEXTURE_2D, 0);
     return (uint32_t)id;
 #endif
 }

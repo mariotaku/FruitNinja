@@ -100,8 +100,9 @@ void Geometry::Render(Matrix44 const& mvp) {
     if (!m_Vbo || m_VertCount == 0) return;
 
     // ASM-spec v1.6.1 Geometry::Render @0x00264468 (+ GlClientStates::Reset @0x00258000): GLES1 3D-mesh pass forces BLEND off + CULL_FACE on. The v1.5.x BeginFrame cull-disable (0x0019e012/66) is GONE in v1.6.1; Reset disables cull at frame top, Render re-enables it, so cull is ON only during 3D mesh draws. Effect PCDX render-states are not consumed by GLES1.
-    glDisable(GL_BLEND);        // f00c one-shot: 3D mesh pass blend OFF
-    glEnable(GL_CULL_FACE);     // f00d one-shot: 3D mesh pass cull ON
+    Renderer* renderer = Renderer::GetInstance();
+    renderer->SetBlendEnabled(false);    // f00c one-shot: 3D mesh pass blend OFF
+    renderer->SetCullFaceEnabled(true);  // f00d one-shot: 3D mesh pass cull ON
     glCullFace(GL_BACK);        // GL default; binary relies on InitGL/default
 
     const VertexLayout& L = m_Layout;
@@ -116,9 +117,9 @@ void Geometry::Render(Matrix44 const& mvp) {
     // constant white the old glColor4ub(255,255,255,255) provided.
     const int colSize = (L.colorSize > 0 && L.colorFmt == 3) ? L.colorSize : 0;
 
-    Renderer::GetInstance()->DrawMesh3D(m_Vbo, m_Ibo, m_VertCount, m_IndexCount, m_PrimType,
-                                        L.totalStride, L.posOffset, L.texOffset, L.colorOffset,
-                                        L.texSize, colSize, tex, mvp);
+    renderer->DrawMesh3D(m_Vbo, m_Ibo, m_VertCount, m_IndexCount, m_PrimType,
+                         L.totalStride, L.posOffset, L.texOffset, L.colorOffset,
+                         L.texSize, colSize, tex, mvp);
 }
 
 // v1.6.1 Mortar::Geometry::HasActiveEffect @0x00264440

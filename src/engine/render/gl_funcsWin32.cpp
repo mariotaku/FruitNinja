@@ -36,6 +36,8 @@ static void  (APIENTRYP s_glDeleteBuffers)        (GLsizei, const GLuint*) = nul
 static void  (APIENTRYP s_glBindBuffer)           (GLenum, GLuint) = nullptr;
 static void  (APIENTRYP s_glBufferData)           (GLenum, GLsizeiptr,
                                                    const void*, GLenum) = nullptr;
+static void  (APIENTRYP s_glBufferSubData)        (GLenum, GLintptr, GLsizeiptr,
+                                                   const void*) = nullptr;
 // GL 2.0 shader entry points (Renderer 2D shader path).
 static GLuint (APIENTRYP s_glCreateShader)        (GLenum) = nullptr;
 static void  (APIENTRYP s_glShaderSource)         (GLuint, GLsizei,
@@ -93,6 +95,10 @@ void APIENTRY glBindBuffer(GLenum target, GLuint b) {
 void APIENTRY glBufferData(GLenum target, GLsizeiptr size,
                            const void* data, GLenum usage) {
     if (s_glBufferData) s_glBufferData(target, size, data, usage);
+}
+void APIENTRY glBufferSubData(GLenum target, GLintptr offset,
+                              GLsizeiptr size, const void* data) {
+    if (s_glBufferSubData) s_glBufferSubData(target, offset, size, data);
 }
 
 GLuint APIENTRY glCreateShader(GLenum type) {
@@ -180,6 +186,7 @@ bool gl_load_extensions_win32() {
     LOAD(glDeleteBuffers);
     LOAD(glBindBuffer);
     LOAD(glBufferData);
+    LOAD(glBufferSubData);
     LOAD(glCreateShader);
     LOAD(glShaderSource);
     LOAD(glCompileShader);

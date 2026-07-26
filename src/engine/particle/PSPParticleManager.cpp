@@ -461,10 +461,9 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
             // template -- draws straight-alpha in the real binary. Per-template
             // additive blending here washed the flash out under the bright splash.
             // See tmp/asm-verify/blade-flash-re.md.
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            glBindTexture(GL_TEXTURE_2D, tex->GetTexId());
             if (Renderer* r = Renderer::GetInstance()) {
+                r->SetBlendEnabled(true);
+                r->BindTexture2D(tex->GetTexId());
                 r->DrawTriList(verts.data(), (int)verts.size(), false);
             }
         }
@@ -624,16 +623,9 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
         }
     }
     FlushParticleVerts(s_verts, curTmpl, m_pTextureRefs, m_NumTextureRefs);
-
-    // Restore the engine-default blend func. FlushParticleVerts sets
-    // glBlendFunc(GL_SRC_ALPHA, GL_ONE) for additive templates and intentionally
-    // does NOT restore it (setBlendFunc=false), so the additive func leaked as
-    // global GL state into whatever drew next -- washing later geometry toward
-    // white (the "gray/washed menu text after slicing into a screen" bug, only
-    // visible once #370 enabled menu slice particles). The binary never leaks:
-    // v1.6.1 Mesh::DrawTris sets blend per draw (glState<3042>). Restore it here.
-    // Same blend-leak family as #327/#328/#329.
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // No blend-func restore needed: glBlendFunc is the init-time constant
+    // (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) everywhere and is never changed
+    // per draw (see the DIFFERS note in FlushParticleVerts).
 }
 
 // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c
