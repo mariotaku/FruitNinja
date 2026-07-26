@@ -25,6 +25,9 @@
 #include "game/FruitSaveData.h"
 #include "game/WaveManager.h"
 #include "math/Random.h"
+#include "math/MathUtil.h"
+#include "math/Colour.h"
+#include "asset/Mesh.h"
 #include "hud/HUD.h"
 #include "hud/HUDLayer.h"
 #include "hud/MenuButton.h"
@@ -919,7 +922,10 @@ static void SetupQuadMatrix(MatrixManager& mm, const _Vector3<float>& hudScale,
 void MainScreen::Draw(float* hudScaleRaw) {
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
-    if (m_State == STATE_CAMERA_FADE) return;
+    // Binary early-return: cmp r3,#0xd / cmpne r3,#0x11 — state 0xd has no
+    // name in the port enum yet (unreachable today; the binary gave it a
+    // dedicated loading-spinner position, see DrawLoadingSymbol).
+    if (m_State == STATE_CAMERA_FADE || m_State == 0x0d) return;
     if ((m_State == STATE_DOJO_WAIT_A || m_State == STATE_DOJO_WAIT_B) &&
         m_Timer2 == 0.0f) return;
 
@@ -977,6 +983,8 @@ void MainScreen::Draw(float* hudScaleRaw) {
         // 1b. fruit_text logo (m_TexFruitText) drawn at {m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ}
         // Binary: TranslateMatrix(&this+0xF8) reads 3 consecutive floats at binary +0xF8..+0x100
         // (port +0xE0..+0xE8 = m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ).
+        // Every quad in this function draws with Colour::White (GOT @0x199804)
+        // in the binary — never m_DrawColour.
         static const float FRUIT_TEXT_SCALE = 0.85f;  // DAT_0014d838
         m_TexFruitText->Set();
         _Vector3<float> fruitTextDrawPos(m_NinjaTextX + dxLogo, m_NinjaTextY + dyLogo, m_NinjaTextZ);
@@ -984,7 +992,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
             (float)m_TexFruitText->GetWidth() * FRUIT_TEXT_SCALE,
             (float)m_TexFruitText->GetHeight() * FRUIT_TEXT_SCALE,
             fruitTextDrawPos);
-        if (game) game->renderer.DrawQuad(m_DrawColour);
+        if (game) game->renderer.DrawQuad(Colour::White);
         m_TexFruitText->UnSet();
     }
 
@@ -1001,7 +1009,7 @@ void MainScreen::Draw(float* hudScaleRaw) {
         SetupQuadMatrix(mm, hudScale,
             (float)m_ninjaTex->GetWidth(), (float)m_ninjaTex->GetHeight(),
             ninjaDrawPos);
-        if (game) game->renderer.DrawQuad(m_DrawColour);
+        if (game) game->renderer.DrawQuad(Colour::White);
         m_ninjaTex->UnSet();
     }
 
@@ -1016,13 +1024,16 @@ void MainScreen::Draw(float* hudScaleRaw) {
         SetupQuadMatrix(mm, hudScale,
             (float)m_TexSliceFruit->GetWidth(), (float)m_TexSliceFruit->GetHeight(),
             logoPos);
-        if (game) game->renderer.DrawQuad(m_DrawColour);
+        if (game) game->renderer.DrawQuad(Colour::White);
         m_TexSliceFruit->UnSet();
-    }
-    if (m_pSliceInstrBox) {
-        _Vector3<float> instrPos = logoPos + _Vector3<float>(-4.0f, -4.0f, 0.0f);
-        m_pSliceInstrBox->SetTranslation(instrPos, 1);
-        m_pSliceInstrBox->Draw(_Vector2<float>(1.0f, 1.0f), 8.0f, 1);
+
+        // Binary draws the instruction string only inside this
+        // parchment-texture-valid block (and with no null check).
+        if (m_pSliceInstrBox) {
+            _Vector3<float> instrPos = logoPos + _Vector3<float>(-4.0f, -4.0f, 0.0f);
+            m_pSliceInstrBox->SetTranslation(instrPos, 1);
+            m_pSliceInstrBox->Draw(_Vector2<float>(1.0f, 1.0f), 8.0f, 1);
+        }
     }
 
     // 5. Loading symbol (v1.6.1 Draw @0x001993ac: states 0x13/0x14 only)
@@ -1031,15 +1042,19 @@ void MainScreen::Draw(float* hudScaleRaw) {
     }
 
     // 6. m_TexBc (comming_soon overlay) — drawn when valid AND m_pGameModeButton exists.
+    // Scale scalar @0x001999a0 is m_pGameModeButton->size.x ([r6,#0xa0] + 0x20),
+    // so the overlay tracks the button's animated size; translate = (148, 7, 0)
+    // (@0x001999c0, pool 0x199808).
     if (m_TexBc.IsValid() && m_pGameModeButton != NULL) {
         float csW = (float)m_TexBc->GetWidth();
         float csH = (float)m_TexBc->GetHeight();
-        float scaleX = csW * 0.5f;
-        float scaleY = csH * 0.5f * (csW > 0.0f ? (csH / csW) : 1.0f);
-        _Vector3<float> csPos(0.0f, 7.0f, 0.0f);
+        float btnSize = m_pGameModeButton->size.x;
+        float scaleX = btnSize * 0.5f;
+        float scaleY = btnSize * 0.5f * (csH / csW);
+        _Vector3<float> csPos(148.0f, 7.0f, 0.0f);
         m_TexBc->Set();
         SetupQuadMatrix(mm, hudScale, scaleX, scaleY, csPos);
-        if (game) game->renderer.DrawQuad(m_DrawColour);
+        if (game) game->renderer.DrawQuad(Colour::White);
         m_TexBc->UnSet();
     }
 }
@@ -1419,89 +1434,71 @@ void MainScreen::DrawPostEffects() {
     // TODO: implement -- post-effect overlays (score flash, bonus anim, etc.)
 }
 
+// ASM-spec v1.6.1 MainScreen::DrawLoadingSymbol @0x00198fd4
+// Byte-for-byte the same 8-wedge spinner algorithm as the GameOverScreen
+// state-0xe halo (GameOverScreen::DrawOrder @0x00186484): radial quads between
+// r = 0.5 and r = 0.6*0.5 with perpendicular half-width SinIdx(a+0x3ffc)*0.075,
+// UVs sweeping (0,0)-(1,1) across each wedge (samples blurry_backing), constant
+// scale Vector3::One * 64.0 (0x42800000). Position @0x00199174..:
+//   state 0x14 -> (168, -106, 0); state 0x0d -> (0, -50, 0);
+//   else (incl. 0x13) -> (148, 7, 0).
 void MainScreen::DrawLoadingSymbol(float* hudScale) {
+    (void)hudScale;  // binary scale is the constant 64.0, not hudScale-derived
     if (!s_blurTex.IsValid()) return;
-
-    int idx   = (int)m_Field114 & 7;  // DAT_0014D4B8
-    int phase = (7 - idx) & 7;
-
-    static const float kSmallR = 0.03125f;  // DAT_0014D4C0
-    static const float kBigR   = 1.0f;      // DAT_0014D4C4
 
     static QUADCUSTOMVERTEX s_verts[48];
     static bool s_built = false;
-
     if (!s_built) {
-        static const float kTwoPi = 6.283185307f;
-        for (int seg = 0; seg < 8; seg++) {
-            float a1    = (float)seg * (kTwoPi / 8.0f);
-            float a1end = a1 + (kTwoPi / 8.0f);
-            float a2    = a1 + (kTwoPi / 4.0f);
+        for (int wedge = 0; wedge < 8; ++wedge) {
+            const uint16_t baseAng = (uint16_t)(wedge * 0x1FFE);
+            const float s0 = SinIdx(baseAng) * 0.5f;
+            const float c0 = CosIdx(baseAng) * 0.5f;
+            const float s1 = SinIdx((uint16_t)(baseAng + 0x3FFC)) * 0.075f;
+            const float c1 = CosIdx((uint16_t)(baseAng + 0x3FFC)) * 0.075f;
 
-            float sx1 = sinf(a1)    * kBigR,   cy1 = cosf(a1)    * kBigR;
-            float ex1 = sinf(a1end) * kBigR,   ey1 = cosf(a1end) * kBigR;
-            float sx2 = sinf(a2)    * kSmallR, cy2 = cosf(a2)    * kSmallR;
-
-            float corners[4][2] = {
-                { sx1 + sx2, cy1 + cy2 },
-                { sx1 - sx2, cy1 - cy2 },
-                { ex1 + sx2, ey1 + cy2 },
-                { ex1 - sx2, ey1 - cy2 },
-            };
-
-            static const int kOrder[6][2] = {{0,0},{1,1},{2,2},{1,1},{3,3},{2,2}};
-            int vbase = seg * 6;
-            for (int v = 0; v < 6; v++) {
-                QUADCUSTOMVERTEX& qv = s_verts[vbase + v];
-                qv.x = corners[kOrder[v][0]][0];
-                qv.y = corners[kOrder[v][0]][1];
-                qv.z = 0.0f;
-                qv.nx = 0.0f; qv.ny = 0.0f; qv.nz = 1.0f;
-                qv.colour = 0xC8FFFFFFu;
-                qv.u = 0.0f; qv.v = 0.0f;
+            QUADCUSTOMVERTEX* v = &s_verts[wedge * 6];
+            v[0].x = s0 - s1;        v[0].y = c0 - c1;        v[0].u = 0.0f; v[0].v = 0.0f;
+            v[1].x = s0 + s1;        v[1].y = c0 + c1;        v[1].u = 1.0f; v[1].v = 0.0f;
+            v[2].x = s0*0.6f - s1;   v[2].y = c0*0.6f - c1;   v[2].u = 0.0f; v[2].v = 1.0f;
+            v[3].x = s0 + s1;        v[3].y = c0 + c1;        v[3].u = 1.0f; v[3].v = 0.0f;
+            v[4].x = s0*0.6f - s1;   v[4].y = c0*0.6f - c1;   v[4].u = 0.0f; v[4].v = 1.0f;
+            v[5].x = s0*0.6f + s1;   v[5].y = c0*0.6f + c1;   v[5].u = 1.0f; v[5].v = 1.0f;
+            for (int i = 0; i < 6; ++i) {
+                v[i].z = 0.0f;
+                v[i].nx = 0.0f; v[i].ny = 0.0f; v[i].nz = 1.0f;
             }
         }
         s_built = true;
     }
 
-    for (int seg = 0; seg < 8; seg++) {
-        int fadeIdx   = (phase + seg) & 7;
-        int raw       = fadeIdx * 32;
-        int intensity = (raw < 64) ? 64 : ((raw > 255) ? 255 : raw);
-        uint32_t col  = ((uint32_t)200 << 24) |
-                        ((uint32_t)intensity << 16) |
-                        ((uint32_t)intensity << 8) |
-                        (uint32_t)intensity;
-        for (int v = 0; v < 6; v++) {
-            s_verts[seg * 6 + v].colour = col;
-        }
+    // Per-frame wedge brightness: (phase + wedge) mod 8 (binary INCREMENTS).
+    int phase = (7 - ((int)m_Field114 & 7)) & 7;  // DAT_0014D4B8
+    for (int wedge = 0; wedge < 8; ++wedge) {
+        int alphaIdx = (phase + wedge) & 7;
+        int a = alphaIdx * 0x20;
+        if (a > 0xFF) a = 0xFF;
+        if (a < 0x40) a = 0x40;
+        const Colour wedgeCol((uint8_t)a, (uint8_t)a, (uint8_t)a, 200);
+        const uint32_t packed = wedgeCol.PlatformColour();
+        QUADCUSTOMVERTEX* v = &s_verts[wedge * 6];
+        for (int i = 0; i < 6; ++i) v[i].colour = packed;
     }
 
-    MatrixManager& mm = MatrixManager::GetInstance();
-    s_blurTex->Set();
-
-    float scale = (*hudScale) * 0.0625f;  // DAT_0014D4C8
-
-    float tx = 0.0f, ty = 0.0f;
+    _Vector3<float> drawPos(148.0f, 7.0f, 0.0f);
     if (m_State == STATE_LOADING_B) {
-        // TODO: DAT_0014D4CC = state 0x14 X offset (unresolved)
-        // TODO: DAT_0014D4D0 = state 0x14 Y offset (unresolved)
-        tx = 0.0f; ty = 0.0f;
-    } else {
-        // STATE_LOADING_A: DAT_0014D4D8 X (unresolved), Y = 7.0
-        tx = 0.0f; ty = 7.0f;
+        drawPos = _Vector3<float>(168.0f, -106.0f, 0.0f);
+    } else if (m_State == 0x0d) {  // state 0xd has no port enum name yet
+        drawPos = _Vector3<float>(0.0f, -50.0f, 0.0f);
     }
 
-    _Vector3<float> drawPos(tx, ty, 0.0f);
+    s_blurTex->Set();
+    MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
-    Matrix44 mat = Matrix44::MakeScale(scale, scale, 1.0f);
+    Matrix44 mat = Matrix44::MakeScale(64.0f, 64.0f, 64.0f);
     mat.GlobalTranslate44(drawPos);
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
-
-    Game* game = Game::GetInstance();
-    if (game) game->renderer.DrawTriList(s_verts, 48);
-
+    Mortar::Mesh::DrawTriList(s_verts, 48, false, NULL);
     s_blurTex->UnSet();
 }
 
