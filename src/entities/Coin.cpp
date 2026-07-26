@@ -64,7 +64,7 @@ static int g_oneInThree = 0;
 static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 
 // ---------------------------------------------------------------------------
-// CoinArrived — static helper @ 0x0017320C.
+// CoinArrived — free helper; v1.6.1 CoinArrived @0x001d7a88.
 // Free function in binary; kept as static member of Coin.cpp for greppability.
 // Coin balance lives in game_work (+0x20/+0x24), not FruitSaveData.
 // ---------------------------------------------------------------------------
@@ -73,7 +73,8 @@ void CoinArrived(Coin* coin) {
 }
 
 // ---------------------------------------------------------------------------
-// Coin constructor (C1) @ 0x00173394
+// Coin constructor — v1.6.1 Coin::Coin @0x001d7b94 / @0x001d7c8c (two emitted
+// variants, identical default-ctor signature; verified via Ghidra symbol lookup)
 // ---------------------------------------------------------------------------
 Coin::Coin()
     : m_CoinValue(0)
@@ -618,7 +619,7 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float> spawnPos,
 
 // ---------------------------------------------------------------------------
 // DefaultArrivedDelegate — factory returning a Delegate1 bound to CoinArrived.
-// Exposes the file-static CoinArrived helper (binary @ 0x0017320C) to callers
+// Exposes the file-static CoinArrived helper (v1.6.1 CoinArrived @0x001d7a88) to callers
 // in other translation units (e.g. SlashEntity::Update combo-coin spawn).
 // ---------------------------------------------------------------------------
 Mortar::Delegate1<void, Coin*> Coin::DefaultArrivedDelegate() {
