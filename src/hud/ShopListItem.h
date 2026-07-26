@@ -124,11 +124,18 @@ public:
     void AdvanceAnim(float dtSeconds) override;
 #endif
 
-    // vtable slot 12 (+0x30): Draw() thin dispatcher
+    // vtable slot 12 (+0x30): Draw() dispatcher + offscreen description fade.
     // v1.6.1 ShopListItem::Draw @0x001b5da4:
     //   if (m_bSelected) reset s_lastDrawnType colour cache.
-    //   if (!m_bOnscreen) DrawDarkness();
-    //   else              NewDraw();
+    //   if (m_bOnscreen)  { NewDraw(); return; }
+    //   OFFSCREEN: while m_pShopScreen && m_pItemInfo &&
+    //   (int)(m_CostAlpha*255) > 0, draws the fading side-panel description
+    //   with the LEGACY BITMAP font (pM_Fonts[1] = game_work.pFontMain) --
+    //   auto-shrink from 18.0 by 0.25 while GetStringHeight(desc,size,160)
+    //   > 82.5; locked + reqType 1/2 draws the red/green requirement prompt
+    //   at (GetDescriptionTextXPos(),-20) then white desc at (x,+10);
+    //   else desc at (x,0), white if locked else 0x745D3B.
+    //   Then DrawDarkness() always.
     void Draw() override;
 
     // NewDraw -- all visible rendering, v1.6.1 TTF path.

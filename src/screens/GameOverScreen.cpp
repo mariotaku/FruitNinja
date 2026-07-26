@@ -698,14 +698,11 @@ void GameOverScreen::SetStateWait() {
         Mortar::NetworkManager::GetInstance()->SetLeaderboardScore(
             (const char*)(intptr_t)GetCurrentModeLeaderboardID(-1),
             (long long)score, 0, 0);
-        // TODO: v1.6.1 0x00184e04 (GameOverScreen::SetStateWait) -- rate-app dialog
-        //   unported: DialogManager::GetInstance() vtable slot 3 with
-        //   (GETSTRING 177, GETSTRING 181, GETSTRING 180, Delegate1<void,int>(RejectCallback),
-        //    GETSTRING 182, Delegate1<void,int>(AcceptCallback), 1); the binary
-        //   early-returns here WITHOUT setting m_State -- the state advance is
-        //   deferred to the dialog's Accept/Reject callbacks. DialogManager and
-        //   the two callbacks are not ported yet; until then fall through to
-        //   STATE_MAIN_DISPLAY so the game-over screen cannot hang.
+        // DIFFERS: original shows the DialogManager rate-app dialog
+        // (v1.6.1 GameOverScreen::SetStateWait @0x00184e04) and defers m_State
+        // to its Reject/Accept callbacks; dropped by decision -- dead store
+        // URL, meaningless in a homebrew port -- so we fall through to
+        // STATE_MAIN_DISPLAY.
     }
     m_State = STATE_MAIN_DISPLAY;
 }

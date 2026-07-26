@@ -1,4 +1,4 @@
-// ASM-spec v1.6.1 ShopListItem::Draw @0x001b5da4 (thin dispatcher -> NewDraw)
+// ASM-spec v1.6.1 ShopListItem::Draw @0x001b5da4 (dispatcher + offscreen desc fade)
 // ASM-spec v1.6.1 ShopListItem::NewDraw @0x001b58e8
 // ASM-spec v1.6.1 ShopListItem::DrawDescription @0x001b1f20
 // ASM-spec v1.6.1 ShopListItem::DrawDividers @0x001b1a98
@@ -313,28 +313,105 @@ void ShopListItem::Create(ItemInfo* pItemInfo, ShopScreen* pShopScreen) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopListItem::Draw @ v1.6.1 0x001b5da4 -- thin dispatcher
+// ShopListItem::Draw @ v1.6.1 0x001b5da4
+// ASM-spec v1.6.1 ShopListItem::Draw @0x001b5da4: offscreen path draws the
+// fading description in the side panel with the LEGACY BITMAP font
+// (pM_Fonts[1]) before DrawDarkness, gated m_pShopScreen && m_pItemInfo &&
+// (int)(m_CostAlpha*255)>0; auto-shrink from 18.0 by 0.25 while
+// GetStringHeight(desc,size,160)>82.5; locked+reqType1/2: requirement string
+// (0xD7/0xD8 upside-down, 0xCE/0xCF zen-played; red 0xBD0000 unmet / green
+// 0xA0DC00 met, alpha=a) at (GetDescriptionTextXPos(),-20) scale size*0.8
+// align 3, then white desc at (x,+10) scale size*0.9 (type2 size*0.81)
+// align 0xF; else desc at (x,0) scale size, white if locked else 0x745D3B,
+// align 0xF; wrap 160, rotZ 0, no clip.
 // ---------------------------------------------------------------------------
 void ShopListItem::Draw() {
-    // Legacy bitmap font ref (binary: pM_Fonts[1] = pFontMain); used only in
-    // the offscreen branch which draws nothing visible when m_CostAlpha==0.
-    // Kept as a faithful variable reference matching the binary's register load.
-    Mortar::Font* f = game_work.pFontMain.IsValid()
-                      ? game_work.pFontMain.Get() : nullptr;
-    (void)f;
-
     // Reset divider colour cache when this row is selected.
     // Binary @0x001b5da4: *(static_block+0x8C) = 0xFFFFFFFF when *(this+0x27D) != 0.
     if (m_bSelected) {
         s_lastDrawnType = (int32_t)0xFFFFFFFF;
     }
 
-    // Dispatch: onscreen -> full TTF draw; offscreen -> loading-stripe only.
-    if (!m_bOnscreen) {
-        DrawDarkness();
-    } else {
+    if (m_bOnscreen) {
         NewDraw();
+        return;
     }
+
+    // OFFSCREEN: keep fading the description while m_CostAlpha ramps out
+    // (a row deselected then flung out of the viewport stays offscreen with
+    // alpha > 0 for up to ~0.2s at the +/-5.0/s ramp).
+    if (m_pShopScreen) {
+        int a = (int)(m_CostAlpha * 255.0f);
+        if (a > 255) a = 255;
+        if (a < 0) a = 0;
+        if (m_pItemInfo && a > 0) {
+            // Legacy bitmap font (binary GOT+0x58: pM_Fonts[1] = pFontMain) --
+            // NOT the TTF path the onscreen branch uses; deliberate v1.6.1
+            // asymmetry.
+            Mortar::Font* font = game_work.pFontMain.Get();
+            if (font) {
+                // Auto-shrink FONT SIZE only: from 18.0 by 0.25 while the
+                // wrapped height at width 160 exceeds 82.5.
+                float size = 18.0f;
+                float h = font->GetStringHeight(
+                    Mortar::Utf8StringIterator(m_DescText), size, 160.0f);
+                while (h > 82.5f) {
+                    size -= 0.25f;
+                    h = font->GetStringHeight(
+                        Mortar::Utf8StringIterator(m_DescText), size, 160.0f);
+                }
+
+                bool isLocked = (m_pItemInfo->IsLocked() != 0);
+                int8_t reqType = m_pItemInfo->m_RequirementType;
+                float xPos = m_pShopScreen->GetDescriptionTextXPos();
+
+                if (isLocked && (reqType == 1 || reqType == 2)) {
+                    // Requirement path: red unless the requirement is met.
+                    Colour reqColour(0xBD, 0, 0, 0xFF);
+                    LocalizedString promptId;
+                    float s17 = size;
+                    if (reqType == 1) {
+                        bool met = Mortar::IsDeviceUpsideDown();
+                        if (met) reqColour = Colour(0xA0, 0xDC, 0, 0xFF);
+                        promptId = met
+                            ? LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN   // 0xD8 (met)
+                            : LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP;  // 0xD7 (not met)
+                    } else {
+                        s17 = size * 0.9f;
+                        bool met = (game_work.m_SaveData != nullptr)
+                            && game_work.m_SaveData->PlayedModeToday(GAME_MODE_ZEN);
+                        if (met) reqColour = Colour(0xA0, 0xDC, 0, 0xFF);
+                        promptId = met
+                            ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY       // 0xCF (met)
+                            : LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY;  // 0xCE (not met)
+                    }
+                    reqColour.a = (uint8_t)a;
+                    const char* reqStr = GETSTRING_CAST_0(promptId);
+                    if (reqStr) {
+                        font->DrawString(Mortar::Utf8StringIterator(reqStr),
+                                         xPos, -20.0f, 0.0f, reqColour,
+                                         size * 0.8f, 160.0f, 0.0f,
+                                         /*alignment*/3, NULL, 0.0f);
+                    }
+                    font->DrawString(Mortar::Utf8StringIterator(m_DescText),
+                                     xPos, 10.0f, 0.0f,
+                                     Colour(255, 255, 255, (uint8_t)a),
+                                     s17 * 0.9f, 160.0f, 0.0f,
+                                     /*alignment*/0x0F, NULL, 0.0f);
+                } else {
+                    Colour descColour = isLocked
+                        ? Colour(255, 255, 255, (uint8_t)a)
+                        : Colour(0x74, 0x5D, 0x3B, (uint8_t)a);
+                    font->DrawString(Mortar::Utf8StringIterator(m_DescText),
+                                     xPos, 0.0f, 0.0f, descColour, size,
+                                     160.0f, 0.0f,
+                                     /*alignment*/0x0F, NULL, 0.0f);
+                }
+            }
+        }
+    }
+
+    DrawDarkness();
 }
 
 // ---------------------------------------------------------------------------
