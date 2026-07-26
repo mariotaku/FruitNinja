@@ -872,10 +872,11 @@ if(NOT FN_ASM_VERIFY)
     # the widget render tests load them directly), so svg-to-webp.py exits
     # non-zero on any failure and fails this build step loudly.
     # Under --web (EMSCRIPTEN) stage-assets.py additionally transcodes
-    # sfx/*.wav.pcm to Ogg/Vorbis (+ sfx-loops.json) and subsets
-    # fontstruetype/gangofchinese.ttf, for the Web Audio backend
-    # (SoundManagerWebAudio.cpp) and the wasm preload size budget; the host
-    # build ships raw .wav.pcm (SDL mixer) and the full TTF, unchanged.
+    # sfx/*.wav.pcm to Ogg/Vorbis and subsets fontstruetype/gangofchinese.ttf,
+    # for the Web Audio backend (SoundManagerWebAudio.cpp) and the wasm
+    # preload size budget; loop points ship via the generated C++ loop table
+    # (--gen-loop-table below), linked into the wasm. The host build ships
+    # raw .wav.pcm (SDL mixer) and the full TTF, unchanged.
     #
     # Host: FN_DATA_DIR_PATH (set above) points straight at FN_STAGING_DATA_DIR,
     # so GameSDL.cpp's existing SetDataDir call transparently reads staged
@@ -901,15 +902,21 @@ if(NOT FN_ASM_VERIFY)
         # glyph-subset shrink for a smaller IPK but NOT --web's Ogg/WebP-audio
         # transcoding. --web already implies --subset-font internally, so web
         # behaviour is unchanged.
-        # --ogg-audio + --gen-loop-table (FN_OGG_AUDIO, default ON for webOS):
-        # transcodes sfx/*.wav.pcm to sfx/*.ogg like --web does, plus emits the
-        # generated C++ loop table (SfxLoopTable.generated.cpp, consumed by
-        # SoundManagerSDL.cpp) since the SDL backend has no sfx-loops.json
-        # reader. --web already implies --ogg-audio internally; passing
-        # --gen-loop-table under EMSCRIPTEN too is harmless (extra unused
-        # generated source) but is gated off here to avoid feeding the
-        # web build a TU it doesn't compile.
+        # --ogg-audio + --gen-loop-table: transcodes sfx/*.wav.pcm to
+        # sfx/*.ogg and emits the generated C++ loop table
+        # (SfxLoopTable.generated.cpp -- {loopStart samples, source rate} per
+        # looping sound, see src/engine/audio/SfxLoopTable.h). EVERY Ogg
+        # consumer links it: SoundManagerSDL.cpp (FN_OGG_AUDIO, e.g. webOS)
+        # reads SfxLoopStartSamples, SoundManagerWebAudio.cpp (EMSCRIPTEN,
+        # where --web implies --ogg-audio) reads SfxLoopStartSeconds -- no
+        # runtime loop-metadata file exists, so a build missing the table
+        # fails at link, never by silently degrading loops at runtime.
         file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/generated")
+        if (FN_OGG_AUDIO OR EMSCRIPTEN)
+            set(FN_GEN_LOOP_TABLE ON)
+        else()
+            set(FN_GEN_LOOP_TABLE OFF)
+        endif()
         set(FN_ASSET_STAGING_COMMANDS
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/svg-to-webp.py ${CMAKE_SOURCE_DIR}
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/assets/stage-assets.py
@@ -917,8 +924,8 @@ if(NOT FN_ASM_VERIFY)
                     $<$<BOOL:${EMSCRIPTEN}>:--web>
                     $<$<BOOL:${FRUIT_PLATFORM_WEBOS}>:--subset-font>
                     $<$<BOOL:${FN_OGG_AUDIO}>:--ogg-audio>
-                    $<$<BOOL:${FN_OGG_AUDIO}>:--gen-loop-table>
-                    $<$<BOOL:${FN_OGG_AUDIO}>:${CMAKE_BINARY_DIR}/generated/SfxLoopTable.generated.cpp>
+                    $<$<BOOL:${FN_GEN_LOOP_TABLE}>:--gen-loop-table>
+                    $<$<BOOL:${FN_GEN_LOOP_TABLE}>:${CMAKE_BINARY_DIR}/generated/SfxLoopTable.generated.cpp>
         )
     endif()
     # ALL: the host runtime + every test read assets from FN_STAGING_DATA_DIR
@@ -931,14 +938,15 @@ if(NOT FN_ASM_VERIFY)
         VERBATIM
     )
 
-    # FN_OGG_AUDIO: mortar_engine's audio/SfxLoopTable.generated.cpp source
-    # (added by src/engine/CMakeLists.txt) is WRITTEN by fn_asset_staging
-    # above (stage-assets.py --gen-loop-table), so mortar_engine must not
-    # compile before staging runs. mortar_engine already exists here (created
-    # by add_subdirectory(src/engine) further up), so the dependency is added
+    # FN_GEN_LOOP_TABLE (FN_OGG_AUDIO or EMSCRIPTEN): mortar_engine's
+    # audio/SfxLoopTable.generated.cpp source (added by
+    # src/engine/CMakeLists.txt) is WRITTEN by fn_asset_staging above
+    # (stage-assets.py --gen-loop-table), so mortar_engine must not compile
+    # before staging runs. mortar_engine already exists here (created by
+    # add_subdirectory(src/engine) further up), so the dependency is added
     # from this scope rather than from within src/engine/CMakeLists.txt
     # (fn_asset_staging doesn't exist yet at that point in the file).
-    if (FN_OGG_AUDIO)
+    if (FN_GEN_LOOP_TABLE)
         add_dependencies(mortar_engine fn_asset_staging)
     endif()
 
@@ -1043,11 +1051,13 @@ if (EMSCRIPTEN)
         # Port specific: preload read-only assets into MEMFS; exclude the two
         # writable save files so they are NOT packed into the read-only bundle.
         # Saves are routed to /save (IDBFS) at runtime; see mainEmscripten.cpp.
-        # Source is the STAGED data dir (sfx transcoded to Ogg/Vorbis + a
-        # sfx-loops.json loop map, textures re-encoded to WebP, at build time,
-        # everything else identical to FruitNinjaBada/Data) -- see
-        # fn_asset_staging above. Virtual mount path is unchanged, so runtime
-        # code (TextureManager::GetDataDir() etc.) needs no changes; the Web
+        # Source is the STAGED data dir (sfx transcoded to Ogg/Vorbis,
+        # textures re-encoded to WebP, at build time, everything else
+        # identical to FruitNinjaBada/Data) -- see fn_asset_staging above.
+        # Loop points are NOT in this bundle: they ship as the generated C++
+        # loop table linked into the wasm (see the --gen-loop-table comment
+        # above). Virtual mount path is unchanged, so runtime code
+        # (TextureManager::GetDataDir() etc.) needs no changes; the Web
         # Audio backend reads sfx/<name>.ogg.
         "SHELL:--preload-file ${FN_STAGING_DATA_DIR}@/FruitNinjaBada/Data"
         "SHELL:--exclude-file *FruitySave.xml"

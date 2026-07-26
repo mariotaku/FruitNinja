@@ -106,11 +106,9 @@ AUDIO (--ogg-audio flag, IMPLIED by --web):
   3. AUDIO: every sfx/*.wav.pcm is TRANSCODED to Ogg/Vorbis (sfx/<name>.ogg)
      exactly ONCE at build time via ffmpeg; the source .wav.pcm is NOT
      copied into the staging tree (that would re-bloat the payload we are
-     shrinking). Under --web this also emits sfx/sfx-loops.json (loop points
-     in SECONDS, consumed by the web-JS Web Audio backend only). Without
-     --ogg-audio (plain host build), *.wav.pcm files copy through verbatim
-     like any other file -- the host build plays raw PCM via the existing
-     SDL mixer, unchanged.
+     shrinking). Without --ogg-audio (plain host build), *.wav.pcm files
+     copy through verbatim like any other file -- the host build plays raw
+     PCM via the existing SDL mixer, unchanged.
 
      This step is decoupled from --web (mirrors the --subset-font
      decoupling below) so a native/SDL target that wants the smaller Ogg
@@ -118,13 +116,16 @@ AUDIO (--ogg-audio flag, IMPLIED by --web):
      --ogg-audio. Since .ogg has no 20-byte custom header, the loopStart
      sample offset the native loader used to read from the .wav.pcm header
      is no longer available at runtime; --gen-loop-table <path> emits a
-     small generated C++ source (Mortar::SfxLoopStartSamples, see
-     gen_loop_table_cpp) mapping each looping sound's lowercased bare name
-     to its loopStart IN SAMPLES (not seconds -- unlike sfx-loops.json),
-     read straight from the header this script already parses. If
-     --ogg-audio is passed without --gen-loop-table, the C++ emit is simply
-     skipped (logged, non-fatal) -- e.g. plain --web today still only needs
-     the JSON, not the table.
+     small generated C++ source (Mortar::SfxLoopStartSamples /
+     SfxLoopStartSeconds, see gen_loop_table_cpp) mapping each looping
+     sound's lowercased bare name to its {loopStart IN SAMPLES, source
+     sample rate}, read straight from the header this script already
+     parses. Every Ogg consumer links this table (SDL/stb_vorbis uses the
+     samples accessor; the web/Web Audio backend uses the seconds
+     accessor), so --gen-loop-table should accompany any --ogg-audio /
+     --web build; if omitted the C++ emit is simply skipped (logged,
+     non-fatal) and the consumer fails at LINK time (unresolved
+     Mortar::SfxLoopStart*), never silently at runtime.
 
 FONT SUBSET (--subset-font flag, IMPLIED by --web):
 
@@ -190,14 +191,10 @@ which shifts for 16-voice int-mixer headroom). The web backend mixes in float
 with a master gain node, so full-scale audio is shipped and loudness is
 handled by MASTER_SFX_GAIN in the JS backend.
 
-Loop metadata (web only): a small JSON file is emitted at
-    <out>/sfx/sfx-loops.json
-mapping { "<name>": <loopStart_seconds> } for every sfx with loopStart != 0
-(loopStart_seconds = loopStart / sampleRate). Keys are the lowercased bare
-name (no extension), matching the case-folded lookup the JS backend performs
-(mirrors the desktop ResolvePathCI fallback). The C++/JS backend consumes
-this to set the Web Audio loop point (source.loop / loopStart / loopEnd) for
-looping sfx (e.g. bomb-fuse) and music (music-menu).
+Loop metadata: ships ONLY as the generated C++ table (--gen-loop-table, see
+the AUDIO section above) -- linked into the binary/wasm, so a build missing
+it fails at link, never at runtime. The retired runtime sfx-loops.json is no
+longer emitted (swept from stale staging trees, see sweep_stale_pcm).
 
 Idempotent and incremental: an already-transcoded .ogg is skipped unless its
 source .wav.pcm is newer; other files use size+mtime copy-if-different. This
@@ -219,7 +216,6 @@ skipped unless it is older than the source .ttf or any translations_*.str
 body file that feeds its charset.
 """
 
-import json
 import os
 import shutil
 import struct
@@ -234,25 +230,31 @@ import tex_decoder
 HEADER_FMT = "<5i"
 HEADER_SIZE = 20
 SFX_RELPATH = "sfx"
-LOOP_JSON_NAME = "sfx-loops.json"
 VORBIS_QUALITY = "5"
+
+# Retired runtime loop-metadata JSON (sfx-loops.json): the Web Audio backend
+# now links the generated C++ loop table like SDL does, so the file is no
+# longer emitted -- only swept from previously-staged trees (sweep_stale_pcm).
+STALE_LOOP_JSON_NAME = "sfx-loops.json"
 
 # Generated C++ loop table (see gen_loop_table_cpp): emitted when
 # --gen-loop-table <path> is passed alongside --ogg-audio (or --web, which
-# implies --ogg-audio). Carries each looping sfx's loopStart in SAMPLES (the
-# raw .wav.pcm header field) so the native/SDL Ogg loader -- which no longer
-# has the 20-byte header to read once audio ships as .ogg -- can still find
-# the loop point. sfx-loops.json (SECONDS, web-JS-only) keeps shipping under
-# --web unchanged; this table is the native/C++ equivalent, keyed the same
-# way (lowercased basename, no extension).
+# implies --ogg-audio). Carries each looping sfx's loopStart in SAMPLES plus
+# its source sample rate in Hz (both raw .wav.pcm header fields) so every
+# Ogg consumer -- which no longer has the 20-byte header to read once audio
+# ships as .ogg -- can still find the loop point: SDL/stb_vorbis reads
+# SfxLoopStartSamples, the Web Audio backend reads SfxLoopStartSeconds
+# (loopStart/rate, since decodeAudioData resamples to ctx.sampleRate and
+# source.loopStart takes seconds). Keyed by lowercased basename, no
+# extension.
 LOOP_TABLE_HEADER = (
     "// Auto-generated by stage-assets.py --ogg-audio. Do not edit.\n"
     "#include \"engine/audio/SfxLoopTable.h\"\n"
     "#include <string.h>\n"
     "namespace Mortar {\n"
     "namespace {\n"
-    "struct SfxLoopEntry { const char* name; uint32_t loopStart; }; "
-    "// loopStart in SAMPLES\n"
+    "struct SfxLoopEntry { const char* name; uint32_t loopStart; uint32_t rate; }; "
+    "// loopStart in SAMPLES, rate = source sample rate in Hz\n"
     "static const SfxLoopEntry kSfxLoops[] = {\n"
 )
 LOOP_TABLE_FOOTER = (
@@ -263,6 +265,13 @@ LOOP_TABLE_FOOTER = (
     "    for (unsigned i = 0; i < sizeof(kSfxLoops)/sizeof(kSfxLoops[0]); ++i)\n"
     "        if (strcmp(kSfxLoops[i].name, name) == 0) return kSfxLoops[i].loopStart;\n"
     "    return 0u;\n"
+    "}\n"
+    "double SfxLoopStartSeconds(const char* name) {\n"
+    "    if (!name) return 0.0;\n"
+    "    for (unsigned i = 0; i < sizeof(kSfxLoops)/sizeof(kSfxLoops[0]); ++i)\n"
+    "        if (strcmp(kSfxLoops[i].name, name) == 0)\n"
+    "            return (double)kSfxLoops[i].loopStart / (double)kSfxLoops[i].rate;\n"
+    "    return 0.0;\n"
     "}\n"
     "} // namespace Mortar\n"
 )
@@ -985,7 +994,6 @@ def stage_tree(src_root, dst_root, is_web, is_ogg_audio, is_subset_font, font_co
         "font_codepoint_count": 0,
         "save_files_skipped": 0,
     }
-    loops = {}
     sample_loops = {}
 
     for root, _dirs, files in os.walk(src_root):
@@ -1014,10 +1022,8 @@ def stage_tree(src_root, dst_root, is_web, is_ogg_audio, is_subset_font, font_co
 
                 # Collect loop metadata straight from the header.
                 _k, rate, _bd, _c, loop_start = read_header(src_path)
-                if loop_start != 0 and rate > 0:
-                    loops[short] = float(loop_start) / float(rate)
                 if loop_start != 0:
-                    sample_loops[short] = int(loop_start)
+                    sample_loops[short] = (int(loop_start), int(rate))
             elif name.lower().endswith(".tex"):
                 dst_tex = os.path.join(dst_dir, name)
                 transcode_tex_file(src_path, dst_tex, stats)
@@ -1036,7 +1042,7 @@ def stage_tree(src_root, dst_root, is_web, is_ogg_audio, is_subset_font, font_co
                 else:
                     stats["other_skipped"] += 1
 
-    return stats, loops, sample_loops
+    return stats, sample_loops
 
 
 def sweep_stale_save_files(dst_root):
@@ -1083,18 +1089,22 @@ def sweep_stale_wii_ttf(dst_root):
 
 
 def sweep_stale_pcm(dst_root):
-    """Remove any stale sfx/*.wav.pcm left in staging by the retired resampler.
-    Web builds --preload-file the whole staging Data dir, so a lingering
-    .wav.pcm would re-bloat .data; other --ogg-audio targets (e.g. webOS)
-    likewise ship .ogg instead of .wav.pcm. Only .ogg + non-pcm files should
-    remain under sfx/. Plain host builds (no --ogg-audio) intentionally keep
-    .wav.pcm (see stage_tree), so this sweep only runs when is_ogg_audio."""
+    """Remove any stale sfx/*.wav.pcm left in staging by the retired resampler,
+    plus a stale sfx-loops.json from before the Web Audio backend moved onto
+    the generated C++ loop table (nothing reads it any more; leaving it would
+    keep shipping it in the --preload-file'd .data indefinitely, since staging
+    only copies/skips, never deletes). Web builds --preload-file the whole
+    staging Data dir, so a lingering .wav.pcm would re-bloat .data; other
+    --ogg-audio targets (e.g. webOS) likewise ship .ogg instead of .wav.pcm.
+    Only .ogg + non-pcm files should remain under sfx/. Plain host builds (no
+    --ogg-audio) intentionally keep .wav.pcm (see stage_tree), so this sweep
+    only runs when is_ogg_audio."""
     removed = 0
     dst_sfx = os.path.join(dst_root, SFX_RELPATH)
     if not os.path.isdir(dst_sfx):
         return removed
     for name in os.listdir(dst_sfx):
-        if name.lower().endswith(".wav.pcm"):
+        if name.lower().endswith(".wav.pcm") or name.lower() == STALE_LOOP_JSON_NAME:
             try:
                 os.remove(os.path.join(dst_sfx, name))
                 removed += 1
@@ -1105,16 +1115,26 @@ def sweep_stale_pcm(dst_root):
 
 def gen_loop_table_cpp(sample_loops, out_path):
     """Emit the generated C++ loop-lookup source at out_path from
-    {name: loopStart_samples} (name = lowercased basename, no extension;
-    only entries with loopStart > 0). Deterministic (sorted by name) and
-    written only if content changed, so an unchanged loop set doesn't
-    trigger a rebuild."""
+    {name: (loopStart_samples, rate_hz)} (name = lowercased basename, no
+    extension; only entries with loopStart > 0). Both raw header fields are
+    emitted verbatim; the SECONDS accessor (SfxLoopStartSeconds, Web Audio
+    consumer) divides them in the generated code. Deterministic (sorted by
+    name) and written only if content changed, so an unchanged loop set
+    doesn't trigger a rebuild."""
     lines = [LOOP_TABLE_HEADER]
     for name in sorted(sample_loops.keys()):
-        loop_start = sample_loops[name]
+        loop_start, rate = sample_loops[name]
         if loop_start <= 0:
             continue
-        lines.append("    {{ \"{}\", {}u }},\n".format(name, loop_start))
+        if rate <= 0:
+            # A looping sound with a non-positive sample rate is a corrupt
+            # .wav.pcm header; SfxLoopStartSeconds would divide by it. Fail
+            # the stage loudly rather than emit a poisoned table.
+            print("ERROR: sfx '{}' has loopStart={} but sampleRate={} -- "
+                  "corrupt .wav.pcm header".format(name, loop_start, rate),
+                  file=sys.stderr)
+            sys.exit(1)
+        lines.append("    {{ \"{}\", {}u, {}u }},\n".format(name, loop_start, rate))
     lines.append(LOOP_TABLE_FOOTER)
     content = "".join(lines)
 
@@ -1149,8 +1169,8 @@ def main():
     # --web implies --ogg-audio (unchanged web behaviour); other targets
     # (e.g. native/SDL builds wanting Ogg to ship a generated C++ loop table
     # instead of raw .wav.pcm) can request just the Ogg transcode without the
-    # rest of --web (font subset, JSON loop file is still emitted -- see
-    # module docstring -- only under --web itself).
+    # rest of --web (font subset). Loop points ship solely via
+    # --gen-loop-table on every Ogg target, web included.
     is_ogg_audio = is_web or "--ogg-audio" in extra_args
     gen_loop_table_path = None
     if "--gen-loop-table" in extra_args:
@@ -1234,24 +1254,17 @@ def main():
     if is_ogg_audio and not is_web:
         mode += "+ogg-audio"
     print("[stage-assets] staging {} -> {} ({})".format(src_root, dst_root, mode))
-    stats, loops, sample_loops = stage_tree(
+    stats, sample_loops = stage_tree(
         src_root, dst_root, is_web, is_ogg_audio, is_subset_font, font_codepoints,
         font_charset_sources, font_charset_txt_path, fonttools_available)
 
     merge_widget_textures(repo_root, dst_root, stats)
 
-    if is_web:
-        # Emit loop metadata JSON next to the .ogg files (web-JS-only consumer).
-        loop_json_path = os.path.join(dst_root, SFX_RELPATH, LOOP_JSON_NAME)
-        os.makedirs(os.path.dirname(loop_json_path), exist_ok=True)
-        with open(loop_json_path, "w") as f:
-            json.dump(loops, f, indent=0, sort_keys=True)
-
     if is_ogg_audio:
         removed = sweep_stale_pcm(dst_root)
 
         print("[stage-assets] sfx: {} transcoded, {} unchanged (skipped); {} loop points".format(
-            stats["sfx_transcoded"], stats["sfx_skipped"], len(loops)))
+            stats["sfx_transcoded"], stats["sfx_skipped"], len(sample_loops)))
         if removed:
             print("[stage-assets] swept {} stale .wav.pcm from staging sfx/".format(removed))
 

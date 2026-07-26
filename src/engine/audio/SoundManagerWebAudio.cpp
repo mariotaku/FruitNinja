@@ -14,7 +14,11 @@
 //     per-callback main-thread mix (the SDL emscripten backend's
 //     ScriptProcessorNode ran on the JS main thread and crackled under load).
 //   - Assets are transcoded to sfx/<name>.ogg at build time by
-//     tools/assets/stage-assets.py --web, plus a sfx/sfx-loops.json loop map.
+//     tools/assets/stage-assets.py --web. Loop points come from the
+//     build-generated C++ table linked into the wasm (SfxLoopStartSeconds,
+//     see audio/SfxLoopTable.h) -- same generated TU the SDL/webOS backend
+//     uses (SfxLoopStartSamples), so a missing table is a LINK error, never
+//     a silent loop degradation at runtime.
 //   - SFX handles stay a monotonic uint32 + JS-side active[] map for API
 //     compatibility with MortarSound / GameSound (which are unchanged).
 //   - A play for a not-yet-decoded name is queued on its async decode
@@ -41,10 +45,12 @@
 // Case-folding: game code passes Title-Case names ("Clean-Slice-1", "Pause",
 // "Bomb-Fuse"); on-disk assets are lowercase. The desktop path resolves this
 // via Mortar::ResolvePathCI; here the JS backend lowercases every name before
-// building the FS path and doing map lookups, and the transcode script writes
-// lowercase .ogg names + lowercase loop-map keys to match.
+// building the FS path and doing map lookups, the C++ side lowercases before
+// the SfxLoopTable lookup (its keys are strictly lowercase), and the
+// transcode script writes lowercase .ogg names + table keys to match.
 
 #include "audio/SoundManager.h"
+#include "audio/SfxLoopTable.h"
 #include "asset/TextureManager.h"
 #include "debug/Logger.h"
 #include "debug/DebugFlags.h"
@@ -133,7 +139,6 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         pendingSfx: {},  // handle -> {name, gain}: play waiting on a decode
         failed: {},      // name -> true after missing/failed decode (warn once, no retry)
         active: {},      // handle -> sfx entry
-        loops: {},       // name -> loopStart (seconds)
         song: null,      // current song entry
         songName: null,  // name of most recent playSong (race guard)
         sfxMuted: false,
@@ -202,7 +207,10 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
             }
         },
 
-        playSfx: function(name, handle, gain) {
+        // loopStartSec comes from the C++ caller (SFXPlay, via the linked
+        // SfxLoopTable's SfxLoopStartSeconds); 0 = non-looping (the table's
+        // no-entry sentinel -- entries only exist for loopStart > 0).
+        playSfx: function(name, handle, gain, loopStartSec) {
             name = this.nm(name);
             var b = this.buffers[name];
             if (!b) {
@@ -213,13 +221,13 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
                 // pendingSfx keeps the handle honest meanwhile: stop()/pause()
                 // cancel it, setVolume() retargets it, isActive() reports it.
                 var outer = this;
-                var p = { name: name, gain: gain };
+                var p = { name: name, gain: gain, loopStartSec: loopStartSec };
                 this.pendingSfx[handle] = p;
                 this.decode(name, function(decoded) {
                     if (outer.pendingSfx[handle] !== p) return;  // stopped/stale
                     delete outer.pendingSfx[handle];
                     if (!decoded) return;                        // failed: drop
-                    outer.playSfx(name, handle, p.gain);         // fast path now
+                    outer.playSfx(name, handle, p.gain, p.loopStartSec);  // fast path now
                 });
                 return;
             }
@@ -228,8 +236,8 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
             src.buffer = b;
             var g = this.ctx.createGain();
             g.gain.value = gain;
-            var ls = this.loops[name];
-            var looping = (ls !== undefined && ls !== null);
+            var ls = loopStartSec;
+            var looping = (ls > 0);
             if (looping) { src.loop = true; src.loopStart = ls; src.loopEnd = b.duration; }
             src.connect(g);
             g.connect(this.masterSfx);
@@ -323,10 +331,11 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
             for (var i = 0; i < keys.length; ++i) this.resume(keys[i]);
         },
 
+        // loopStartSec comes from the C++ caller (SongPlay, via the linked
+        // SfxLoopTable's SfxLoopStartSeconds); 0 = loop from the start.
         playSong: function(name, loopStartSec, vol) {
             name = this.nm(name);
             this.songStop();
-            if (loopStartSec < 0) { loopStartSec = this.loops[name]; if (loopStartSec === undefined || loopStartSec === null) loopStartSec = 0; }
             this.musicVol = vol;
             this.music.gain.value = this.musicMuted ? 0 : (vol * this.MASTER_MUSIC_GAIN);
             var self = this;
@@ -443,28 +452,14 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         try { ctx.resume(); } catch (e) {}
     }
 
-    // Load the build-time loop metadata (name -> loopStart seconds).
-    try {
-        var txt = FS.readFile(sfxDir + 'sfx-loops.json', { encoding: 'utf8' });
-        FN.loops = JSON.parse(txt);
-    } catch (e) {
-        // A missing/corrupt loop table silently degrades every looping SFX
-        // (Bomb-Fuse etc.) to a one-shot; the fuse then ends mid-session and
-        // GameUpdate's raw m_pBombFuseSound pointer dangles, force-muting
-        // whatever GameSound slot recycles it. Fail loud, no fallback table.
-        console.error('FNAudio: failed to load ' + sfxDir + 'sfx-loops.json (' + e +
-            '); loop table is EMPTY -- all looping SFX (e.g. Bomb-Fuse) will play as ' +
-            'one-shots and the bomb-fuse voice will dangle. Fix the build/deploy: ' +
-            'sfx-loops.json must be present in the preloaded FS.');
-    }
 });
 
 EM_JS(void, fnaudio_decode, (const char* namePtr), {
     if (window.FNAudio) window.FNAudio.decode(UTF8ToString(namePtr));
 });
 
-EM_JS(void, fnaudio_play_sfx, (const char* namePtr, unsigned handle, double gain), {
-    if (window.FNAudio) window.FNAudio.playSfx(UTF8ToString(namePtr), handle, gain);
+EM_JS(void, fnaudio_play_sfx, (const char* namePtr, unsigned handle, double gain, double loopStartSec), {
+    if (window.FNAudio) window.FNAudio.playSfx(UTF8ToString(namePtr), handle, gain, loopStartSec);
 });
 
 EM_JS(void, fnaudio_set_volume, (unsigned handle, double gain), {
@@ -552,7 +547,7 @@ SoundManager::~SoundManager() {
 
 // FNAudio.init() -- no SDL_OpenAudioDevice on web. The data dir
 // (TextureManager::GetDataDir(), e.g. "/FruitNinjaBada/Data") is the MEMFS base
-// the backend reads sfx/<name>.ogg + sfx/sfx-loops.json from.
+// the backend reads sfx/<name>.ogg from.
 void SoundManager::Init() {
     std::string dataDir = TextureManager::GetDataDir();
     fnaudio_init(dataDir.c_str(), MASTER_SFX_GAIN, MASTER_MUSIC_GAIN);
@@ -594,7 +589,14 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     uint32_t newId = m_NextSoundId++;
     if (m_NextSoundId == 0) m_NextSoundId = 1;   // skip 0 (idle sentinel)
 
-    fnaudio_play_sfx(name, newId, 1.0);
+    // Lowercased basename is the SfxLoopTable key (generated table is keyed
+    // strictly lowercase; game code passes Title-Case) -- same fold as the
+    // SDL backend's LoadSound and SongPlay below.
+    std::string lower(name);
+    for (size_t i = 0; i < lower.size(); ++i) {
+        if (lower[i] >= 'A' && lower[i] <= 'Z') lower[i] = (char)(lower[i] + ('a' - 'A'));
+    }
+    fnaudio_play_sfx(lower.c_str(), newId, 1.0, Mortar::SfxLoopStartSeconds(lower.c_str()));
 
     if (sound) {
         sound->m_Handle = newId;
@@ -661,8 +663,8 @@ bool SoundManager::IsInterrupted() { return m_Interrupted; }
 // NOT musicdesc.xml's defunct .caf 66162); PlayNewSound @0x0022f6c4 sets
 // loop=(loopStart!=0); FillBuffer @0x0022f7f0 rewinds to loopStart on end.
 //
-// Loop point always resolved by the JS loop map (see fnaudio_play_song), which
-// must be header-derived (music-menu=24004, music-dojo=1, background=261549
+// Loop point resolved from the linked SfxLoopTable (SfxLoopStartSeconds),
+// which is header-derived (music-menu=24004, music-dojo=1, background=261549
 // samples @ 16000 Hz) -- not musicdesc.xml's defunct .caf value.
 void SoundManager::SongPlay(const char* name) {
     if (!name) return;
@@ -672,7 +674,7 @@ void SoundManager::SongPlay(const char* name) {
         if (lower[i] >= 'A' && lower[i] <= 'Z') lower[i] = (char)(lower[i] + ('a' - 'A'));
     }
 
-    double loopStartSec = -1.0;   // JS resolves from the loop map (or 0)
+    double loopStartSec = Mortar::SfxLoopStartSeconds(lower.c_str());   // 0 = loop from start
 
     fnaudio_play_song(lower.c_str(), loopStartSec, s_MusicVolume);
 
