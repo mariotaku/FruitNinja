@@ -470,7 +470,11 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 // PERF: binary caches via cxa-guard at 0x00159090 (= 96.0 = 48 * 2);
                 // recomputing each frame is functionally equivalent.
                 float baseline = game_work.pFontNumbers->MeasureWidth(48.0f, "000") * 96.0f;
-                float printed  = game_work.pFontNumbers->MeasureWidth(48.0f, buf);
+                // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80: printed =
+                // MeasureString(buf) * m_ScalePulse * 48.0 (world-units width of the
+                // string as actually drawn); without the * m_ScalePulse * 48.0 the
+                // clamp can never fire.
+                float printed  = game_work.pFontNumbers->MeasureWidth(48.0f, buf) * m_ScalePulse * 48.0f;
                 if (printed > baseline) {
                     scaleX  = baseline / printed;
                     offsetX = (printed - baseline) * 0.5f;
@@ -518,15 +522,15 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                 tint.a = alpha;
             }
 
-            // Cursor init: MeasureWidth(scoreBuf) * m_ScalePulse * 48 + 5
-            // (binary @ 0x00159062..0x00159086)
-            // Combo overlay font: binary loads game[+0x54] = pFontMain
-            // ("font_fruit_ninja.fnt"), NOT pFontNumbers. Verified
-            // 2026-05-09 (re-analyst @ 0x00159116/0x00159184).
+            // Cursor init: MeasureString(scoreBuf) * m_ScalePulse * 48 + 5.
+            // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80 (0x001ad16c): the
+            // cursor-init measurement uses pM_Fonts[2] = pFontNumbers (the font that
+            // drew the score digits), NOT pFontMain. Only the per-digit draw +
+            // advance below use pFontMain ("font_fruit_ninja.fnt").
             if (game_work.pFontMain.IsValid()) {
                 char scoreBuf[32];
                 snprintf(scoreBuf, sizeof(scoreBuf), "%d", m_DisplayedScore);
-                float cursorX = game_work.pFontMain->MeasureWidth(48.0f, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
+                float cursorX = game_work.pFontNumbers->MeasureWidth(48.0f, scoreBuf) * m_ScalePulse * 48.0f + 5.0f;
 
                 // Per-digit loop (binary @ 0x001590B8..0x001591BC)
                 for (int i = 0; i < 16; i++) {
@@ -565,17 +569,27 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // 82 px vertically (sign-flipped 30 vs -52).
         if (game_work.gameMode == GAME_MODE_ARCADE) {
             int mult = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
-            if (mult > 1 && game_work.pFontBlue2.IsValid()) {
+            // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80: gated on
+            // game_work.bM_bPaused == 0; scale = m_ScalePulse * 48.0 * 0.75;
+            // alignment = 0x0d (CENTER|MIDDLE|BOTTOM).
+            if (mult > 1 && game_work.bM_bPaused == 0 && game_work.pFontBlue2.IsValid()) {
                 char multBuf[16];
                 snprintf(multBuf, sizeof(multBuf), "x%d", mult);
                 Colour col(255, 255, 255, alpha);
-                game_work.pFontBlue2->DrawString(48.0f, 1.0f, 0.0f,
+                game_work.pFontBlue2->DrawString(m_ScalePulse * 48.0f * 0.75f, 1.0f, 0.0f,
                     multBuf, _Vector3<float>(pos.x - 18.0f, pos.y - 52.0f, 0.0f),
-                    col, Mortar::FONT_ALIGN_CENTER);
+                    col, 0x0d);
             }
         }
 
-        // Section C: Highscore banner text
+    }
+
+    // Section C: Highscore banner text (inlined NewDrawBestScore @0x001abd98).
+    // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80: NewDrawBestScore is called
+    // UNCONDITIONALLY (outside the transTimer >= -1 block); its else-branch resets
+    // the green-pulse cycle whenever the |t| < 1 && highscore > 0 gate fails, so the
+    // banner pulses from orange again on re-entry instead of reappearing fully green.
+    {
         // Active when |transTimer| < 1.0 AND m_HighscoreToShow > 0
         if (m_HighscoreToShow > 0 && transTimer > -1.0f && transTimer < 1.0f) {
             // Binary @ 0x001591BC: green-pulse lerp on highscore-reached banner.
@@ -612,6 +626,10 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
                     m_pStringBox100->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
                 }
             }
+        } else {
+            // ASM-spec v1.6.1 ScoreControl::NewDrawBestScore @0x001abd98: gate
+            // failed -> reset the colour-pulse cycle.
+            s_BannerSinIdx = 0;
         }
     }
 
@@ -624,6 +642,8 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // (same "hud.score" key/corner as the score readout above, so the "SCORE"
         // label and the number hug the widened left edge together). MP centering
         // branch left as-is (transient wave-transition target, not the resting corner).
+        // TODO: v1.6.1 ScoreControl::PreDraw @0x001ace80 -- MP wordmark x is 160*t-160
+        // (deferred to the suspended feat/mp-revival work).
         float xPos = IsMultiplayer()
             ? (SCORE_BANNER_X_CENTRE * transTimer - SCORE_ICON_X_MP_STRIDE)
             : MapX(SCORE_ICON_X_SP, "hud.score");
@@ -635,10 +655,14 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     // Binary ScoreControl::PreDraw @0x001ace80 -- replaced inline texture draw with
     // pM_Popups[0xF]->Draw(animScale, &pos). The scale anim (bannerScale * wobbleScale)
     // stays; the texture draw is now owned by IngamePopup.
-    if (m_BannerScaleTime > 0.0f) {
+    // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80: whole banner block is
+    // nested inside if (0.0 < flM_PauseAmount), so it hides during pause/transition;
+    // scale = SinIdx(k) / SinIdx(0x5550) * (1 + 0.15 * SinIdx(m_BannerSinIdx)) --
+    // the / SinIdx(0x5550) (sin 120 deg ~= 0.866) normalises the ease to peak > 1.
+    if (transTimer > 0.0f && m_BannerScaleTime > 0.0f) {
         float k = m_BannerScaleTime * SCORE_BANNER_SIN_RATE2;
         uint16_t idx = (k > 0.0f) ? (uint16_t)(int)k : 0;
-        float bannerScale = SinIdx(idx);
+        float bannerScale = SinIdx(idx) / SinIdx(0x5550);
         float wobbleScale = SinIdx(m_BannerSinIdx) * SCORE_BANNER_WOBBLE + 1.0f;
         float animScale = bannerScale * wobbleScale;
 
