@@ -1597,14 +1597,14 @@ void Fruit::Slice() {
     }
 
     // --- flipSide determination ---
-    // Binary: rotate (0,0,1) by current m_Rot1, compare XY direction
-    // against m_SliceArcAngle via GetSmallestDelta. If the rotated Z axis
-    // points away from the slice direction, flip the halves' angles.
+    // Binary: rotate (0,0,1) by current m_Rot1 (Quaternion::Matrix44Unit +
+    // Matrix44::MultVec44 with Vec3(0,0,1)), compare XY direction against
+    // m_SliceArcAngle via GetSmallestDelta. If the rotated Z axis points
+    // away from the slice direction, flip the halves' angles.
     _Vector3<float> slicePlane(0, 0, 1);
-    // Approximate: m_Rot1.ToMatrix44() * (0,0,1) -- just extract the
-    // third column of the rotation matrix.
+    // m_Rot1.ToMatrix44() * (0,0,1) == third column of the rotation matrix
+    // (column-major, mat.m[8..10]).
     Matrix44 rotMat = m_Rot1.ToMatrix44();
-    // Third column of a column-major 4x4 is mat.m[8..10].
     slicePlane.x = rotMat.m[8];
     slicePlane.y = rotMat.m[9];
     slicePlane.z = rotMat.m[10];
@@ -1626,23 +1626,20 @@ void Fruit::Slice() {
     if (info->m_bIsSuperFruit) {
         flipSide = true;
     } else if (fabsf(slicePlane.x) + fabsf(slicePlane.y) > 0.0f) {
-        // 16-bit angle of the rotated-Z XY projection.
-        float rotAngleRad = atan2f(slicePlane.y, slicePlane.x);
-        float sliceAngleRad = (float)(int16_t)m_SliceArcAngle *
-                              (6.2831853f / 65536.0f);
-        // Wrap both into [-pi, pi] and take signed delta.
-        float delta = rotAngleRad - sliceAngleRad;
-        {
-            while (delta >  3.1415926f) {
-                delta -= 6.2831853f;
-            }
-        }
-        {
-            while (delta < -3.1415926f) {
-                delta += 6.2831853f;
-            }
-        }
-        if (delta < 0.0f) flipSide = true;
+        // ASM-verified: 2026-07-26T02:01Z v1.6.1 Fruit::Slice @ 0x001dcc84..0x001dcd2c (asm-inspector)
+        // Literal binary math -- offsets 0x3FFC / 0x7FF8 and divisor 182.0 are
+        // exact instruction-level constants, NOT 0x4000/0x8000/65536-per-360.
+        // The (uint16_t) cast around Atan2Idx restores the binary's mod-65536
+        // domain (port's Atan2Idx returns signed short). flipSide is
+        // load-bearing visually: it selects which half gets the + vs - angle
+        // offset AND is passed as sliceDirFlag into Fruit::SetupSliceRotations
+        // @0x001da968 which sets the halves' spin -- do not "simplify" this
+        // back to a plain atan2 delta (that reintroduces a handedness flip
+        // plus a 90-degree offset in the sliced halves' rotation).
+        uint16_t atanIdx = (uint16_t)Math::Atan2Idx(slicePlane.y, slicePlane.x);
+        float a = (float)(uint16_t)(atanIdx - 0x3FFCu) / -182.0f + 360.0f;
+        float b = (float)(uint16_t)(m_SliceArcAngle - 0x7FF8u) / 182.0f;
+        if (GetSmallestDelta(a, b) < 0.0f) flipSide = true;
     }
 
     // --- Impulse ---
