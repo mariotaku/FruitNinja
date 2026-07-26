@@ -29,6 +29,12 @@
 // Call SaveSettings() whenever the settings UI closes, so changes are
 // durable across relaunch (needed because a language change requires a
 // full quit/relaunch to take effect -- see SettingsScreen::Toggle()).
+// It is ALSO called from GameTaskSaveOnExit (GameTaskState.cpp) so
+// live-applied settings survive quit/backgrounding while the popup is
+// still open or animating closed -- that hook covers desktop window
+// close, focus-loss/minimize, and web tab-hide. Idempotent and cheap
+// (always rewrites the whole file), so double-saving is harmless. Do
+// NOT call it from per-frame paths (e.g. a slider drag handler).
 //
 // Both are safe no-ops when the file is missing or partially unparsable:
 // LoadSettings leaves any untouched global at its current value (never

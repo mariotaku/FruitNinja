@@ -15,7 +15,10 @@ namespace Mortar { class FontCacheObjectTTF; }
 // g_DebugWireframe: glPolygonMode(GL_LINE) around 3D entity pass. Toggle F2.
 //                   Desktop GL only (no-op under GLES).
 // g_ShowFps:        "FPS NNN" counter in top-left corner. Toggle F3,
-//                   or launch with --fps / --show-fps, or web ?fps=1.
+//                   or launch with --fps (desktop) / web ?fps=1. Also
+//                   user-settable via SettingsScreen and persisted
+//                   (SettingsSave); the CLI/URL override runs after
+//                   LoadSettings so it wins for that session.
 // g_FpsCap60:       Port specific: caps render/present rate to 60 fps
 //                   (sim stays a fixed 60 Hz accumulator either way -- see
 //                   FixedStepDriver). false (default) = native/display-refresh

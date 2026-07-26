@@ -605,6 +605,24 @@ static void BootWait(void* arg) {
             FN::g_bOsdSfx = true;
             LOG_INFO("Debug", "URL param: SFX OSD ON");
         }
+
+        // fps=1 or fps (bare) -- enables the FPS counter overlay
+        // (same flag F3 toggles on desktop; mobile has no F3). The only way
+        // to see frame timing on a TV browser with no DevTools.
+        int fpsParam = EM_ASM_INT({
+            try {
+                var qs = window.location.search;
+                if (!qs) return 0;
+                var params = new URLSearchParams(qs);
+                var v = params.get('fps');
+                if (v !== null && v !== '0') return 1;
+            } catch(e) {}
+            return 0;
+        });
+        if (fpsParam) {
+            FN::g_ShowFps = true;
+            LOG_INFO("Debug", "URL param: FPS overlay ON");
+        }
     }
 
     if (!g_game.init(ba->window, ba->gl)) {

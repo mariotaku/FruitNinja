@@ -10,6 +10,7 @@
 #include <cstdio>
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
+#include "game/SettingsSave.h"  // GameTaskSaveOnExit: port-specific settings persistence
 #include "hud/HUD.h"  // GameTaskSaveOnExit: mHud->Save() needs the full HUD definition
 
 // Verified timing constants from binary (read_memory)
@@ -135,6 +136,14 @@ void GameTaskExit() {
 // Used on app-suspend (Paused/SaveOnExit) instead of GameTaskExit so in-game state is preserved.
 void GameTaskSaveOnExit() {
     game_work.m_bUpdatesSuspended = 1;
+    // Port specific: persist the port-side settings (SettingsSave.xml) on every
+    // app-exit/suspend path, not only when the Settings popup finishes its close
+    // animation (SettingsScreen::UpdateAnim) -- otherwise a live-applied setting
+    // changed and then quit/backgrounded before the popup fully closed is lost.
+    // Must run BEFORE the guards below: they are game-save re-entrancy gates,
+    // and settings are independent of the game save (must persist even with no
+    // HUD). SaveSettings does its own IDBFS flush on web.
+    SaveSettings();
     if (*GetIsSavingBool() != 0) return;
     if (!game_work.mHud) return;
     game_work.mHud->Save();

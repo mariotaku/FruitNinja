@@ -252,6 +252,12 @@ void Game::pollInput() {
             LOG_DEBUG("Debug", "Wireframe %s", FN::g_DebugWireframe ? "ON" : "OFF");
             // Port specific: OSD toast confirmation (binary OSD is a dead stub).
             OSD_AddMessage(FN::g_DebugWireframe ? "Wireframe: ON" : "Wireframe: OFF");
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F3) {
+            // Port specific: FPS counter overlay (DebugFps_Draw, top-left corner).
+            FN::g_ShowFps = !FN::g_ShowFps;
+            LOG_DEBUG("Debug", "FPS overlay %s", FN::g_ShowFps ? "ON" : "OFF");
+            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
+            OSD_AddMessage(FN::g_ShowFps ? "FPS overlay: ON" : "FPS overlay: OFF");
         } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F4) {
             // Port specific: OSD toast per SFX played (SoundManager::SFXPlay).
             // Display-only diagnostic; never gates actual audio.
