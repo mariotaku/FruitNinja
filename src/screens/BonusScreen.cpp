@@ -642,8 +642,9 @@ void BonusScreen::Update(float dt) {
 
                 // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: 3 particle emitters
                 // spawned at accumPos = pos + m_AnimPos + m_ShakeOffset +
-                // FIRST_NAME_OFFSET(-105,+40,0) + (0.5,0,0), z-alternating red/blue by
-                // (i&1) so successive awards' bursts don't z-fight.
+                // FIRST_NAME_OFFSET(-105,+40,0) + (0.5,0,0); red/blue alternate their
+                // X SIGN by (i & 1) (mirrored vs each other) so successive awards
+                // throw their bursts to opposite sides; both use z = 0.
                 // ASM-spec v1.6.1 BonusScreen::Update @0x00164664: the emitter Y is a
                 // running accumulator stepped by AWARD_Y_DIF(-42) per award i (sp+0x108
                 // += -42 at the loop tail), so each award's burst lands on ITS row --
@@ -657,17 +658,24 @@ void BonusScreen::Update(float dt) {
 
                 PSPParticleEmitter* redFx = ppm.AddEmitter(StringHash("bonus_mode_fx_red"), 0, false);
                 if (redFx) {
-                    redFx->m_Pos = _Vector3<float>(accumPos.x, accumPos.y,
-                        (i & 1) ? -1.0f : 1.0f);
+                    // ASM-spec v1.6.1 BonusScreen::Update @0x00164440-0x00164468:
+                    // x = accumX * ((i & 1) ? -1 : +1), z = 0.0f literal @0x001642c0.
+                    redFx->m_Pos = _Vector3<float>(
+                        accumPos.x * ((i & 1) ? -1.0f : 1.0f), accumPos.y, 0.0f);
                 }
                 PSPParticleEmitter* blueFx = ppm.AddEmitter(StringHash("bonus_mode_fx_blue"), 0, false);
                 if (blueFx) {
-                    blueFx->m_Pos = _Vector3<float>(accumPos.x, accumPos.y,
-                        (i & 1) ? 1.0f : -1.0f);
+                    // ASM-spec v1.6.1 BonusScreen::Update @0x001644b0-0x001644d8:
+                    // mirrored vs red -- x = accumX * ((i & 1) ? +1 : -1), z = 0.0f.
+                    blueFx->m_Pos = _Vector3<float>(
+                        accumPos.x * ((i & 1) ? 1.0f : -1.0f), accumPos.y, 0.0f);
                 }
                 PSPParticleEmitter* impactFx = ppm.AddEmitter(StringHash("impact_fx"), 0, false);
                 if (impactFx) {
-                    impactFx->m_Pos = _Vector3<float>(accumPos.x, accumPos.y, 10.0f);
+                    // ASM-spec v1.6.1 BonusScreen::Update @0x00164520-0x00164530:
+                    // accumPos copied verbatim (the nearby 10.0f is Shake's amplitude
+                    // arg @0x00164528, not an emitter z).
+                    impactFx->m_Pos = accumPos;
                 }
             }
 
@@ -685,8 +693,10 @@ void BonusScreen::Update(float dt) {
             entry.m_DisplayedScore = (cur <= 0.0f) ? 0 :
                 (int)((float)(entry.m_TierBase * entry.m_Multiplier) * (0.5f + cur * 0.5f));
         }
-        // NOTE: the binary loop does NOT accumulate a displayed total here; the
-        // screen total (m_DisplayedScore) is computed in the tail @0x001646b8 below.
+        // NOTE: the binary loop DOES accumulate each award's displayed score into
+        // m_DisplayedScore (+0x7c += @0x00164684-0x00164690, zeroed @0x001641d0),
+        // but it is a dead store -- the tail overwrites +0x7c unconditionally
+        // (@0x00164724 / @0x00164768). Not ported; behaviour is identical.
     }
 
     // -----------------------------------------------------------------------
