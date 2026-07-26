@@ -26,6 +26,7 @@
 #include "config.h"
 #include "render/gl_funcs.h"
 #include "render/Layout.h"
+#include "render/Renderer.h"   // Port specific: stage-2 Flush2D end-of-frame barrier
 #include "platform/AppDirSDL.h"
 #include "platform/SaveDirSDL.h"
 #include <cstdio>
@@ -593,6 +594,11 @@ void Game::renderFrame(float alpha, int steps) {
         s_osdLastCounter = now;
         OSD_Update(osdDt);
         OSD_Draw();
+    }
+    // Port specific (stage-2 2D batching): drain pending 2D draws so the F12
+    // glReadPixels below and the swap both see the complete frame.
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->Flush2D();
     }
     do_screenshot_if_requested(static_cast<SDL_Window*>(window));
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));

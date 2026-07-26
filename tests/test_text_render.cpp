@@ -151,6 +151,8 @@ struct CellFBO {
     }
 
     void ReadRGBA(unsigned char* buf) {
+        // Stage-2 2D batching: drain pending 2D draws before the readback.
+        Renderer::GetInstance()->Flush2D();
         tr_glReadPixels(0, 0, CELL_W, CELL_H, GL_RGBA, GL_UNSIGNED_BYTE, buf);
     }
 

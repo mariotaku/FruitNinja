@@ -59,6 +59,7 @@
 #include "hud/HUDLayer.h"
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
+#include "render/Renderer.h"   // Flush2D readback barrier (stage-2 2D batching)
 #include "engine/util/LanguageArgs.h"
 #include "engine/util/Localisation.h"
 #include <cstdio>
@@ -662,6 +663,8 @@ struct TestHarness {
         if (!m_glReadPixels) { std::free(pixels); return NULL; }
         const unsigned int GL_RGB_           = 0x1907;
         const unsigned int GL_UNSIGNED_BYTE_ = 0x1401;
+        // Stage-2 2D batching: drain pending 2D draws before the readback.
+        if (Renderer* r = Renderer::GetInstance()) r->Flush2D();
         m_glReadPixels(0, 0, ww, wh, GL_RGB_, GL_UNSIGNED_BYTE_, pixels);
         return pixels;
     }
@@ -742,6 +745,8 @@ private:
             std::free(flip);
             return NULL;
         }
+        // Stage-2 2D batching: drain pending 2D draws before the readback.
+        if (Renderer* r = Renderer::GetInstance()) r->Flush2D();
         m_glReadPixels(0, 0, ww, wh, GL_RGB_, GL_UNSIGNED_BYTE_, tmp);
         for (int y = 0; y < wh; ++y) {
             std::memcpy(flip + (size_t)y * rowBytes,

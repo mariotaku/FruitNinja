@@ -45,7 +45,10 @@ void DisplayManager::BeginFrame() {
     // Port specific: forget the Renderer's GL state shadow once per frame so
     // GL state touched outside the shadowed paths (SDL, tests, tools) can
     // never desync it. Covers the test harness too -- every test render loop
-    // goes through BeginFrame.
+    // goes through BeginFrame. Stage-2 batching: InvalidateStateCache also
+    // drains any pending 2D batch, satisfying the "flush before the frame
+    // clear" barrier (a leftover batch here would otherwise be cleared away
+    // or survive into the wrong frame).
     if (Renderer* r = Renderer::GetInstance()) {
         r->InvalidateStateCache();
     }
@@ -94,6 +97,11 @@ void DisplayManager::SetDrawColour(const Colour& c) {
 }
 
 void DisplayManager::SetDepthBuffer(bool enable) {
+    // Port specific (stage-2 2D batching): pending 2D verts were submitted
+    // under the current depth-test state -- draw them before it changes.
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->Flush2D();
+    }
     if (enable) {
         glEnable(GL_DEPTH_TEST);
     } else {
@@ -102,6 +110,10 @@ void DisplayManager::SetDepthBuffer(bool enable) {
 }
 
 void DisplayManager::SetDepthBufferWrite(bool enable) {
+    // Port specific (stage-2 2D batching): see SetDepthBuffer.
+    if (Renderer* r = Renderer::GetInstance()) {
+        r->Flush2D();
+    }
     glDepthMask(enable ? GL_TRUE : GL_FALSE);
 }
 

@@ -13,6 +13,13 @@
 #include <gccore.h>  // GXTexObj (m_WhiteTexObj)
 #endif
 
+// Port specific (stage 2): compile-time default for m_Merge2DPreTransform
+// (MVP pre-transform merging; see the stage-2 class comment). Define to 0 to
+// build with same-MVP-only merging by default.
+#ifndef FN_2D_PRETRANSFORM_DEFAULT
+#define FN_2D_PRETRANSFORM_DEFAULT 1
+#endif
+
 // GL renderer — targets the same behaviour as the binary's ES 1.x pipeline.
 //
 // GLES2 migration phase 2: the 2D quad/UI draws (DrawQuad, DrawTriList,
@@ -42,6 +49,44 @@
 //     code that glDeleteTextures a texture the shadow may consider bound
 //     calls NotifyTextureDeleted. External GL churn between frames is
 //     absorbed by DisplayManager::BeginFrame -> InvalidateStateCache().
+//
+// Stage 2 (deferred adjacent-run merger): 2D submissions no longer issue one
+// glBufferSubData + glDrawArrays each. DrawShaded2D accumulates packed
+// vertices CPU-side (m_Batch2D) and the whole run is uploaded + drawn in ONE
+// glBufferSubData + ONE glDrawArrays at the next flush. Submission order is
+// preserved exactly -- only ADJACENT compatible submissions merge, never
+// reordered (2D alpha blending is order-dependent, and the HUD block depth-
+// tests against 3D fruit depth).
+//   - GL_TRIANGLE_STRIP submissions are converted to GL_TRIANGLES at submit
+//     time (winding-preserving (i,i+1,i+2)/(i+1,i,i+2) expansion; the fonts'
+//     degenerate connector triangles stay zero-area = zero pixels) so strips
+//     (fonts, blades, shadows, bars) and lists (particles) share one batch.
+//   - Batch-breaking axes: effective sampling texture, and -- when MVP
+//     pre-transform is off or the MVP is non-affine -- the MVP itself.
+//     Blend / cull / scissor / depth / program are NOT part of the key:
+//     every path that changes them (SetBlendEnabled, SetCullFaceEnabled,
+//     SetClipRect/ClearClipRect, DisplayManager::SetDepthBuffer/
+//     SetDepthBufferWrite, DrawMesh3D, BakedStringBox's raw scissor block)
+//     calls Flush2D() BEFORE touching GL, so pending vertices always land
+//     under the state they were submitted with.
+//   - MVP merging (m_Merge2DPreTransform, default ON): vertex positions are
+//     CPU pre-transformed by the full MVP at submit time and the flush draws
+//     with u_mvp = identity, so draws with different world matrices share a
+//     batch (precedent: the TTF glyph path in Font.cpp pre-transforms the
+//     same way). Identity multiply is IEEE-exact but CPU mul-add vs GPU
+//     (FMA / dot ordering) is NOT guaranteed bit-identical, so an edge-exact
+//     pixel could differ; turn the switch off to fall back to same-MVP-only
+//     merging (pixel-identical to stage 1). Non-affine MVPs (projective
+//     bottom row) are never pre-transformed -- a vec3 attrib cannot carry
+//     the resulting w -- and batch per-MVP instead.
+//   - RULE: any pixel readback (glReadPixels), buffer swap, or GL state
+//     change outside the shadowed setters MUST be preceded by Flush2D().
+//     Wired barriers: DrawMesh3D entry, SetClipRect/ClearClipRect,
+//     DisplayManager::SetDepthBuffer/SetDepthBufferWrite, InvalidateState-
+//     Cache (covers DisplayManager::BeginFrame before the clear),
+//     BindTextureForUpload / NotifyTextureDeleted, GameSDL.cpp before the
+//     F12 screenshot + SDL_GL_SwapWindow, and the test harness / render
+//     tests before every glReadPixels.
 struct Renderer {
     static Renderer* s_instance;
     static Renderer* GetInstance() { return s_instance; }
@@ -136,7 +181,26 @@ struct Renderer {
     // touched GL state cannot desync the shadow. Does NOT clear the requested
     // sampling texture -- the legacy eager binding persisted across frames
     // and the mirror must too.
+    // Stage 2: drains the pending 2D batch FIRST (Flush2D), so pending
+    // vertices are drawn before the shadow is forgotten. The flush relies on
+    // blend/cull/depth/scissor GL state being unchanged since submission --
+    // true at both call sites (BeginFrame runs before its state resets;
+    // MeshManager churn is buffer-binding only, which Flush2D re-asserts).
     void InvalidateStateCache();
+
+    // Port specific (stage 2): draw the pending 2D batch now -- one ring
+    // upload + one glDrawArrays(GL_TRIANGLES) -- and clear it. No-op when
+    // nothing is pending (cheap to call defensively). MUST be called before
+    // any pixel readback, buffer swap, or GL state change that bypasses the
+    // shadowed setters (see the stage-2 RULE in the class comment). On Wii
+    // this is a no-op: the GX backend draws immediately.
+    void Flush2D();
+
+    // Port specific (stage 2): runtime switch for MVP pre-transform merging
+    // (see class comment). ON by default; set false to fall back to
+    // same-MVP-only merging, which is pixel-identical to the unbatched
+    // stage-1 path. Compile-time default override: FN_2D_PRETRANSFORM_DEFAULT.
+    bool m_Merge2DPreTransform;
 
     // Port specific: no binary counterpart. Wraps glPolygonMode(GL_FRONT_AND_BACK,
     // GL_LINE/GL_FILL) for the F2 wireframe debug toggle. No-op where glPolygonMode
@@ -174,22 +238,24 @@ struct Renderer {
                     GLuint tex, const Matrix44& mvp);
 
 private:
-    // Shared GLES2 draw for the 2D paths. Uploads `mvp` to u_mvp (skipped
-    // when identical to the last upload), repacks `verts` (vertCount *
-    // stride bytes; pos 3xfloat @posOff, uv 2xfloat @uvOff, colour 4x
-    // normalized ubyte @colOff) into the canonical 24-byte Shaded2DVertex
-    // layout, streams them into the m_QuadVBO ring via glBufferSubData
-    // (orphan + rewind on wrap; one-shot glBufferData fallback for draws
-    // larger than the ring) and glDrawArrays(prim, ringBase/24, vertCount).
+    // Shared GLES2 submit for the 2D paths. Stage 2: does NOT draw -- it
+    // repacks `verts` (vertCount * stride bytes; pos 3xfloat @posOff, uv
+    // 2xfloat @uvOff, colour 4x normalized ubyte @colOff) into the canonical
+    // 24-byte Shaded2DVertex layout, expands GL_TRIANGLE_STRIP to
+    // GL_TRIANGLES (winding-preserving), optionally CPU pre-transforms
+    // positions by `mvp` (m_Merge2DPreTransform + affine MVP), and appends
+    // to the pending CPU batch (m_Batch2D). A submission whose batch key
+    // (effective texture; MVP when not pre-transformed) differs from the
+    // pending batch -- or that would overflow the ring -- flushes first.
+    // The actual upload + glDrawArrays happens in Flush2D().
+    // `prim` must be GL_TRIANGLES or GL_TRIANGLE_STRIP (all call sites).
     // tex != 0: resolves to it. tex == 0: resolves to the lazily-requested
     // BindTexture2D texture (Texture::Set / draw_sprite own it -- same
-    // contract the eager path had; requested 0 still binds 0). The bind is
-    // only issued when it differs from what is actually bound.
-    // Blend / cull / scissor state is the CALLER's responsibility, set before
-    // calling (matches the old per-draw FF state decisions).
-    // Port specific: no trailing restore -- program / ring binding / attrib
-    // config persist between 2D draws (see the state-cache note in the class
-    // comment).
+    // contract the eager path had; requested 0 still binds 0 at flush).
+    // Blend / cull / scissor / depth state is the CALLER's responsibility,
+    // set BEFORE submitting through the flushing setters (SetBlendEnabled /
+    // SetCullFaceEnabled / SetClipRect / DisplayManager depth) so a change
+    // drains earlier submissions under their own state.
     void DrawShaded2D(const void* verts, int vertCount, int stride,
                       int posOff, int uvOff, int colOff,
                       GLenum prim, GLuint tex, const Matrix44& mvp);
@@ -241,7 +307,14 @@ private:
     };
     GLStateShadow m_GLState;
     GLsizeiptr m_RingCursor;              // next free byte in the ring (24-aligned)
-    std::vector<unsigned char> m_Staging2D;  // repack scratch (reused across draws)
+
+    // Port specific (stage 2): pending 2D batch. m_Batch2D holds packed
+    // Shaded2DVertex bytes (always GL_TRIANGLES after strip expansion);
+    // empty() == no batch open. Key fields below are valid while non-empty.
+    std::vector<unsigned char> m_Batch2D;
+    GLuint m_BatchTex;      // effective sampling texture of the open batch
+    bool   m_BatchPreXf;    // verts pre-transformed (flush draws u_mvp = identity)
+    float  m_BatchMVP[16];  // batch MVP when !m_BatchPreXf
 #endif
 };
 

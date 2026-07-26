@@ -166,6 +166,8 @@ struct AlignFBO {
     }
 
     void ReadPixels(unsigned char* buf) {
+        // Stage-2 2D batching: drain pending 2D draws before the readback.
+        Renderer::GetInstance()->Flush2D();
         fa_glReadPixels(0, 0, FA_W, FA_H, GL_RGBA, GL_UNSIGNED_BYTE, buf);
     }
 
@@ -447,6 +449,8 @@ struct SmMatrixFBO {
     void Unbind() { fa_glBindFramebuffer(FA_FB_, 0); }
 
     void ReadPixels(unsigned char* buf) {
+        // Stage-2 2D batching: drain pending 2D draws before the readback.
+        Renderer::GetInstance()->Flush2D();
         fa_glReadPixels(0, 0, SM_FBO_W, SM_FBO_H, GL_RGBA, GL_UNSIGNED_BYTE, buf);
     }
 

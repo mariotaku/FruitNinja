@@ -86,6 +86,7 @@ bool Renderer::init() {
 }
 
 void Renderer::shutdown() {
+    m_Batch2D.clear();   // drop, don't draw -- the GL objects are going away
     m_Quad2D.Destroy();
     m_Mesh3D.Destroy();
     if (m_WhiteTex) {
@@ -99,13 +100,115 @@ void Renderer::shutdown() {
     }
 }
 
-// See Renderer.h for the full contract. Port specific: state-cached + ring
-// VBO -- no per-draw pipeline teardown (nothing fixed-function remains to
-// coexist with; MatrixManager no longer issues GL).
+// Pack one source vertex (pos 3xfloat @posOff, uv 2xfloat @uvOff, colour
+// 4 bytes @colOff) into the canonical Shaded2DVertex layout. Bit patterns
+// are copied verbatim (QUADCUSTOMVERTEX's normals are skipped -- the shader
+// never reads them).
+static inline void PackShaded2DVert(Shaded2DVertex& dst, const unsigned char* src,
+                                    int posOff, int uvOff, int colOff) {
+    memcpy(&dst.x,     src + posOff, 3 * sizeof(float));
+    memcpy(&dst.u,     src + uvOff,  2 * sizeof(float));
+    memcpy(&dst.color, src + colOff, sizeof(uint32_t));
+}
+
+// See Renderer.h for the full contract. Stage 2: submit-only -- expands
+// strips to triangles, optionally CPU pre-transforms by the MVP, and appends
+// to the pending batch; Flush2D() issues the GL calls.
 void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
                             int posOff, int uvOff, int colOff,
                             GLenum prim, GLuint tex, const Matrix44& mvp) {
     if (vertCount <= 0) return;
+    GLStateShadow& st = m_GLState;
+
+    // Resolve the sampling texture: an explicit tex wins, else the lazily-
+    // requested one (which may be 0 -- and 0 must still be BOUND at flush to
+    // keep the old incomplete-texture sampling semantics). The requested
+    // value then mirrors what the eager path would have left bound on unit 0.
+    const GLuint effectiveTex = tex ? tex : (GLuint)st.requestedTex;
+    st.requestedTex = (uint32_t)effectiveTex;
+
+    // MVP merge eligibility: only an affine MVP (projective bottom row
+    // (0,0,0,1), i.e. clip w == 1 for every vertex) can be CPU
+    // pre-transformed -- the vec3 position attrib cannot carry a w.
+    const float* M = mvp.ptr();
+    const bool preXf = m_Merge2DPreTransform &&
+                       M[3] == 0.0f && M[7] == 0.0f && M[11] == 0.0f && M[15] == 1.0f;
+
+    // Vertex count after strip -> list expansion (`prim` is GL_TRIANGLES or
+    // GL_TRIANGLE_STRIP; no other primitive reaches this path).
+    int outCount;
+    if (prim == GL_TRIANGLE_STRIP) {
+        if (vertCount < 3) return;
+        outCount = (vertCount - 2) * 3;
+    } else {
+        outCount = vertCount;
+    }
+    const size_t newBytes = (size_t)outCount * sizeof(Shaded2DVertex);
+
+    // Batch break: texture change, pre-transform mode change, MVP change
+    // (only when not pre-transforming), or ring overflow.
+    if (!m_Batch2D.empty()) {
+        bool brk = (m_BatchTex != effectiveTex) || (m_BatchPreXf != preXf);
+        if (!brk && !preXf) {
+            brk = (memcmp(m_BatchMVP, M, sizeof(m_BatchMVP)) != 0);
+        }
+        if (!brk && m_Batch2D.size() + newBytes > (size_t)kRingSize) {
+            brk = true;
+        }
+        if (brk) {
+            Flush2D();
+        }
+    }
+    if (m_Batch2D.empty()) {
+        m_BatchTex   = effectiveTex;
+        m_BatchPreXf = preXf;
+        if (!preXf) {
+            memcpy(m_BatchMVP, M, sizeof(m_BatchMVP));
+        }
+    }
+
+    const size_t base = m_Batch2D.size();
+    m_Batch2D.resize(base + newBytes);
+    Shaded2DVertex* dst = reinterpret_cast<Shaded2DVertex*>(&m_Batch2D[base]);
+    const unsigned char* src = static_cast<const unsigned char*>(verts);
+
+    if (prim == GL_TRIANGLE_STRIP) {
+        // Strip triangle t = (t, t+1, t+2), odd t swaps the leading pair to
+        // preserve winding. Fonts' degenerate connector verts become
+        // zero-area triangles -- zero pixels, identical output.
+        int o = 0;
+        for (int t = 0; t + 2 < vertCount; ++t) {
+            const int i0 = (t & 1) ? t + 1 : t;
+            const int i1 = (t & 1) ? t     : t + 1;
+            PackShaded2DVert(dst[o++], src + (size_t)i0 * stride, posOff, uvOff, colOff);
+            PackShaded2DVert(dst[o++], src + (size_t)i1 * stride, posOff, uvOff, colOff);
+            PackShaded2DVert(dst[o++], src + (size_t)(t + 2) * stride, posOff, uvOff, colOff);
+        }
+    } else {
+        for (int i = 0; i < vertCount; ++i) {
+            PackShaded2DVert(dst[i], src + (size_t)i * stride, posOff, uvOff, colOff);
+        }
+    }
+
+    if (preXf) {
+        // Full affine transform (x,y,z; w==1 guaranteed by the check above).
+        // Same CPU pre-transform idiom the TTF glyph path uses (Font.cpp);
+        // column-major m[col*4+row], matching the GL_FALSE-transpose upload.
+        for (int i = 0; i < outCount; ++i) {
+            const float x = dst[i].x, y = dst[i].y, z = dst[i].z;
+            dst[i].x = M[0] * x + M[4] * y + M[8]  * z + M[12];
+            dst[i].y = M[1] * x + M[5] * y + M[9]  * z + M[13];
+            dst[i].z = M[2] * x + M[6] * y + M[10] * z + M[14];
+        }
+    }
+}
+
+// See Renderer.h for the full contract. Draws the pending 2D batch: one ring
+// upload + one glDrawArrays(GL_TRIANGLES), state-cached, no trailing restore.
+void Renderer::Flush2D() {
+    const size_t bytes = m_Batch2D.size();
+    if (bytes == 0) return;
+    const int vertCount = (int)(bytes / sizeof(Shaded2DVertex));
     GLStateShadow& st = m_GLState;
 
     if (!st.programValid || st.program != m_Quad2D.Program()) {
@@ -114,50 +217,33 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
         st.programValid = true;
     }
 
-    if (!st.mvp2DValid || memcmp(st.mvp2D, mvp.ptr(), sizeof(st.mvp2D)) != 0) {
-        glUniformMatrix4fv(m_Quad2D.MVPLoc(), 1, GL_FALSE, mvp.ptr());
-        memcpy(st.mvp2D, mvp.ptr(), sizeof(st.mvp2D));
+    // Pre-transformed batches draw with u_mvp = identity (constant, so the
+    // memcmp cache reduces uniformMatrix4fv to ~one upload per frame).
+    static const float kIdentityMVP[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
+    const float* mvpPtr = m_BatchPreXf ? kIdentityMVP : m_BatchMVP;
+    if (!st.mvp2DValid || memcmp(st.mvp2D, mvpPtr, sizeof(st.mvp2D)) != 0) {
+        glUniformMatrix4fv(m_Quad2D.MVPLoc(), 1, GL_FALSE, mvpPtr);
+        memcpy(st.mvp2D, mvpPtr, sizeof(st.mvp2D));
         st.mvp2DValid = true;
     }
 
-    // Resolve the sampling texture: an explicit tex wins, else the lazily-
-    // requested one (which may be 0 -- and 0 must still be BOUND to keep the
-    // old incomplete-texture sampling semantics). The requested value then
-    // mirrors what the eager path would have left bound on unit 0.
-    const GLuint effectiveTex = tex ? tex : (GLuint)st.requestedTex;
-    if (!st.boundTexValid || st.boundTex != effectiveTex) {
-        glBindTexture(GL_TEXTURE_2D, effectiveTex);
-        st.boundTex = effectiveTex;
+    if (!st.boundTexValid || st.boundTex != m_BatchTex) {
+        glBindTexture(GL_TEXTURE_2D, m_BatchTex);
+        st.boundTex = m_BatchTex;
         st.boundTexValid = true;
     }
-    st.requestedTex = (uint32_t)effectiveTex;
 
-    // Repack to the canonical Shaded2DVertex layout (QUADCUSTOMVERTEX carries
-    // normals the shader never reads -- attribs 0/1/2 skip them). Vertex bit
-    // patterns (pos/uv/colour) are copied verbatim.
-    const GLsizeiptr size = (GLsizeiptr)((size_t)vertCount * sizeof(Shaded2DVertex));
-    const void* packed;
-    if (stride == (int)sizeof(Shaded2DVertex) &&
-        posOff == (int)offsetof(Shaded2DVertex, x) &&
-        uvOff  == (int)offsetof(Shaded2DVertex, u) &&
-        colOff == (int)offsetof(Shaded2DVertex, color)) {
-        packed = verts;
-    } else {
-        if ((GLsizeiptr)m_Staging2D.size() < size) {
-            m_Staging2D.resize((size_t)size);
-        }
-        Shaded2DVertex* dst = reinterpret_cast<Shaded2DVertex*>(&m_Staging2D[0]);
-        const unsigned char* src = static_cast<const unsigned char*>(verts);
-        for (int i = 0; i < vertCount; ++i, src += stride) {
-            memcpy(&dst[i].x,     src + posOff, 3 * sizeof(float));
-            memcpy(&dst[i].u,     src + uvOff,  2 * sizeof(float));
-            memcpy(&dst[i].color, src + colOff, sizeof(uint32_t));
-        }
-        packed = dst;
-    }
-
+    // Bind the ring unconditionally: GL_ARRAY_BUFFER may have been rebound
+    // (mesh uploads) since the batch opened. The attrib POINTERS captured
+    // the ring buffer OBJECT, so only the upload target needs re-asserting;
+    // ringReady still gates the enable + pointer config.
+    glBindBuffer(GL_ARRAY_BUFFER, m_QuadVBO);
     if (!st.ringReady) {
-        glBindBuffer(GL_ARRAY_BUFFER, m_QuadVBO);
         glEnableVertexAttribArray(0);
         glEnableVertexAttribArray(1);
         glEnableVertexAttribArray(2);
@@ -165,13 +251,18 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
         st.ringReady = true;
     }
 
+    const GLsizeiptr size = (GLsizeiptr)bytes;
+    const void* packed = &m_Batch2D[0];
     if (size > kRingSize) {
-        // Oversize fallback: one-shot upload replaces the ring storage; the
-        // forced wrap below re-allocates it before the next ring draw.
+        // Oversize fallback (cannot occur via DrawShaded2D, which breaks the
+        // batch before it outgrows the ring; kept for the degenerate case of
+        // a single submission larger than the ring): one-shot upload replaces
+        // the ring storage; the forced wrap below re-allocates it.
         glBufferData(GL_ARRAY_BUFFER, size, packed, GL_DYNAMIC_DRAW);
-        glDrawArrays(prim, 0, vertCount);
+        glDrawArrays(GL_TRIANGLES, 0, vertCount);
         m_RingCursor = kRingSize;
         st.ringReady = false;
+        m_Batch2D.clear();
         return;
     }
 
@@ -183,8 +274,9 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
         ConfigureRingAttribs();
     }
     glBufferSubData(GL_ARRAY_BUFFER, (GLintptr)m_RingCursor, size, packed);
-    glDrawArrays(prim, (GLint)(m_RingCursor / (GLsizeiptr)sizeof(Shaded2DVertex)), vertCount);
+    glDrawArrays(GL_TRIANGLES, (GLint)(m_RingCursor / (GLsizeiptr)sizeof(Shaded2DVertex)), vertCount);
     m_RingCursor += size;   // size is a multiple of 24, cursor stays aligned
+    m_Batch2D.clear();      // keeps capacity -- no per-frame reallocation
 }
 
 // See Renderer.h for the full contract. Port specific: state-cached; no
@@ -193,6 +285,9 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
 void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount, GLenum prim,
                           int stride, int posOff, int uvOff, int colOff, int uvSize, int colSize,
                           GLuint tex, const Matrix44& mvp) {
+    // Stage-2 barrier: 2D verts submitted before this mesh must be drawn
+    // before it (2D/3D interleave via the depth buffer -- order matters).
+    Flush2D();
     GLStateShadow& st = m_GLState;
 
     if (!st.programValid || st.program != m_Mesh3D.Program()) {
@@ -282,6 +377,9 @@ void Renderer::InitGL(int width, int height) {
 // (SetupOrtho(160,-160,-240,240,...)). Moved here verbatim from the duplicated
 // UiDropdown.cpp / SettingsScreen.cpp inline blocks -- same math, same guard.
 void Renderer::SetClipRect(float left, float top, float right, float bottom) {
+    // Stage-2 barrier: pending 2D verts were submitted under the current
+    // scissor state -- draw them before it changes.
+    Flush2D();
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     const float orthoW = 480.0f;
     const float orthoH = 320.0f;
@@ -305,6 +403,8 @@ void Renderer::SetClipRect(float left, float top, float right, float bottom) {
 }
 
 void Renderer::ClearClipRect() {
+    // Stage-2 barrier: see SetClipRect.
+    Flush2D();
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     glDisable(GL_SCISSOR_TEST);
 #endif

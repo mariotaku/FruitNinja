@@ -29,10 +29,18 @@
 Renderer* Renderer::s_instance = nullptr;
 
 #if defined(FRUIT_PLATFORM_WII)
-Renderer::Renderer() : m_WhiteTexBuf(nullptr), m_WhiteTex(kWhiteTexSentinel) {}
+Renderer::Renderer() : m_Merge2DPreTransform(false), m_WhiteTexBuf(nullptr), m_WhiteTex(kWhiteTexSentinel) {}
+
+// Stage-2 2D batching is GL-backend only; GX draws immediately, so the
+// barrier call sites (DisplayManager, portable setters) link against this.
+void Renderer::Flush2D() {}
 #else
-Renderer::Renderer() : m_QuadVBO(0), m_WhiteTex(0), m_RingCursor(0) {
+Renderer::Renderer()
+    : m_Merge2DPreTransform(FN_2D_PRETRANSFORM_DEFAULT != 0),
+      m_QuadVBO(0), m_WhiteTex(0), m_RingCursor(0),
+      m_BatchTex(0), m_BatchPreXf(false) {
     memset(&m_GLState, 0, sizeof(m_GLState));
+    memset(m_BatchMVP, 0, sizeof(m_BatchMVP));
 }
 #endif
 
@@ -48,6 +56,9 @@ void Renderer::SetBlendEnabled(bool enabled) {
     if (enabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
 #else
     if (!m_GLState.blendValid || m_GLState.blendOn != enabled) {
+        // Stage-2 barrier: pending 2D verts were submitted under the current
+        // blend state -- draw them before it changes.
+        Flush2D();
         if (enabled) glEnable(GL_BLEND); else glDisable(GL_BLEND);
         m_GLState.blendOn = enabled;
         m_GLState.blendValid = true;
@@ -60,6 +71,8 @@ void Renderer::SetCullFaceEnabled(bool enabled) {
     if (enabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
 #else
     if (!m_GLState.cullValid || m_GLState.cullOn != enabled) {
+        // Stage-2 barrier: see SetBlendEnabled.
+        Flush2D();
         if (enabled) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
         m_GLState.cullOn = enabled;
         m_GLState.cullValid = true;
@@ -71,6 +84,11 @@ void Renderer::BindTextureForUpload(uint32_t texId) {
 #if defined(FRUIT_PLATFORM_WII)
     glBindTexture(GL_TEXTURE_2D, (GLuint)texId);
 #else
+    // Stage-2 barrier: an upload can rewrite texels of the batch's texture
+    // (lazy font-atlas glyph rasterisation mid-frame); the eager path had
+    // already drawn the earlier verts against the pre-upload texels, so
+    // drain them before the upload can touch anything.
+    Flush2D();
     glBindTexture(GL_TEXTURE_2D, (GLuint)texId);
     m_GLState.boundTex = (GLuint)texId;
     m_GLState.boundTexValid = true;
@@ -82,6 +100,16 @@ void Renderer::NotifyTextureDeleted(uint32_t texId) {
 #if defined(FRUIT_PLATFORM_WII)
     (void)texId;
 #else
+    // Stage-2 barrier: if the deleted texture is the open batch's sampling
+    // texture, draw the batch now. NOTE this runs AFTER the glDeleteTextures
+    // (contract: callers notify post-delete), so the flush binds an
+    // already-deleted name -- callers that could delete a texture drawn
+    // earlier in the same frame should Flush2D() BEFORE deleting. In
+    // practice all deletion sites (screen teardown, test cleanup) sit
+    // outside active 2D drawing, so the batch is empty here.
+    if (!m_Batch2D.empty() && m_BatchTex == (GLuint)texId) {
+        Flush2D();
+    }
     // GL rebinds 0 when the currently-bound texture is deleted; mirror that,
     // and never leave the requested sampling texture pointing at a name that
     // may get recycled by a later glGenTextures.
@@ -96,6 +124,9 @@ void Renderer::NotifyTextureDeleted(uint32_t texId) {
 
 void Renderer::InvalidateStateCache() {
 #if !defined(FRUIT_PLATFORM_WII)
+    // Stage-2 barrier: drain pending 2D verts before forgetting the shadow
+    // (see the header note on what the flush may rely on here).
+    Flush2D();
     m_GLState.programValid  = false;
     m_GLState.boundTexValid = false;
     m_GLState.blendValid    = false;

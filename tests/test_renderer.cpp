@@ -169,6 +169,8 @@ struct FBO {
     // Read RGBA pixels from FBO into a caller-allocated FBO_W*FBO_H*4 buffer.
     // glReadPixels returns bottom-up; this returns bottom-up too (raw GL order).
     void ReadPixels(unsigned char* buf) {
+        // Stage-2 2D batching: drain pending 2D draws before the readback.
+        Renderer::GetInstance()->Flush2D();
         fn_glReadPixels(0, 0, FBO_W, FBO_H, GL_RGBA, GL_UNSIGNED_BYTE, buf);
     }
 };

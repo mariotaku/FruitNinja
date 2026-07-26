@@ -913,6 +913,9 @@ void BakedStringBox::Draw(_Vector2<float> scale, float rotation, bool center) {
         GLint sh = (GLint)((clipTop_ws - clipBot_ws) / orthoH * (float)vpH);
         if (sw < 0) sw = 0;
         if (sh < 0) sh = 0;
+        // Stage-2 2D batching: raw scissor change bypasses Renderer::
+        // SetClipRect, so drain pending 2D verts before it takes effect.
+        if (Renderer* r = Renderer::GetInstance()) r->Flush2D();
         glEnable(GL_SCISSOR_TEST);
         glScissor(sx, sy, sw, sh);
     }
@@ -968,6 +971,9 @@ void BakedStringBox::Draw(_Vector2<float> scale, float rotation, bool center) {
 
 #if !defined(__bada__) && !defined(FN_GL_STUB)
     if (m_HasClip) {
+        // Stage-2 2D batching: the clipped line draws above are still
+        // pending -- flush them while the scissor is active.
+        if (Renderer* r = Renderer::GetInstance()) r->Flush2D();
         glDisable(GL_SCISSOR_TEST);
     }
 #endif
