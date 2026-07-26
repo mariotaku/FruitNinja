@@ -26,6 +26,9 @@
 #                                              classified (non-escalated rows).
 #                            Every pre-existing field is preserved unchanged.
 #   suggested-triage.json    proposed ACCEPT entries for the benign rows (review only).
+#                            Only causes in BENIGN_VERDICT are eligible; LOW-but-
+#                            not-benign causes (port-stub / port-stub-defunct) are
+#                            excluded -- LOW ranking never implies auto-accept.
 #
 # No markdown is written. The ranked shortlist (HIGH rows + top MED) is printed
 # to STDOUT instead, alongside a per-cause count summary and a PASS/FAIL
@@ -49,6 +52,7 @@ ESCALATED = {"SUSPICIOUS", "DIVERGE", "UNPAIRED"}
 # ---------------------------------------------------------------------------
 
 LCS_RE = re.compile(r"([0-9]+(?:\.[0-9]+)?)%\s*LCS")
+NPB_RE = re.compile(r"\((\d+)p vs (\d+)b\)")
 
 
 def parse_lcs(reason):
@@ -57,6 +61,17 @@ def parse_lcs(reason):
         return None
     m = LCS_RE.search(reason)
     return float(m.group(1)) if m else None
+
+
+def parse_counts(reason):
+    """Pull the (port_instr, bin_instr) counts out of a reason string like
+    '13.3% LCS (9p vs 9b)', or (None, None)."""
+    if not reason:
+        return (None, None)
+    m = NPB_RE.search(reason)
+    if not m:
+        return (None, None)
+    return (int(m.group(1)), int(m.group(2)))
 
 
 def split_sides(diff):
@@ -420,6 +435,43 @@ def detect_wrong_field(mangled, common, bin_only, port_only, lcs):
     return ("wrong-field", "HIGH")
 
 
+# Name keywords that mark a symbol as belonging to a KNOWN defunct/platform-bound
+# subsystem (online services, P2P MP, news, Bada/Osp platform glue, splash). A
+# trivial port body under one of these names is almost certainly an intentional
+# policy stub, not an unported gap. Everything else stays in plain `port-stub`
+# so a human can enumerate candidate unported gaps from report.json.
+DEFUNCT_NAME_HINT = re.compile(
+    r"News|Facebook|OpenFeint|Feint|P2P|Network|Leaderboard|Bada|Osp|Splash"
+    r"|GameCenter|Multiplayer|Online")
+
+
+def detect_port_stub(mangled, common, bin_only, port_only, lcs):
+    """Port side compiled to a TRIVIAL body (<= 3 instructions, e.g. `bx lr` or
+    `mov GREG, #0; bx lr`) against a SUBSTANTIAL binary body (>= 4 instructions
+    AND at least 2x the port body -- a flat >=10 floor left the b=4..8 defunct
+    one-liners, IsP2POnline / OpenFeintOnline / ConnectGameCenter and friends,
+    pinning the 0.0%-LCS top of the MED shortlist).
+    Two sub-cases the instruction counts alone cannot distinguish:
+      - a correctly-stubbed defunct/platform feature (project stub-don't-skip
+        policy) -- not a bug; or
+      - a genuinely UNPORTED function someone should still port.
+    So: likelihood LOW (must not pin the HIGH/MED shortlist -- ~40 honest stubs
+    otherwise sit at max score forever), but deliberately NOT auto-accepted --
+    neither cause appears in BENIGN_VERDICT, and the suggested-triage writer only
+    emits causes listed there, so these rows stay visible for human enumeration.
+    `port-stub-defunct` = name matches a known defunct/platform keyword;
+    `port-stub` = everything else (the candidate unported gaps).
+    Runs AFTER wrong-field (a real disjoint-cluster bug keeps HIGH) and BEFORE
+    call-graph (which used to grab these rows as MED and pin the ranking)."""
+    port_n = len(common) + len(port_only)
+    bin_n = len(common) + len(bin_only)
+    if port_n <= 3 and bin_n >= 4 and bin_n >= 2 * port_n:
+        if DEFUNCT_NAME_HINT.search(mangled):
+            return ("port-stub-defunct", "LOW")
+        return ("port-stub", "LOW")
+    return None
+
+
 def detect_call_graph(mangled, common, bin_only, port_only, lcs):
     """A named call present on one side and absent on the other (missing/extra
     call), or an inverted condition code on a branch. Real-ish but often a
@@ -454,6 +506,10 @@ DETECTORS = [
     detect_addr_form,     # benign, same-value different instruction selection
     detect_wrong_field,   # HIGH real bug -- run before offset/const so a wholesale
                           # structural mismatch isn't downgraded to a 1-line offset
+    detect_port_stub,     # LOW but NOT auto-accepted -- trivial port body vs
+                          # substantial binary body (honest stub OR unported gap);
+                          # must run before call-graph, which otherwise grabs
+                          # these as MED and pins the shortlist
     detect_wrong_offset,  # MED real-ish, localized displacement
     detect_wrong_const,   # MED real-ish, wrong literal
     detect_call_graph,    # MED, missing/extra call or inverted branch
@@ -466,6 +522,13 @@ def classify(sym):
     diff = sym.get("diff", [])
     lcs = parse_lcs(sym.get("reason", ""))
     common, bin_only, port_only = split_sides(diff)
+
+    # Compiler-generated TU static-init is identifiable by NAME alone -- classify
+    # it even when the diff is empty/missing (e.g. UNPAIRED rows) so a
+    # _GLOBAL__I_* row can never fall through to the MED shortlist as `unknown`.
+    res = detect_static_init(mangled, common, bin_only, port_only, lcs)
+    if res:
+        return res
 
     # No divergent lines at all -> nothing to classify (shouldn't be escalated).
     if not bin_only and not port_only:
@@ -490,7 +553,12 @@ def one_line_summary(sym):
     return " | ".join(bits) if bits else "(no divergent lines)"
 
 
-# Map a benign cause to a proposed triage verdict.
+# Map a benign cause to a proposed triage verdict. ONLY causes listed here are
+# eligible for suggested-triage.json auto-accept. `port-stub` / `port-stub-defunct`
+# are deliberately ABSENT: a trivial port body is either a correct policy stub or
+# a genuinely unported gap, and the classifier cannot tell which -- so those rows
+# rank LOW but must stay out of the auto-accept path (human enumerates them from
+# report.json `cause` fields).
 BENIGN_VERDICT = {
     "std-inline": "ACCEPT-cosmetic",
     "got-idiom": "ACCEPT-cosmetic",
@@ -548,8 +616,13 @@ def run(report_path):
     triage_path = os.path.join(out_dir, "suggested-triage.json")
     suggested = {}
     for sym, cause, lk, lcs in low:
+        # Only causes with an explicit BENIGN_VERDICT entry get an auto-accept
+        # proposal. port-stub / port-stub-defunct (and any future LOW-but-not-
+        # benign cause) are skipped: LOW ranking must not imply acceptance.
+        if cause not in BENIGN_VERDICT:
+            continue
         suggested[sym["mangled"]] = {
-            "verdict": BENIGN_VERDICT.get(cause, "ACCEPT-cosmetic"),
+            "verdict": BENIGN_VERDICT[cause],
             "reason": "auto: {}".format(cause),
             "asm_hash": sym.get("asm_hash"),
         }
@@ -594,6 +667,29 @@ def run(report_path):
                   "fields)".format(len(med) - MAX_MED))
     else:
         print("(no HIGH/MED rows)")
+
+    # ---- port-stub section: LOW-ranked but NOT auto-accepted ----
+    # Trivial port body vs substantial binary body. The non-defunct rows are the
+    # candidate UNPORTED GAPS -- listed in full so a human can enumerate them.
+    # Defunct-keyword rows are policy stubs; count + a few examples only.
+    stub_gap = [r for r in rows if r[1] == "port-stub"]
+    stub_def = [r for r in rows if r[1] == "port-stub-defunct"]
+    if stub_gap or stub_def:
+        def _bin_n(r):
+            c, b, p = split_sides(r[0].get("diff", []))
+            return len(c) + len(b)
+        print()
+        print("port-stub rows (trivial port body vs substantial binary; LOW but "
+              "NOT auto-accepted):")
+        print("  {} defunct/platform-keyword stubs (policy stubs, e.g.: {})".format(
+            len(stub_def),
+            ", ".join(_truncate(r[0]["mangled"], 40)
+                      for r in sorted(stub_def, key=_bin_n, reverse=True)[:3])))
+        print("  {} candidate unported gaps (no defunct keyword) -- review these:".format(
+            len(stub_gap)))
+        for r in sorted(stub_gap, key=_bin_n, reverse=True):
+            print("    {:<70} bin {:>4} instrs".format(
+                _truncate(r[0]["mangled"], 70), _bin_n(r)))
 
     # ---- per-cause count summary ----
     cause_counts = Counter(r[1] for r in rows)
@@ -755,6 +851,56 @@ GATE_FIXTURES = {
             "  bx lr",
         ],
     },
+    # FruitNinjaNewsControl::Update (port-stub-defunct): defunct online-news
+    # subsystem, port body is a bare `bx lr` policy stub vs a 200+ instruction
+    # binary body. Must classify LOW (not pin the shortlist as call-graph MED)
+    # but must NOT enter suggested-triage auto-accept.
+    "_ZN21FruitNinjaNewsControl6UpdateEf": {
+        "reason": "0.4% LCS (1p vs 242b)",
+        "diff": [
+            "- push {GREG, GREG, GREG, lr}",
+            "- ldr GREG, [GREG, #12]",
+            "- cmp GREG, #0",
+            "- beq <SYM>",
+            "- CALL <SYM>",
+            "- ldr GREG, [GREG, #48]",
+            "- vldr VREG, [GREG, #56]",
+            "- CALL <SYM>",
+            "- str GREG, [GREG, #16]",
+            "- CALL <SYM>",
+            "- mov GREG, #1",
+            "- strb GREG, [GREG, #20]",
+            "- pop {GREG, GREG, GREG, pc}",
+            "+ bx lr",
+        ],
+    },
+    # ActorManager::Update (plain port-stub): NO defunct keyword in the name --
+    # a trivial port body here is a candidate UNPORTED GAP. Same LOW ranking,
+    # same not-auto-accepted handling, but distinguishable cause.
+    "_ZN6Mortar12ActorManager6UpdateEfP7ColAABBS2_": {
+        "reason": "1.2% LCS (2p vs 85b)",
+        "diff": [
+            "- push {GREG, GREG, GREG, lr}",
+            "- ldr GREG, [GREG, #8]",
+            "- cmp GREG, GREG",
+            "- beq <SYM>",
+            "- CALL <SYM>",
+            "- ldr GREG, [GREG, #4]",
+            "- str GREG, [GREG, #12]",
+            "- CALL <SYM>",
+            "- add GREG, GREG, #1",
+            "- bne <SYM>",
+            "- pop {GREG, GREG, GREG, pc}",
+            "+ mov GREG, #0",
+            "+ bx lr",
+        ],
+    },
+    # Compiler-generated TU static-init row with an EMPTY diff (UNPAIRED shape):
+    # must still classify static-init LOW by name alone, never `unknown MED`.
+    "_GLOBAL__I_ExampleScreen.cpp": {
+        "reason": "unpaired",
+        "diff": [],
+    },
     # ScreenEffect::Activate (the guard-skips-work HIGH case): the port added an
     # `if (img.m_bAddedToHUD) continue;` bit-test guard the binary lacks (tst #1 +
     # beq back to the loop head) that branches PAST the per-image AddControl calls,
@@ -811,6 +957,12 @@ GATE = [
     ("_ZN4Math22GetUncompressedSizeLZ8EPKv", "LOW (benign)", _gate_low_any),
     ("_ZN10MenuButton12HasNewSymbolEv", "NOT HIGH", _gate_not_high),
     ("_ZN10MenuButton15IsLoadingSymbolEv", "NOT HIGH", _gate_not_high),
+    ("_ZN21FruitNinjaNewsControl6UpdateEf", "LOW port-stub-defunct",
+     _gate_low_cause("port-stub-defunct")),
+    ("_ZN6Mortar12ActorManager6UpdateEfP7ColAABBS2_", "LOW port-stub",
+     _gate_low_cause("port-stub")),
+    ("_GLOBAL__I_ExampleScreen.cpp", "LOW static-init",
+     _gate_low_cause("static-init")),
 ]
 
 
