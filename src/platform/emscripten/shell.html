@@ -1528,8 +1528,41 @@
       return c;
     })(),
 
-    print:    function () { console.log.apply(console, arguments); },
-    printErr: function () { console.error.apply(console, arguments); },
+    /* Port specific: batch stdout into one console.log per flush.
+       DevTools captures a stack trace for EVERY console.* call while the
+       Performance panel is recording.  In a 26s profile that made ~230 log
+       lines cost ~650ms -- more than any single GL call, and enough to
+       distort what the profile appears to say.  Buffering and joining keeps
+       every line, and its order, while paying the capture cost once per
+       flush instead of once per line.
+       printErr stays immediate: errors are rare and worth their stack, and
+       it flushes pending stdout first so the two stay interleaved. */
+    print: (function () {
+      var buf = [], timer = null;
+      function flush() {
+        timer = null;
+        if (!buf.length) return;
+        var s = buf.join('\n');
+        buf.length = 0;
+        console.log(s);
+      }
+      var fn = function (text) {
+        buf.push(text);
+        if (buf.length >= 256) { flush(); return; }
+        if (timer === null) timer = setTimeout(flush, 250);
+      };
+      fn.flush = flush;
+      window.addEventListener('pagehide', flush);
+      window.addEventListener('beforeunload', flush);
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flush();
+      });
+      return fn;
+    })(),
+    printErr: function () {
+      if (Module.print && Module.print.flush) Module.print.flush();
+      console.error.apply(console, arguments);
+    },
 
     setStatus: function (text) {
       if (!text) return;
