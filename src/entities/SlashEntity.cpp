@@ -2099,10 +2099,14 @@ void SlashEntity::Update(float dt) {
         // v1.6.1 @0x1e97cc scatter scale RandF(0.75)+0.75 = [0.75,1.5].
         FruitCamera* cam = game_work.m_FruitCamera;
         _Vector3<float> splatPos = cam ? cam->TranslatePos(pos, true, true) : pos;
-        // TODO: v1.6.1 @0x1e9810 binary passes param3=1 (hardcoded true, not false).
+        // ASM-spec v1.6.1 SlashEntity::Update @0x001e982c: param3 = 1 (mov r3,#0x1
+        // @0x001e9828) -- ONLY slash-trail splats are streak-eligible (types 4/5,
+        // 1-in-2 in UpdateSplat). The other three spawn sites (Fruit::Slice
+        // @0x001dcfd0, Jiblet::Update @0x001e5638, ExplodeSuperFruit @0x001bab08)
+        // pass 0.
         // ASM-spec v1.6.1 trail caller @0x001e9788: mute arg = (FruitInfo+0x330
         // m_bIsSuperFruit != 0) -- super-fruit splats land silent.
-        s->MakeSplat(splatPos, v, false,
+        s->MakeSplat(splatPos, v, true,
                      /*mute=*/sliceInfo != 0 && sliceInfo->m_bIsSuperFruit != 0,
                      (long)m_SliceFruitType);
     }

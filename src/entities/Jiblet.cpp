@@ -204,14 +204,9 @@ void Jiblet::Update(float dt) {
             _Vector3<float> sp = pos;
             // sv = (sin*vmag, cos*vmag, 0.0)  (DAT_001e5730 = 0.0)
             _Vector3<float> sv(SinIdx(a16) * vmag, CosIdx(a16) * vmag, 0.0f);
-            // MakeSplat mute arg = (FruitInfo+0x330 m_bIsSuperFruit != 0), matching
-            // the trail callers (Fruit::Slice @0x001dcfc8 / @0x001e9788).
-            // TODO: v1.6.1 0x1e5330 (Jiblet::Update) -- confirm the drip-loop caller's
-            //   mute arg against the binary (unverified; assumed same +0x330 read).
-            const FruitInfo* jibInfo = FruitInfo_Get(m_FruitType);
-            s->MakeSplat(sp, sv, false,
-                         /*mute=*/jibInfo != 0 && jibInfo->m_bIsSuperFruit != 0,
-                         (long)m_FruitType);
+            // ASM-spec v1.6.1 Jiblet::Update @0x001e5618: mute arg is a constant 1
+            // (no FruitInfo lookup) -- drip splats always land silent.
+            s->MakeSplat(sp, sv, false, /*mute=*/true, (long)m_FruitType);
             m_SplatTimer += 1.0f / m_DripRate;
         }
     }

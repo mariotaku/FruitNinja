@@ -11,6 +11,7 @@
 #include "FruitInfo.h"
 #include "hud/HUD.h"
 #include "math/Colour.h"
+#include "math/MathUtil.h"
 #include "audio/GameSound.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -69,8 +70,9 @@ static const float UP_LIFE_RAND       = 2.5f;
 static const float UP_DECAY_BASE      = 0.375f;   // Rand(0.25) + 0.375
 static const float UP_DECAY_RAND      = 0.25f;
 
-// PlaySplat size-bucket thresholds (binary @ 0x0017f9ce-f9f8)
-static const float SPLAT_SZ_LARGE_THR  = 50.0f;   // > 50 -> bucket 3 (no SFX / mute)
+// PlaySplat size-bucket thresholds.
+// ASM-spec v1.6.1 SplatEntity::Update @0x001ebee0: no-SFX bucket threshold is 100.0.
+static const float SPLAT_SZ_LARGE_THR  = 100.0f;  // > 100 -> bucket 3 (no SFX / mute)
 static const float SPLAT_SZ_MEDIUM_THR = 30.0f;   // > 30 -> bucket 2 (medium)
                                                    // else -> bucket 1 (small)
 
@@ -384,7 +386,7 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
 //
 // Bugfix #1: m_Life/m_DecayRate set on landing (binary @ 0x0017fa1c).
 //
-// Bugfix #3: PlaySplat bucket by m_Scale.x (binary @ 0x0017f9ce-f9f8).
+// Bugfix #3: PlaySplat bucket by m_Scale.x (v1.6.1 SplatEntity::Update @0x001ebee0).
 //
 // Bugfix #5: special-fruit splat-type override on landing (binary @ 0x0017f806-f82a).
 void SplatEntity::UpdateSplat(float dt) {
@@ -438,6 +440,26 @@ void SplatEntity::UpdateSplat(float dt) {
 
             m_SplatType = type;
 
+            // ASM-spec v1.6.1 SplatEntity::Update @0x001ebff4: directional streak
+            // orientation for types 4/5 (bottom half of white_splash.tex). Angle
+            // from the landing velocity: Atan2Idx(vel.y, vel.x), degrees =
+            // (uint16)idx / -182.0 (NOTE the negation, vdiv @0x001ec02c), then
+            // jittered by RandF(45)-22 (@0x001ec034..48). Axes rebuilt from the
+            // angle via the deg->idx factor +182.0: axis A (cos,sin)*0.5
+            // (0x3f000000 @0x001ec0a0), axis B at angle+90 scaled *0.25
+            // (0x3e800000 @0x001ec118) -- the 0.25 half-height is what makes the
+            // streak elongated (generic MakeSplat uses 0.5 for both axes).
+            // Must run BEFORE m_Vel is zeroed below.
+            if (m_SplatType - 4U < 2U) {
+                const uint16_t velIdx = (uint16_t)Math::Atan2Idx(m_Vel.y, m_Vel.x);
+                m_Angle = (float)velIdx / -182.0f;
+                m_Angle += RandRange(45.0f) - 22.0f;
+                const uint16_t iA = (uint16_t)(int32_t)(m_Angle * 182.0f);
+                const uint16_t iB = (uint16_t)(int32_t)((m_Angle + 90.0f) * 182.0f);
+                m_AxisA = _Vector3<float>(CosIdx(iA), SinIdx(iA), 0.0f) * 0.5f;
+                m_AxisB = _Vector3<float>(CosIdx(iB), SinIdx(iB), 0.0f) * 0.25f;
+            }
+
             // Per-type size multiplier -- binary at landing branch:
             //   m_Scale *= (kLandScale[type] * 2.5)
             // Table @ 0x001bd074. See kLandScale[] above.
@@ -460,7 +482,7 @@ void SplatEntity::UpdateSplat(float dt) {
             m_Life      = UP_LIFE_BASE  + RandRange(UP_LIFE_RAND);
             m_DecayRate = UP_DECAY_BASE + RandRange(UP_DECAY_RAND);
 
-            // Bugfix #3 (binary @ 0x0017f9ce-f9f8): PlaySplat size bucket is
+            // Bugfix #3 (v1.6.1 SplatEntity::Update @0x001ebee0): PlaySplat size bucket is
             // determined by m_Scale.x (after the landing scale multiply above),
             // NOT by m_SplatType/2. Coconut fruit type suppresses SFX entirely.
             // ASM-spec v1.6.1 SplatEntity::Update @0x001ebee0: PlaySplat gated on m_bMuteSfx==0 (super-fruit splats land silent).
@@ -469,7 +491,7 @@ void SplatEntity::UpdateSplat(float dt) {
                 if (m_FruitType == GetCoconutFruitType()) {
                     splatSize = 0;   // coconut: bucket 0 -- suppress / no SFX
                 } else if (m_Scale.x > SPLAT_SZ_LARGE_THR) {
-                    splatSize = 3;   // large (> 50): no SFX (PlaySplat clamps to [0,2])
+                    splatSize = 3;   // large (> 100): no SFX (PlaySplat clamps to [0,2])
                 } else if (m_Scale.x > SPLAT_SZ_MEDIUM_THR) {
                     splatSize = 2;   // medium (> 30)
                 } else {

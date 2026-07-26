@@ -46,12 +46,18 @@ public:
 
     float    m_Angle;            // +0x10: rotation angle in degrees [0, 360)
     int      m_FruitType;        // +0x14: index into FRUIT_INFO array
-    uint8_t  m_bParam3;          // +0x18: special-spawn flag (bomb-juice / critical variant)
+    uint8_t  m_bParam3;          // +0x18: streak-eligible flag; true only from the
+                                 //        slash-trail spawner (SlashEntity::Update
+                                 //        @0x001e982c). On landing: 1-in-2 chance to
+                                 //        become directional streak type 4/5.
     uint8_t  m_bSpecial;         // +0x19: copy of FRUIT_INFO[m_FruitType].m_bSpecial
     uint8_t  pad1A[2];           // +0x1A: padding
 
     _Vector3<float> m_AxisA;            // +0x1C: right-axis at m_Angle * 0.5
     _Vector3<float> m_AxisB;            // +0x28: up-axis at m_Angle+90 * 0.5
+                                        //        (streak types 4/5 rebuild both on
+                                        //        landing from the velocity angle;
+                                        //        axisB * 0.25 -> elongated quad)
 
     uint8_t  m_bFlipV;           // +0x34: random V-flip flag
     uint8_t  pad35[3];           // +0x35: padding
@@ -104,10 +110,13 @@ public:
     //   Signature: (Vec3 pos, Vec3 vel, bool param3, bool mute, long fruitType).
     //   Always spawns AIRBORNE (m_SplatType=-1) with the real launch velocity;
     //   there is no immediate-landing path in the binary. Splats land via
-    //   normal Update physics (m_Pos.z < -50 threshold). param3 biases the
-    //   landing-type RNG toward large types 4/5 (applied in Update, not here).
-    //   mute = caller's (FruitInfo::m_bIsSuperFruit @+0x330 != 0) -- super-fruit
-    //   splats land silent (m_bMuteSfx).
+    //   normal Update physics (m_Pos.z < -50 threshold). param3 = streak
+    //   eligibility: on landing, 1-in-2 chance to become directional streak
+    //   type 4/5, oriented along the landing velocity (applied in Update, not
+    //   here). Only the slash-trail spawner passes true.
+    //   mute -> m_bMuteSfx (suppress landing SFX). Slash-trail passes the
+    //   caller's (FruitInfo::m_bIsSuperFruit @+0x330 != 0); Jiblet::Update and
+    //   ExplodeSuperFruit pass a constant 1.
     void MakeSplat(_Vector3<float> pos, _Vector3<float> vel, bool param3, bool mute, long fruitType);
 
     // --- Pool API ---
