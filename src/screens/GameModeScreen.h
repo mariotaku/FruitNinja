@@ -114,7 +114,9 @@ public:
     //   +0xa8  m_TransitionTimer  (set to -1 in state 0 transition)
     //   +0xac  m_pClassicButton   (classic.tex, watermelon)
     //   +0xb0  m_pZenButton       (mode_2.tex, apple_red)
-    //   +0xb4  m_SecondaryAlpha   (starts -2.5, lerped toward 1)
+    //   +0xb4  m_SecondaryAlpha   (starts -2.5, lerped toward 1; lags m_TransitionAlpha.
+    //                              Draw uses it for the zen-plate lerp ONLY — the sensei
+    //                              slide uses m_TransitionAlpha +0x8c; see Draw @0x00183ac8)
     //   +0xb8  m_bIsFromPause     (ctor bool param)
     //   +0xb9  m_bChallenge       (= 0; set by SetIsChallenge)
     //   +0xba..+0xbb  2-byte pad

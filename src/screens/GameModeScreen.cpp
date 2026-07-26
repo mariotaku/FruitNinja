@@ -836,26 +836,23 @@ void GameModeScreen::DrawConnectTexture(_Vector3<float> pos) {
 
 // ===================================================================
 // Matches GameModeScreen::Draw @ 0x00183ac8
-// 1. Background panel (mode_sensei.tex) with slide-in from secondaryAlpha
+// 1. Background panel (mode_sensei.tex) with slide-in from m_TransitionAlpha
 // 2. Borders via BaseScreen::DrawBorders (mode_select.tex)
 // 3. Connect animation (zen_sign.tex pulsating)
-// 4. Logo panel (mode_sensei.tex repeated at top-right)
+// 4. Logo panel (zen_sign.tex) lerped by m_SecondaryAlpha
+// ASM-verified: 2026-07-26T05:43Z v1.6.1 GameModeScreen::Draw @ 0x00183ac8 (general-purpose)
+//   0x00183b8c vldr s15,[r5,#0x8c] -> sensei-panel slide reads +0x8c = m_TransitionAlpha
+//   0x00183df8 add r2,r5,#0xb4     -> zen-plate lerp scalar reads +0xb4 = m_SecondaryAlpha
+//   (m_SecondaryAlpha starts -2.5 and lags: the wooden plate flies in late/springy
+//   from far right while the sensei backdrop tracks the fast transition.)
+//   No early-return on m_TransitionAlpha in the binary.
 // ===================================================================
 void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
-    if (m_TransitionAlpha <= 0.0f) return;
-
     MatrixManager& mm = MatrixManager::GetInstance();
 
     // --- 1. Background panel (mode_sensei.tex) ---
-    // Binary math:
-    //   slideVec = (0, 1, 0)  (g_slideVec global)
-    //   scaled   = slideVec * texWidth
-    //   offset   = scaled * (1 - m_SecondaryAlpha)
-    //   translate = offset - POS_BG_NEG
-    //             = (0, texW*(1-sa), 0) - (-188, -32, 0)
-    //             = (188, 32 + texW*(1-sa), 0)
-    // At sa=1: panel at (188, 32). At sa=-2.5: offset is texW*3.5
-    // above, so the panel slides DOWN from above.
+    // Slide factor = m_TransitionAlpha (+0x8c, vldr @0x00183b8c) — the fast
+    // screen transition, NOT the lagging m_SecondaryAlpha.
     // Mode_sensei panel — same pattern as DojoScreen's dojo_sensei:
     // bottom-left position (-188, -32) with horizontal slide from left.
     if (s_TexModeSensei.IsValid()) {
@@ -864,7 +861,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
             (float)s_TexModeSensei->GetWidth() + 1.0f,
             (float)s_TexModeSensei->GetHeight() + 1.0f,
             1.0f);
-        const float slideX = -(float)s_TexModeSensei->GetWidth() * (1.0f - m_SecondaryAlpha);
+        const float slideX = -(float)s_TexModeSensei->GetWidth() * (1.0f - m_TransitionAlpha);
         // DIFFERS: opt-in widescreen -- MapX the bottom-left corner anchor (edge-anchored,
         // same pattern as AboutScreen's about.sensei / DojoScreen's dojo.sensei).
         // Identity when disabled/__bada__.
@@ -904,9 +901,10 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
 
     // --- 5. Logo panel (zen_sign.tex — slot 8, NOT mode_sensei) ---
     // Binary DAT_0013fbc0 = 0x76f8 -> BSS slot for zen_sign.tex.
-    // Standard slide-in lerp: at alpha=0 the sign sits off-right at
-    // SRC=(314,14,10) (past +240 X edge), as alpha->1 it slides in to
-    // rest at DST=(194,29,10) on-screen.
+    // Slide-in lerp src + (dst - src) * t with t = m_SecondaryAlpha
+    // (+0xb4, add r2,r5,#0xb4 @0x00183df8): starts at -2.5 so the plate
+    // begins FAR off-right (past SRC=(314,14,10)) and flies in late and
+    // springy, resting at DST=(194,29,10) as t -> 1.
     // DIFFERS: opt-in widescreen -- MapX both lerp endpoints (edge-anchored,
     // right side). This is the wooden mode-description plate; it's a FIXED
     // right-side position independent of the mode-select rings, so it needs
@@ -917,7 +915,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     if (s_TexZenSign.IsValid()) {
         _Vector3<float> src(MapX(POS_LOGO_SRC.x, "modeselect.plate"), POS_LOGO_SRC.y, POS_LOGO_SRC.z);
         _Vector3<float> dst(MapX(POS_LOGO_DST.x, "modeselect.plate"), POS_LOGO_DST.y, POS_LOGO_DST.z);
-        _Vector3<float> logoPos = src + (dst - src) * m_TransitionAlpha;
+        _Vector3<float> logoPos = src + (dst - src) * m_SecondaryAlpha;
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexZenSign->GetWidth() + 1.0f,
