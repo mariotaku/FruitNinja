@@ -95,7 +95,7 @@ asm-verify.py             -- operand-level diff + classify + report writer
 classify-divergences.py   -- rank divergences (HIGH/MED/LOW); enrich report.json cause/likelihood + suggested-triage.json (ranked shortlist -> stdout)
 triage.sh / triage.json   -- sticky per-asm_hash verdicts
 asm-verify-hook.sh        -- pre-commit hook entry
-manifest.toml             -- hand-written overrides (precedence)
+manifest.toml             -- hand-written overrides (per-key precedence; incl. `port_mangled` forwarder-vs-body aliases -- see its header)
 manifest.generated.toml   -- auto-discovered (gitignored)
 cross-build/              -- object-only `fnverify` target; TU list + demos
 cross-headers/            -- C++11 shims + libstdc++ 4.5 workarounds (no SDL.h)

@@ -432,6 +432,11 @@ def classify_lcs(port_lines, bin_lines):
 
 def verify_one(s: dict) -> dict:
     name = s["mangled"]
+    # Optional symbol alias: the port's real body for this binary symbol lives
+    # under a different mangled name (see manifest.toml header, `port_mangled`).
+    # ONLY the port-side disassembly uses the alias; the binary side keeps
+    # using `mangled` (the binary symbol name / exported .s file).
+    port_name = s.get("port_mangled", name)
     # s["addr"] (from the manifest) is RAW nm/LIEF convention. Every returned
     # dict below overrides "addr" with the Ghidra-convention value (report
     # display) and keeps the raw value under "raw_addr" (internal bookkeeping;
@@ -450,13 +455,13 @@ def verify_one(s: dict) -> dict:
 
     # Semantic normalize + LCS scoring (primary path).
     try:
-        port_text = disasm_port_symbol(port_obj_path, name)
+        port_text = disasm_port_symbol(port_obj_path, port_name)
     except Exception as e:
         return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": "UNPAIRED",
                 "reason": f"port disasm failed: {e}", "diff": []}
     if not port_text.strip():
         return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": "UNPAIRED",
-                "reason": "port symbol not found in .o", "diff": []}
+                "reason": f"port symbol {port_name} not found in .o", "diff": []}
 
     bin_lines = normalize(bin_asm_path.read_text())
     port_lines = normalize(port_text)
@@ -562,6 +567,7 @@ def write_report(results: list[dict]) -> pathlib.Path:
             "raw_addr": r.get("raw_addr"),  # raw nm/LIEF convention (objdump/ELF-native).
             "verdict": r.get("verdict"),
             "reason":  r.get("reason"),
+            "port_mangled": r.get("port_mangled"),  # set only for aliased symbols
             "score":   r.get("score"),
             "max_score": r.get("max_score"),
             "asm_hash": r.get("asm_hash"),
@@ -573,13 +579,24 @@ def write_report(results: list[dict]) -> pathlib.Path:
 
 
 def load_symbols(manifest_paths: list[pathlib.Path]) -> list[dict]:
-    """Merge multiple manifests. Earlier paths take precedence on duplicates."""
+    """Merge multiple manifests. Earlier paths take precedence on duplicates,
+    PER KEY: a later manifest fills in keys the earlier entry omitted. This
+    lets a hand-written override carry only what it overrides (e.g. just
+    `mangled` + `port_mangled` + `notes`) while addr/size/port keep coming
+    from the auto-generated manifest -- those are machine-derived and the
+    port .o path is environment-specific (container vs host build dir)."""
     seen: dict[str, dict] = {}
     for path in manifest_paths:
         if not path.exists():
             continue
         for s in tomllib.loads(path.read_text()).get("symbol", []):
-            seen.setdefault(s["mangled"], s)
+            name = s["mangled"]
+            if name in seen:
+                merged = s.copy()
+                merged.update(seen[name])  # earlier-manifest keys win
+                seen[name] = merged
+            else:
+                seen[name] = s
     return list(seen.values())
 
 
@@ -620,6 +637,17 @@ def main():
     syms = load_symbols(manifests)
     if not syms:
         sys.exit("No [[symbol]] entries in any manifest.")
+
+    # A hand-written entry pairs with its generated counterpart per key; if
+    # the generated manifest has no row for it (symbol dropped from the binary
+    # nm intersection, stale alias, typo), the merged entry lacks addr/port
+    # and cannot be verified. Surface it instead of crashing the worker pool.
+    incomplete = [s for s in syms if "addr" not in s or "port" not in s]
+    if incomplete:
+        for s in incomplete:
+            print(f"  WARN: skipping {s['mangled']}: no addr/port "
+                  f"(no matching entry in the generated manifest)", file=sys.stderr)
+        syms = [s for s in syms if "addr" in s and "port" in s]
 
     if args.filter:
         before = len(syms)

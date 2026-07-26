@@ -120,8 +120,12 @@ def main():
     if not OBJDUMP.exists():
         sys.exit(f"objdump missing: {OBJDUMP}")
 
-    syms: list[dict] = []
-    seen_names: set[str] = set()
+    # Per-key merge across manifests (earlier manifests take precedence per
+    # key) -- mirrors asm-verify.py's load_symbols. A hand-written override
+    # may carry only `mangled` + `port_mangled` + `notes`; addr/size then
+    # come from the generated manifest's row for the same symbol.
+    merged: dict[str, dict] = {}
+    order: list[str] = []
     manifest_concat = ""
     for mp in args.manifest:
         path = pathlib.Path(mp)
@@ -130,10 +134,22 @@ def main():
         text = path.read_text()
         manifest_concat += text + "\n"
         for s in tomllib.loads(text).get("symbol", []):
-            if s["mangled"] in seen_names:
-                continue
-            seen_names.add(s["mangled"])
-            syms.append(s)
+            name = s["mangled"]
+            if name in merged:
+                m = s.copy()
+                m.update(merged[name])  # earlier-manifest keys win
+                merged[name] = m
+            else:
+                merged[name] = s
+                order.append(name)
+    syms = []
+    for name in order:
+        s = merged[name]
+        if "addr" not in s or "size" not in s:
+            print(f"  WARN: skipping {name}: no addr/size "
+                  f"(no matching entry in the generated manifest)", file=sys.stderr)
+            continue
+        syms.append(s)
     if not syms:
         sys.exit("No [[symbol]] entries in any manifest.")
 

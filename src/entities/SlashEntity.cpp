@@ -2332,8 +2332,11 @@ void SlashEntity::InitPoints(long count) {
 // ---------------------------------------------------------------------------
 // SetModColours / InitModColours / SetModScales / ResetModScales
 // ---------------------------------------------------------------------------
+// v1.6.1 SlashEntity::SetModColours @0x001e7f24 -- binary signature (non-const
+// Colour*, per mangled _ZN11SlashEntity13SetModColoursEP6ColouriifPKcS3_bS3_S3_)
+// owns the body; the port-added const overload below forwards here.
 void SlashEntity::SetModColours(
-    const Colour*  colours,
+    Colour*        colours,
     int            colourCount,
     int            colourType,
     float          lifeScale,
@@ -2514,19 +2517,21 @@ bool SlashEntity::CollideWithEntity(Mortar::Entity* entity) {
 int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
                                     unsigned long /*mask2*/, _Vector3<float>* /*bladeVel*/) { return 0; }
 
-// v1.6.1 SlashEntity::SetModColours @0x001e7f24 -- non-const Colour* overload; body identical to const overload.
+// Port-added const-correct convenience overload -- forwards to the binary-mangled
+// non-const overload (v1.6.1 SlashEntity::SetModColours @0x001e7f24), which owns
+// the body. The body only reads the palette, so the const_cast is safe.
 void SlashEntity::SetModColours(
-    Colour*     colours,
-    int         colourCount,
-    int         colourType,
-    float       lifeScale,
-    const char* particlePath,
-    const char* textureName2,
-    bool        directional,
-    const char* contactParticle,
-    const char* particle2)
+    const Colour* colours,
+    int           colourCount,
+    int           colourType,
+    float         lifeScale,
+    const char*   particlePath,
+    const char*   textureName2,
+    bool          directional,
+    const char*   contactParticle,
+    const char*   particle2)
 {
-    SetModColours(static_cast<const Colour*>(colours), colourCount, colourType,
+    SetModColours(const_cast<Colour*>(colours), colourCount, colourType,
                   lifeScale, particlePath, textureName2, directional,
                   contactParticle, particle2);
 }
@@ -2606,6 +2611,11 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
     if (g && game_work.m_BombHitTimer > 0.0f) return;
 #if !defined(__bada__)
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
+#else
+    // Binary data flow: TouchMoveX/Y write Entity::pos (@0x001e785c/@0x001e77b4),
+    // UpdateTouchDown consumes it. m_RawTouchPos is the port-only SDL cache of the
+    // same value (synced to pos in OnTouchActive), so both arms are equivalent.
+    OnTouchActive(pos.x, pos.y);
 #endif
 }
 

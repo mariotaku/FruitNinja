@@ -1,9 +1,59 @@
 # Hand-written asm-verify manifest. Takes precedence over the auto-generated
-# tools/asm-verify-manifest.generated.toml when symbols overlap.
+# tools/asm-verify/manifest.generated.toml when symbols overlap.
 #
-# Each [[symbol]] adds or overrides one entry. Use this file for:
+# Each [[symbol]] adds or overrides one entry. Precedence is PER KEY: a
+# hand-written entry only needs the keys it overrides (plus "mangled" as the
+# join key); addr/size/port fill in from the generated manifest's row for the
+# same symbol. Use this file for:
 #   - hand-tuned `notes` describing port intent vs binary
 #   - non-mangled-name overlaps (e.g. demo wrappers with synthetic names)
 #   - explicit port-side .obj path overrides
+#   - `port_mangled` symbol aliases (below)
 #
-# Empty by default; the auto-discovery output covers the regular case.
+# port_mangled = "<mangled name>"
+#   Diff the BINARY symbol (`mangled`) against a DIFFERENT port-side symbol.
+#   The binary side keeps using `mangled`; only the port disassembly reads
+#   the aliased section. discover-symbols.py resolves the port .o from the
+#   alias, so the body may live in a different TU than a same-name forwarder.
+#
+#   WHEN to use: the port's symbol under the binary's mangled name is only a
+#   thin forwarder, and the REAL ported body lives under a port-chosen name
+#   (canonical signature overload, or a split-out helper). Without the alias
+#   the diff compares forwarder-vs-body -- meaningless, pinned at max score,
+#   crowding real findings out of the divergence ranking.
+#
+#   WHEN NOT to use: a symbol whose body is genuinely UNPORTED (stub, no-op,
+#   partial port) must stay flagged as divergent. Aliasing it to some
+#   other function that "looks similar" hides a real gap behind a fake
+#   verified pairing. The alias asserts "this other symbol IS the faithful
+#   port of this binary function" -- nothing less.
+#
+#   The aliased port symbol's mangled name must be exact (read it off the
+#   cross-build nm / tools/asm-verify/dump-port-nm.sh); a typo or stale name
+#   surfaces as UNPAIRED "port symbol <alias> not found in .o".
+
+# v1.6.1 Fruit::LoadInfo @0x001e1084. Port body is FruitInfo_Load(const char*)
+# in src/entities/FruitInfo.cpp (different TU); the port's Fruit::LoadInfo
+# (src/entities/Fruit.cpp) is a one-line forwarder passing "xml/fruitlist.xml".
+[[symbol]]
+mangled      = "_ZN5Fruit8LoadInfoEv"
+port_mangled = "_Z14FruitInfo_LoadPKc"
+notes        = "binary body ported as FruitInfo_Load(const char*); Fruit::LoadInfo is a forwarder"
+
+# v1.6.1 Mortar::Font::DrawString @0x0024c7f0. The binary-name overload
+# (packed Vec3/Vec2 ABI shape) is a forwarder in the port; the real body is
+# the port's canonical overload (scale, yLineFactor, rotZ, iter, pos&,
+# colour&, maxWH, alignment, z, clipRect) in src/engine/render/Font.cpp
+# (ASM-verified marker on the body).
+[[symbol]]
+mangled      = "_ZN6Mortar4Font10DrawStringENS_18Utf8StringIteratorE8_Vector3IfE6Colourf8_Vector2IfEifPNS_16MortarRectangleTIfEEf"
+port_mangled = "_ZN6Mortar4Font10DrawStringEfffNS_18Utf8StringIteratorERK8_Vector3IfERK6Colour8_Vector2IfEifPNS_16MortarRectangleTIfEE"
+notes        = "binary body ported as the canonical DrawString overload; binary-name overload is a forwarder"
+
+# v1.6.1 ShopScreen::Init @0x001b42ac. Port's Init calls the port-only split
+# ShopScreen::CreateShopList() (same TU, src/screens/ShopScreen.cpp), which
+# holds the binary Init's per-item population loop.
+[[symbol]]
+mangled      = "_ZN10ShopScreen4InitEv"
+port_mangled = "_ZN10ShopScreen14CreateShopListEv"
+notes        = "binary Init body ported as CreateShopList(); port Init forwards to it"

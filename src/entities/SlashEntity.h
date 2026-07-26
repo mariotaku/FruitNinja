@@ -402,6 +402,8 @@ public:
     // Blade modifier apply functions (called from SlashModInfo::SetEquipped).
     // -----------------------------------------------------------------------
 
+    // Port-added const-correct convenience overload; forwards to the
+    // binary-mangled non-const overload (@0x001e7f24) which owns the body.
     static void SetModColours(
         const Colour*  colours,
         int            colourCount,
@@ -474,7 +476,8 @@ public:
     // ASM-verified: 2026-05-18 v1.6.1 InitPoints @ 0x1e75d0 (re-analyst)
     void InitPoints(long count);
 
-    // v1.6.1 SlashEntity::SetModColours @0x001e7f24 -- non-const Colour* overload.
+    // v1.6.1 SlashEntity::SetModColours @0x001e7f24 -- binary signature (non-const
+    // Colour*); owns the real body. The const overload above forwards here.
     static void SetModColours(Colour* colours, int colourCount, int colourType,
                               float lifeScale, const char* particlePath,
                               const char* textureName2, bool directional,

@@ -17,6 +17,11 @@ import sys
 
 import os
 
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore
+
 # tools/asm-verify/discover-symbols.py -> project root is two parents up.
 ASM_VERIFY_DIR = pathlib.Path(__file__).resolve().parent
 PROJECT_ROOT   = ASM_VERIFY_DIR.parent.parent
@@ -32,6 +37,7 @@ CROSS  = pathlib.Path(os.environ.get(
 OUT    = pathlib.Path(os.environ.get(
     "ASM_VERIFY_MANIFEST_OUT",
     ASM_VERIFY_DIR / "manifest.generated.toml"))
+HAND_MANIFEST = ASM_VERIFY_DIR / "manifest.toml"
 
 
 # Skip symbols we don't care about diffing:
@@ -95,8 +101,35 @@ def walk_cross_objs() -> dict[str, pathlib.Path]:
             print(f"  WARN: nm failed on {obj.relative_to(PROJECT_ROOT)}: {e}", file=sys.stderr)
             continue
         for name in syms:
+            prev = out.get(name)
+            if prev is not None and prev != obj:
+                # First-seen-wins over rglob order is arbitrary; if a mangled
+                # name is ever defined in two TUs, surface it -- the silently
+                # picked object could be the wrong body.
+                print(f"  WARN: {name} defined in multiple objects; "
+                      f"keeping {prev.name}, ignoring {obj.name}", file=sys.stderr)
+                continue
             out.setdefault(name, obj)
     return out
+
+
+def load_port_aliases() -> dict[str, str]:
+    """{binary_mangled: port_mangled} from the hand-written manifest.
+
+    A `port_mangled` alias says: the real port body for this binary symbol
+    lives under a different mangled name (see manifest.toml header). The
+    aliased body may live in a DIFFERENT TU than a same-name port forwarder,
+    so the generated row's `port` obj must point at the alias's object file.
+    """
+    if not HAND_MANIFEST.exists():
+        return {}
+    try:
+        data = tomllib.loads(HAND_MANIFEST.read_text())
+    except Exception as e:
+        print(f"  WARN: cannot parse {HAND_MANIFEST.name}: {e}", file=sys.stderr)
+        return {}
+    return {s["mangled"]: s["port_mangled"]
+            for s in data.get("symbol", []) if "port_mangled" in s}
 
 
 def write_manifest(intersect: list[dict]) -> None:
@@ -139,8 +172,13 @@ def main() -> int:
     print(f"      {len(port_syms)} text symbols")
 
     print(f"[3/3] intersect + write manifest...")
-    common = sorted(set(bin_syms) & set(port_syms))
-    only_bin = len(set(bin_syms) - set(port_syms))
+    aliases = load_port_aliases()
+    # A binary symbol pairs either via its own name or via a hand-written
+    # port_mangled alias (whose body may carry a port-chosen mangled name
+    # that never appears in the binary).
+    common = sorted(name for name in bin_syms
+                    if name in port_syms or aliases.get(name) in port_syms)
+    only_bin = len(set(bin_syms) - set(common))
     only_port = len(set(port_syms) - set(bin_syms))
 
     rows = []
@@ -150,8 +188,16 @@ def main() -> int:
             # Fall back to next-symbol-addr - this-addr (rough estimate).
             sorted_addrs = sorted(a for (a, _) in bin_syms.values() if a > addr)
             size = (sorted_addrs[0] - addr) if sorted_addrs else 32
+        port_name = aliases.get(name, name)
+        if port_name not in port_syms:
+            # Alias declared but its body isn't in the cross-build (e.g. TU
+            # excluded); fall back to the same-name obj so the row stays
+            # visible (asm-verify will then report the alias as not found).
+            print(f"  WARN: port_mangled alias {port_name} for {name} not in "
+                  f"cross-build; using same-name obj", file=sys.stderr)
+            port_name = name
         rows.append({"mangled": name, "addr": addr, "size": size,
-                     "port": port_syms[name]})
+                     "port": port_syms[port_name]})
 
     write_manifest(rows)
     print(f"\nWrote {OUT.relative_to(PROJECT_ROOT)} with {len(rows)} symbols.")
