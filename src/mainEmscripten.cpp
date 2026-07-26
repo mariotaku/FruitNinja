@@ -13,6 +13,7 @@
 #include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include "game/SettingsSave.h"
+#include "game/GameTaskState.h"  // fn_save_on_exit: GameTaskSaveOnExit (web tab-hide save)
 #include "game/GameWork.h"
 #include "game/StartupEffects.h"
 #include "audio/SoundManager.h"
@@ -231,6 +232,31 @@ EMSCRIPTEN_KEEPALIVE void fn_web_synth_touch(int phase, int fingerId, float nx, 
     }
 
     SDL_PushEvent(&ev);
+}
+
+// Port specific: called from JS on the tab-hide lifecycle set installed in
+// main() (visibilitychange->hidden / pagehide / beforeunload).  Browsers have
+// no SDL_APP_WILLENTERBACKGROUND-shaped signal we can rely on, so without
+// this the C++ side never writes its save files on tab close and the
+// handler's FS.syncfs(false) has nothing new to push to IndexedDB.
+//
+// Runs the same save path the binary runs on app-suspend
+// (GameTaskSaveOnExit, v1.6.1 @0x001ce170).  Safe to call repeatedly (it
+// fires on EVERY tab-hide):
+//   - SaveSettings() always rewrites the whole SettingsSave.xml (idempotent);
+//   - the game save is gated on *GetIsSavingBool() (re-entrancy) and a
+//     non-null game_work.mHud;
+//   - game_work.m_bUpdatesSuspended=1 has no reader in the port (see
+//     GameWork.h +0x195), so setting it on a hide/show round-trip cannot
+//     freeze the game.
+// The g_gameInited gate is load-bearing, not just defensive: visibilitychange
+// can fire during boot, BEFORE LoadSettings/GameInitialise have populated the
+// globals from IDBFS -- saving at that point would overwrite the user's
+// stored settings with compile-time defaults (and save_dir may not be
+// resolved yet).
+EMSCRIPTEN_KEEPALIVE void fn_save_on_exit(void) {
+    if (!g_gameInited) return;
+    GameTaskSaveOnExit();
 }
 } // extern "C"
 
@@ -773,7 +799,28 @@ int main(int argc, char* argv[]) {
     // callback calls fn_idbfs_ready() which sets g_idbfs_ready so the boot
     // loop can proceed.  If syncfs fails we still set the flag (safe defaults
     // on first run) -- the game handles absent save files gracefully.
-    // A beforeunload listener is also registered as a safety-net flush.
+    //
+    // Save-on-tab-hide lifecycle set: browsers have no reliable "app is
+    // backgrounding" SDL event, so the JS side drives the save.  Each handler
+    // FIRST calls Module._fn_save_on_exit() (C++ writes SettingsSave.xml /
+    // FruitySave.xml / ItemSave.xml into the MEMFS-backed mount --
+    // synchronous) and THEN FS.syncfs(false) as a safety-net push to
+    // IndexedDB.  Order matters: syncfs alone only pushes already-written
+    // files.  Hooks, most reliable first:
+    //   - visibilitychange -> 'hidden': the last moment mobile/TV browsers
+    //     reliably deliver before discarding the page;
+    //   - pagehide: bfcache/navigation teardown;
+    //   - beforeunload: desktop-browser extra net (kept from before).
+    // Multiple hooks can fire for one hide -- fn_save_on_exit is idempotent
+    // (see its comment block) so double-firing is harmless.  The
+    // Module._fn_save_on_exit existence check guards the boot window where
+    // the runtime exports are not wired yet; the C++ side additionally gates
+    // on g_gameInited.  fn_save_on_exit's saves each run their own
+    // FS.syncfs(false) flush, so the handler's syncfs overlaps them --
+    // that is safe: IDBFS snapshots MEMFS state at sync start (the C++
+    // writes have already completed synchronously) and overlapping syncs
+    // write identical content; emscripten just logs a "syncfs operations in
+    // flight" warning in ASSERTIONS builds, no writes are dropped.
     EM_ASM({
         try {
             FS.mkdir('/save');
@@ -785,9 +832,19 @@ int main(int argc, char* argv[]) {
             }
             Module._fn_idbfs_ready();
         });
-        window.addEventListener('beforeunload', function() {
-            FS.syncfs(false, function(err) {});
+        var fnFlushSave = function() {
+            try {
+                if (Module._fn_save_on_exit) Module._fn_save_on_exit();
+            } catch(e) {}
+            try {
+                FS.syncfs(false, function(err) {});
+            } catch(e) {}
+        };
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') fnFlushSave();
         });
+        window.addEventListener('pagehide', fnFlushSave);
+        window.addEventListener('beforeunload', fnFlushSave);
     });
 
     // Port specific: stash window+gl for the boot-wait callback, then spin

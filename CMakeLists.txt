@@ -1079,7 +1079,13 @@ if (EMSCRIPTEN)
         # without adding it here -- the JS call site's `Module._fn_set_audio_enabled`
         # guard silently no-op'd (function never existed on Module), so the
         # audio unlock/session-state setter never ran on ANY tap.
-        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_user_started','_fn_web_synth_touch','_fn_set_audio_enabled','_fn_audio_consent_done']"
+        # fn_save_on_exit: called by the tab-hide lifecycle handlers
+        # (visibilitychange/pagehide/beforeunload, installed in
+        # mainEmscripten.cpp main()) so the C++ side writes its save files
+        # BEFORE the FS.syncfs(false) push to IndexedDB -- its JS call site
+        # uses the same existence-guard pattern, so forgetting it here would
+        # silently no-op exactly like the fn_set_audio_enabled bug above.
+        "SHELL:-sEXPORTED_FUNCTIONS=['_main','_fn_idbfs_ready','_fn_user_started','_fn_web_synth_touch','_fn_set_audio_enabled','_fn_audio_consent_done','_fn_save_on_exit']"
     )
     # Debug build (FN_DEBUG_TOUCH): keep C++ function names in the wasm name
     # section so browser crash stack traces name the actual C++ frames.
