@@ -340,11 +340,19 @@ ScreenEffect::ScreenEffect(const ScreenEffect& rhs)
         m_Sounds[i].m_VoiceHandle = nullptr;
 }
 
-// TODO: v1.6.1 0x00148728 (ScreenEffect::~ScreenEffect) — binary D1 body is 108
-//   bytes; port body is empty (implicit member destruction only) and has not been
-//   verified against it. Deactivate() is called by external callers
-//   (PowerUpManager) before destruction; deleting variant is the sibling
-//   @0x00148794.
+// ASM-spec v1.6.1 ScreenEffect::~ScreenEffect @0x00148728: compiler-generated
+//   member teardown ONLY — ~vector<SoundEffect> (this+0x24, @0x0014873c),
+//   ~vector<ScreenTint> (this+0x18, @0x00148760), ~vector<EffectImage>
+//   (this+0x0c, @0x00148768; element dtor @0x00145ca4 is solely
+//   ~ReloadableTexture: delete[] m_pPath + SmartPtr<Texture> release), then
+//   ~vector<Emmiter> (this+0x00, @0x00148788) — i.e. reverse declaration order,
+//   exactly what an empty body emits implicitly. NO Deactivate call, NO HUD or
+//   emitter or voice release, NO game_work.pM_pHud access. Live handles are
+//   released by Deactivate(), which external callers (PowerUpManager) invoke
+//   before destruction; if they don't, the binary leaks them too. Deleting
+//   variant D0 is the sibling @0x00148794.
+//   The empty body below is therefore already faithful — the 108-byte figure is
+//   four vector dtor calls plus the literal pool, not unported logic.
 ScreenEffect::~ScreenEffect() {
 }
 
@@ -558,6 +566,16 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     // v1.6.1 ScreenEffect::Update @0x00148844
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
+        // Port specific: no binary counterpart -- v1.6.1 Update @0x00148844 writes
+        // through ctrl (`ldr r11,[r5,#8]`) with no null check at all, because
+        // Activate always allocates one control per image so it is never null
+        // there. Defensive only; see the copy-ctor note above for the case that
+        // motivated it. The per-write sites below are likewise UNGATED in the
+        // binary (pos @0x00148a28, size @0x00148a6c, alpha @0x00148a98) -- only
+        // the alpha-modulate block that dereferences the HUD itself is gated on
+        // game_work.pM_pHud (@0x00148a9c-0x00148ad0), and that gate is present.
+        // Do not add a game_work.mHud gate here: Update never runs after HUD
+        // teardown, unlike Deactivate @0x00148510 which does and needs one.
         if (!img.m_pHudCtrl) continue;
 
         // ASM-verified: 2026-07-26T00:00Z v1.6.1 ScreenEffect::Update @ 0x001488a8..0x001488d4 (asm-inspector)
