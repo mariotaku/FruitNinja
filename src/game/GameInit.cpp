@@ -952,26 +952,21 @@ void GameDraw(float dt, bool active) {
     {
         // DIFFERS: original = no pause bg-dim (v1.6.1 GameDraw @0x001cd720). Port injects a full-screen
         //   ~50% black quad between pass15 (WaveManager::Draw(0)) and pass16 (HUD::Draw(0x08)) so the
-        //   frozen gameplay dims while the pause UI (layers 0x08/0x108/0x100) stays bright.
-        //   Alpha source tracks whichever freeze is active: PauseScreen::m_Alpha eases the manual
-        //   in-game pause overlay's own state machine (FADE_IN/ACTIVE/RESUME_EXIT/...), while
-        //   game_work.m_PauseAmount is the real freeze ramp for the arcade game-over/bonus reveal
-        //   (GameOverScreen::Update, STATE_MAIN_DISPLAY: alpha += (1-alpha)*0.125). The two never
-        //   overlap: PauseScreen::IsEnabled() (v1.6.1 @0x00153e4c) requires |m_PauseAmount| < 0.001,
-        //   so m_PauseAmount only leaves 0 once pause is disabled, and PauseScreen::m_State only
-        //   leaves PAUSE_STATE_HIDDEN via PauseGameCallback (manual pause) -- during which
-        //   m_PauseAmount is pinned at 0 by SkipToPause/PauseGame. So max() of the two, clamped to
-        //   [0,1] first, always resolves to the single actually-active freeze without popping the
-        //   manual-pause fade-in (m_PauseAmount contributes 0 throughout manual pause).
+        //   frozen gameplay dims while the manual-pause UI (layers 0x08/0x108/0x100) stays bright.
+        //   Alpha source is PauseScreen::m_Alpha ONLY (the manual pause overlay's own state machine).
+        //   Do NOT drive this from game_work.m_PauseAmount: GameOverScreen::Update ramps it to 1.0
+        //   and HOLDS it there for the entire game-over display in every mode (STATE_MAIN_DISPLAY /
+        //   STATE_RETRY_PREPARE), while all game-over/bonus UI -- GameOverScreen banner,
+        //   FruitFactControl, BonusScreen (all HUD_LAYER_POST_ACTOR 0x80) -- draws BEFORE this quad;
+        //   only ScoreControl (0x08 at game over) draws after. An m_PauseAmount term therefore dims
+        //   the whole game-over screen except the score (regression from f4a473ac). It also never
+        //   yields a bonus-reveal dim: m_PauseAmount stays 0 throughout STATE_BONUS_PHASE.
+        //   PauseScreen::m_Alpha stays 0 for all of game-over (its state machine only leaves
+        //   PAUSE_STATE_HIDDEN via the manual-pause / pause-quit paths), so this dim is
+        //   manual-pause-only by construction.
         {
             PauseScreen* ps = ts->pPauseScreen;
-            // m_PauseAmount uses -1.0f as a pause-transition sentinel (see GameInit.cpp @0x0c writes) --
-            // clamp to [0,1] before combining so a negative transition value never contributes / underflows.
-            float pauseAmountAlpha = game_work.m_PauseAmount;
-            if (pauseAmountAlpha < 0.0f) pauseAmountAlpha = 0.0f;
-            if (pauseAmountAlpha > 1.0f) pauseAmountAlpha = 1.0f;
-            const float psAlpha = ps ? ps->m_Alpha : 0.0f;
-            const float dimA = (pauseAmountAlpha > psAlpha) ? pauseAmountAlpha : psAlpha;
+            const float dimA = ps ? ps->m_Alpha : 0.0f;
             if (dimA > 0.0f) {
                 MatrixManager& mm = MatrixManager::GetInstance();
                 mm.GetWorldStack().Reset();
