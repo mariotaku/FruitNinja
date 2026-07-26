@@ -776,7 +776,12 @@ void ScreenEffect::Deactivate() {
 
     for (size_t i = 0; i < m_Images.size(); ++i) {
         EffectImage& img = m_Images[i];
-        if (img.m_pHudCtrl) {
+        // ASM-spec v1.6.1 ScreenEffect::Deactivate @0x00148510: EffectImage loop guard is
+        // (game_work.pM_pHud != 0 && img.m_pHudCtrl != 0) -- the global-HUD null check is the
+        // binary's defence against the atexit ~PowerUpManager -> Deactivate path running after
+        // GameDestroy has deleted the HUD (GameDestroy @0x0011cea4 nulls game_work.pM_pHud and
+        // never drains PowerUpManager; the manager is a __aeabi_atexit local static @0x00140848).
+        if (game_work.mHud && img.m_pHudCtrl) {
             // v1.6.1 ScreenEffect::Deactivate @0x00148510
             if (img.m_DeferKind == 1) {
                 // Arcade x2 board: bank final payout (doubled points if the window ran
