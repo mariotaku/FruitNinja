@@ -1286,8 +1286,13 @@ void GameOverScreen::Update(float dt) {
                 FruitSaveData* save = game_work.m_SaveData;
                 if (save) {
                     save->secondaryFlag = 0;
-                    save->AddToTotal("games", 1);
-                    save->AddToTotal("totalscore", score);
+                    // ASM-spec v1.6.1 GameOverScreen @0x001875dc/0x001875fc:
+                    // both calls pass trackSession=true, achievementGate=true
+                    // (r3 = count, [sp,#0] = 1, [sp,#4] = 1) -- these lifetime
+                    // totals must land in m_SessionTotals, which survives
+                    // ClearTotals() on quit/retry.
+                    save->AddToTotal("games", StringHash("games"), 1, true, true);
+                    save->AddToTotal("totalscore", StringHash("totalscore"), score, true, true);
                     save->UnlockTotals();
                     AchievementManager::GetInstance()->UnlockScoreAchievement(score);
                     AchievementManager::GetInstance()->UnlockTotalFruitAchievement((int)(intptr_t)game_work.m_pLastScoredSaveEntry);

@@ -774,6 +774,11 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
         if (rated) data->m_bRated = (strcmp(rated, "true") == 0) ? 1 : 0;
         const char* p2p = self.Attribute("p2pCancelled");
         if (p2p) data->m_bP2PCancelled = (strcmp(p2p, "true") == 0) ? 1 : 0;
+        // ASM-spec v1.6.1 ParseSaveFile @0x00154c8c: legacy-highscore migration --
+        // seed CLASSIC's per-mode highscore from the global "highscore" attr
+        // (ldr [+0x40] / str [+0x44]) BEFORE the per-mode attr loop, so a
+        // pre-mode-split save (global attr only) keeps its CLASSIC highscore.
+        data->m_ModeHighScores[0] = data->m_highscore;
         char an[40];
         for (int m = 0; m < 4; m++) {
             snprintf(an, sizeof(an), "%shighscore", k_ModeNames[m]);
@@ -795,9 +800,32 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
         if (type && *type) {
             int score = 0;
             self.QueryIntAttribute("score", &score);
-            const char* u = self.Attribute("u");
-            bool isSession = (u && strcmp(u, "true") == 0);
-            data->AddToTotal(type, StringHash(type), score, isSession, false);
+            // ASM-spec v1.6.1 ParseSaveFile @0x00154c8c: totals with score <= 0
+            // are skipped entirely (no AddToTotal call).
+            if (score > 0) {
+                uint32_t hash = StringHash(type);
+                const char* u = self.Attribute("u");
+                bool isSession = (u && strcmp(u, "true") == 0);
+                // ASM-spec v1.6.1 ParseSaveFile @0x00154c8c: __cxa_guard'ed
+                // function-local static list of SEVEN lifetime-total hashes.
+                // A loaded <total> matching one of them with the "u" attr absent
+                // or false is FORCED to trackSession=1, re-homing it into
+                // m_SessionTotals (+0x18) -- the map that survives ClearTotals()
+                // on quit/retry. Without this, lifetime keys land in the
+                // wipeable m_Totals map and reset every game.
+                static const uint32_t k_LifetimeTotalHashes[7] = {
+                    StringHash("all"),         StringHash("games"),
+                    StringHash("totalscore"),  StringHash("sessions"),
+                    StringHash("bomb"),        StringHash("coming_soon"),
+                    StringHash("unrated_games"),
+                };
+                if (!isSession) {
+                    for (int i = 0; i < 7; i++) {
+                        if (k_LifetimeTotalHashes[i] == hash) { isSession = true; break; }
+                    }
+                }
+                data->AddToTotal(type, hash, score, isSession, false);
+            }
         }
         return;
     } else if (strcmp(tag, "ent") == 0) {
@@ -839,11 +867,15 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
         data->m_bHasActiveGame = 1;
         data->m_EntityStates.clear();
 
+        // ASM-spec v1.6.1 ParseSaveFile @0x00154c8c: m_GameMode is assigned
+        // UNCONDITIONALLY from ParseGameMode (no clamp), then the handler
+        // EARLY-RETURNS before parsing any state attrs when the mode is
+        // unrecognised (> 3) or the save predates the running build.
         const char* mode = self.Attribute("mode");
-        if (mode) {
-            unsigned int gm = ParseGameMode(StringHash(mode));
-            if (gm < 4) data->m_GameMode = gm;
-        }
+        if (mode) data->m_GameMode = ParseGameMode(StringHash(mode));
+        if (data->m_GameMode > 3) return;
+        if (data->m_VersionInfo != GetVersionTotal()) return;
+
         self.QueryIntAttribute("score",  &data->m_CurrentScore);
         self.QueryIntAttribute("misses", &data->m_CurrentMissCount);
         const char* hasDropped = self.Attribute("hasDropped");
@@ -891,7 +923,9 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
             if (strcmp(tag, wc) == 0) {
                 for (TiXmlElement e = self.FirstChildElement("game_count"); e;
                      e = e.NextSiblingElement("game_count")) {
-                    int waveIdx = 0, games = 0;
+                    // ASM-spec v1.6.1 ParseSaveFile @0x00154c8c: defaults are
+                    // -1/-1 (sentinels for a missing attr), not 0/0.
+                    int waveIdx = -1, games = -1;
                     e.QueryIntAttribute("waveIdx", &waveIdx);
                     e.QueryIntAttribute("games",   &games);
                     data->m_ModeScoreHistory[m][waveIdx] = games;

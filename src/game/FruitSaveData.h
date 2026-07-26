@@ -439,6 +439,15 @@ void ParseVersionInfo(const char* s, FruitSaveData* sd);
 // Recursive tag-walker invoked by LoadGame on the <save_file> root element. Dispatches
 // each element by tag name into the matching field group; container tags (save_file,
 // state) recurse into their children. Uses the binary's exact element/attr names.
+// Contract notes:
+// - <save_file>: seeds m_ModeHighScores[0] (CLASSIC) from the global "highscore"
+//   attr before the per-mode attrs (legacy pre-mode-split migration).
+// - <total>: entries with score <= 0 are skipped; the seven lifetime keys
+//   (all/games/totalscore/sessions/bomb/coming_soon/unrated_games) are forced
+//   into m_SessionTotals so they survive ClearTotals() on quit/retry.
+// - <state>: m_GameMode is assigned unconditionally, then the handler early-returns
+//   (no state attrs, no child recursion) if the mode is unrecognised (> 3) or
+//   m_VersionInfo != GetVersionTotal().
 void ParseSaveFile(TiXmlNode* node, FruitSaveData* data);
 
 // ParseWaveInfo -- v1.6.1 @0x00154510 (_Z13ParseWaveInfoP12TiXmlElementP13FruitSaveData).
