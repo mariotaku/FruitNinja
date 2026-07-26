@@ -10,6 +10,7 @@
 #include "entities/Fruit.h"
 #include "util/StringHash.h"
 #include "math/Random.h"
+#include <algorithm>
 #include <cstdlib>
 
 // ASM-spec v1.6.1 SPAWNER_INFO::SelectTypes @0x0012dcc8 (thunk veneer @0x00114654).
@@ -123,7 +124,7 @@ int PROBABILITY_OVERIDE::GetType() {
 void WaveQue::AddWave(WaveInfo* wi, bool isLast) {
     Math::Random& rng = WaveManager::GetInstance()->m_Random;
     WaveQueItem item;
-    item.m_WaveIndex = wi->m_WaveIndex;
+    item.m_Count2 = wi->m_WaveIndex;
 
     // Roll a policy code that controls alternating normal/random spawner-op assignment.
     int policy;
@@ -174,20 +175,30 @@ bool WaveQue::PopWave(WaveQueItem* out) {
     return true;
 }
 
-// WaveQue::RandomiseOrder — binary @ 0x00124464
-// Alternately flips spawner-ops 1<->2 at every other list position (positions 0,2,4,...).
-void WaveQue::RandomiseOrder(bool doSwap) {
-    if (!doSwap) return;
-    int pos = 0;
-    for (std::list<WaveQueItem>::iterator it = m_Items.begin();
-         it != m_Items.end(); ++it, ++pos) {
-        if ((pos & 1) == 0) {
-            for (std::vector<int>::iterator oit = it->m_SlotList.begin();
-                 oit != it->m_SlotList.end(); ++oit) {
-                if (*oit == 1)      *oit = 2;
-                else if (*oit == 2) *oit = 1;
-            }
+// ASM-spec v1.6.1 WaveQue::RandomiseOrder @0x0012d1d0:
+//  iterates a COPY of m_Items; for each item builds a mirrored duplicate via
+//  copy-ctor (@0x0012da08: SlotList+Fraction+Count0/1/2, 0x1c bytes), flips every
+//  slot op 1<->2 (0/3 untouched), swaps m_Count1<->m_Count2 (+0x14<->+0x18), and
+//  inserts it into the REAL queue at index 0,2,4,... -> queue doubles to
+//  [mirror0, orig0, mirror1, orig1, ...]. bool gates the whole thing; sole caller
+//  SetupWaveQue @0x00123458 passes true. Originals are never mutated.
+void WaveQue::RandomiseOrder(bool mirror) {
+    if (!mirror) return;
+    std::list<WaveQueItem> copy(m_Items);
+    int insertPos = 0;
+    for (std::list<WaveQueItem>::iterator it = copy.begin();
+         it != copy.end(); ++it, insertPos += 2) {
+        WaveQueItem m(*it);
+        for (size_t i = 0; i < m.m_SlotList.size(); ++i) {
+            if      (m.m_SlotList[i] == 1) m.m_SlotList[i] = 2;
+            else if (m.m_SlotList[i] == 2) m.m_SlotList[i] = 1;
         }
+        std::swap(m.m_Count1, m.m_Count2);
+        // Binary walks insertPos nodes from begin(); the end-reached-first branch
+        // @0x0012d2c8 is unreachable (index 2k < size n+k for k<n).
+        std::list<WaveQueItem>::iterator ins = m_Items.begin();
+        for (int step = 0; step < insertPos; ++step) ++ins;
+        m_Items.insert(ins, m);
     }
 }
 
@@ -196,7 +207,7 @@ void WaveQue::RandomiseOrder(bool doSwap) {
 // persists across all m_Items, is bumped once per item after the inner slot loop, and
 // is reset to 0 only when a special is placed (anywhere). Per-item cap is
 // it->m_SpecialsCount (WaveQueItem +0x1c, distinct from idleItems). On placement, the
-// slot-selected counter (m_Count0/m_Count1/m_WaveIndex) is decremented.
+// slot-selected counter (m_Count0/m_Count1/m_Count2) is decremented.
 void WaveQue::AddSpecials() {
     Math::Random& rng = WaveManager::GetInstance()->m_Random;
     int idleItems = 0;
@@ -211,7 +222,7 @@ void WaveQue::AddSpecials() {
                 switch (slot) {
                     case 0: it->m_Count0--;    break;
                     case 1: it->m_Count1--;    break;
-                    case 2: it->m_WaveIndex--; break;
+                    case 2: it->m_Count2--;    break;
                 }
                 *oit = 3;
                 ++it->m_SpecialsCount;

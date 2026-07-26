@@ -411,24 +411,34 @@ static_assert(sizeof(PROBABILITY_OVERIDE) == 0x84, "PROBABILITY_OVERIDE size mis
 // Alias kept so existing callers (WaveManager.cpp etc.) compile unchanged.
 typedef WaveInfo WAVE_INFO;
 
-// WaveQueItem — binary @ 0x001268fc ctor. Size 0x20 (32 bytes).
+// WaveQueItem — binary size 0x1c (evidence: operator new(0x1c) in SetupWaveQue,
+// _List_base<WaveQueItem>::_M_get_node @0x0012dab8 allocates 0x24 = 8 node header
+// + 0x1c, copy-ctor @0x0012da08 copies exactly through +0x18). Port is 0x20 — see
+// m_SpecialsCount DIFFERS below.
 // Only used in gameMode==2 (Survival/Combo). SetupWaveQue populates this via AddWave.
 struct WaveQueItem {
     // +0x00..+0x0b: per-spawn slot indices; push_back of {0,1,2} for each unit
     std::vector<int> m_SlotList;    // +0x00, 12 bytes
     // +0x0c: timing/ratio value (init 0.5f; overwritten with count1/totalWeight)
     float m_Fraction;               // +0x0c
-    // +0x10: counter group (treated as int[3] starting at +0x10 by AddWave)
+    // +0x10: counter group (treated as int[3] starting at +0x10 by AddWave
+    // @0x0012d014 via sp+(op+4)*4 and AddSpecials @0x0012cf00 via (op+6)*4)
     int m_Count0;                   // +0x10
     // +0x14: counter slot 1 (left/right balance tracker)
     int m_Count1;                   // +0x14
-    // +0x18: wave-id seed AND counter slot 2; seeded from WAVE_INFO::m_WaveIndex
-    int m_WaveIndex;                // +0x18
-    // +0x1c: per-item cap on AddSpecials placements (<2). Distinct from AddSpecials'
+    // +0x18: counter slot 2; seeded from WaveInfo +0x68 (m_WaveIndex) but indexed
+    // as counter[2] by AddWave/AddSpecials, and swapped with m_Count1 by
+    // RandomiseOrder's mirroring
+    int m_Count2;                   // +0x18
+    // DIFFERS: original has no such field; AddSpecials @0x0012ced4 writes the
+    // per-item cap at node+0x24, one word past the 0x1c-byte WaveQueItem
+    // allocation (an OOB bug in v1.6.1). Port stores it explicitly instead,
+    // making sizeof 0x20.
+    // Per-item cap on AddSpecials placements (<2). Distinct from AddSpecials'
     // cross-item cooldown counter (which is a local, not stored here).
-    int m_SpecialsCount;             // +0x1c
+    int m_SpecialsCount;             // +0x1c (port-only)
 
-    WaveQueItem() : m_Fraction(0.0f), m_Count0(0), m_Count1(0), m_WaveIndex(0), m_SpecialsCount(0) {}
+    WaveQueItem() : m_Fraction(0.0f), m_Count0(0), m_Count1(0), m_Count2(0), m_SpecialsCount(0) {}
 
     // v1.6.1: PopPlayer — binary @ 0x0012cf6c.
     // Pops front of m_SlotList into *out. Returns true if an item was available.
@@ -442,6 +452,8 @@ struct WaveQueItem {
 };
 
 #ifdef __bada__
+// Port value: 0x20. Binary WaveQueItem is 0x1c; the extra word is the port-only
+// m_SpecialsCount (see its DIFFERS — fixes the binary's node+0x24 OOB write).
 static_assert(sizeof(WaveQueItem) == 0x20, "WaveQueItem size mismatch");
 #endif
 
@@ -465,14 +477,16 @@ struct WaveQue {
     // Pops front of m_Items into *out. Returns true if an item was available.
     bool PopWave(WaveQueItem* out);
 
-    // WaveQue::RandomiseOrder — binary @ 0x00124464.
-    // Walks the list and alternately flips spawner-ops 1<->2 at every other position.
-    void RandomiseOrder(bool doSwap);
+    // WaveQue::RandomiseOrder — v1.6.1 @0x0012d1d0.
+    // If mirror: doubles the queue by inserting a left/right-mirrored duplicate of
+    // each item (slot ops 1<->2 flipped, m_Count1<->m_Count2 swapped) before it ->
+    // [mirror0, orig0, mirror1, orig1, ...]. Originals are never mutated.
+    void RandomiseOrder(bool mirror);
 
     // WaveQue::AddSpecials @0x0012ce8c.
     // Iterates all items; for each spawner-op with Rand32(100)<5 (or the cross-item idle
     // cooldown counter > 4), sets the op to 3 (special) if item.m_SpecialsCount<2, and
-    // decrements the slot-selected counter (m_Count0/m_Count1/m_WaveIndex).
+    // decrements the slot-selected counter (m_Count0/m_Count1/m_Count2).
     // RNG = WaveManager::GetInstance()->m_Random.
     void AddSpecials();
 };
