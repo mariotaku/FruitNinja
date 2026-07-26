@@ -1682,10 +1682,12 @@ void GameOverScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
 
             // Per-frame: pulse brightness
             // ASM-spec v1.6.1 GameOverScreen::DrawOrder @0x00186484
-            // phase = 7 - (abs((int)m_Timer) & 7)
+            // phase = 7 - (abs((int)m_Timer) & 7); wedge alpha index INCREMENTS
+            // per wedge (binary: uVar9 = uVar9 + 1) -> (phase + wedge) mod 8,
+            // same direction as MainScreen::DrawLoadingSymbol @0x00198fd4.
             int phase = 7 - (abs((int)m_Timer) & 7);
             for (int wedge = 0; wedge < 8; ++wedge) {
-                int alphaIdx = (phase - wedge) & 7;
+                int alphaIdx = (phase + wedge) & 7;
                 int a = alphaIdx * 0x20;
                 if (a > 0xFF) a = 0xFF;
                 if (a < 0x40) a = 0x40;
