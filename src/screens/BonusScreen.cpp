@@ -47,20 +47,21 @@ static Mortar::SmartPtr<Mortar::Texture> s_bonusScreenBacking;
 // Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
 // REVEAL_END / FINALE_HOLD / DISMISS_BUFFER removed: superseded by the memory-verified
 // revealEnd formula and m_bPendingRemoval latch below (v1.6.1 BonusScreen::Update @0x00163dd0).
-// AWARD_SPACING removed: superseded by TIME_PER_AWARD (0.6f), the real per-award stagger
+// AWARD_SPACING removed: superseded by TIME_PER_AWARD (1.0f), the real per-award stagger
 // (see SET_DEFINES below and the Phase B ASM-spec block).
 
-// SET_DEFINES globals — set on every BonusScreen::Update by SET_DEFINES() @ 0x00162090.
-// Non-const so SET_DEFINES can write them; initial values match what SET_DEFINES writes.
+// SET_DEFINES globals — set once by the SET_DEFINES() static ctor @ 0x00162090
+// (init_array @0x2d174c, runs pre-OspMain). Non-const so SET_DEFINES can write them;
+// initial values match what SET_DEFINES writes.
 // Values memory-verified 2026-07-04 against the resolved tuning struct @0x002d8c3c
 // (v1.6.1 BonusScreen::Update @0x00163dd0, re-analyst batch1 spec).
 static float TRANSITION_IN_TIME  = 0.333333f;  // 0x3eaa7efa (~1/3)
 static float TRANSITION_OUT_TIME = 0.25f;       // 0x3e800000
-// ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0 (struct@0x2d8c3c+0x04, re-verified):
-// TIME_PER_AWARD = 0.6f, staggering each award's reveal 0.6s apart. The prior 1.0f had
-// grabbed the wrong tuning-struct slot; 0.6f is corroborated by the per-award one-shot
-// gate math (ph crosses 0.2s into a 0.6s slot) below.
-static float TIME_PER_AWARD      = 0.6f;        // 0x3f19999a
+// ASM-spec v1.6.1 SET_DEFINES @0x00162090: static ctor (init_array @0x2d174c) writes
+// struct@0x2d8c3c+0x04 = 1.0f (vmov s15,0x3f800000; vstr [r3,#4] @0x162110). The .data
+// initialiser 0.6f (0x3f19999a) is DEAD -- overwritten pre-OspMain, never read.
+// HLE-verified: award spacing ~1.0s, ramp saturates at FA+2*TPA = 2.667s.
+static float TIME_PER_AWARD      = 1.0f;        // 0x3f800000 (struct init 0x3f19999a is dead)
 static float FIRST_AWARD         = 0.666667f;   // 0x3f2a7efa (~2/3)
 static float TOTAL_TIME          = 7.0f;        // 0x40e00000
 static float AWARD_Y_DIF         = -42.0f;      // 0xc2280000
@@ -68,12 +69,14 @@ static float TOTAL_POS_X         = 50.0f;       // DAT_003144b0
 static float TOTAL_POS_Y         = -88.0f;      // DAT_003144b4 (was DAT_003144b8 in spec; adj offset)
 static float TOTAL_POS_Z         = 0.0f;        // DAT_003144bc
 
-// ASM-spec v1.6.1 SET_DEFINES @ 0x00162090 (static, same TU as BonusScreen::Update).
-// Called at the top of every BonusScreen::Update to (re-)initialize tuning constants.
+// ASM-spec v1.6.1 SET_DEFINES @ 0x00162090: static ctor (init_array @0x2d174c), runs
+// once pre-OspMain -- binary xrefs to 0x162090 are init_array only, NOT called from
+// BonusScreen::Update. The port additionally invokes it at the top of Update() below
+// (harmless -- every write is idempotent, same constants every call).
 static void SET_DEFINES() {
     TRANSITION_IN_TIME  = 0.333333f;
     TRANSITION_OUT_TIME = 0.25f;
-    TIME_PER_AWARD      = 0.6f;
+    TIME_PER_AWARD      = 1.0f;
     FIRST_AWARD         = 0.666667f;
     TOTAL_TIME          = 7.0f;
     AWARD_Y_DIF         = -42.0f;
@@ -206,7 +209,8 @@ void BonusScreen::AddAward(Colour colour, Mortar::SmartPtr<Mortar::Texture> tex,
 // Dead accessor (no binary xrefs; Update reads FIRST_AWARD directly).
 float BonusScreen::GetTimeFirstAward() { return FIRST_AWARD; }
 
-// v1.6.1 BonusScreen::GetTimePerAward @0x00162030: getter, struct@0x2d8c3c+0x04 = 0.6f.
+// v1.6.1 BonusScreen::GetTimePerAward @0x00162030: getter, struct@0x2d8c3c+0x04 = 1.0f
+// (the .data initialiser 0.6f is dead -- overwritten pre-OspMain by SET_DEFINES).
 // Dead accessor (no binary xrefs; Update reads TIME_PER_AWARD directly).
 float BonusScreen::GetTimePerAward() { return TIME_PER_AWARD; }
 
@@ -438,7 +442,10 @@ void BonusScreen::BuildBonusText() {
 
 // v1.6.1 @0x00163dd0
 void BonusScreen::Update(float dt) {
-    SET_DEFINES();  // v1.6.1 @ 0x00163dec (called at top of every Update)
+    // SET_DEFINES is a v1.6.1 static ctor (@0x00162090, init_array-only xref) -- the
+    // binary does not call it from Update. Calling it here is a harmless idempotent
+    // re-init (same constants every call).
+    SET_DEFINES();
 
     // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: Update NEVER stores m_Timer (+0xdc).
     // The phase timer is driven externally by GameOverScreen::Update @0x00187104
@@ -559,8 +566,8 @@ void BonusScreen::Update(float dt) {
     // Per-award reveal timing -- TWO animation channels, both driven by
     //   ph   = fmod(m_Timer - FIRST_AWARD, TIME_PER_AWARD)  -- position within CURRENT slot
     //   FIRST_AWARD    = 0.666667f          (initial delay before award 0's slot)
-    //   TIME_PER_AWARD = 0.6f               (each award gets its own 0.6s slot,
-    //                                         staggered i*0.6s after FIRST_AWARD)
+    //   TIME_PER_AWARD = 1.0f               (each award gets its own 1.0s slot,
+    //                                         staggered i*1.0s after FIRST_AWARD)
     // Channel 1 -- text/star fade (entry.m_Colour.a, entry+0x53 = Colour{b,g,r,a}+3):
     //   aRamp = clamp(ph / 0.1f, 0, 1)                      -- @0x164358-0x1643a4, NO -0.2 bias
     //   m_Colour.a = (uint8_t)(aRamp * 255.0f)
@@ -908,7 +915,7 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     // Per-award loop: star + label + value. pos.y steps -42 each row.
     // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector, fresh binary read):
     //   per-row reveal gate `m_Timer - FIRST_AWARD >= i * TIME_PER_AWARD`
-    //   (initial delay FIRST_AWARD=0.666667f, interval TIME_PER_AWARD=0.6f -- re-verified,
+    //   (initial delay FIRST_AWARD=0.666667f, interval TIME_PER_AWARD=1.0f -- re-verified,
     //   struct@0x2d8c3c+0x04; see the SET_DEFINES note above).
     //   Row colour = the per-award element's OWN animated m_Colour (+0x50), NOT a fixed palette
     //   (the prior kDrawRowColours 3-entry palette here was WRONG and has been removed).
