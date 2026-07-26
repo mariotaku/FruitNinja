@@ -1344,7 +1344,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     //   y = bladeSpeed * 0.4                   (impulse length)
     // v1.6.1 Fruit::CollisionResponse @0x001de53c: AddSlice with 6 args.
     //   modelIdx = 0 (normal) or 1 (crit), fruit = this, rateMul = 1.0
-    const float sliceAngleDeg = (float)(int16_t)m_SliceArcAngle / -182.0f + 90.0f;
+    // v1.6.1 @0x001ddac4: the binary reads the halfword UNSIGNED (ldrh +
+    // vcvt.f32.u32), so arc >= 0x8000 must stay positive here. Casting through
+    // int16_t makes those angles 360.09 deg low.
+    const float sliceAngleDeg = (float)(uint16_t)m_SliceArcAngle / -182.0f + 90.0f;
     const float sliceLength   = bladeSpeed * 0.4f;
     AddSlice(_Vector3<float>(sliceAngleDeg, sliceLength, 1.0f), pos.x, pos.y,
              isCritical ? 1 : 0, this, pos.z);
@@ -1666,7 +1669,9 @@ void Fruit::Slice() {
         //   infoA/B.y = impulse * 0.4 * 0.7
         // v1.6.1 Fruit::Slice @0x001dcba0: two crit slice lines at +/-60 deg.
         //   rateMul=1.0, modelIdx=0, fruit=(Fruit*)1 (sentinel, not real ptr)
-        const float critBase = (float)(int16_t)m_SliceArcAngle / -182.0f;
+        // v1.6.1 @0x001dcd98: unsigned halfword read (ldrh + vcvt.f32.u32) -- see
+        // the note at the sliceAngleDeg site above.
+        const float critBase = (float)(uint16_t)m_SliceArcAngle / -182.0f;
         const float critLen  = impulse * 0.4f * 0.7f;
         AddSlice(_Vector3<float>(critBase + 60.0f, critLen, 1.0f), pos.x, pos.y,
                  0, (Fruit*)1, pos.z);
