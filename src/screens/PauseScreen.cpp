@@ -36,6 +36,7 @@
 #include "math/Colour.h"
 #include "engine/audio/GameSound.h"
 #include "engine/network/NetworkManager.h"
+#include "engine/network/P2PMessageHandling.h"
 #include "game/GameOver.h"
 #include "game/PowerUpManager.h"
 #include "screens/MainScreen.h"
@@ -386,27 +387,33 @@ void PauseScreen::Init() {
 }
 
 // -------------------------------------------------------------------------
-// vtable[3]: Release -- nulls 5 SmartPtr<Texture> slots.
-// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x0015408C (re-analyst)
+// vtable[3]: Release -- nulls 5 SmartPtr<Texture> slots, then deletes m_PausedText.
+// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Release @0x001a5bbc (re-analyst)
 //
-// Slots nulled (5x SmartPtrNull_Tex calls at 0x00154054):
-//   +0x74 m_Texture (HUDControl3d primary)
-//   +0xb8 m_PauseButtonTex
-//   +0xbc m_PlayButtonTex
-//   +0xc0 m_QuitTitleTex
-//   +0xc4 m_RetryButtonTex
+// Slots nulled (5x SmartPtr::SetNull, binary order):
+//   +0x74 m_Texture (HUDControl3d primary)  @0x001a5bc4
+//   +0xbc m_PlayButtonTex                   @0x001a5bcc
+//   +0xb8 m_PauseButtonTex                  @0x001a5bd4
+//   +0xc0 m_QuitTitleTex                    @0x001a5bdc
+//   +0xc4 m_RetryButtonTex                  @0x001a5be4
+// Then @0x001a5bec..0x001a5c0c (null-guarded, after the five nulls):
+//   if (m_PausedText) { delete m_PausedText; m_PausedText = 0; }
 // -------------------------------------------------------------------------
 void PauseScreen::Release() {
     m_Texture.SetNull();
-    m_PauseButtonTex.SetNull();
     m_PlayButtonTex.SetNull();
+    m_PauseButtonTex.SetNull();
     m_QuitTitleTex.SetNull();
     m_RetryButtonTex.SetNull();
+    if (m_PausedText) {
+        delete m_PausedText;
+        m_PausedText = nullptr;
+    }
 }
 
 // -------------------------------------------------------------------------
 // vtable[4]: Reset -- restores SP-mode tex assignments on resume/retry buttons
-// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00154024 (re-analyst)
+// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Reset @0x001a58ac (re-analyst)
 //
 // Two if-blocks, no other PauseScreen field is touched:
 //   if (m_RetryButton) {
@@ -511,14 +518,14 @@ void PauseScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
 
 // -------------------------------------------------------------------------
 // vtable[11]: SetToMultiplayerState -- Tier-2 stub
-// Binary: 0x00154060
+// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::SetToMultiplayerState @0x001a5e74 (re-analyst)
 // -------------------------------------------------------------------------
 bool PauseScreen::SetToMultiplayerState() {
-    // Tier-2 deferred (binary @ 0x00154060): vtable[11], called from PauseScreen::Reset on MP entry.
+    // Tier-2 deferred (v1.6.1 @0x001a5e74): vtable[11], called from PauseScreen::Reset on MP entry.
     // Body (3 stores):
     //   1. m_RetryButton->m_Texture = SmartPtr::Null;     // retry+0x74
     //   2. m_RetryButton->m_bAcceptsTouch = 0;             // retry+0x149 -- disable interactability
-    //   3. m_ResumeButton->m_Texture = m_RetryButtonTex;  // resume+0x74 -- show retry icon (+0xc4) on resume btn
+    //   3. m_ResumeButton->m_Texture = m_QuitTitleTex;    // resume+0x74 <- this+0xc0 (add r1,r5,#0xc0), NOT m_RetryButtonTex
     // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
     return HUDControl::SetToMultiplayerState();
 }
@@ -527,30 +534,46 @@ bool PauseScreen::SetToMultiplayerState() {
 // Button delegate callbacks
 // -------------------------------------------------------------------------
 
-// PauseGameCallback (binary 0x001542d0)
+// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::PauseGameCallback @0x001a5978 (re-analyst)
 // Resume button press-action:
-//   State 0 -> 2 (pause from gameplay)
-//   State 3 -> 4 (resume)
+//   Debounce: return while m_ButtonFadeAlpha != 0 (taps mid-fade are swallowed).
+//   State 0 -> 2 (pause from gameplay): m_PressIndex = 0; SFX "Pause" plays BEFORE
+//     the PauseGame() gate; PauseGame() skipped in online MP.
+//   State 3 -> 4 (resume): disable resume touch, m_RevealTimer = 2.0 (@0x001a5a6c;
+//     Update()'s RESUME_EXIT-faded branch writes it again -- both exist in binary),
+//     SFX "Unpause"; then the game_work+0x89 resume-snapshot block: if pending,
+//     re-seed the global RNG from m_FrameTimer (helper @0x001a566c), clear the flag
+//     (same block as ContinueGameCallback).
 void PauseScreen::PauseGameCallback() {
+    if (m_ButtonFadeAlpha != 0.0f) return;
     if (m_State == PAUSE_STATE_HIDDEN) {
         LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_FADE_IN), "PauseGameCallback");
+        m_PressIndex = 0;
         m_State = PAUSE_STATE_FADE_IN;
-        PauseGame();
         // SFX "Pause"
         if (game_work.mGameSound) {
             game_work.mGameSound->SFXPlay("Pause", 1.0f);
         }
+        if (!IsOnlineMultiplayer()) {
+            PauseGame();
+        }
     } else if (m_State == PAUSE_STATE_ACTIVE) {
         LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RESUME_EXIT), "PauseGameCallback");
-        m_State = PAUSE_STATE_RESUME_EXIT;
+        if (m_ResumeButton) m_ResumeButton->m_bAcceptsTouch = 0;
+        m_RevealTimer = 2.0f;
         // SFX "Unpause"
         if (game_work.mGameSound) {
             game_work.mGameSound->SFXPlay("Unpause", 1.0f);
         }
+        m_State = PAUSE_STATE_RESUME_EXIT;
+        if (game_work.m_bResumeSnapshotPresent != 0) {
+            Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
+        }
+        game_work.m_bResumeSnapshotPresent = 0;
     }
 }
 
-// ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00154400 (asm-inspector)
+// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::PauseGameCallback2 @0x001a5b38 (re-analyst)
 void PauseScreen::PauseGameCallback2() {
     bool wasIdle = (m_ButtonFadeAlpha == 0.0f) && (m_State == PAUSE_STATE_HIDDEN);
     PauseGameCallback();   // drives state 0->2 or 3->4
@@ -625,14 +648,14 @@ void PauseScreen::RetryGameCallback() {
 // -------------------------------------------------------------------------
 void PauseScreen::Update(float dt) {
     // --- Lazy button creation (SP path only) ---
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00154468..0x001545fc (asm-inspector)
+    // ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Update @0x001a5ebc, range 0x001a5ec4..0x001a64e4 (re-analyst)
     // Each of the three create blocks is gated only on null-on-self
     // (`+0x98 m_ResumeButton`, `+0xa0 m_QuitButton`, `+0xac m_RetryButton`).
     // No `IsEnabled()` / `levelTransitionFlag` / `m_State` / `m_TransitionTimer` test
     // wraps the allocations — binary creates eagerly on first Update().
     // Visibility on non-gameplay screens is an alpha/draw-time concern,
     // handled by m_ButtonFadeAlpha -> m_DrawColour.a propagation below.
-    // ASM-spec for v1.6.1 binary @ 0x001544e8..0x001545fc (re-analyst):
+    // ASM-spec v1.6.1 PauseScreen::Update @0x001a5ee4..0x001a60d8 (re-analyst):
     //   MenuButton(this, texSP&, &pos, &clickDelegate, fruitType=-1,
     //              &globalCenterVec, &deletedDelegate)
     //   then SetSingular() and AddControl().
@@ -662,7 +685,7 @@ void PauseScreen::Update(float dt) {
         game_work.mHud->AddControl(m_ResumeButton);
         m_ResumeButton->SetSingular();
 
-        // ASM-verified post-Init override (binary @ 0x001545d8..0x00154604):
+        // ASM-verified post-Init override (v1.6.1 PauseScreen::Update @0x001a6060..0x001a60ac):
         //   m_TargetSize = (Vector3::One @ GOT+0x77CC) * 64.0 * 1.0 = (64,64,64)
         //   m_ButtonOriginPos := m_TargetSize  (one-shot capture for OX in
         //   the per-frame position formulas).
@@ -732,8 +755,8 @@ void PauseScreen::Update(float dt) {
         m_RevealTimer -= dt;
         if (m_RevealTimer <= 0.0f) {
             m_RevealTimer = 0.0f;
-            // Re-arm the Resume button. Binary @ 0x00154d24 unconditionally
-            // writes m_bAcceptsTouch(+0x149) = 1 here (re-analyst confirmed
+            // Re-arm the Resume button. v1.6.1 PauseScreen::Update @0x001a6bc8..0x001a6bd0
+            // unconditionally writes m_bAcceptsTouch(+0x149) = 1 here (re-analyst confirmed
             // no = 0 write to +0x149 exists anywhere in PauseScreen::Update).
             if (m_ResumeButton) m_ResumeButton->m_bAcceptsTouch = 1;
         }
@@ -806,7 +829,7 @@ void PauseScreen::Update(float dt) {
 #endif
         // Port: easing already advanced by UpdateRealtime(); read current value.
         if (m_Alpha < EXIT_THRESHOLD) {
-            // Binary @ 0x00154dbc: SaveCurrentData(false) before RetryLevel.
+            // v1.6.1 PauseScreen::Update @0x001a6d0c: SaveCurrentData(false) before RetryLevel.
             SaveCurrentData(false);
             m_Alpha = 0.0f;
             m_ButtonFadeAlpha = 0.0f;
@@ -822,7 +845,7 @@ void PauseScreen::Update(float dt) {
         break;
 
     case PAUSE_STATE_QUIT_EXIT:
-        // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00154dc4..0x00154e1e (re-analyst).
+        // ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Update @0x001a6c58..0x001a6c84 (re-analyst).
         // Binary applies 0.5x extra fast-fade in case 6 then falls through to
         // the common 0.75 decay; both happen each frame.
 #ifdef __bada__
@@ -878,9 +901,9 @@ void PauseScreen::Update(float dt) {
     // Port: easing already advanced by UpdateRealtime() (per-present, dt-scaled,
     // same isEnabled gate re-evaluated there); this 60Hz tick reads the current value.
 
-    // 2. State 6 scratch override (binary @ 0x00154eac..0x00154ec4 +
-    // 0x00155200..0x00155204).
-    // ASM-verified: 2026-05-10 binary (asm-inspector). Binary saves
+    // 2. State 6 scratch override (v1.6.1 PauseScreen::Update @0x001a6dac..0x001a6dc8 +
+    // 0x001a71cc..0x001a71d0).
+    // ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Update @0x001a5ebc (re-analyst). Binary saves
     // m_Alpha + m_ButtonFadeAlpha BEFORE the reset, runs the rendering math
     // with the scratch values, then RESTORES the persistent fields from
     // the saved values at function exit. The 1.0 / 0.0 reset only affects
@@ -967,7 +990,7 @@ void PauseScreen::Update(float dt) {
     //     base positions (off-screen left/right) for the entire pause
     //     overlay -- which is what the user observed visually.
     //
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00154468 (re-analyst)
+    // ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Update @0x001a702c..0x001a705c (re-analyst)
     // Per-frame Resume m_TargetSize: m_ButtonOriginPos (captured (64,64,64)
     // at lazy-create) scaled by resumeScale = m_Alpha * 1.25 + 0.75.
     // MenuButton::Update writes `size = m_TargetSize` each frame, so only
@@ -998,14 +1021,15 @@ void PauseScreen::Update(float dt) {
         m_ResumeButton->pos.x = MapX(-(term1 + term2), "pause.resume");
         m_ResumeButton->pos.y = 0.375f * OX - 165.0f;
     }
-    // Retry base (binary @ 0x00155076..0x00155096):
+    // Retry base (v1.6.1 PauseScreen::Update @0x001a6fa8..0x001a6fe4):
     //   pos = (240 + 0.5*OX, -20, 0)
     // DIFFERS: opt-in widescreen -- MapX re-anchors the right-edge base X.
     if (m_RetryButton) {
         m_RetryButton->pos = _Vector3<float>(MapX(240.0f + 0.5f * OX, "pause.retry"), -20.0f, 0.0f);
     }
 
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00154468 tail (re-analyst)
+    // ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Update @0x001a7078..0x001a7090 (re-analyst)
+    // (gate spans 0x001a7060..0x001a71a0)
     // Retry m_TargetSize := Resume m_TargetSize when m_Alpha > 0.
     // Without this, Retry stays at MenuButton::Init texture-auto-size
     // (129,129,0) -- 2x oversize hitbox and .z=0 degenerate render matrix.
@@ -1021,7 +1045,7 @@ void PauseScreen::Update(float dt) {
     }
 
     // Phase 2: lerp toward on-screen target by m_Alpha.
-    // Binary @ 0x00155106..0x001551d2:
+    // v1.6.1 PauseScreen::Update @0x001a7094..0x001a7198:
     //   button.pos += (to_pos - button.pos) * m_Alpha
     //   Resume target = (-OX, -20, 0) -- inside-left
     //   Retry  target = (+OX, -20, 0) -- inside-right
@@ -1041,7 +1065,7 @@ void PauseScreen::Update(float dt) {
     // m_P2ResumeButton / m_P2RetryButton are always nullptr in Tier-1.
 
     // Restore the persistent fade state -- the state-6 reset above was a
-    // scratch override for rendering only. Binary @ 0x00155200/0x00155204.
+    // scratch override for rendering only. v1.6.1 PauseScreen::Update @0x001a71cc..0x001a71d0.
     m_Alpha           = savedAlpha;
     m_ButtonFadeAlpha = savedButtonFadeAlpha;
 }

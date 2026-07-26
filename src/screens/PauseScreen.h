@@ -136,10 +136,12 @@ public:
     // vtable[2]: Init -- forwards to Reset() per binary 0x00153e28
     void Init() override;
 
-    // vtable[3]: Release -- nulls all owned SmartPtr textures; binary @ 0x0015408c
+    // vtable[3]: Release -- nulls all owned SmartPtr textures, then deletes + nulls
+    // m_PausedText; v1.6.1 PauseScreen::Release @0x001a5bbc
     void Release() override;
 
-    // vtable[4]: Reset -- restores RetryButton/ResumeButton tex to SP defaults; binary @ 0x00154024
+    // vtable[4]: Reset -- restores RetryButton/ResumeButton tex to SP defaults;
+    // v1.6.1 PauseScreen::Reset @0x001a58ac
     void Reset() override;
 
     // vtable[5]: BeginDraw -- asserts m_LayerFlags = 8
@@ -172,8 +174,10 @@ public:
     bool SetToMultiplayerState() override;
 
     // Button delegate callbacks (press-action targets)
+    // No-op while m_ButtonFadeAlpha != 0 (mid-fade taps swallowed);
+    // v1.6.1 PauseScreen::PauseGameCallback @0x001a5978
     void PauseGameCallback();
-    void PauseGameCallback2();
+    void PauseGameCallback2();    // v1.6.1 @0x001a5b38 -- wraps PauseGameCallback, sets m_PressIndex=1
     void QuitGameCallback();
     void QuitGameCallback2();     // binary @ 0x00153ef8 — P2-Quit (MP path)
     void RetryGameCallback();     // binary @ 0x00153f68 — P1 SP Retry
