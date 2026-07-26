@@ -35,7 +35,7 @@ struct SliceEffect {
     float    m_AngleDeg;   // +0x08: v.x (degrees-offset angle)
     _Vector3<float> m_Pos;        // +0x0c: world position (+0x0c..+0x17)
     int      m_ModelIdx;   // +0x18: 0/1/3 -> s_sliceModel index
-    Fruit*   m_pFruit;     // +0x1c: fruit link (dedup/clamp); sentinels 0/1/3
+    Fruit*   m_pFruit;     // +0x1c: fruit link (dedup/clamp); real Fruit* or sentinels 0/1
     float    m_RateMul;    // +0x20: v.z (per-frame timer-rate multiplier)
     // +0x24: dead reserved word -- AddSlice @0x001dc990 memset-0's it and never
     // writes a real value; DrawSlices @0x001dae7c never reads it. (Earlier RE
@@ -85,8 +85,11 @@ extern const _Vector3<float> SLICE_KEYFRAMES[7];
 // Binary: _Z8AddSlice8_Vector3IfEffiP5Fruitf @0x001dc990
 //   v.x = angleDeg, v.y = impulse, v.z = rateMul
 //   posX/posY/posZ = world position of the slice effect
-//   modelIdx: 0=slice_fx, 1=slice_fx_crit, 3=slice_fx (super-fruit pass)
-//   fruit: dedup/clamp link; sentinel values 0, 1, 3 accepted
+//   modelIdx: 0=slice_fx, 1=slice_fx_crit, 3=super-fruit slice model (drawn by
+//     the DrawSlices pass==true second pass)
+//   fruit: dedup link (expires older slices sharing the same m_pFruit); a real
+//     Fruit* (super-fruit call B @0x001bbc70 passes the host fruit) or sentinels
+//     0/1. (An earlier "sentinel 3" note misread that call site's modelIdx arg.)
 void AddSlice(_Vector3<float> v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ);
 
 // DrawSlices -- update timer + draw all active slice nodes.

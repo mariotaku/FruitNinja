@@ -210,11 +210,17 @@ public:
     // TODO: v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20 -- full ExplodeSuperFruit VFX not yet ported
     void ExplodeSuperFruit();
 
+    // Binary @ 0x001b9d60. One-shot (static-flag) TTF glyph-cache warm: bakes
+    // "0123456789HITSLICE" at size 50 via a throwaway FancyBakedString so the
+    // first mid-combo popup pays no bake hitch. Invoked at the top of ChangeText.
+    void PregenerateText();
+
     // Binary @ 0x001b9ee4. Create-or-replace a combo/score popup label.
     //   text     - the string to bake (e.g. "SLICE!", "5 HITS", "+12")
     //   resetFade - if true, restarts the fade-in (m_FadeIn = 0)
     //   target   - which slot to (re)build; NULL => &m_pComboText.
     // Colour-morphs the fill/stroke by m_SliceCount/35; stroke only on fast HW.
+    // Calls PregenerateText() first (binary thunk @0x00112e18).
     void ChangeText(const char* text, bool resetFade, Mortar::FancyBakedString** target);
 
     // Binary @ 0x001bd4d8 (DrawExplosion): draws the two shockwave rings.

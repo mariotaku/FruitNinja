@@ -368,6 +368,11 @@ public:
     // SlashEntity* reinterpret-cast to a phantom SuperFruitHitControl*.)
     void ClampTailPosZ() { if (m_TailPos.z <= 0.8f) m_TailPos.z = 0.8f; }
 
+    // v1.6.1 SuperFruitControl::Sliced @0x001bbcdc: on slow hardware the binary
+    // writes m_PendingSplats (SlashEntity+0x12c) = -1 directly to cancel the
+    // pending splat stream. Minimal public mutator exposing that single write.
+    void CancelPendingSplats() { m_PendingSplats = -1; }
+
 private:
 
     // -----------------------------------------------------------------------

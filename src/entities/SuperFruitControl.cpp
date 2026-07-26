@@ -174,8 +174,12 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
     if (m_pHostFruit) {
         pos = _Vector3<float>(m_pHostFruit->pos.x, m_pHostFruit->pos.y, 0.0f);
         uint16_t idx = (uint16_t)(int)(spin * 182.0f);
-        dir = _Vector3<float>(CosIdx(idx), SinIdx(idx), 0.0f);
-        pos += dir * (320.0f * 0.4f);
+        // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*) @0x001bde88:
+        //   dir = (SinIdx(idx), CosIdx(idx), 0) -- SinIdx feeds x (matches the Update
+        //   throw-phase); pos += dir * 320.0 * 0.4 * 0.625 = dir*80 (pools
+        //   @0x001be18c=320.0, @0x001be198=0.4, [sp,#0x114]=0.625).
+        dir = _Vector3<float>(SinIdx(idx), CosIdx(idx), 0.0f);
+        pos += dir * (320.0f * 0.4f * 0.625f);
     }
 
     // Binary ctor @0x001be1c8: registers ComboCancel delegate on ComboCanceledEvent.
@@ -187,13 +191,17 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
 
     // v1.6.1 @0x001be1c8: throw-orbit camera zoom-in + ramp-down SFX.
     if (m_pHostFruit && game_work.m_FruitCamera) {
-        _Vector3<float> camTgt = m_pHostFruit->pos + dir * (320.0f * 0.15f);   // dir*48
+        // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*) @0x001bde88:
+        //   camTgt = host.pos + dir * 320.0 * 0.15 * 0.625 = dir*30 (pool @0x001be190=0.15).
+        _Vector3<float> camTgt = m_pHostFruit->pos + dir * (320.0f * 0.15f * 0.625f);
         game_work.m_FruitCamera->StartZoomIn(camTgt, 0.625f, spin,
             Mortar::Delegate0<void>::Make(this, &SuperFruitControl::TransitionFin));
     }
+    // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*) @0x001be1c8:
+    //   SFXPlay("pome-rampdown", atten=0.125, gain=1.0, pitch=0.0).
     if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("pome-rampdown", 1.0f, 1.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.125f);
+        game_work.mGameSound->SFXPlay("pome-rampdown", 0.125f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
     }
 }
 
@@ -561,6 +569,28 @@ void SuperFruitControl::Update(float dt)
     m_PrevTimer = m_Timer;  // commit edge tracker (+0x8c = +0x88)
 }
 
+// ASM-spec v1.6.1 SuperFruitControl::PregenerateText @0x001b9d60: one-shot
+// (function-local static flag) TTF-cache warm -- bakes "0123456789HITSLICE" at
+// size 50 (glow layer size 3 on fast HW, else 0, all colours white) into the
+// glyph cache via a throwaway FancyBakedString, so the first mid-combo popup
+// pays no glyph-bake hitch. Called at the top of ChangeText.
+void SuperFruitControl::PregenerateText()
+{
+    static bool hasPreGenerated = false;
+    Game* g = Game::GetInstance();
+    float glowSize = (g && g->IsFastHardware()) ? 3.0f : 0.0f;
+    if (hasPreGenerated || !game_work.m_pTTFFontMain) return;
+    Mortar::FancyBakedString warm(
+        game_work.m_pTTFFontMain, "0123456789HITSLICE", 50.0f,
+        Colour(255, 255, 255, 255), 0, 0.0f,
+        glowSize, Colour(255, 255, 255, 255),
+        0.0f, Colour(255, 255, 255, 255),
+        0.0f, Colour(255, 255, 255, 255),
+        0, 0.0f, 0,
+        Colour(255, 255, 255, 255), Colour(255, 255, 255, 255));
+    hasPreGenerated = true;
+}
+
 // ASM-spec v1.6.1 SuperFruitControl::ChangeText @0x001b9ee4. Create-or-replace a
 // combo/score popup FancyBakedString. Fill (main) + stroke (INNER_GLOW) colours
 // morph across three keys by t = clamp(m_SliceCount/35, 0, 1); stroke drawn only
@@ -568,6 +598,9 @@ void SuperFruitControl::Update(float dt)
 void SuperFruitControl::ChangeText(const char* text, bool resetFade,
                                    Mortar::FancyBakedString** target)
 {
+    // v1.6.1 ChangeText @0x001b9ee4 head: one-shot glyph-cache warm (thunk @0x00112e18).
+    PregenerateText();
+
     if (target == NULL) target = &m_pComboText;
 
     // Create-or-replace: drop any existing label in this slot first.
@@ -600,8 +633,8 @@ void SuperFruitControl::ChangeText(const char* text, bool resetFade,
     *target = new Mortar::FancyBakedString(
         game_work.m_pTTFFontMain, text, 50.0f, colourA, /*p5*/0, /*circleRadius*/0.0f,
         glowSize, colourB,               // glow -> STROKE (the visible halo)
-        0.0f, Colour(0, 0, 0, 255),      // shadow off
-        0.0f, Colour(0, 0, 0, 255),      // stroke off
+        0.0f, Colour(255, 255, 255, 255), // shadow off (binary passes white, inert at size 0)
+        0.0f, Colour(255, 255, 255, 255), // stroke off (binary passes white, inert at size 0)
         /*shadowMode*/0, /*extraSize*/0.0f, /*p15*/0,
         Colour(255, 255, 255, 255), Colour(255, 255, 255, 255));
 
@@ -721,25 +754,26 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     // Glow-counter reroll + per-hit scale-pop.
     if (m_GlowCounter > 0) m_GlowCounter--;
     if (m_GlowCounter < 1) {
-        // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbee4: m_TintB reroll. All constants
+        // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbaac: m_TintB reroll. All constants
         //   are inline immediates (not DATs). idx selects a direction by m_TintB's current
-        //   magnitude: near-zero -> full-random angle; large -> roughly away from current tint
-        //   (opposite-direction fold, jittered); mid-range -> exactly opposite. r's magnitude
-        //   scale (*8+7) matches the binary's literal operands but the exact rand helper composing
-        //   it is not asm-diffed -- uses the file's existing signed-rand idiom (RandF(2x)-x).
+        //   magnitude: near-zero (<1) -> full-random angle; mid (1..44 incl.) -> along the
+        //   current tint drift, Atan2Idx(m_TintB - m_TintA); large (>44) -> roughly away from
+        //   current tint (+0x5ffa opposite fold, jittered by rand(0x3ffc)). Step magnitude is
+        //   TRUNCATED to int before scaling (vcvt.s32/f32 pair @0x001bba34):
+        //   r = (float)(int)(signedRand(1)*8+7).
         {
             float mag = m_TintB.Magnitude();
             uint16_t idx;
             if (mag < 1.0f) {
                 idx = (uint16_t)Math::g_Random.Rand32(0);
-            } else if (mag >= 44.0f) {
+            } else if (mag <= 44.0f) {
+                _Vector3<float> d = m_TintB - m_TintA;
+                idx = (uint16_t)Math::Atan2Idx(d.y, d.x);
+            } else {
                 idx = (uint16_t)((int)Math::Atan2Idx(m_TintB.y, m_TintB.x)
                                  + 0x5ffa + (int)Math::g_Random.Rand32(0x3ffc));
-            } else {
-                _Vector3<float> d = m_TintB * -1.0f;
-                idx = (uint16_t)Math::Atan2Idx(d.y, d.x);
             }
-            float r = SuperFruitSignedRand(1.0f) * 8.0f + 7.0f;
+            float r = (float)(int)(SuperFruitSignedRand(1.0f) * 8.0f + 7.0f);
             m_TintB += _Vector3<float>(CosIdx(idx), SinIdx(idx), 0.0f) * r;
         }
         m_Scale = 0.0f;               // per-hit scale-pop (re-ramps in Update)
@@ -762,15 +796,14 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 
     // v1.6.1 SuperFruitControl::Sliced @0x001bb994: two AddSlice effects at the host fruit pos.
     //   impulse = uniform[0.8, 1.1), rateMul = 0.65, pos.z = m_EmitterDepth - 5.0
-    //   call A: fruit=(Fruit*)0, call B: fruit=(Fruit*)3
     if (m_pHostFruit) {
-        // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: slice angle is derived from
-        //   the SLASH ENTITY's collision line (Entity+0x38 m_Col, a ColLine*), not host velocity.
-        //   Reads the line's first point (a()), negated, then Atan2Idx(y,x).
+        // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbbc4: slice angle is derived from
+        //   the SLASH ENTITY's collision line (Entity+0x38 m_Col, a ColLine*), not host velocity:
+        //   the swipe DIRECTION colLine.a(+0x04) - colLine.b(+0x14), then Atan2Idx(y,x).
         float angleDeg = 0.0f;
         if (slashEntity && slashEntity->m_Col) {
             ColLine* line = static_cast<ColLine*>(slashEntity->m_Col);
-            _Vector3<float> d = line->a() * -1.0f;
+            _Vector3<float> d = line->a() - line->b;
             angleDeg = (float)(int16_t)Math::Atan2Idx(d.y, d.x) / 182.0f;
         }
         float impulse = 0.8f + Math::g_Random.RandF(0.3f);
@@ -778,8 +811,22 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
         float sliceZ = m_pHostFruit->m_ZPosition - 5.0f;   // m_EmitterDepth - 5
         AddSlice(_Vector3<float>(angleDeg, impulse, 0.65f),
                  hostPos.x, hostPos.y, 0, (Fruit*)0, sliceZ);
+        // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbc70: call B passes
+        //   r1 = 3 (modelIdx 3 = super-fruit slice model, drawn by DrawSlices pass==true)
+        //   and r2 = m_pHostFruit (+0x7c) -- AddSlice's dedup loop keys on m_pFruit,
+        //   expiring older slice lines per host fruit.
         AddSlice(_Vector3<float>(angleDeg, impulse, 0.65f),
-                 hostPos.x, hostPos.y, 0, (Fruit*)3, sliceZ);
+                 hostPos.x, hostPos.y, 3, m_pHostFruit, sliceZ);
+    }
+
+    // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbcdc: on slow hardware, cancel the
+    //   slicer's pending splat stream -- if slashEntity->entityType(+0x35) == 3 (SlashEntity)
+    //   and !IsFastHardware(), write m_PendingSplats(+0x12c) = -1.
+    if (slashEntity && slashEntity->entityType == 3) {
+        Game* g = Game::GetInstance();
+        if (!(g && g->IsFastHardware())) {
+            static_cast<SlashEntity*>(slashEntity)->CancelPendingSplats();
+        }
     }
 
     // Clear the linked slasher's head anchor and remove it quickly.
@@ -801,7 +848,7 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 
     // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: pome-slice SFX. n = T_1643(1,3)
     // (uniform int in [1,3]); pitch ramps down from 0.4 as the combo approaches 28 hits, then
-    // holds at 0.4 past that.
+    // holds at 0.4 past that. SFXPlay args: atten=0.125, gain=1.0, pitch=ramp.
     {
         int n = 1 + (int)Math::g_Random.Rand32(3);
         char key[24];
@@ -809,33 +856,41 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
         float t = (float)m_SliceCount / 28.0f;
         float pitch = (t <= 0.8f) ? (t - 0.4f) : 0.4f;
         if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay(key, 1.0f, 1.0f,
+            game_work.mGameSound->SFXPlay(key, 0.125f, 1.0f,
                 Mortar::Delegate1<bool, Mortar::MortarSound*>(), pitch);
         }
     }
 
     // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: per-hit PSP emitter hookup.
-    // NOTE: the binary's particleStopper gate is `IsFastHardware() || stopper==2` -- the port
-    //   has no `stopper` debug setting mapped, so this only tests IsFastHardware().
+    //   Gate: function-local static particleStopper (always incremented); the block runs when
+    //   IsFastHardware() || particleStopper == 2, and resets the counter to 0 on every pass --
+    //   slow-hardware profiles get half-rate particles, not zero.
     {
+        static int particleStopper = 0;
+        ++particleStopper;
         Game* g = Game::GetInstance();
-        bool particlesOn = g && g->IsFastHardware();
-        if (particlesOn && m_pHostFruit) {
-            const FruitInfo* fi = Fruit::FruitInfo((long)m_pHostFruit->m_FruitType);
-            uint32_t emitterHash = fi ? fi->m_NameHash : 0;
-            PSPParticleManager& pm = PSPParticleManager::GetInstance();
-            if (pm.EmitterExists(emitterHash)) {
-                PSPParticleEmitter* e = pm.AddEmitter(emitterHash, 0, false);
-                if (e) {
-                    uint16_t negArc = (uint16_t)(-(int16_t)m_pHostFruit->m_SliceArcAngle);
-                    e->m_DirCos = CosIdx(negArc);
-                    e->m_DirSin = -SinIdx(negArc);
-                    if (slashEntity && slashEntity->m_Col) {
-                        ColLine* line = static_cast<ColLine*>(slashEntity->m_Col);
-                        e->m_Pos = line->a();
+        if ((g && g->IsFastHardware()) || particleStopper == 2) {
+            particleStopper = 0;
+            if (m_pHostFruit) {
+                const FruitInfo* fi = Fruit::FruitInfo((long)m_pHostFruit->m_FruitType);
+                uint32_t emitterHash = fi ? fi->m_NameHash : 0;
+                PSPParticleManager& pm = PSPParticleManager::GetInstance();
+                if (pm.EmitterExists(emitterHash)) {
+                    // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbd8c: AddEmitter's
+                    //   updateWhenPaused arg = (game_work.flM_PauseAmount(+0xc) < 1.0).
+                    PSPParticleEmitter* e = pm.AddEmitter(emitterHash, 0,
+                                                          game_work.m_PauseAmount < 1.0f);
+                    if (e) {
+                        uint16_t negArc = (uint16_t)(-(int16_t)m_pHostFruit->m_SliceArcAngle);
+                        e->m_DirCos = CosIdx(negArc);
+                        e->m_DirSin = -SinIdx(negArc);
+                        if (slashEntity && slashEntity->m_Col) {
+                            ColLine* line = static_cast<ColLine*>(slashEntity->m_Col);
+                            e->m_Pos = line->a();
+                        }
+                        e->m_TimeScale /= WaveManager::GetInstance()->m_ComboSpeedDivisor; // +0x2c
+                        e->m_SpinScale *= 0.5f;                                            // +0x28
                     }
-                    e->m_TimeScale /= WaveManager::GetInstance()->m_ComboSpeedDivisor;   // +0x2c
-                    e->m_SpinScale *= 0.5f;                                              // +0x28
                 }
             }
         }
@@ -845,7 +900,7 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 }
 
 // Binary @ 0x001baa20. Finale VFX: 10 or 25 radial jibs, 8 lettered fragments,
-// white screen flash, SFXPlay vol=2.0.
+// white screen flash, SFXPlay gain=2.0.
 // DAT constants: 0x1bae50=0.2f, 0x1bae54=0.0f, 0x1bae58=0.3f,
 //                0x1bae5c=1000.0f (T_1628 hi), 0x1bae60=600.0f (T_1628 lo),
 //                0x1bae64=700.0f (fragment angular-vel).
@@ -901,10 +956,11 @@ void SuperFruitControl::ExplodeSuperFruit()
     CriticalFlash(hostPos, Colour(255, 255, 255, 255));
 
     // ---- (C) explosion SFX ----
-    // ASM-spec v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20: SFXPlay("pome-burst", vol=2.0, pitch=0.125).
+    // ASM-spec v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001babf4:
+    //   SFXPlay("pome-burst", atten=0.125, gain=2.0, pitch=0.0).
     if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("pome-burst", 2.0f, 1.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.125f);
+        game_work.mGameSound->SFXPlay("pome-burst", 0.125f, 2.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
     }
 
     // ---- (D) 8 lettered mesh fragments (cube-corner pattern) ----
