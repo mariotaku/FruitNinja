@@ -73,8 +73,9 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
     m_Texture->UnSet();
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::HUDControl3d C1 @ 0x0018b72c (re-analyst)
-// (C2 variant @0x0018b6dc; C1 is the one CoinCounter and friends call.)
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::HUDControl3d C1 @ 0x0018b6dc (re-analyst)
+// (C2 variant @0x0018b72c; C1 is the one ScreenEffect::Activate and
+// MenuButton::AddPiece call.)
 // Structure: base ctor (implicit) → vtable (implicit) → SetNull(m_Texture) → SetNull(m_Model) → m_Timer = 0.
 HUDControl3d::HUDControl3d() {
     m_Texture.SetNull();

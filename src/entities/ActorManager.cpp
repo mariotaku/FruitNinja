@@ -127,9 +127,9 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
             for (int j = i; j < m_FreeCount; j++)
                 m_FreePool[j] = m_FreePool[j + 1];
             m_FreePool[m_FreeCount] = nullptr;
-            // Entity::Activate at 0x00170b18: flags &= 0xFE (clear bit 0 only).
-            // Binary @ 0x00170b18: only ENT_INACTIVE (bit 0) is cleared; ENT_KILLED
-            // is NOT touched. ASM-verified: 2026-04-28T15:55Z v1.6.1 binary @ 0x00170b18 (asm-inspector)
+            // Mortar::Entity::Activate: flags &= 0xFE (clear bit 0 only) — only
+            // ENT_INACTIVE (bit 0) is cleared; ENT_KILLED is NOT touched.
+            // ASM-verified: 2026-04-28T15:55Z v1.6.1 Mortar::Entity::Activate @ 0x001d45f8 (asm-inspector)
             candidate->flags &= ~ENT_INACTIVE;
             return candidate;
         }

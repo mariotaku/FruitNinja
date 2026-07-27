@@ -3,9 +3,19 @@
 
 //
 // HUDControl — base class for all HUD elements
-// v1.6.1 HUDControl::HUDControl C1 @0x0018b354 / C2 @0x0018b440, size = 0x74.
-// TODO: v1.6.1 HUDControl -- the remaining bare `binary @ 0x0014xxxx` citations in this
-//   header / HUDControl.cpp are UNVERIFIED v1.5-era leftovers; re-resolve before use.
+// v1.6.1 HUDControl::HUDControl C2 @0x0018b354 / C1 @0x0018b440 (per the ELF symbol
+// table: _ZN10HUDControlC2Ev = 0x0018b354, _ZN10HUDControlC1Ev = 0x0018b440).
+//
+// sizeof(HUDControl) = 0x74. No direct `new HUDControl` exists to read the size off;
+// it is derived from HUDControl3d::C1 @0x0018b6dc doing `str r3,[r0],#0x74` before
+// laying SmartPtr<Texture> at +0x74 and SmartPtr<Model> at +0x78 (0x74+4+4 = 0x7c),
+// corroborated by ~HUDControl3d D1 @0x0018b814 destroying +0x78 then +0x74. The field
+// list below accounts for every byte up to 0x74 with no unexplained gaps.
+//
+// TODO: v1.6.1 HUDControl -- three citations in HUDControl.cpp still carry unresolved
+//   v1.5-era addresses: DefaultDeleteCallback @0x00143f94, and the two ctor-body cites
+//   @0x00144184 / @0x00144104 (the ctor itself is C2 @0x0018b354 / C1 @0x0018b440;
+//   the delegate factory it calls is at 0x0018b310, invoked from 0x0018b3ec).
 //
 
 #include "math/_Vector3.h"
@@ -25,7 +35,7 @@ class ScrollingMenu;
 class HUDControl {
 public:
     // +0x04: if 0, SetToMultiplayerState marks for removal; if 1, preserved.
-    // Binary uses strb (byte store) @ 0x00143fac.
+    // Binary uses strb (byte store); read by v1.6.1 HUDControl::SetToMultiplayerState @0x0018b114.
     uint8_t m_Singular;
 
     // +0x08: position in centered coords
@@ -65,8 +75,9 @@ public:
     // +0x5c: tint colour (BGRA, default white)
     Colour m_DrawColour;
 
-    // +0x60: set to 1 by HUDControl ctor (binary @ 0x00144162: strb.w r8,[r4,#0x60]
-    // with r8=1). Set to 0 by SpeedControl ctor only — opts out of HUD
+    // +0x60: set to 1 by HUDControl ctor (v1.6.1 HUDControl::HUDControl C2 @0x0018b354,
+    // instruction @0x0018b3bc: strb r7,[r4,#0x60] with r7=1; the C1 counterpart is
+    // @0x0018b4a8). Set to 0 by SpeedControl ctor only — opts out of HUD
     // pulse-modulation, gets identity tint vec3(1,1,1).
     uint8_t m_bUseHUDScales;
 
@@ -110,13 +121,14 @@ public:
     virtual void PreDrawOrder(float* hudScale, int layerMask) { PreDraw(hudScale); (void)layerMask; }
     virtual void DrawOrder(float* hudScale, int layerMask) { Draw(hudScale); (void)layerMask; }
     virtual void Update(float dt);
-    // Binary @ 0x00143fac — returns true if this control should be removed (m_Singular == 0).
+    // v1.6.1 HUDControl::SetToMultiplayerState @0x0018b114 — returns true if this
+    // control should be removed (m_Singular == 0).
     virtual bool SetToMultiplayerState();
     virtual int GetType() { return 0; }
     virtual void Skip() {}
     virtual void Save() {}
 
-    // Vtable slot 15 (+0x3c): binary @ 0x136c2c (HUDControl::GetAdjustedPos).
+    // Vtable slot 15 (+0x3c): v1.6.1 HUDControl::GetAdjustedPos @0x00136c2c.
     // Returns pos + Vec3(480, 320, 0) * m_HudScale.
     // Used by MenuButton::Update to re-anchor the held fruit/bomb entity every
     // frame. DAT_00136c88={480,320,0} confirmed.
@@ -179,14 +191,16 @@ public:
     virtual void UpdateRealtime(float dtSeconds) { (void)dtSeconds; }
 #endif
 
+    // Body is `strb #1,[+0x04]`.
+    // ASM-verified: 2026-05-24 v1.6.1 HUDControl::SetSingular @ 0x0019a07c (re-analyst)
     void SetSingular() {
         m_Singular = 1;
-        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0014dda8 (re-analyst)
     }
 
+    // Body is `strb r1,[+0x30]`.
+    // ASM-verified: 2026-05-24 v1.6.1 HUDControl::SetActive @ 0x00178d54 (re-analyst)
     void SetActive(bool b) {
         m_Active = b ? 1 : 0;
-        // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0013cdd0 (re-analyst)
     }
 };
 

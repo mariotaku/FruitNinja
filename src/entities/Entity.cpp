@@ -6,15 +6,18 @@
 #include <map>
 #include <new>
 
-// Binary @ 0x0019d708 / 0x0019d6d0: process-global LinkedHeap arena + size fields.
+// v1.6.1 Mortar::Entity::HeapCreate @0x002564b0 / HeapDestroy @0x00256508:
+// process-global LinkedHeap arena + size fields. The binary keeps these as static
+// class members Mortar::Entity::m_heap @0x0035cdfc and m_heap_size @0x0035ce00.
 namespace Mortar {
 
 static LinkedHeap*   s_pEntityHeap    = 0;
 static unsigned int  s_EntityHeapSize = 0;
 
-// Binary @ 0x0019d88c — base ctor.
-// memset(this, 0, 0x3C) then explicit assignments. Scale stays 0 from memset
-// (subclasses must set scale if they need 1.0). flags bit5 (NO_DESTRUCT) cleared.
+// v1.6.1 Mortar::Entity::Entity C1/C2 @0x00256370 — base ctor.
+// CpuFill8(this, 0, 0x3C) then explicit assignments. Scale (+0x28) stays 0 from the
+// fill (subclasses must set scale if they need 1.0). flags bit5 (NO_DESTRUCT) cleared
+// via bfi on +0x0c.
 Entity::Entity()
     : m_RuntimeID(0)
     , m_TrackerID(0)
@@ -24,15 +27,16 @@ Entity::Entity()
     , m_Angle(0)
     , m_Col(nullptr)
 {
-    // Binary: after memset, pos = ZERO_VEC3, vel = ZERO_VEC3, m_Col = nullptr,
-    // flags &= ~0x20 (bit5 NO_DESTRUCT off). Memberwise init above covers this.
+    // Binary: after the fill, pos = ZERO_VEC3, vel = ZERO_VEC3, m_RecycleFlag = 0,
+    // m_Col = nullptr, flags &= ~0x20 (bit5 NO_DESTRUCT off). Memberwise init above
+    // covers this.
 }
 
-// Binary @ 0x0019d5cc — D1: restores vptr only, does NOT call Release
-// Binary @ 0x0019d794 — D0: deleting variant (compiler-generated)
+// v1.6.1 Mortar::Entity::~Entity D1/D2 @0x002561ec — restores vptr only, does NOT call Release
+// v1.6.1 Mortar::Entity::~Entity D0 @0x00256468 — deleting variant (compiler-generated)
 Entity::~Entity() {}
 
-// Binary: Entity::HeapCreate(size_t bytes) @ 0x0019d708.
+// v1.6.1 Mortar::Entity::HeapCreate(size_t bytes) @0x002564b0.
 // Placement-new a LinkedHeap into a raw operator new(0x24) block.
 // Called from GameInit step 15 with 0x20000 (128 KB).
 void Entity::HeapCreate(unsigned long size) {
@@ -41,7 +45,7 @@ void Entity::HeapCreate(unsigned long size) {
     s_EntityHeapSize = size;
 }
 
-// Binary: Entity::HeapDestroy @ 0x0019d6d0.
+// v1.6.1 Mortar::Entity::HeapDestroy @0x00256508.
 // Explicit dtor call + operator delete, matching placement-new in HeapCreate.
 void Entity::HeapDestroy() {
     if (s_pEntityHeap) {
@@ -57,7 +61,7 @@ void Entity::HeapDestroy() {
 // FruitNinja never loads .lvl files so that path is dead.
 void Entity::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {}
 
-// Binary @ 0x0019d5e8 — base Release: dtor m_Col via vtable[1] then null it.
+// v1.6.1 Mortar::Entity::Release @0x00256210 — base Release: dtor m_Col via vtable[1] then null it.
 // Col has a virtual dtor; delete dispatches to the correct subclass dtor.
 void Entity::Release() {
     if (m_Col) {
@@ -99,9 +103,11 @@ void Entity::ReceiveMessage(Entity* /*sender*/, Mortar::Message* msg) {
     else if (t == 1) flags |=  0x01u;
 }
 
-// Binary @ 0x00172f4c — slot 12: ListenerCallback identity (returns first arg)
-Entity* Entity::ListenerCallback(Entity* a, Entity* /*b*/, Mortar::Message* /*msg*/) {
-    return a;
+// v1.6.1 Mortar::Entity::ListenerCallback @0x001d7738 — slot 12. The whole body is a
+// single `bx lr`, so r0 is left holding the `this` pointer: the binary returns `this`,
+// not the first explicit argument. Vtable-only (8 DATA xrefs, no direct calls).
+Entity* Entity::ListenerCallback(Entity* /*a*/, Entity* /*b*/, Mortar::Message* /*msg*/) {
+    return this;
 }
 
 }  // namespace Mortar
@@ -142,41 +148,41 @@ void ET_RemoveEntity(int treeIdx, uint16_t id) {
 }
 
 // Entity LinkedHeap arena accessors. The binary keeps two process-global slots,
-// written by HeapCreate @ 0x0019d708: a LinkedHeap* (s_pEntityHeap) and the arena
-// byte-size (s_EntityHeapSize).
+// written by HeapCreate @0x002564b0: a LinkedHeap* (m_heap @0x0035cdfc) and the arena
+// byte-size (m_heap_size @0x0035ce00).
 namespace Mortar {
 
-// Binary @ 0x0019d640 — return s_EntityHeapSize directly (NOT a LinkedHeap call).
+// v1.6.1 Mortar::Entity::HeapGetSize @0x002565a4 — return s_EntityHeapSize directly (NOT a LinkedHeap call).
 unsigned int Entity::HeapGetSize() {
     return s_EntityHeapSize;
 }
 
-// Binary @ 0x0019d658 — true when the LinkedHeap pointer slot is populated.
+// v1.6.1 Mortar::Entity::HeapExist @0x002565e4 — true when the LinkedHeap pointer slot is populated.
 bool Entity::HeapExist() {
     return s_pEntityHeap != 0;
 }
 
-// Binary @ 0x0019d678 — LinkedHeap::GetTotalFreeMemory on the global arena.
+// v1.6.1 Mortar::Entity::HeapGetFree @0x002565c4 — tail-calls LinkedHeap::GetTotalFreeMemory @0x0024122c.
 unsigned int Entity::HeapGetFree() {
     if (!s_pEntityHeap) return 0;
     return s_pEntityHeap->GetTotalFreeMemory();
 }
 
-// Binary @ 0x0019d694 — LinkedHeap::DisplayUsage on the global arena.
+// v1.6.1 Mortar::Entity::HeapDisplay @0x00256580 — tail-calls LinkedHeap::DisplayUsage @0x002417a8.
 void Entity::HeapDisplay(bool verbose) {
     if (s_pEntityHeap) {
         s_pEntityHeap->DisplayUsage(verbose);
     }
 }
 
-// Binary @ 0x0019d6b4 — LinkedHeap::ReleaseAll on the global arena.
+// v1.6.1 Mortar::Entity::HeapClear @0x00256560 — tail-calls LinkedHeap::ReleaseAll @0x0010a138.
 void Entity::HeapClear() {
     if (s_pEntityHeap) {
         s_pEntityHeap->ReleaseAll();
     }
 }
 
-// Binary @ 0x0019d7dc — Entity::operator new -> s_pEntityHeap->Allocate(size, NULL)
+// v1.6.1 Mortar::Entity::operator new @0x002563e4 -> s_pEntityHeap->Allocate(size, NULL)
 void* Entity::operator new(size_t size) {
     if (s_pEntityHeap) {
         void* p = s_pEntityHeap->Allocate((unsigned int)size, 0);
@@ -185,7 +191,7 @@ void* Entity::operator new(size_t size) {
     return ::operator new(size);
 }
 
-// Binary @ 0x0019d770 — Entity::operator delete -> s_pEntityHeap->Release(p, false)
+// v1.6.1 Mortar::Entity::operator delete @0x0025643c -> tail-calls LinkedHeap::Release @0x00241640
 // Port-specific guard: if operator new fell back to ::operator new (entity heap full),
 // the returned pointer is a system-heap address. Calling LinkedHeap::Release on it
 // would interpret garbage memory as a Block header and corrupt the heap. Check
@@ -201,7 +207,14 @@ void Entity::operator delete(void* p) {
     ::operator delete(p);
 }
 
-// Binary @ 0x0019d7b8 — Entity::operator new[] -> s_pEntityHeap->Allocate(size, NULL)
+// v1.6.1 Mortar::Entity::operator new(size_t, void*) @0x0025640c — placement new.
+// Binary body is `cpy r0,r1; bx lr`: the arena is bypassed entirely and the caller's
+// storage is returned unchanged.
+void* Entity::operator new(size_t /*size*/, void* place) {
+    return place;
+}
+
+// v1.6.1 Mortar::Entity::operator new[] @0x00256414 -> s_pEntityHeap->Allocate(size, NULL)
 void* Entity::operator new[](size_t size) {
     if (s_pEntityHeap) {
         void* p = s_pEntityHeap->Allocate((unsigned int)size, 0);
@@ -210,7 +223,7 @@ void* Entity::operator new[](size_t size) {
     return ::operator new[](size);
 }
 
-// Binary @ 0x0019d74c — Entity::operator delete[] -> s_pEntityHeap->Release(p, false)
+// v1.6.1 Mortar::Entity::operator delete[] @0x00256484 -> tail-calls LinkedHeap::Release @0x00241640
 // Same Contains() guard as operator delete (scalar) — see comment there.
 void Entity::operator delete[](void* p) {
     if (p && s_pEntityHeap) {

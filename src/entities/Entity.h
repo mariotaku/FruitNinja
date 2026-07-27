@@ -18,16 +18,12 @@ struct Renderer;
 // is required for ActorManager::Update and Draw to gate iteration the
 // same way the binary does (test `(flags & 0x11) == 0`).
 //
-// Analysed: 2026-05-04T00:00
+// Layout verified from v1.6.1 Mortar::Entity::Entity @0x00256370:
+//   CpuFill8(this, 0, 0x3c) -> ZERO_VEC3 into +0x10 and +0x1c -> strb #0,[+0x34]
+//   -> str #0,[+0x38] -> bfi clearing bit5 of +0x0c. Scale (+0x28) is NOT zeroed
+//   separately; the 0x3c fill covers it. sizeof(Entity) = 0x3C confirmed.
 //
-// TODO: v1.6.1 Mortar::Entity — the remaining bare `Binary @ 0x0019dXXX` citations in
-//   this header / Entity.cpp (ctor, dtors, Release, Heap*, operator new/delete,
-//   ListenerCallback) are UNVERIFIED v1.5-era leftovers: that range is live .text in
-//   v1.6.1 but holds MenuButton/MissControl bodies, so they point at the wrong
-//   function. The vtable no-op slots that WERE re-resolved (Init/PostLoad/
-//   CollisionResponse/Collide/ReceiveMessage/InRect) are restamped below.
-//
-// Layout verified from ctor at 0x0019d88c (memset 0x3C bytes):
+// Field map:
 //   +0x00: vtable (4B)
 //   +0x04: m_RuntimeID / uint32_t (4B) — RuntimeID / LoadEntity ID; matched by
 //          ActorManager::FindByID against a trackerKey, and as the message senderId
@@ -39,7 +35,7 @@ struct Renderer;
 //   +0x1c: vel / Vec3 (12B)
 //   +0x28: scale / Vec3 (12B)
 //   +0x34: m_RecycleFlag / uint8_t (1B)
-//   +0x35: type / uint8_t (1B) — entity type; port widens to int
+//   +0x35: type / uint8_t (1B) — entity type
 //   +0x36: m_Angle / uint16_t (2B) — used by LoadEntity and Coin::Draw
 //   +0x38: m_Col / Col* (4B)
 //   sizeof = 0x3C (60)
@@ -61,8 +57,7 @@ enum EntityFlagBits : uint8_t {
 
 namespace Mortar {
 
-// ASM-verified: 2026-04-28T15:55Z v1.6.1 binary @ 0x0019d88c (asm-inspector)
-// ASM-verified: 2026-04-28T15:55Z v1.6.1 binary @ 0x001ea478 (asm-inspector)
+// ASM-verified: 2026-04-28T15:55Z v1.6.1 Mortar::Entity::Entity @ 0x00256370 (asm-inspector)
 class Entity {
 public:
     // +0x04: RuntimeID / loader field. Set by LoadEntity; matched by
@@ -106,30 +101,32 @@ public:
     uint8_t entityType;
 
     // +0x36: 16-bit angle used by LoadEntity and Coin::Draw (Y-rotation index).
-    // Binary @ 0x0019d88c ctor: zeroed by memset. BombBlast::Init writes random.
+    // v1.6.1 Mortar::Entity::Entity @0x00256370: zeroed by the 0x3c fill.
+    // BombBlast::Init writes random.
     uint16_t m_Angle;        // +0x36 in binary
 
     // +0x38: collision primitive pointer (nullable).
     Col* m_Col;     // +0x38 in binary -- polymorphic; subclasses install ColSphere/ColLine/ColAABB
 
-    // Binary @ 0x0019d88c — base ctor
+    // v1.6.1 Mortar::Entity::Entity C1/C2 @0x00256370 — base ctor (both aliases
+    // resolve to the same address in the symbol table)
     Entity();
 
-    // Binary @ 0x0019d5cc — D1: restores vptr only, does NOT call Release
-    // Binary @ 0x0019d794 — D0: deleting variant
+    // v1.6.1 Mortar::Entity::~Entity D1/D2 @0x002561ec — restores vptr only, does NOT call Release
+    // v1.6.1 Mortar::Entity::~Entity D0 @0x00256468 — deleting variant
     virtual ~Entity();
 
-    // Binary: Entity::HeapCreate(size_t) @ 0x0019d708 (40 bytes).
+    // v1.6.1 Mortar::Entity::HeapCreate(size_t) @0x002564b0.
     // Called from GameInit step 15 with 0x20000 (128 KB) to allocate the
     // process-global LinkedHeap Entity arena before ActorManager::Initialise.
     // DIFFERS: original = LinkedHeap arena 0x20000, port uses std new (no fixed cap).
     static void HeapCreate(unsigned long bytes);
 
     // Counterpart to HeapCreate; called from GameExit.
-    // Binary: Entity::HeapDestroy @ 0x0019d6d0.
+    // v1.6.1 Mortar::Entity::HeapDestroy @0x00256508.
     static void HeapDestroy();
 
-    // Binary @ 0x00170b18 — clear bit0 (ENT_INACTIVE). Called by ActorManager::Add
+    // v1.6.1 Mortar::Entity::Activate @0x001d45f8 — clear bit0 (ENT_INACTIVE). Called by ActorManager::Add
     // recycle path. Single instruction: strb r0,[r0,#0x0c] where r0=flags & ~1.
     void Activate() { flags &= ~static_cast<uint8_t>(0x01u); }
 
@@ -142,7 +139,7 @@ public:
                       long   /*entityTypeOrLen, ignored except by .lvl loader*/,
                       _Vector3<float>* /*scaleOrNull; defaults to (1,1,1)*/);
 
-    // Vtable slot 3 (+0x0C): Release — Binary @ 0x0019d5e8
+    // Vtable slot 3 (+0x0C): Release — v1.6.1 Mortar::Entity::Release @0x00256210
     // Base: frees m_Col then nulls it. Subclasses override to release resources.
     virtual void Release();
 
@@ -185,32 +182,41 @@ public:
     // msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE
     virtual void ReceiveMessage(Entity* sender, Mortar::Message* msg);
 
-    // Vtable slot 12 (+0x30): ListenerCallback — Binary @ 0x00172f4c
-    // Returns first argument (identity).
+    // Vtable slot 12 (+0x30): ListenerCallback — v1.6.1 Mortar::Entity::ListenerCallback @0x001d7738.
+    // Binary body is a single `bx lr`, i.e. it returns r0 == `this` (NOT the first
+    // explicit argument). Vtable-only in the binary: 8 DATA xrefs, zero direct calls.
     virtual Entity* ListenerCallback(Entity* a, Entity* b, Mortar::Message* msg);
 
     // Binary test: `(flags & 0x11) == 0`. Inactive / killed entities fail.
     bool IsActive() const { return (flags & ENT_SKIP_MASK) == 0; }
 
     // Entity LinkedHeap allocation overrides.
-    // Binary @ 0x0019d7dc / 0x0019d770 / 0x0019d7b8 / 0x0019d74c.
+    // v1.6.1 Mortar::Entity::operator new @0x002563e4 / operator new[] @0x00256414 /
+    //   operator delete @0x0025643c / operator delete[] @0x00256484.
+    // Both delete forms tail-call LinkedHeap::Release @0x00241640.
     // Route through the global LinkedHeap arena; fall back to global ::operator new/delete.
     static void* operator new(size_t size);
     static void  operator delete(void* p);
     static void* operator new[](size_t size);
     static void  operator delete[](void* p);
 
+    // v1.6.1 Mortar::Entity::operator new(size_t, void*) @0x0025640c — placement new.
+    // Binary body is `cpy r0,r1; bx lr`: returns the supplied storage unchanged.
+    // Declared in-class by the binary, so it hides the global placement form for
+    // Entity and its subclasses; behaviour is identical.
+    static void* operator new(size_t size, void* place);
+
     // Entity LinkedHeap arena accessors (counterparts to HeapCreate/HeapDestroy).
     // Operate on the process-global LinkedHeap that HeapCreate allocates.
-    // Binary @ 0x0019d6b4 — HeapClear: LinkedHeap::ReleaseAll on the global Entity arena
+    // v1.6.1 Mortar::Entity::HeapClear @0x00256560 — tail-calls LinkedHeap::ReleaseAll @0x0010a138
     static void HeapClear();
-    // Binary @ 0x0019d694 — HeapDisplay: debug-dump the Entity LinkedHeap (bool = verbose)
+    // v1.6.1 Mortar::Entity::HeapDisplay @0x00256580 — tail-calls LinkedHeap::DisplayUsage @0x002417a8 (bool = verbose)
     static void HeapDisplay(bool verbose);
-    // Binary @ 0x0019d658 — HeapExist: report whether the global Entity LinkedHeap is allocated
+    // v1.6.1 Mortar::Entity::HeapExist @0x002565e4 — report whether the global Entity LinkedHeap is allocated
     static bool HeapExist();
-    // Binary @ 0x0019d678 — HeapGetFree: return free byte count of the Entity LinkedHeap
+    // v1.6.1 Mortar::Entity::HeapGetFree @0x002565c4 — tail-calls LinkedHeap::GetTotalFreeMemory @0x0024122c
     static unsigned int HeapGetFree();
-    // Binary @ 0x0019d640 — HeapGetSize: return total byte size of the Entity LinkedHeap
+    // v1.6.1 Mortar::Entity::HeapGetSize @0x002565a4 — returns the s_EntityHeapSize global directly
     static unsigned int HeapGetSize();
 };
 

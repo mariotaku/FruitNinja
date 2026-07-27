@@ -13,10 +13,10 @@
 //                                                  Dtor D1 @0x0018b814 calls SmartPtr<Model>::~SmartPtr
 //                                                  on this+0x78 confirming the type.
 //
-// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d C2 @0x0018b6dc / C1 @0x0018b72c (ctors),
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d C1 @0x0018b6dc / C2 @0x0018b72c (ctors),
 //   D0 @0x0018b77c / D1 @0x0018b814 / D2 @0x0018b8a4 (dtors), Release @0x0018b134,
 //   PreDraw @0x0018b138, Update @0x0018b13c, Draw @0x0018b544 (re-analyst)
-// NOTE: the HUDControl BASE ctor is a separate symbol (C1 @0x0018b354 / C2 @0x0018b440)
+// NOTE: the HUDControl BASE ctor is a separate symbol (C2 @0x0018b354 / C1 @0x0018b440)
 //   and is documented in HUDControl.h, not here.
 //
 
@@ -58,7 +58,10 @@ public:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(HUDControl3d) == 0x7c, "HUDControl3d size mismatch"); // v1.6.1 HUDControl3d @0x149084
+// v1.6.1: operator new(0x7c) at ScreenEffect::Activate @0x00149080-84 and
+// MenuButton::AddPiece @0x0019cd64, both `mov r0,#0x7c` immediately before
+// HUDControl3d::C1 @0x0018b6dc.
+static_assert(sizeof(HUDControl3d) == 0x7c, "HUDControl3d size mismatch");
 #endif
 
 #endif
