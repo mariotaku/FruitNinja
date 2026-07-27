@@ -126,13 +126,12 @@ void MatrixStack::Reset() {}
 void MatrixStack::Scale(const _Vector3<float>&) {}
 void MatrixStack::Translate(const _Vector3<float>&) {}
 void MatrixStack::SetCurrentMatrix(const Matrix44&) {}
-// RotZ/TranslateLocal/ScaleRows are referenced by BakedStringTTF::Draw (now linked in
+// RotZ/TranslateLocal are referenced by BakedStringTTF::Draw (now linked in
 // for the BakedStringBox -> FancyBakedString -> BakedStringTTF dispatcher chain) but
 // never actually invoked by this test (it only exercises the static ComputeBaselineY).
 // Link-only stubs.
 void MatrixStack::RotZ(float) {}
 void MatrixStack::TranslateLocal(const _Vector3<float>&) {}
-void MatrixStack::ScaleRows(float, float, float) {}
 
 // ---------------------------------------------------------------------------
 // MatrixManager stubs

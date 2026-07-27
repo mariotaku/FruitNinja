@@ -59,12 +59,17 @@ struct MatrixStack {
     void Push();
     void Pop();
 
-    // ASM-spec v1.6.1 MatrixStack::Scale @0x0015d100 (called from MenuButton::Draw
-    // sparkle-ring block @0x0019cca4).
+    // ASM-verified: 2026-07-27T14:40Z v1.6.1 MatrixStack::Scale @ 0x0015d100 (asm-inspector)
+    // LEFT-multiply m_Current by diag(s.x, s.y, s.z, 1) via _Matrix44<float>::Scale44
+    // (S*M), then ++Version. Rows 0/1/2 are scaled, INCLUDING the translation
+    // elements m[12]/m[13]/m[14] -- an already-translated matrix has its translation
+    // scaled too. Call sites that want the scale to leave an existing translation
+    // alone must Reset() (or Push/Reset) first; every in-port call site does.
+    // Called from MenuButton::Draw's sparkle-ring block @0x0019cca4.
     void Scale(const _Vector3<float>& s);
 
-    // ASM-spec v1.6.1 MatrixStack::Translate @0x0015d040: world-space offset added
-    // to the translation column (T*M).
+    // ASM-verified: 2026-07-27T14:40Z v1.6.1 MatrixStack::Translate @ 0x0015d040 (asm-inspector)
+    // World-space offset added to the translation column (T*M).
     void Translate(const _Vector3<float>& t);
 
     // ASM-spec v1.6.1 MatrixStack::SetCurrentMatrix @0x00143720: copy mat into
@@ -79,10 +84,6 @@ struct MatrixStack {
     // m_Current by a local-space translate (M*T). Distinct from Translate above,
     // which adds a world-space offset to the translation column (T*M).
     void TranslateLocal(const _Vector3<float>& t);
-
-    // Row/left scale (S*M) via Matrix44::Scale44. NOT MatrixStack::Scale, which
-    // scales columns (M*S) -- the wrong side for BakedStringTTF::Draw's pipeline.
-    void ScaleRows(float sx, float sy, float sz);
 };
 
 #ifdef __bada__

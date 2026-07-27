@@ -48,7 +48,7 @@ struct _Matrix44 {
         out.m[5]  = T(2) * invTB;
     }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0012f954 (asm-inspector)
+    // ASM-verified: 2026-07-27T14:40Z v1.6.1 _Matrix44<float>::GlobalTranslate44 @ 0x0015d018 (asm-inspector)
     // col[3] += (tx, ty, tz) -- world-space translate.
     void GlobalTranslate44(T tx, T ty, T tz) {
         m[12] += tx;
@@ -68,18 +68,25 @@ struct _Matrix44 {
         m[14] += m[2] * tx + m[6] * ty + m[10] * tz;
     }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0012f9a0 (asm-inspector)
-    // In-place column-scale; not the same as the static factory below.
+    // PORT-ONLY. No binary counterpart: the only scale primitives in v1.6.1 are
+    // _Matrix44<float>::Scale44 @0x0015d06c (row/left, below), the MakeScale factory
+    // Scale44(Vec3 const&, _Matrix44&) @0x0015f4c8, and Vector3 forwarders. A prior
+    // `ASM-verified @0x0012f9a0` stamp here was fabricated -- that address is mid
+    // _GLOBAL__I_BonusManager.cpp's static initialiser, not a matrix routine.
+    // In-place COLUMN scale (M*S): leaves the translation column m[12..14] untouched.
+    // Kept because several port call sites compose it onto a fresh Identity, where
+    // M*S == S*M; do NOT reach for it as a stand-in for MatrixStack::Scale.
     void ApplyScale(T sx, T sy, T sz) {
         m[0]  *= sx; m[1]  *= sx; m[2]  *= sx; m[3]  *= sx;
         m[4]  *= sy; m[5]  *= sy; m[6]  *= sy; m[7]  *= sy;
         m[8]  *= sz; m[9]  *= sz; m[10] *= sz; m[11] *= sz;
     }
 
-    // ASM-spec v1.6.1 Matrix44::Scale44 @0x0015d06c (row/left scale)
-    // Left-multiply by diag(sx,sy,sz,1) -- scales rows 0/1/2 (S*M). This is the
-    // OPPOSITE side from ApplyScale above (which scales columns, i.e. M*S).
-    // Used by BakedStringTTF::Draw where the scale must apply before rotation.
+    // ASM-verified: 2026-07-27T14:40Z v1.6.1 _Matrix44<float>::Scale44 @ 0x0015d06c (asm-inspector)
+    // Left-multiply by diag(sx,sy,sz,1) -- scales rows 0/1/2 (S*M), which includes
+    // the translation elements m[12]/m[13]/m[14]. This is the OPPOSITE side from
+    // ApplyScale above (which scales columns, i.e. M*S). This is the primitive
+    // MatrixStack::Scale calls.
     void Scale44(T sx, T sy, T sz) {
         m[0] *= sx; m[4] *= sx; m[8]  *= sx; m[12] *= sx;  // row 0
         m[1] *= sy; m[5] *= sy; m[9]  *= sy; m[13] *= sy;  // row 1

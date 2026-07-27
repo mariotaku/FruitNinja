@@ -30,13 +30,16 @@ void MatrixStack::Pop() {
     m_Version++;
 }
 
-// ASM-spec v1.6.1 MatrixStack::Scale @0x0015d100
+// ASM-verified: 2026-07-27T14:40Z v1.6.1 MatrixStack::Scale @ 0x0015d100 (asm-inspector)
+// Tail-calls _Matrix44<float>::Scale44 (PLT stub 0x0010370c -> GOT 0x2c15c0, .rel.plt
+// type-22 reloc to _ZN9_Matrix44IfE7Scale44Efff), then bumps m_Version. LEFT-multiply
+// (S*M), consistent with Translate/RotZ; TranslateLocal is the lone right-multiply.
 void MatrixStack::Scale(const _Vector3<float>& s) {
-    m_Current.ApplyScale(s.x, s.y, s.z);
+    m_Current.Scale44(s.x, s.y, s.z);
     m_Version++;
 }
 
-// ASM-spec v1.6.1 MatrixStack::Translate @0x0015d040
+// ASM-verified: 2026-07-27T14:40Z v1.6.1 MatrixStack::Translate @ 0x0015d040 (asm-inspector)
 void MatrixStack::Translate(const _Vector3<float>& t) {
     m_Current.GlobalTranslate44(t);
     m_Version++;
@@ -58,12 +61,5 @@ void MatrixStack::RotZ(float deg) {
 // ASM-spec v1.6.1 MatrixStack::TranslateLocal @0x0024a150
 void MatrixStack::TranslateLocal(const _Vector3<float>& t) {
     m_Current.LocalTranslate44(t.x, t.y, t.z);  // right-mult (M*T)
-    m_Version++;
-}
-
-// Row/left scale (S*M) -- mirrors Matrix44::Scale44 @0x0015d06c. Bumps m_Version
-// like Scale/Translate so MatrixManager re-uploads on the next draw.
-void MatrixStack::ScaleRows(float sx, float sy, float sz) {
-    m_Current.Scale44(sx, sy, sz);
     m_Version++;
 }

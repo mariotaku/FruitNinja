@@ -1048,7 +1048,7 @@ void BakedStringTTF::ApplyGradient_TopBottom(Colour top, Colour bottom)
 //
 // Pure-matrix pipeline (no CPU per-vertex transform, no vertex copy). The world
 // stack composes
-//   M = T(anchor) * RotZ(rotZ) * ScaleRows(scale) * TranslateLocal(alignOff)
+//   M = T(anchor) * RotZ(rotZ) * Scale(scale) * TranslateLocal(alignOff)
 // which is algebraically identical to the previous CPU loop
 //   v' = R(rotZ) * S(scale) * (v + alignOff) + anchor
 // so the on-screen text is unchanged; GL consumes the baked local verts directly.
@@ -1106,14 +1106,14 @@ void BakedStringTTF::Draw(const _Vector3<float>& anchor, _Vector2<float> scale, 
     }
 
     // Build the world matrix. Steps (binary order):
-    //   1 Reset, 2 TranslateLocal(alignOff), 3 ScaleRows(scale) [row/left scale],
+    //   1 Reset, 2 TranslateLocal(alignOff), 3 Scale(scale) [row/left scale, S*M],
     //   4 RotZ(rotZ), 5 Translate(anchor) [applies anchor.z], 6 OMITTED.
     // step 6 in the binary is Scale(1, atlas->m_Field150, 1) with m_Field150==1.0 --
     // a unit-Y no-op, so it is intentionally omitted here.
     MatrixStack& world = MatrixManager::GetInstance().GetWorldStack();
     world.Reset();
     world.TranslateLocal(alignOff);
-    world.ScaleRows(scale.x, scale.y, 1.0f);
+    world.Scale(_Vector3<float>(scale.x, scale.y, 1.0f));
     world.RotZ(rotZ);
     world.Translate(anchor);
     MatrixManager::GetInstance().UploadModelViewOnly();
