@@ -24,7 +24,16 @@
 //   - A play for a not-yet-decoded name is queued on its async decode
 //     (pendingSfx) and starts on completion instead of being dropped; the
 //     handle stays live meanwhile (stop/pause cancel it, setVolume retargets
-//     it, isActive reports it). Failed decodes drop queued plays, warn once.
+//     it, isActive reports it).
+//   - Decodes are THROTTLED (DECODE_CONCURRENCY) and a failed decode is
+//     RETRIED (MAX_DECODE_ATTEMPTS). PreloadSounds hands this backend ~40-70
+//     PreLoadSound calls in one boot burst; passing all of them straight to
+//     decodeAudioData made weak browsers (webOS TV) fail the tail of the burst
+//     outright, and the old permanent failed[] mark then dropped every play of
+//     those names for the rest of the session. See pumpDecodes/onDecodeError.
+//     Only after the retry budget is spent is a name marked permanently failed,
+//     and that lands in failLog for the C++ side to re-emit via LOG_ERROR
+//     (console.warn alone is invisible on a TV).
 //
 // Both backends play SFX/music at full scale (unity gain). Bada's own SFX path
 // (MAMAudioController::LoadSound @0x0022f46c) applied a >>4 shift, but that was
@@ -133,66 +142,104 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         MASTER_SFX_GAIN: masterSfxGain,
         MASTER_MUSIC_GAIN: masterMusicGain,
         sfxDir: sfxDir,  // '<GetDataDir()>/sfx/'
-        buffers: {},     // name -> AudioBuffer
-        inflight: {},    // name -> true while decoding
-        pendingCb: {},   // name -> [cb] queued on an in-flight decode
-        pendingSfx: {},  // handle -> {name, gain}: play waiting on a decode
-        failed: {},      // name -> true after missing/failed decode (warn once, no retry)
-        active: {},      // handle -> sfx entry
+        buffers: {},        // name -> AudioBuffer
+        inflight: {},       // name -> true while queued / decoding / retry-scheduled
+        pendingCb: {},      // name -> [cb] queued on an in-flight decode
+        pendingSfx: {},     // handle -> {name, gain}: play waiting on a decode
+        failed: {},         // name -> true once PERMANENTLY undecodable (budget spent)
+        failCount: {},      // name -> decodeAudioData failures so far
+        retryScheduled: {}, // name -> true while a retry timer is pending
+        failLog: [],        // "name: reason" lines drained by the C++ side -> LOG_ERROR
+        decodeQueue: [],    // names waiting for a decode slot (throttle)
+        decodeRunning: 0,   // decodeAudioData calls currently outstanding
+        active: {},         // handle -> sfx entry
         song: null,      // current song entry
         songName: null,  // name of most recent playSong (race guard)
         sfxMuted: false,
         musicMuted: false,
         musicVol: 0.45,
 
+        // Decode scheduling knobs. See pumpDecodes / onDecodeError.
+        MAX_DECODE_ATTEMPTS: 3,   // decodeAudioData tries per name before giving up
+        DECODE_CONCURRENCY: 3,    // decodeAudioData calls allowed in flight at once
+        RETRY_DELAY_MS: 200,      // backoff base; attempt N waits N * this
+
         nm: function(name) { return String(name).toLowerCase(); },
 
-        // decode(name, cb): ensure <name> is decoded, then cb(buffer) -- or
-        // cb(null) when the file is missing/undecodable (callers null-check).
-        // A cb arriving while a decode is already in flight is QUEUED onto it
-        // (pendingCb), not dropped; failure flushes the whole queue with null
-        // and warns once per name (failed[] short-circuits retries).
-        decode: function(name, cb) {
+        // decode(name, cb, lowPriority): ensure <name> is decoded, then
+        // cb(buffer) -- or cb(null) once the name is PERMANENTLY undecodable
+        // (file absent, or MAX_DECODE_ATTEMPTS decodeAudioData failures).
+        //
+        // A cb arriving while a decode is queued / running / retry-scheduled is
+        // QUEUED onto it (pendingCb), not dropped -- and it stays parked ACROSS
+        // a retry, so a play deferred on a decode that failed once still fires
+        // when the retry succeeds. Only a permanent failure flushes with null.
+        //
+        // lowPriority (the PreLoadSound path) appends to the decode queue;
+        // everything else (a play or a song actively waiting on this decode)
+        // jumps the queue, so a cold on-demand sound is never stuck behind the
+        // whole boot preload list.
+        decode: function(name, cb, lowPriority) {
             name = this.nm(name);
-            var self = this;
             if (this.buffers[name]) { if (cb) cb(this.buffers[name]); return; }
             if (this.failed[name]) { if (cb) cb(null); return; }
-            if (this.inflight[name]) {
-                if (cb) (this.pendingCb[name] = this.pendingCb[name] || []).push(cb);
-                return;
+            if (cb) (this.pendingCb[name] = this.pendingCb[name] || []).push(cb);
+            if (this.inflight[name]) return;
+            this.inflight[name] = true;
+            this.enqueueDecode(name, !lowPriority);
+        },
+
+        enqueueDecode: function(name, front) {
+            if (front) this.decodeQueue.unshift(name);
+            else this.decodeQueue.push(name);
+            this.pumpDecodes();
+        },
+
+        // Throttle. PreloadSounds (src/game/PreloadSounds.cpp, ASM-verified
+        // faithful to v1.6.1 PreloadSounds @0x001107e0) calls PreLoadSound
+        // ~40-70 times back to back at boot. Handing every one of those to
+        // decodeAudioData simultaneously overwhelmed weaker browsers (webOS
+        // TV), which then failed the LAST decodes of the burst -- the swipe and
+        // visceral-impact sounds, which the binary's preload order puts at the
+        // very end. Bounding the in-flight count fixes that without making the
+        // preload synchronous: nothing here blocks the boot thread or the first
+        // frame, the queue just drains over the following frames.
+        pumpDecodes: function() {
+            while (this.decodeRunning < this.DECODE_CONCURRENCY && this.decodeQueue.length > 0) {
+                this.startDecode(this.decodeQueue.shift());
             }
+        },
+
+        startDecode: function(name) {
+            if (this.buffers[name] || this.failed[name]) return;
+            var self = this;
             var path = this.sfxDir + name + '.ogg';
             var data;
             try { data = FS.readFile(path); } catch (e) {
-                this.failed[name] = true;
-                console.warn('FNAudio missing sfx: ' + path);
-                if (cb) cb(null);
+                // An absent file never fixes itself -- permanent, no retry.
+                this.failPermanently(name, 'missing sfx file ' + path);
                 return;
             }
-            this.inflight[name] = true;
-            if (cb) this.pendingCb[name] = [cb];
-            var flush = function(buf) {
-                delete self.inflight[name];
-                var cbs = self.pendingCb[name];
-                delete self.pendingCb[name];
-                if (cbs) for (var i = 0; i < cbs.length; ++i) cbs[i](buf);
-            };
+            this.decodeRunning++;
             // decodeAudioData detaches its ArrayBuffer; hand it a private copy
             // so the wasm HEAP that FS.readFile viewed is never detached. Also
             // guards against FS.readFile returning a Uint8Array VIEW into a
             // larger backing store (MEMFS often over-allocates) -- slicing by
             // byteOffset/byteLength yields exactly the file's bytes, never the
-            // whole heap/backing buffer.
+            // whole heap/backing buffer. Re-read per attempt so a retry decodes
+            // a fresh (non-detached) copy rather than the consumed one.
             var ab = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
             var decodePromise = this.ctx.decodeAudioData(ab, function(decoded) {
+                self.decodeRunning--;
                 self.buffers[name] = decoded;
-                flush(decoded);
+                delete self.inflight[name];
+                delete self.failCount[name];
+                self.flushCbs(name, decoded);
+                self.pumpDecodes();
             }, function(err) {
-                self.failed[name] = true;
-                console.warn('FNAudio decode failed: ' + name, err);
-                // Flush queued cbs with null so decode-pending plays are
-                // dropped (never left hanging). Non-fatal by design.
-                flush(null);
+                self.decodeRunning--;
+                self.onDecodeError(name, err);
+                self.pumpDecodes();
             });
             // decodeAudioData ALSO returns a Promise (spec, even in callback
             // form) that rejects on the same failure the error callback above
@@ -205,6 +252,49 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
             if (decodePromise && typeof decodePromise.catch === 'function') {
                 decodePromise.catch(function() {});
             }
+        },
+
+        flushCbs: function(name, buf) {
+            var cbs = this.pendingCb[name];
+            delete this.pendingCb[name];
+            if (cbs) for (var i = 0; i < cbs.length; ++i) cbs[i](buf);
+        },
+
+        // A decodeAudioData failure is RETRYABLE: a browser can refuse a decode
+        // for transient reasons (decoder resources exhausted by a concurrent
+        // burst) and then succeed on the very same bytes moments later. The old
+        // code marked the name failed[] forever on the first refusal, which is
+        // what silenced the swipe SFX for a whole session. Note the parked cbs
+        // are deliberately NOT flushed here -- they wait for the retry.
+        onDecodeError: function(name, err) {
+            var n = (this.failCount[name] || 0) + 1;
+            this.failCount[name] = n;
+            var msg = (err && err.message) ? err.message : String(err);
+            if (n >= this.MAX_DECODE_ATTEMPTS) {
+                this.failPermanently(name, 'decode failed ' + n + 'x: ' + msg);
+                return;
+            }
+            console.warn('FNAudio decode attempt ' + n + ' failed, will retry: ' + name, err);
+            var self = this;
+            this.retryScheduled[name] = true;
+            setTimeout(function() {
+                delete self.retryScheduled[name];
+                if (self.buffers[name] || self.failed[name]) return;
+                self.enqueueDecode(name, true);   // a retry jumps the queue
+            }, this.RETRY_DELAY_MS * n);
+        },
+
+        // Budget spent (or the file is simply absent): stop retrying, drop the
+        // parked cbs with null, and record ONE line for the C++ drain to re-emit
+        // through LOG_ERROR. One entry per name, not per attempt.
+        failPermanently: function(name, reason) {
+            this.failed[name] = true;
+            delete this.inflight[name];
+            delete this.retryScheduled[name];
+            var line = name + ': ' + reason;
+            console.warn('FNAudio giving up -- ' + line);
+            if (this.failLog.length < 32) this.failLog.push(line);
+            this.flushCbs(name, null);
         },
 
         // loopStartSec comes from the C++ caller (SFXPlay, via the linked
@@ -226,7 +316,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
                 this.decode(name, function(decoded) {
                     if (outer.pendingSfx[handle] !== p) return;  // stopped/stale
                     delete outer.pendingSfx[handle];
-                    if (!decoded) return;                        // failed: drop
+                    if (!decoded) return;   // permanently failed: drop
                     outer.playSfx(name, handle, p.gain, p.loopStartSec);  // fast path now
                 });
                 return;
@@ -454,8 +544,10 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
 
 });
 
+// PreLoadSound's decode hook only -- lowPriority=true, so the boot preload
+// burst queues BEHIND any on-demand decode a play/song is actively waiting on.
 EM_JS(void, fnaudio_decode, (const char* namePtr), {
-    if (window.FNAudio) window.FNAudio.decode(UTF8ToString(namePtr));
+    if (window.FNAudio) window.FNAudio.decode(UTF8ToString(namePtr), null, true);
 });
 
 EM_JS(void, fnaudio_play_sfx, (const char* namePtr, unsigned handle, double gain, double loopStartSec), {
@@ -522,6 +614,59 @@ EM_JS(void, fnaudio_set_music_muted, (int muted), {
     if (window.FNAudio) window.FNAudio.setMusicMuted(muted);
 });
 
+// Port specific: dev-tool ("?osdsfx=1" / F4) snapshot of everything on the JS
+// side that can make a play inaudible, packed into one int so the OSD toast
+// needs a single call. No state of its own -- pure read of FNAudio's maps.
+//   bits 0-2  decode state of <name>: 0 undecoded (playSfx will defer it),
+//             1 decoded (plays immediately), 2 queued/decoding (deferred),
+//             3 PERMANENTLY failed (the queued play is dropped, never heard),
+//             4 retry scheduled after a failed attempt (still deferred)
+//   bits 4-5  ctx.state: 0 no context, 1 running, 2 suspended, 3 closed/other
+//   bit  6    sfxMuted (masterSfx bus forced to gain 0)
+//   bit  7    masterSfx.gain.value > 0
+EM_JS(int, fnaudio_sfx_diag, (const char* namePtr), {
+    var A = window.FNAudio;
+    if (!A) return 0;
+    var n = A.nm(UTF8ToString(namePtr));
+    var d = A.buffers[n] ? 1
+          : (A.failed[n] ? 3
+          : (A.retryScheduled[n] ? 4
+          : (A.inflight[n] ? 2 : 0)));
+    var c = 0;
+    if (A.ctx) {
+        if (A.ctx.state === 'running') c = 1;
+        else if (A.ctx.state === 'suspended') c = 2;
+        else c = 3;
+    }
+    var m = A.sfxMuted ? 1 : 0;
+    var g = (A.masterSfx && A.masterSfx.gain.value > 0) ? 1 : 0;
+    return d | (c << 4) | (m << 6) | (g << 7);
+});
+
+// Port specific: pop one "name: reason" line off FNAudio.failLog into <out>
+// (a C++ buffer of <cap> bytes), returning 1 if a line was written and 0 when
+// the log is empty. Writes bytes through HEAPU8 by hand and clamps every byte
+// to printable ASCII ('?' otherwise) -- browser error text can carry curly
+// quotes / non-Latin characters, and the project's runtime-output rule is
+// ASCII only. Deliberately does NOT use stringToNewUTF8 / a JS->wasm callback:
+// that would need a new EXPORTED_FUNCTIONS entry in CMakeLists.txt, and the
+// existing history of a call site silently no-op'ing because a function was
+// missing from that list is not worth repeating for a diagnostic path.
+EM_JS(int, fnaudio_take_decode_failure, (char* out, int cap), {
+    var A = window.FNAudio;
+    if (!A || !A.failLog || A.failLog.length === 0) return 0;
+    var s = String(A.failLog.shift());
+    var lim = cap - 1;
+    var n = 0;
+    for (var i = 0; i < s.length && n < lim; ++i) {
+        var ch = s.charCodeAt(i);
+        HEAPU8[out + n] = (ch >= 32 && ch < 127) ? ch : 63;   // 63 = '?'
+        ++n;
+    }
+    HEAPU8[out + n] = 0;
+    return 1;
+});
+
 namespace Mortar {
 
 // Static globals -- default volumes match BadaSound constructor (same as SDL).
@@ -563,10 +708,31 @@ MortarSound* SoundManager::CreateNewSound() {
     return new MortarSound();
 }
 
+// Port specific: re-emit permanent decode failures the JS side recorded.
+// Decodes fail asynchronously, long after the PreLoadSound/SFXPlay call that
+// kicked them, and console.warn is invisible on a TV -- so JS parks one line
+// per dead name in FNAudio.failLog and this drains it into LOG_ERROR, which
+// survives the web build's FN_LOG_ERRORS_ONLY stripping. Called from the
+// audio entry points below rather than a per-frame hook because SoundManager
+// has no Update; one EM_JS call that usually returns 0 immediately.
+static void DrainDecodeFailures() {
+    char line[192];
+    while (fnaudio_take_decode_failure(line, (int)sizeof(line)) != 0) {
+        LOG_ERROR("SoundManager", "web sfx decode gave up: %s", line);
+        if (FN::g_bOsdSfx) {
+            char osd[224];
+            snprintf(osd, sizeof(osd), "DECODE DEAD %s", line);
+            OSD_AddMessage(osd);
+        }
+    }
+}
+
 // PreLoad = decode hook. PreloadSounds.cpp's list decodes common sfx during
-// the loading screen so they are ready before first play.
+// the loading screen so they are ready before first play. The decode itself is
+// queued + throttled JS-side (FNAudio.pumpDecodes) -- this never blocks.
 void SoundManager::PreLoadSound(const char* name) {
     if (!name || !*name) return;
+    DrainDecodeFailures();
     fnaudio_decode(name);
 }
 
@@ -574,18 +740,25 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
     PreLoadSound(name);
 }
 
+// Initial per-source GainNode value handed to playSfx. Unity: the 0-255 byte
+// that actually decides audibility only arrives one call later, via
+// SFXSetVolume (MortarSound::SetVolume), which retargets this same node to
+// 1.0 or 0.0. Named so the dev-tool readout below cannot drift from the value
+// really passed.
+static const double INITIAL_SFX_GAIN = 1.0;
+
+// Port specific: handle of the most recent play that posted an OSD toast, so
+// SFXSetVolume can complete that toast with the gate byte. 0 = nothing
+// pending (already completed, or the flag is off).
+static uint32_t s_OsdVolHandle = 0;
+
 // Assign monotonic handle, kick a JS source. Volume arrives right after via
 // SFXSetVolume (GameSound::SFXPlay computes the per-play byte; it gates,
 // never scales -- see SFXSetVolume below).
 uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     if (!name || !*name) return 0;
 
-    // Port specific: dev-tool SFX readout (?osdsfx / F4), display-only.
-    if (FN::g_bOsdSfx) {
-        char osd[64];
-        snprintf(osd, sizeof(osd), "[%06u] %s", Debug::g_LogTick, name);
-        OSD_AddMessage(osd);
-    }
+    DrainDecodeFailures();
 
     uint32_t newId = m_NextSoundId++;
     if (m_NextSoundId == 0) m_NextSoundId = 1;   // skip 0 (idle sentinel)
@@ -597,7 +770,47 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     for (size_t i = 0; i < lower.size(); ++i) {
         if (lower[i] >= 'A' && lower[i] <= 'Z') lower[i] = (char)(lower[i] + ('a' - 'A'));
     }
-    fnaudio_play_sfx(lower.c_str(), newId, 1.0, Mortar::SfxLoopStartSeconds(lower.c_str()));
+
+    // Port specific: dev-tool SFX readout (?osdsfx / F4), display-only -- the
+    // audio path below is never gated by it. Sampled BEFORE the play call so
+    // d= reports the state the play actually meets (playSfx itself kicks a
+    // decode for an undecoded name). Fields:
+    //   d=1 decoded (starts now)   d=0 undecoded -> deferred until its decode
+    //   d=P queued/decoding        d=R a decode attempt failed, retry pending
+    //                                  (still deferred -- it fires if the retry
+    //                                   succeeds)
+    //   d=F decode PERMANENTLY failed (retry budget spent) -> play DROPPED.
+    //       A "DECODE DEAD <name>: <reason>" OSD line names the cause.
+    //   g=  initial GainNode value passed to playSfx (NOT the gate byte)
+    //   c=r ctx running  c=s suspended (no user gesture -> everything silent)
+    //   c=c closed/other  c=? no AudioContext at all
+    //   m=1 SFX bus muted (masterSfx gain forced to 0); m=0 unmuted
+    //   M=0 masterSfx gain is 0 despite m=0 (bus zeroed by teardown)
+    //   v=  the 0-255 gate byte, appended by SFXSetVolume -- audible iff > 5.
+    //       A line with NO v= never got a SetVolume for this handle.
+    if (FN::g_bOsdSfx) {
+        const int diag = fnaudio_sfx_diag(lower.c_str());
+        static const char kDecChar[8] = { '0', '1', 'P', 'F', 'R', '?', '?', '?' };
+        static const char kCtxChar[4] = { '?', 'r', 's', 'c' };
+        char osd[64];
+        const int masterOn = (diag >> 7) & 1;
+        const int muted    = (diag >> 6) & 1;
+        if (masterOn || muted) {
+            snprintf(osd, sizeof(osd), "[%06u] %s d=%c g=%.1f c=%c m=%d",
+                     Debug::g_LogTick, name, kDecChar[diag & 7],
+                     INITIAL_SFX_GAIN, kCtxChar[(diag >> 4) & 3], muted);
+        } else {
+            // Bus silent without the mute flag -- worth calling out explicitly.
+            snprintf(osd, sizeof(osd), "[%06u] %s d=%c g=%.1f c=%c m=0 M=0",
+                     Debug::g_LogTick, name, kDecChar[diag & 7],
+                     INITIAL_SFX_GAIN, kCtxChar[(diag >> 4) & 3]);
+        }
+        OSD_AddMessage(osd);
+        s_OsdVolHandle = newId;
+    }
+
+    fnaudio_play_sfx(lower.c_str(), newId, INITIAL_SFX_GAIN,
+                     Mortar::SfxLoopStartSeconds(lower.c_str()));
 
     if (sound) {
         sound->m_Handle = newId;
@@ -629,6 +842,18 @@ void SoundManager::SFXResume(uint32_t handle) {
 // completion and its onended handler still retires the handle.
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (handle == 0) return;
+
+    // Port specific: dev-tool -- complete this play's OSD line with the gate
+    // byte (SFXPlay had to toast before MortarSound::SetVolume computed it).
+    // One-shot per play: later volume changes on the same handle (bomb-fuse
+    // ramp) do not re-append. Display-only, never gates the call below.
+    if (FN::g_bOsdSfx && handle == s_OsdVolHandle) {
+        s_OsdVolHandle = 0;
+        char suffix[16];
+        snprintf(suffix, sizeof(suffix), " v=%u", (unsigned)vol);
+        OSD_AppendToLast(suffix);
+    }
+
     fnaudio_set_volume(handle, (vol > 5) ? 1.0 : 0.0);
 }
 
