@@ -1,7 +1,7 @@
 // ShopScreen — Sensei's Swag blade/background shop, launched from DojoScreen.
 // Binary: ShopScreen(DojoScreen*) @ 0x001b3f94, Update @ 0x001b321c (387 lines),
 //         DrawOrder @ 0x001b4e48, Init @ 0x001b42ac, LoadContent @ 0x001b2a20
-//         (thunk @ 0x001047b8; the older 0x001b61c8/0x0015cb08 addresses were stale).
+//         (PLT thunk @ 0x001047b8). There is no ShopScreen::Draw symbol in v1.6.1.
 //
 // Analysed: 2026-04-28T14:00
 
@@ -47,9 +47,9 @@
 // ---------------------------------------------------------------------------
 
 // Transition alpha rates (from Update state 0 decompile)
-// DAT_0015e554 = 77 be 7f 3f = 0x3f7fbe77 ~ 0.999f
+// Literal @0x001b3698 = 0x3f7fbe77 ~ 0.999f (loaded @0x001b330c)
 static const float ALPHA_LERP_IN       = 0.125f;   // state 0: += (1-alpha)*0.125
-static const float ALPHA_IN_DONE       = 0.999f;   // DAT_0015e554
+static const float ALPHA_IN_DONE       = 0.999f;   // literal @0x001b3698
 
 // States 2/7 decay (uses DAT_0015e90c, not literal 0.75):
 // DAT_0015e90c = 9a 99 59 3f = 0x3f59999a = 0.85f
@@ -97,32 +97,34 @@ static const float POS_EQUIP_BUTTON_X = 145.0f;  // DAT_0015e564
 static const _Vector3<float> POS_EQUIP_BUTTON(POS_EQUIP_BUTTON_X, 104.0f, 0.0f);  // DAT_0015e564/568/558
 
 // State-3 replacement back button position:
-// DAT_0015e918 = 00 00 39 43 = 185.0f (same x)
-// DAT_0015e91c = 00 00 d2 c2 = -105.0f (same y)
-// z = DAT_0015e93c = 00 00 00 00 = 0.0f
-static const _Vector3<float> POS_BACK_BUTTON_NEW(185.0f, -105.0f, 0.0f);  // DAT_0015e918/91c/93c
+// literal @0x001b3d30 = 00 00 39 43 = 185.0f (same x)
+// literal @0x001b3d34 = 00 00 d2 c2 = -105.0f (same y)
+// z = literal @0x001b36ec = 00 00 00 00 = 0.0f
+static const _Vector3<float> POS_BACK_BUTTON_NEW(185.0f, -105.0f, 0.0f);  // @0x001b3d30/3d34/36ec
 
 // Post-creation scale multiplier for both buttons:
-// DAT_0015e920 = 33 33 53 3f = 0x3f533333 = 0.825f
-static const float BUTTON_SCALE = 0.825f;           // DAT_0015e920
+// Literal @0x001b3d38 = 33 33 53 3f = 0x3f533333 = 0.825f (loaded @0x001b3c88/0x001b3c98)
+static const float BUTTON_SCALE = 0.825f;           // literal @0x001b3d38
 
 // Equip button scale override after creation (hardcoded literal 0.75 in decompile)
 static const float EQUIP_BUTTON_SCALE = 0.75f;
 
-// Scroll list position animation parameters (from 0x0015ead8, 32 bytes):
-// DAT_0015ead8 = 00 00 20 42 = 40.0f   (list pos y)
-// DAT_0015eadc = 00 00 00 00 = 0.0f    (list pos z)
-// DAT_0015eae0 = 00 00 be 42 = 95.0f   (slide offset from right edge)
-// DAT_0015eae4 = 00 00 91 43 = 290.0f  (slide multiplier)
+// Scroll list position animation parameters (v1.6.1 ShopScreen::Update literals):
+// literal @0x001b3d60 = 00 00 20 42 = 40.0f   (list pos y)
+// literal @0x001b3d64 = 00 00 00 00 = 0.0f    (list pos z)
+// literal @0x001b3d5c = 00 00 be 42 = 95.0f   (slide offset from right edge)
+// literal @0x001b3d6c = 00 00 91 43 = 290.0f  (slide multiplier)
 // Slide formula: pos.x = (1 - alpha) * 290.0 * -1.5 - 95.0
-static const float LIST_POS_Y     = 40.0f;          // DAT_0015ead8
-static const float LIST_POS_Z     = 0.0f;           // DAT_0015eadc
-static const float LIST_SLIDE_OFF  = 95.0f;         // DAT_0015eae0
-static const float LIST_SLIDE_MUL  = 290.0f;        // DAT_0015eae4
+// ShopScreen::Init's list position uses its own literals:
+//   (-530.0 @0x001b4588, 40.0 @0x001b458c, 0.0 @0x001b4580)
+static const float LIST_POS_Y     = 40.0f;          // literal @0x001b3d60
+static const float LIST_POS_Z     = 0.0f;           // literal @0x001b3d64
+static const float LIST_SLIDE_OFF  = 95.0f;         // literal @0x001b3d5c
+static const float LIST_SLIDE_MUL  = 290.0f;        // literal @0x001b3d6c
 
 // SHOP_SHRINK_VEC -- Vec3 stored at .got + 0x77cc, initialised to
 // (1,1,1) by _GLOBAL__I_ShopScreen.cpp @ 0x0015d7a0. Copied to the
-// equip-button fruit's m_HalfB_vel by ShrinkBuyButton @ 0x0015c4cc.
+// equip-button fruit's m_HalfB_vel by ShrinkBuyButton @ 0x001b17b4.
 static const _Vector3<float> SHOP_SHRINK_VEC(1.0f, 1.0f, 1.0f);
 
 // Note: the EquipCallback shrink branch uses Vec3::ZERO (not a "fling"
@@ -233,7 +235,7 @@ void ShopScreen::LoadContent() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::UnLoadContent @ 0x0015d080
+// ShopScreen::UnLoadContent @ 0x001b4afc
 // Clears all static texture slots in the same order as LoadContent.
 // ---------------------------------------------------------------------------
 void ShopScreen::UnLoadContent() {
@@ -257,7 +259,7 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     : HUDControl3d()
     , m_TransitionAlpha(0.0f)
     // m_LayerFlagsAlt drives the panel's draw layer (copied into m_LayerFlags each
-    // Update). Binary @ 0x0015cdac does not init +0x80; the first Update sets it
+    // Update). Binary @ 0x001b3f94 does not init +0x80; the first Update sets it
     // before the first Draw. We init to 0x80 (HUD_LAYER_POST_ACTOR) defensively --
     // matches the only pre-Update value reachable. Update demotes it to 0x40 only
     // while NumActiveSplats()==0 (v1.6.1 ShopScreen::Update @0x001b321c), so splats (alive only during
@@ -333,7 +335,7 @@ ShopScreen::ShopScreen(DojoScreen* parent)
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::~ShopScreen @ 0x0015ce98
+// ShopScreen::~ShopScreen @ 0x001b49f8
 // ---------------------------------------------------------------------------
 ShopScreen::~ShopScreen() {
 #if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
@@ -359,8 +361,8 @@ ShopScreen::~ShopScreen() {
 // ShopScreen::Init @ 0x001b42ac (vtable slot 2, called by DojoScreen after AddControl)
 // Binary: (**(code**)(*(int*)shop + 8))(shop)
 // Real v1.6.1 address confirmed via the sibling ShopScreen::DrawOrder match at
-// 0x001b4e48 (same 0x1b4xxx family) -- the header's older 0x0015f7ac/0x0015cdac
-// addresses were stale v1.5.x. Body is the CreateShopList per-item population loop
+// 0x001b4e48 (same 0x1b4xxx family).
+// Body is the CreateShopList per-item population loop
 // (0x001b4394-0x001b44d8): SetWidth/SetHeight/SetItemHeight, then per ItemInfo from
 // GetFirst/GetNext: ctor -> Create -> click-callback wiring -> equip-slot cache ->
 // AddItem, then last-item new-badge + first-item auto-select after the loop.
@@ -443,7 +445,7 @@ void ShopScreen::CreateShopList() {
     m_pShopList->SetHeight(80.0f);
     m_pShopList->SetItemHeight(80.0f);
 
-    // Port-only: binary has no ScrollingMenu object (ShopScreen::Draw @ 0x0015dd50
+    // Port-only: binary has no ScrollingMenu object (ShopScreen::DrawOrder @0x001b4e48
     // draws the list inline in its own pass). The port models m_pShopList as a real
     // HUD control, so it needs a layer that tracks the panel. Use 0x80
     // (HUD_LAYER_POST_ACTOR) so the list draws AFTER the splat pass like the panel
@@ -564,7 +566,7 @@ void ShopScreen::RemoveEquipButton() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::NewItem @ 0x0015c498
+// ShopScreen::NewItem @ 0x001b1774
 // Binary: **(undefined4**)(GOT+offset) = 0x3f800000 (1.0f)
 // Sets s_ScrollOffset = 1.0f -- the sentinel meaning "recompute scroll target
 // on next Init". CreateShopList (Init) reads this back: when > 0.0f, it
@@ -623,7 +625,7 @@ void ShopScreen::ShrinkBuyButton() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::DeletedMenuItem(HUDControl*) @ 0x0015d14c
+// ShopScreen::DeletedMenuItem(HUDControl*) @ 0x001b53d4
 //
 // Registered as m_RemoveCallback on BOTH m_pBuyButton and m_pEquipButton
 // immediately after HUD::AddControl. Fires when HUD removes a button
@@ -653,7 +655,7 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
     if (removed == m_pEquipButton) {
         if (g_bShopButtonShrinking) {
             // Kick the fruit off-screen when the button was shrunk programmatically.
-            // Binary @ 0x0015d14c writes (re-RE'd 2026-05-09 by re-analyst):
+            // Binary @ 0x001b53d4 writes (re-RE'd 2026-05-09 by re-analyst):
             //   *(fruit+0xbc) = -480.0   -> m_SecondPos.y
             //   *(fruit+0x14) = -480.0   -> entity pos.y
             //   *(fruit+0xa0) = -g_ShopFlingVec = (0,-1,0) -> m_Gravity (NEGATE, not zero)
@@ -692,7 +694,7 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::SetSelected(ShopListItem*) @ 0x0015c870
+// ShopScreen::SetSelected(ShopListItem*) @ 0x001b24f0
 // Updates m_pSelectedItem and refreshes equip-button fruit type.
 // ---------------------------------------------------------------------------
 void ShopScreen::SetSelected(ShopListItem* item) {
@@ -768,7 +770,7 @@ void ShopScreen::ClickedOnShopItem(ScrollingMenuItem* item) {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::QuitShopCallback @ 0x0015d55c
+// ShopScreen::QuitShopCallback @ 0x001b2ef0
 // Binary: SFXPlay("menu-bomb"), set m_State=2,
 //         SetVisible_FruitFact(buy_button->fruit_piece),
 //         fling fruit piece with random velocity,
@@ -797,7 +799,7 @@ void ShopScreen::QuitShopCallback() {
     // Set state to transition-out (state 2)
     m_State = 2;
 
-    // Fling the back/quit button. Binary @ 0x0015d55c indirects through
+    // Fling the back/quit button. Binary @ 0x001b2ef0 indirects through
     // m_pBuyButton->m_pTrackedFruit (+0x14C) and writes *(byte*)(piece+0x80)=1
     // (Fruit+0x80 unconfirmed, no reader). Port omits the write.
     if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
@@ -814,7 +816,7 @@ void ShopScreen::QuitShopCallback() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::EquipCallback @ 0x0015d630
+// ShopScreen::EquipCallback @ 0x001b3008
 //
 // Binary gate at 0x0015d63c: reads g_bShopButtonShrinking (GOT+0x451b4).
 //   if != 0 (programmatic shrink path):
@@ -874,7 +876,7 @@ void ShopScreen::EquipCallback() {
                       (int)info->m_Type, (void*)im->GetEquipped((int)info->m_Type),
                       im->GetEquipped((int)info->m_Type) == info ? 1 : 0);
 
-            // Binary @ 0x0015d630 EquipCallback does NOT touch m_DescText.
+            // Binary @ 0x001b3008 EquipCallback does NOT touch m_DescText.
             // The "currently equipped" visual is the m_SelectedAlpha highlight
             // ring driven per-frame by ShopListItem::Move @ 0x0015d1fc polling
             // ItemManager::IsEquipped(m_pItemInfo); description text is set
@@ -931,7 +933,8 @@ void ShopScreen::Update(float dt) {
         m_LayerFlagsAlt = Mortar::HUD_LAYER_MENU_BG;
     }
 
-    // Binary pre-amble (0x0015e212..0x0015e244):
+    // Binary pre-amble (inside v1.6.1 ShopScreen::Update @0x001b321c; the old
+    // 0x0015e2xx sub-address was stale v1.5.x and has not been re-pinned):
     // 1. If m_pShopList && GetItemClosestToZero() != m_pSelectedItem (pointer compare)
     //    && g_ShopSelCounter == 0: call SetSelected (rate-limited every 10 frames).
     // 2. Increment g_ShopSelCounter unconditionally: (g_ShopSelCounter+1) % 10.
@@ -993,13 +996,14 @@ void ShopScreen::Update(float dt) {
 
             // Create the back/quit button (field_0x84 = m_pBuyButton).
             // Binary: MenuButton ctor at state 0 completion uses QuitShopCallback
-            // as the press delegate (confirmed via xref DATA at 0x0015e2fc/0x0015e2fe).
+            // as the press delegate (confirmed via xref DATA; the old 0x0015e2fc
+            // sub-address was stale v1.5.x and has not been re-pinned).
             // Texture comes from *(GameTask + 0x17c) — a per-task Mortar::SmartPtr<Texture>.
             // Fruit type: *(GameTask + GOT_DAT_0015e578) — int pre-stored in task.
             // Port uses bomb fruit type (FruitInfo_GetCount()) matching the
             // DojoScreen back-button pattern: out-of-range index forces a bomb.
-            // Binary: after AddControl, scales m_TargetSize and fruit piece by
-            // DAT_0015e920 = 0.825f.
+            // Binary: after AddControl, scales m_RestScale and fruit piece by
+            // 0.825f (literal @0x001b3d38).
             if (!m_pBuyButton) {
                 const int backFruitType = FruitInfo_GetCount();  // forces bomb spawn
                 m_pBuyButton = new MenuButton();
@@ -1011,11 +1015,11 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->Init(_Vector3<float>(0.0f, 0.0f, 0.0f),
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
-                // Binary @ 0x0015e3c6: m_bRespondsToBackKey = 1.
+                // Binary: m_bRespondsToBackKey = 1 (stale v1.5.x 0x0015e3c6 dropped).
                 m_pBuyButton->m_bRespondsToBackKey = 1;
                 m_pBuyButton->m_bBackdropActive = 1; // v1.6.1 ShopScreen::Update @0x001b3570
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
-                // Binary (0x0015e3e2..0x0015e3f0): register DeletedMenuItem as m_RemoveCallback
+                // Binary: register DeletedMenuItem as m_RemoveCallback
                 m_pBuyButton->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
                 if (game_work.m_TutorialControl) game_work.m_TutorialControl->ResetTutePos(m_pBuyButton);
@@ -1049,7 +1053,6 @@ void ShopScreen::Update(float dt) {
 
     // ---- STATE 1: Active / idle ----
     case 1: {
-        // ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0015e208 (re-analyst).
         // Selection-ring counter (m_AnimFrame at +0xb4) defaults to DECAY
         // each frame: ringSignedDt = -dt. Only ONE control path keeps it
         // at +dt: when the selected item IS EQUIPPED. The ring marks the
@@ -1061,20 +1064,20 @@ void ShopScreen::Update(float dt) {
         // instead of the equipped loadout.
         float ringSignedDt = -dt;
 
-        // Binary (0x0015e3a0): m_BuyDelay only decremented when > 0;
+        // Binary: m_BuyDelay only decremented when > 0;
         // the else branch (shrink/create) only runs when already <= 0.
         if (m_BuyDelay > 0.0f) {
             m_BuyDelay -= dt;   // decrements toward zero
         } else {
-            // Binary (0x0015e438..0x0015e442): only gate is m_bTouchProcessed
+            // Binary: only gate is m_bTouchProcessed
             // (m_pShopList is always non-null after Init).
             if (!m_pShopList->m_bTouchProcessed) {
                 // List is settled (not being tapped): shrink/retract the equip button.
                 // Fires every frame; ShrinkBuyButton's Fruit::Sliced() guard makes it safe.
-                ShrinkBuyButton();  // binary @ 0x0015e442 beq to shrink
+                ShrinkBuyButton();  // binary: beq to shrink
             } else {
                 // One-frame tap-release event: check equipped/locked, maybe create equip button.
-                // Binary (0x0015e480..0x0015e5be):
+                // Binary: (stale v1.5.x 0x0015e4xx sub-addresses dropped)
 
                 // Check if item is equipped/locked — hide tutorial arrow if so
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
@@ -1230,16 +1233,18 @@ void ShopScreen::Update(float dt) {
         }
 
         // Fade complete: transition to state 4, create replacement back button.
-        // Binary: state = 4, alpha = 0.0f (DAT_0015e93c = 0.0f)
+        // Binary: state = 4, alpha = 0.0f (literal @0x001b36ec = 0.0f)
         m_State = 4;
         m_TransitionAlpha = 0.0f;
 
         // Binary: create new MenuButton at POS_BACK_BUTTON_NEW (185, -105, 0)
         // with same QuitShopCallback. Texture from *(GameTask + 0x180).
-        // Fruit type: **(GameTask + DAT_0015e938) (another pre-stored int).
+        // Fruit type: `ldr r3,[GOT 0x002d7dc4]; ldr r3,[r3]` = Fruit::MAX_FRUIT_TYPES
+        // @0x00332a1c (.bss, written at runtime by Fruit::LoadInfo @0x001e13c8) --
+        // i.e. exactly what FruitInfo_GetCount() returns. NOT a .data constant.
         // Port uses same backFruitType (bomb) as state 0.
-        // After AddControl (LAB_0015e874):
-        //   m_TargetSize *= DAT_0015e920 (0.825f)
+        // After AddControl (LAB_001b3c84):
+        //   m_RestScale *= 0.825f (literal @0x001b3d38)
         //   fruit piece scale *= 0.825f
         {
             const int backFruitType = FruitInfo_GetCount();
@@ -1258,7 +1263,7 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->m_RemoveCallback =
                 Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
         }
-        // LAB_0015e874: scale new button (reached by both state 0 and state 3 paths)
+        // LAB_001b3c84: scale new button (reached by both state 0 and state 3 paths)
         m_pBuyButton->m_RestScale = m_pBuyButton->m_RestScale * BUTTON_SCALE;
         if (m_pBuyButton->m_pTrackedFruit) {
             m_pBuyButton->m_pTrackedFruit->scale =

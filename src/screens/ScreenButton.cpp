@@ -13,7 +13,8 @@
 // g_slideVec = Vec3(0, 1, 0) — from _GLOBAL__I_BaseScreen.cpp @ 0x00130694
 static const _Vector3<float> SLIDE_VEC(0.0f, 1.0f, 0.0f);
 
-// DAT_00130fbc = -480.0 — off-screen Y for fruit teleport in ControlDeleted
+// Literal @0x00161060 = 0xC3F00000 = -480.0 — off-screen Y for fruit teleport
+// in ControlDeleted.
 static const float OFFSCREEN_Y = -480.0f;
 
 // 0xC1200000 = -10.0 — downward velocity applied in ControlDeleted
@@ -54,13 +55,13 @@ void ScreenButton::ShrinkButtonCall() {
 }
 
 // ===================================================================
-// Matches ScreenButton::ControlDeleted @ 0x00130f40
+// Matches v1.6.1 ScreenButton::ControlDeleted @0x00160fbc
 //
 // Called when the HUD removes the MenuButton. If the fruit was shrunk,
 // restores it to a "fling off screen" state:
-//   - pos.y = m_SecondPos.y = -480 (below screen)
-//   - m_Gravity = -g_slideVec = (0, -1, 0)
-//   - m_SecondVel.y = -10, vel.y = -10
+//   - pos.y (+0x14) = m_SecondPos.y (+0xcc) = -480 (below screen)
+//   - m_Gravity (+0xa0) = -g_slideVec = (0, -1, 0)
+//   - vel.y (+0x20) = -10, m_SecondVel.y (+0xd8) = -10
 // Then fires m_deletedCb and nulls m_pButton.
 // ===================================================================
 void ScreenButton::ControlDeleted(HUDControl* ctrl) {
@@ -69,7 +70,7 @@ void ScreenButton::ControlDeleted(HUDControl* ctrl) {
     if (m_bShrunk && m_pButton->m_pTrackedFruit) {
         Fruit* fruit = m_pButton->m_pTrackedFruit;
 
-        // Teleport both halves off screen (DAT_00130fbc = -480.0)
+        // Teleport both halves off screen (literal @0x00161060 = -480.0)
         fruit->pos.y        = OFFSCREEN_Y;
         fruit->m_SecondPos.y = OFFSCREEN_Y;
 
@@ -77,8 +78,7 @@ void ScreenButton::ControlDeleted(HUDControl* ctrl) {
         fruit->m_Gravity = _Vector3<float>(-SLIDE_VEC.x, -SLIDE_VEC.y, -SLIDE_VEC.z);
 
         // Fling velocities (0xC1200000 = -10.0)
-        // Binary @ 0x00130fa0: writes -10 to fruit+0xc8 = m_SecondVel.y
-        fruit->m_SecondVel.y = FLING_VEL;  // binary: *(fruit + 0xC8)
+        fruit->m_SecondVel.y = FLING_VEL;  // binary: *(fruit + 0xd8)
         fruit->vel.y         = FLING_VEL;  // binary: *(fruit + 0x20)
     }
 

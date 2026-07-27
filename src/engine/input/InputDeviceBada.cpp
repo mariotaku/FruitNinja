@@ -29,7 +29,7 @@ InputDeviceBada::InputDeviceBada()
 InputDeviceBada::~InputDeviceBada() {
 }
 
-// Binary @ 0x00196cc8 allocates the Bada HAL input-device handle (dev->fns->Init(dev)).
+// v1.6.1 Mortar::InputManager::Init @0x002447d4 allocates the Bada HAL input-device handle (dev->fns->Init(dev)).
 // Port specific: no SDL counterpart — the Touch singleton is bound in the ctor (m_touch),
 // SDL events reach Touch directly via InputTranslatorSDL, and the device is registered on
 // InputManager's list by InputManager::Init (not here). Intentionally a no-op for the SDL backend.
@@ -137,8 +137,10 @@ void InputDeviceBada::AddActionMapper(InputActionMapper* mapper) {
     m_ActionMappers.push_back(mapper);
 }
 
-// Binary @ 0x001961d0 — ClearActions: clear matching bindings.
-// last=true on final device in iteration (from InputManager::ClearActions).
+// v1.6.1 Mortar::InputDevice::ClearActions @0x002758b0 — clear matching bindings.
+// (InputDeviceBada does not override it; this is the base-class body. Distinct
+// symbol from the manager-side broadcaster Mortar::InputManager::ClearActions
+// @0x002441e0.) last=true on the final device in iteration.
 void InputDeviceBada::ClearActions(unsigned long actionHash, bool /*last*/) {
 #if !defined(__bada__)
     for (std::list<InputDeviceBinding>::iterator it = m_bindings.begin();
@@ -154,9 +156,10 @@ void InputDeviceBada::ClearActions(unsigned long actionHash, bool /*last*/) {
 #endif
 }
 
-// TODO: v1.6.1 Mortar::InputDeviceBada::RegisterInputCallback -- address UNVERIFIED.
-//   The InputManager-side broadcaster re-resolved to @0x0024475c; this device-side
-//   callee was not re-resolved, so no address is cited here.
+// v1.6.1 Mortar::InputDevice::RegisterInputCallback @0x002759f4 — InputDeviceBada
+// does NOT override this; it inherits the base body, which walks the
+// m_ActionMappers intrusive list, matches m_ActionHash and calls
+// InputActionMapper::SetCallback. (Manager-side broadcaster: @0x0024475c.)
 // DIFFERS: original = per-device binding via InputActionMapper; port uses
 //   direct InputDeviceBinding list for SDL dispatch path (no InputActionMapper
 //   ctor ported yet).
@@ -176,7 +179,7 @@ void InputDeviceBada::RegisterInputCallback(unsigned long actionHash,
 // ASM-spec v1.6.1 InputDeviceBada::Reset @ 0x00243174 — InputDeviceBada::Reset().
 // Clear tracked-touch state (m_ActiveTouchId, m_LastTouchX/m_LastTouchY) and wipe
 // the Touch singleton's pending state. (The InputManager-level broadcast that
-// fans Reset() out to every device is InputManager::ResetDevices @ 0x00196194,
+// fans Reset() out to every device is InputManager::ResetDevices @ 0x0024380c,
 // a separate function — not this per-device override.)
 void InputDeviceBada::Reset() {
     m_LastTouchY = 0;
@@ -205,7 +208,7 @@ void InputDeviceBada::SetSendDownCallbacksEachUpdate(bool v) {
 // Empty body in the binary (inherits the InputDevice base no-op; the touch
 // device has no axis extents to recompute). The InputManager-level broadcast
 // that fans this out across devices is InputManager::OnAxisExtentsChanged
-// @ 0x001960bc — a separate function, not this per-device override.
+// @ 0x00244238 — a separate function, not this per-device override.
 void InputDeviceBada::OnAxisExtentsChanged() {
 }
 

@@ -14,7 +14,7 @@
 //
 // Binary refs:
 //   ~ScreenButton           0x00131628 (destroys 5 delegate/SmartPtr members)
-//   ControlDeleted          0x00130f40 (called when MenuButton is removed by HUD)
+//   ControlDeleted          0x00160fbc (called when MenuButton is removed by HUD)
 //   ShrinkButtonCall        0x0015f53c (called when fruit shrink animation completes)
 //   DefaultCreateDelegate   0x001300e8 (always returns true)
 //   DefaultButtonDelegate   0x001300ec (always returns false)
@@ -116,8 +116,10 @@ struct ScreenButton {
         , m_bShrunk(0)
     {}
 
-    // Matches ScreenButton::ControlDeleted @ 0x00130f40.
-    // Called when HUD removes the MenuButton.
+    // Matches v1.6.1 ScreenButton::ControlDeleted @0x00160fbc.
+    // Called when HUD removes the MenuButton. When m_bShrunk is set it parks the
+    // tracked fruit off-screen (pos.y / m_SecondPos.y = -480), sets m_Gravity to
+    // -g_slideVec and vel.y / m_SecondVel.y to -10, then fires m_deletedCb.
     void ControlDeleted(HUDControl* ctrl);
 
     // Matches ScreenButton::ShrinkButtonCall @ 0x0015f53c.

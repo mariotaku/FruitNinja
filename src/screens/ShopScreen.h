@@ -6,21 +6,21 @@
 // Sensei's Swag — the in-game blade/background shop.
 //
 // Binary refs:
-//   ctor             0x001b3f94  ShopScreen(DojoScreen*) (older 0x0015cdac was stale v1.5.x)
-//   dtor             0x0015ce98 / 0x0015ced8 / 0x0015cf14
-//   Init             0x001b42ac  (older 0x0015f7ac/0x0015cdac were stale v1.5.x; same
-//                                0x1b4xxx family as DrawOrder@0x001b4e48)
-//   LoadContent      0x001b2a20  (static, loads 10 textures; PLT thunk @0x001047b8;
-//                                older 0x001b61c8/0x0015cb08 were stale)
-//   UnLoadContent    0x0015d080  (static, clears all textures)
-//   Update           0x001b321c  (387 lines)
-//   Draw             0x0015dd50
-//   SetSelected      0x0015c870
-//   ShrinkBuyButton  0x0015c4cc
+//   ctor              0x001b3f94  ShopScreen(DojoScreen*)
+//   ~ShopScreen       0x001b49f8  (_deleting 0x001b4a54, base 0x001b4aa8)
+//   Init              0x001b42ac
+//   LoadContent       0x001b2a20  (static, loads 10 textures; PLT thunk @0x001047b8)
+//   UnLoadContent     0x001b4afc  (static, clears all textures)
+//   Update            0x001b321c  (387 lines; body spans 0x001b321c..0x001b3f8b)
+//   DrawOrder         0x001b4e48  (there is NO ShopScreen::Draw symbol in v1.6.1)
+//   SetSelected       0x001b24f0
+//   ShrinkBuyButton   0x001b17b4
 //   ClickedOnShopItem 0x001b2df4
-//   QuitShopCallback 0x0015d55c
-//   EquipCallback    0x0015d630
-//   NewItem          0x0015c498
+//   QuitShopCallback  0x001b2ef0
+//   EquipCallback     0x001b3008
+//   NewItem           0x001b1774
+//   Reset             0x001b179c  (no port counterpart yet)
+//   DeletedMenuItem   0x001b53d4
 //
 // Struct size: 0xBC bytes
 //
@@ -40,7 +40,7 @@
 //   +0xB8  int    m_State                (state machine index)
 //
 // State machine (Update):
-//   0: Transition in. alpha += (1-alpha)*0.125. On alpha>DAT_0015e554:
+//   0: Transition in. alpha += (1-alpha)*0.125. On alpha > 0.999 (@0x001b3698):
 //        RemoveAllSplats, set m_BuyDelay, state=1.
 //        Lazily creates m_pBuyButton (QCallee<ShopScreen> for buy action).
 //        Registers buy button with TutorialControl.
@@ -57,7 +57,7 @@
 //   5/6: Wait for Mortar::ActorManager empty then equip item via ItemManager.
 //   7: Same as 2 (alternate quit path).
 //
-// Textures (static, loaded by LoadContent at 0x0015cb08):
+// Textures (static, loaded by LoadContent @0x001b2a20):
 //   BG_store.tex / BG_store_sml.tex  — background panel  (+0x48)
 //   dialog_box_shop.tex              — info dialog box   (+0x2c)
 //   locked.tex                       — lock icon         (+0x30)
@@ -71,7 +71,6 @@
 //
 // Port status:
 //   - State machine ported with full logic.
-//   - GL rendering stubbed (TODO: re-verify v1.6.1 ShopScreen::Draw address -- old 0x0015dd50 was stale v1.5.x, resolves to no function in v1.6.1).
 //   - ScrollingMenu is a stub (items visible but not scrollable).
 //   - ItemManager stubs always return "unlocked/not-equipped".
 //   - FruitSaveData::CheckDatesHaveChanged called in DojoScreen before push.
@@ -93,12 +92,12 @@ class HUD;
 
 class ShopScreen : public HUDControl3d {
 public:
-    // Matches ShopScreen::ShopScreen(DojoScreen*) @ 0x0015cdac
+    // Matches ShopScreen::ShopScreen(DojoScreen*) @ 0x001b3f94
     // Binary: calls HUDControl3d ctor, calls LoadContent if not loaded,
     //         initialises all fields, computes m_ScrollOffset from item count.
     ShopScreen(DojoScreen* parent);
 
-    // Matches ~ShopScreen @ 0x0015ce98
+    // Matches ~ShopScreen @ 0x001b49f8
     ~ShopScreen() override;
 
     // Matches ShopScreen::Init @ 0x001b42ac (vtable slot 2) — called from DojoScreen
@@ -146,7 +145,7 @@ public:
     // call site (`if (!s_bContentLoaded) LoadContent();`).
     static void LoadContent();
 
-    // Matches ShopScreen::UnLoadContent @ 0x0015d080
+    // Matches ShopScreen::UnLoadContent @ 0x001b4afc
     // Releases all static textures.
     static void UnLoadContent();
 
@@ -213,7 +212,7 @@ public:
     int m_State;
 
     // --- Static textures (GOT-relative globals in binary) ---
-    // Corrected slot layout verified from LoadContent @ 0x0015cb08 disasm + string reads.
+    // Corrected slot layout verified from LoadContent @ 0x001b2a20 disasm + string reads.
 public:
     // ShopListItem::Draw accesses these via the same GOT static block.
     // Making them public so ShopListItem::Draw can reference them without a friend.
@@ -238,11 +237,11 @@ public:
 
     // --- Callbacks ---
 
-    // Matches ShopScreen::QuitShopCallback @ 0x0015d55c
+    // Matches ShopScreen::QuitShopCallback @ 0x001b2ef0
     // Plays SFX "menu-bomb", sets state=2 (or 7), flings buy-button fruit.
     void QuitShopCallback();
 
-    // Matches ShopScreen::EquipCallback @ 0x0015d630
+    // Matches ShopScreen::EquipCallback @ 0x001b3008
     // Calls ItemManager::SetEquippedItem with selected item, plays equip SFX.
     void EquipCallback();
 
@@ -254,21 +253,21 @@ public:
     // are ever placed in the list).
     void ClickedOnShopItem(ScrollingMenuItem* item);
 
-    // Matches ShopScreen::SetSelected(ShopListItem*) @ 0x0015c870
+    // Matches ShopScreen::SetSelected(ShopListItem*) @ 0x001b24f0
     // Updates m_pSelectedItem, resolves fruit types for buy/equip button display.
     void SetSelected(ShopListItem* item);
 
-    // Matches ShopScreen::ShrinkBuyButton @ 0x0015c4cc
+    // Matches ShopScreen::ShrinkBuyButton @ 0x001b17b4
     // Triggers the "slice" shrink animation on the buy button fruit if not sliced.
     void ShrinkBuyButton();
 
-    // Matches ShopScreen::DeletedMenuItem(HUDControl*) @ 0x0015d14c
+    // Matches ShopScreen::DeletedMenuItem(HUDControl*) @ 0x001b53d4
     // Registered as m_RemoveCallback on both m_pBuyButton and m_pEquipButton.
     // Fires when HUD removes a button from its control list (after m_bPendingRemoval).
     // Nulls the relevant button pointer and optionally kicks the fruit off-screen.
     void DeletedMenuItem(HUDControl* removed);
 
-    // Matches ShopScreen::NewItem @ 0x0015c498
+    // Matches ShopScreen::NewItem @ 0x001b1774
     // Sets s_ScrollOffset = 1.0f (binary: *(GOT + DAT_0015c4b4) = 0x3f800000).
     // Called when a new item is available in the shop.
     void NewItem();

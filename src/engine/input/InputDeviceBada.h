@@ -7,7 +7,7 @@
 #include <cstdint>
 
 // ASM-spec v1.6.1 InputDeviceBada @ 0x002427e0 — concrete InputDevice for Bada/touch.
-// sizeof = 28 (0x1c), from operator new(0x1c) @ InputManager::Init 0x00196cd4.
+// sizeof = 28 (0x1c), from operator new(0x1c) @ InputManager::Init 0x002447e0.
 // Layout:
 //   +0x00: vptr (port) / InputDevice base (binary fns*)
 //   +0x04: std::list<InputActionMapper*> m_ActionMappers (8B, from InputDevice base)

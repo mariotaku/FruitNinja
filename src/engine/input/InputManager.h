@@ -1,10 +1,10 @@
 #ifndef FN_ENGINE_INPUT_INPUTMANAGER_H
 #define FN_ENGINE_INPUT_INPUTMANAGER_H
 
-// InputManager — binary @ 0x00196980 area.
+// InputManager — v1.6.1 Mortar::InputManager @0x0024371c..0x00244264.
 // sizeof 0x14 (20 bytes):
 //   vptr    (4)  — binary isPolymorphic=true; vtableAddr 0x001eb318;
-//                  first vfunc slot 0x0019603c (SetQueueEventsUntilUpdate).
+//                  first vfunc slot 0x002436e8 (SetQueueEventsUntilUpdate).
 //   field_0x4 (1, bool) — m_loadingConfig
 //   field_0x5 (1, bool) — m_inUpdate
 //   pad [0x06..0x07] (2)
@@ -29,39 +29,40 @@ class InputManager {
 public:
     static InputManager* s_instance;
 
-    // Binary @ 0x00196980 — ctor: both flags = 0.
+    // v1.6.1 Mortar::InputManager::InputManager @0x0024375c — ctor: both flags = 0.
     InputManager();
-    // Binary @ 0x00196924 — dtor: vector dtor only; does NOT call Destroy.
+    // v1.6.1 Mortar::InputManager::~InputManager @0x0024371c — dtor: vector dtor only; does NOT call Destroy.
     // Virtual to match binary isPolymorphic=true (vptr at +0x00).
     // Binary vtable slot 0: 0x001eb318 area (dtor is implicitly first slot).
     virtual ~InputManager();
 
     static InputManager* GetInstance();
 
-    // Binary @ 0x00196cc8 — Init: alloc InputDeviceBada, dev->Init(flags), push_back.
+    // v1.6.1 Mortar::InputManager::Init @0x002447d4 — Init: alloc InputDeviceBada, dev->Init(flags), push_back.
     void Init(unsigned long flags);
 
-    // Binary @ 0x001968a0 — Destroy: clear flags, ClearActions(all=true) on first
+    // v1.6.1 Mortar::InputManager::Destroy @0x00243798 — Destroy: clear flags, ClearActions(all=true) on first
     //   device, then Destroy+dtor on each device, vector.clear().
     void Destroy();
 
-    // Binary @ 0x00196138 — Update: gate m_loadingConfig, m_inUpdate=true,
+    // v1.6.1 Mortar::InputManager::Update @0x00243838 — Update: gate m_loadingConfig, m_inUpdate=true,
     //   broadcast Update(dt) via device vtable slot +0x0c, m_inUpdate=false.
     void Update(float dt);
 
-    // Binary @ 0x001969d8 — Defunct: input config file — Bada-only; v1.6.1 binary @ 0x001969d8
+    // Defunct: input config file — no-op stub; v1.6.1 Mortar::InputManager::LoadConfigFile @ 0x002442fc
     int LoadConfigFile(const char* path);
 
-    // Binary @ 0x001960f8 — AddActionMapper: broadcast to devices.
+    // v1.6.1 Mortar::InputManager::AddActionMapper @0x00243894 — AddActionMapper: broadcast to devices.
     void AddActionMapper(InputActionMapper* mapper);
 
-    // Binary @ 0x001961d0 — ClearActions: broadcast InputDevice::ClearActions(hash, last=true on final).
+    // v1.6.1 Mortar::InputManager::ClearActions @0x002441e0 — broadcast
+    // Mortar::InputDevice::ClearActions(hash, last=true on final).
     void ClearActions(unsigned long actionHash);
 
     // Binary @ 0x00195fe8 — HasInputDevice: search devices by GetDeviceType.
     bool HasInputDevice(InputDeviceTypes type, InputDevice** out);
 
-    // Binary @ 0x00196bc8 — OnAxisExtentsChanged: broadcast.
+    // v1.6.1 Mortar::InputManager::OnAxisExtentsChanged @0x00244238 — OnAxisExtentsChanged: broadcast.
     void OnAxisExtentsChanged();
 
     // v1.6.1 Mortar::InputManager::ParseAction @0x00244060 — lookup table of 7
@@ -80,13 +81,13 @@ public:
     // a fictitious 3rd param; corrected here per RE evidence).
     void RegisterInputCallback(unsigned long actionHash, InputCallback cb);
 
-    // Binary @ 0x00196194 — ResetDevices: broadcast Reset().
+    // v1.6.1 Mortar::InputManager::ResetDevices @0x0024380c — ResetDevices: broadcast Reset().
     void ResetDevices();
 
-    // Binary @ 0x0019603c — broadcast.
+    // v1.6.1 Mortar::InputManager::SetQueueEventsUntilUpdate @0x002436e8 — broadcast.
     void SetQueueEventsUntilUpdate(bool v);
 
-    // Binary @ 0x0019607c — broadcast.
+    // v1.6.1 Mortar::InputManager::SetSendDownCallbacksEachUpdate @0x00244264 — broadcast.
     void SetSendDownCallbacksEachUpdate(bool v);
 
     // Binary @ 0x00195fd8 — return (c - 0x20) < 0x90.

@@ -9,7 +9,7 @@ namespace Mortar {
 
 InputManager* InputManager::s_instance = nullptr;
 
-// Binary @ 0x00196980 — ctor: both flags = 0, vector default-inits (all three pointers zeroed).
+// v1.6.1 Mortar::InputManager::InputManager @0x0024375c — ctor: both flags = 0, vector default-inits (all three pointers zeroed).
 InputManager::InputManager()
     : m_loadingConfig(false)
     , m_inUpdate(false)
@@ -17,32 +17,32 @@ InputManager::InputManager()
     s_instance = this;
 }
 
-// Binary @ 0x00196924 — dtor: vector dtor only; does NOT call Destroy.
+// v1.6.1 Mortar::InputManager::~InputManager @0x0024371c — dtor: vector dtor only; does NOT call Destroy.
 // Virtual to match binary isPolymorphic=true.
 InputManager::~InputManager() {
     s_instance = nullptr;
     // Note: binary does NOT call Destroy() in dtor — vector goes out of scope only.
-    // Devices leaked intentionally (matches binary behavior at 0x00196924).
+    // Devices leaked intentionally (matches binary behavior at 0x0024371c).
 }
 
 InputManager* InputManager::GetInstance() {
     return s_instance;
 }
 
-// Binary @ 0x00196cc8 — Init: alloc InputDeviceBada via new, dev->Init(flags), push_back.
+// v1.6.1 Mortar::InputManager::Init @0x002447d4 — Init: alloc InputDeviceBada via new, dev->Init(flags), push_back.
 void InputManager::Init(unsigned long flags) {
     InputDeviceBada* dev = new InputDeviceBada();
     dev->Init(flags);
     m_inputDevices.push_back(dev);
 }
 
-// Binary @ 0x001968a0 — Destroy: clear flags, ClearActions(all=true) on first
+// v1.6.1 Mortar::InputManager::Destroy @0x00243798 — Destroy: clear flags, ClearActions(all=true) on first
 //   device only, then Destroy+dtor on each, list.clear().
 void InputManager::Destroy() {
     m_loadingConfig = false;
     m_inUpdate = false;
     if (!m_inputDevices.empty()) {
-        // Binary @ 0x001968a0: ClearActions(hash=0, last=true) on the FIRST device only
+        // v1.6.1 Mortar::InputManager::Destroy @0x00243798: ClearActions(hash=0, last=true) on the FIRST device only
         // (the loop calls it when its index counter is 0). hash=0 + last=true means
         // "clear every action binding" — the same 2nd-param ('last') used by the
         // ClearActions(hash) broadcast below, here forced true for the wholesale clear.
@@ -57,7 +57,7 @@ void InputManager::Destroy() {
     m_inputDevices.clear();
 }
 
-// Binary @ 0x00196138 — Update: gate on m_loadingConfig, m_inUpdate=true,
+// v1.6.1 Mortar::InputManager::Update @0x00243838 — Update: gate on m_loadingConfig, m_inUpdate=true,
 //   broadcast Update(dt), m_inUpdate=false.
 void InputManager::Update(float dt) {
     if (m_loadingConfig) return;
@@ -69,14 +69,13 @@ void InputManager::Update(float dt) {
     m_inUpdate = false;
 }
 
-// Binary @ 0x001969d8
 int InputManager::LoadConfigFile(const char* path) {
     (void)path;
-    // Defunct: input config file -- Bada-only; v1.6.1 binary @ 0x001969d8
+    // Defunct: input config file — no-op stub; v1.6.1 Mortar::InputManager::LoadConfigFile @ 0x002442fc
     return 1;
 }
 
-// Binary @ 0x001960f8 — broadcast to devices.
+// v1.6.1 Mortar::InputManager::AddActionMapper @0x00243894 — broadcast to devices.
 void InputManager::AddActionMapper(InputActionMapper* mapper) {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
@@ -84,7 +83,8 @@ void InputManager::AddActionMapper(InputActionMapper* mapper) {
     }
 }
 
-// Binary @ 0x001961d0 — broadcast ClearActions(hash, last=true on final).
+// v1.6.1 Mortar::InputManager::ClearActions @0x002441e0 — broadcast
+// ClearActions(hash, last=true on final).
 void InputManager::ClearActions(unsigned long actionHash) {
     std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
     std::vector<InputDevice*>::iterator end = m_inputDevices.end();
@@ -110,7 +110,7 @@ bool InputManager::HasInputDevice(InputDeviceTypes type, InputDevice** out) {
     return false;
 }
 
-// Binary @ 0x00196bc8 — broadcast.
+// v1.6.1 Mortar::InputManager::OnAxisExtentsChanged @0x00244238 — broadcast.
 void InputManager::OnAxisExtentsChanged() {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
@@ -124,7 +124,10 @@ void InputManager::OnAxisExtentsChanged() {
 // __cxa_guard; a function-local static gives the identical once-only init), then
 // linear-searches for `hash` and returns the matching flag, or 0 on no match.
 // Dead unless config-file parsing enabled (LoadConfigFile is a Defunct no-op stub).
-// Table source (strings @ 0x001c25dc/0x001b9730, value table @ 0x001f3ec0):
+// Table source: ONE interleaved array @0x002d8fbc, stride 8 -- name hash at +0
+// (filled by the __cxa_guard'ed init), flag at +4 (pre-initialised in .data),
+// 7 entries. It sits immediately after ParseKey's 61-entry table
+// (0x002d8dd4 + 61*8 == 0x002d8fbc). Strings @ 0x001c25dc/0x001b9730:
 //   "pressed"=0x01, "released"=0x04, "down"=0x02, "up"=0x08,
 //   "active"=0x10, "move"=0x20, "dead"=0x40
 unsigned long InputManager::ParseAction(unsigned long hash) const {
@@ -155,8 +158,9 @@ unsigned long InputManager::ParseAction(unsigned long hash) const {
 // Same lazily-built guarded static table pattern as ParseAction; linear-searches
 // for `hash`, returns the matching key code (InputKeys value), or 0 on no match.
 // Dead unless config-file parsing enabled (LoadConfigFile is a Defunct no-op stub).
-// Table source: ONE interleaved array @0x002d8dd8, stride 8 -- name hash at +0, key
-// code at +4 (it is NOT a separate name array plus value array). Key codes:
+// Table source: ONE interleaved array @0x002d8dd4, stride 8 -- name hash at +0, key
+// code at +4 (it is NOT a separate name array plus value array). ParseAction's
+// 7-entry table is contiguous with it at 0x002d8fbc. Key codes:
 //   MouseButton1..8        -> 0x6c..0x73
 //   MouseAxisX, MouseAxisY -> 0x74, 0x75
 //   Touch1..16             -> 0x89..0x98
@@ -218,7 +222,7 @@ void InputManager::RegisterInputCallback(unsigned long actionHash, InputCallback
     }
 }
 
-// Binary @ 0x00196194 — broadcast Reset().
+// v1.6.1 Mortar::InputManager::ResetDevices @0x0024380c — broadcast Reset().
 void InputManager::ResetDevices() {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
@@ -226,7 +230,7 @@ void InputManager::ResetDevices() {
     }
 }
 
-// Binary @ 0x0019603c — broadcast.
+// v1.6.1 Mortar::InputManager::SetQueueEventsUntilUpdate @0x002436e8 — broadcast.
 void InputManager::SetQueueEventsUntilUpdate(bool v) {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
@@ -234,7 +238,7 @@ void InputManager::SetQueueEventsUntilUpdate(bool v) {
     }
 }
 
-// Binary @ 0x0019607c — broadcast.
+// v1.6.1 Mortar::InputManager::SetSendDownCallbacksEachUpdate @0x00244264 — broadcast.
 void InputManager::SetSendDownCallbacksEachUpdate(bool v) {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {

@@ -6,7 +6,8 @@
 #include <list>
 #include <cstdint>
 
-// Binary @ 0x00196980 area — InputDevice base interface.
+// InputDevice base interface — v1.6.1 Mortar::InputDevice family @0x002756b0..0x00275fc7
+// (the InputManager broadcaster that drives it lives at 0x0024371c..0x00244264).
 // Concrete subclass on Bada: InputDeviceBada (composes a Mortar::Touch).
 //
 // Polymorphism model: the binary uses an explicit 'fns' table pointer at

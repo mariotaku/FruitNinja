@@ -175,7 +175,6 @@ namespace {
     Mortar::SmartPtr<Mortar::Texture> s_TexArcadeMode;
     Mortar::SmartPtr<Mortar::Texture> s_TexComingSoon;
     Mortar::SmartPtr<Mortar::Texture> s_TexZenSign;
-    Mortar::SmartPtr<Mortar::Texture> s_TexBackIcon;
 }
 
 // ===================================================================
@@ -199,11 +198,6 @@ void GameModeScreen::LoadContent() {
         s_TexComingSoon = Mortar::TextureManager::LoadLocalisedTexture("coming_soon.tex");
     if (!s_TexZenSign.IsValid())
         s_TexZenSign    = Mortar::TextureManager::LoadLocalisedTexture("zen_sign.tex");
-    // Port specific: back_icon.tex. Binary reads this from Game+0x17c
-    // (shared slot also used by DojoScreen's play/back button). Load
-    // it locally here until the Game+0x17c field is ported.
-    if (!s_TexBackIcon.IsValid())
-        s_TexBackIcon   = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 }
 
 // ===================================================================
@@ -217,7 +211,6 @@ void GameModeScreen::UnLoadContent() {
     s_TexArcadeMode.SetNull();
     s_TexComingSoon.SetNull();
     s_TexZenSign.SetNull();
-    s_TexBackIcon.SetNull();
 }
 
 // ===================================================================
