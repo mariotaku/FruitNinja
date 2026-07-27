@@ -9,13 +9,15 @@
 // Size: 0x48 bytes (72 bytes).
 //
 // Derived class SlashModInfo (0x118 bytes) extends for SLASH_MODIFIER items.
-// Ctor @ 0x0013ae78; ParseSlashModInfo @ 0x001126c0.
+// Ctor @ 0x0013ae78; ParseSlashModInfo @ 0x00138d00.
 //
 
 #include "engine/math/Colour.h"
 #include "ItemParseUtil.h"
 #include <cstdint>
 #include "engine/xml/TiXmlElement.h"
+
+namespace Mortar { class MortarSound; }
 
 // ItemType — matches m_Type byte values documented in binary.
 // 0=SLASH_MODIFIER, 1=BACKGROUND, 2=UPSELL, 3=REMOVEADS
@@ -100,7 +102,7 @@ public:
 };
 
 // -----------------------------------------------------------------------
-// SlashSoundMods (0x2c bytes) — binary @ 0x00112568.
+// SlashSoundMods (0x2c bytes) — binary @ 0x00138b0c.
 // Stores sound names/volumes for swipe/impact/combo events on a blade mod.
 // -----------------------------------------------------------------------
 struct SlashSoundMods {
@@ -135,7 +137,7 @@ struct SlashSoundMods {
 
     SlashSoundMods();
 
-    // Parse — mirrors binary @ 0x00112568
+    // Parse — mirrors binary @ 0x00138b0c
     void Parse(TiXmlElement* elem);
 
     // Reset — called from Parse and from SlashModInfo::SetEquipped
@@ -161,37 +163,46 @@ struct SlashSoundMods {
 };
 
 // -----------------------------------------------------------------------
-// LoopingSound (0x10 bytes) — binary @ 0x0011253c.
-// Tracks a looping ambient sound attached to the equipped blade mod.
+// LoopingSound (0x10 bytes) — binary ctor @ 0x0013a864, dtor @ 0x0013ac10.
+// Tracks a looping ambient sound attached to the equipped blade mod: gameplay
+// pushes a desired volume in via SetLoopDesiredVol, Update() chases the current
+// volume toward it, and the live SFX handle exists only while that volume is
+// above zero (started on the way up, released on the way down).
+//
+// NOTE: no shipped itemlist.xml/itemlistnfc.xml declares loop="", so m_pLoopName is
+// always NULL in v1.6.1 and this path is inert -- layout fidelity only.
 // -----------------------------------------------------------------------
 struct LoopingSound {
-    // +0x00  float    m_field0     runtime float; ctor 0.0f (vstr.32 s15 = 0.0f)
-    float    m_SoundId;
-    // +0x04  float    m_field4     runtime float; ctor 0.0f (vstr.32 s15 = 0.0f)
-    float    m_Phase;
-    // +0x08  char*    m_pLoopName  CloneString of XML "loop" attr; default NULL
+    // +0x00  float    m_DesiredVol  target volume; only writer is SetLoopDesiredVol
+    float    m_DesiredVol;
+    // +0x04  float    m_CurrentVol  lerped toward m_DesiredVol at 2.5/sec; drives SetVolume
+    float    m_CurrentVol;
+    // +0x08  Mortar::MortarSound*  m_pSound  live SFXPlay handle; NULL when silent
+    Mortar::MortarSound* m_pSound;
+    // +0x0c  char*    m_pLoopName   CloneString of <swipeSounds loop="">; delete[]'d by dtor
     char*    m_pLoopName;
-    // +0x0c  int32_t  m_State      runtime state; ctor 0, not parsed
-    int32_t  m_State;
 
     LoopingSound();
 
-    // Parse — mirrors binary @ 0x0011253c
+    // Parse — mirrors binary @ 0x00138ad0
     // Reads "loop" attr from elem (the <swipeSounds> element).
     void Parse(TiXmlElement* elem);
 
-    // Reset — binary: LoopingSound::Reset (called from SlashModInfo::UnEquip @ 0x00112424)
+    // Reset @ v1.6.1 0x001388e8 — called from SlashModInfo::UnEquip @ 0x0013893c.
+    // Zeroes both volumes and releases any live handle. m_pLoopName is NOT touched,
+    // so the mod can start looping again the next time it is equipped.
     void Reset();
 
-    // TODO: v1.6.1 0x0013975c (SlashModInfo::LoopingSound::Update) — body unported;
-    // the field layout above is also known-wrong (+0x08/+0x0c swapped vs binary,
-    // which is m_DesiredVol/m_CurrentVol/MortarSound* m_pSound/char* m_pLoopName).
-    // Called unconditionally from UpdateSounds; currently a no-op.
+    // Update @ v1.6.1 0x0013975c — chases m_CurrentVol toward m_DesiredVol at 2.5
+    // units/sec (clamped at the target, so it never overshoots), then starts the loop
+    // through GameSound::SFXPlay on the first frame the volume is positive, tracks it
+    // with MortarSound::SetVolume, and releases it once the volume reaches zero.
+    // Called unconditionally every frame from SlashModInfo::UpdateSounds — there is no
+    // early-out and no NULL check on m_pLoopName, matching the binary.
     void Update(float dt);
 
-    // TODO: SetLoopDesiredVol (binary address unknown) — sets desired/target loop volume;
-    // called from ItemManager::SetSwipeLoodVol. Full behavior requires RE of the looping
-    // sound update path (likely stores vol into m_Phase or m_SoundId; drives audio interpolation).
+    // SetLoopDesiredVol @ v1.6.1 0x001382fc — sets the target volume, but only for a
+    // mod that actually declared a loop name. Called from ItemManager::SetSwipeLoodVol.
     void SetLoopDesiredVol(float vol);
 };
 
@@ -199,7 +210,7 @@ struct LoopingSound {
 // SlashModInfo : ItemInfo (0x118 bytes)
 // Extends ItemInfo for SLASH_MODIFIER items.
 // Binary vtable overrides Parse at slot +0x10 with ParseSlashModInfo.
-// ctor @ 0x0013ae78; outer parse @ 0x0013935c wraps inner parse @ 0x001126c0.
+// ctor @ 0x0013ae78; outer parse @ 0x0013935c wraps inner parse @ 0x00138d00.
 // -----------------------------------------------------------------------
 class SlashModInfo : public ItemInfo {
 public:
@@ -254,11 +265,11 @@ public:
     SlashModInfo();
     virtual ~SlashModInfo() override;
 
-    // vtable[+0x08] UnEquip @ 0x00112424 — calls LoopingSound::Reset() on m_LoopingSound (+0x108)
+    // vtable[+0x08] UnEquip @ 0x0013893c — calls LoopingSound::Reset() on m_LoopingSound (+0x108)
     virtual void UnEquip() override;
-    // vtable[+0x0c] SetEquipped @ 0x00112430 — calls SetModColours + SetModScales + 3x SlashSoundMods::Reset
+    // vtable[+0x0c] SetEquipped @ 0x00138944 — calls SetModColours + SetModScales + 3x SlashSoundMods::Reset
     virtual void SetEquipped() override;
-    // vtable[+0x10] Parse override — ParseSlashModInfo @ 0x001126c0
+    // vtable[+0x10] Parse override — ParseSlashModInfo @ 0x00138d00
     virtual void Parse(TiXmlElement* e) override;
 
     // UpdateSounds @ v1.6.1 0x001399f0 — per-frame tick of all four sound members.
@@ -274,8 +285,10 @@ static_assert(offsetof(SlashSoundMods, m_TimeUntilNextSound) == 0x14, "SlashSoun
 static_assert(offsetof(SlashSoundMods, m_LastVolume)         == 0x18, "SlashSoundMods::m_LastVolume");
 static_assert(offsetof(SlashSoundMods, m_LastPitch)          == 0x1c, "SlashSoundMods::m_LastPitch");
 static_assert(sizeof(LoopingSound)                           == 0x10, "LoopingSound size");
-static_assert(offsetof(LoopingSound, m_pLoopName)            == 0x08, "LoopingSound::m_pLoopName @ +0x08");
-static_assert(offsetof(LoopingSound, m_State)                == 0x0c, "LoopingSound::m_State @ +0x0c");
+static_assert(offsetof(LoopingSound, m_DesiredVol)           == 0x00, "LoopingSound::m_DesiredVol");
+static_assert(offsetof(LoopingSound, m_CurrentVol)           == 0x04, "LoopingSound::m_CurrentVol");
+static_assert(offsetof(LoopingSound, m_pSound)               == 0x08, "LoopingSound::m_pSound");
+static_assert(offsetof(LoopingSound, m_pLoopName)            == 0x0c, "LoopingSound::m_pLoopName");
 static_assert(sizeof(ItemInfo)                               == 0x48, "ItemInfo size");
 static_assert(offsetof(ItemInfo, m_Scale)                    == 0x40, "ItemInfo::m_Scale");
 static_assert(offsetof(ItemInfo, m_IsNew)                    == 0x44, "ItemInfo::m_IsNew");

@@ -3,8 +3,8 @@
 // ItemInfo + SlashModInfo — method implementations.
 // Binary: ItemInfo::ctor 0x0013a714 (thunk 0x001145a0), ItemInfo::Parse 0x0013907c,
 //         ItemInfo in-place dtor 0x0013adb8, deleting dtor 0x0013b098,
-//         SlashModInfo::ctor 0x0013ae78, ParseSlashModInfo 0x001126c0,
-//         SlashSoundMods::Parse 0x00112568, LoopingSound::Parse 0x0011253c.
+//         SlashModInfo::ctor 0x0013ae78, ParseSlashModInfo 0x00138d00,
+//         SlashSoundMods::Parse 0x00138b0c, LoopingSound::Parse 0x00138ad0.
 
 #include "ItemInfo.h"
 #include "ItemParseUtil.h"
@@ -172,7 +172,7 @@ SlashSoundMods::SlashSoundMods()
     _pad21[0] = _pad21[1] = _pad21[2] = 0;
 }
 
-// SlashSoundMods::Parse @ 0x00112568
+// SlashSoundMods::Parse @ 0x00138b0c
 void SlashSoundMods::Parse(TiXmlElement* elem) {
     if (!elem) return;
 
@@ -329,39 +329,80 @@ bool SlashSoundMods::PlaySound(int idx, float volume, float pitch) {
 // LoopingSound
 // -----------------------------------------------------------------------
 
+// NOTE: no shipped itemlist.xml/itemlistnfc.xml declares loop="", so m_pLoopName is
+// always NULL in v1.6.1 and this path is inert -- layout fidelity only.
+
 LoopingSound::LoopingSound()
-    : m_SoundId(0.0f)
-    , m_Phase(0.0f)
+    : m_DesiredVol(0.0f)
+    , m_CurrentVol(0.0f)
+    , m_pSound(nullptr)
     , m_pLoopName(nullptr)
-    , m_State(0)
 {
 }
 
-// LoopingSound::Parse @ 0x0011253c
+// LoopingSound::Parse @ 0x00138ad0
 void LoopingSound::Parse(TiXmlElement* elem) {
     if (elem) {
         CloneString(&m_pLoopName, elem->Attribute("loop"));
     }
 }
 
-// LoopingSound::Reset — called from SlashModInfo::UnEquip @ 0x00112424
+// ASM-spec v1.6.1 LoopingSound::Reset @ 0x001388e8 — called from
+// SlashModInfo::UnEquip @ 0x0013893c. Both volumes go to zero and a live handle is
+// released; m_pLoopName is deliberately left intact so a re-equip can loop again.
 void LoopingSound::Reset() {
-    // Runtime audio state reset; no-op until audio system is ported.
-    m_SoundId = 0.0f;
-    m_Phase   = 0.0f;
-    m_State   = 0;
+    m_DesiredVol = 0.0f;
+    m_CurrentVol = 0.0f;
+    if (m_pSound != nullptr) {
+        game_work.mGameSound->Release(m_pSound, m_pLoopName);
+        m_pSound = nullptr;
+    }
 }
 
-// TODO: v1.6.1 0x0013975c (SlashModInfo::LoopingSound::Update) — body unported; layout fix pending
+// ASM-spec v1.6.1 SlashModInfo::LoopingSound::Update @ 0x0013975c:
+//  - m_CurrentVol steps toward m_DesiredVol by dt * 2.5 per second (0x40200000 up,
+//    0xc0200000 down) and is clamped at the target so it never overshoots; already
+//    equal snaps outright. Stored back @ 0x001397c4.
+//  - a positive volume with no live handle starts the loop @ 0x001397d4, and any live
+//    handle is retracked through MortarSound::SetVolume @ 0x0013986c.
+//  - a zero volume with a live handle releases it @ 0x00139890.
+// The binary has no early-out and no NULL check on m_pLoopName here -- SFXPlay is
+// called with whatever the name is. Matched deliberately.
 void LoopingSound::Update(float dt) {
-    (void)dt;
+    float cur = m_CurrentVol;
+    float tgt = m_DesiredVol;
+    if (cur > tgt) {
+        cur += dt * -2.5f;
+        if (tgt > cur) cur = tgt;
+    } else if (cur < tgt) {
+        cur += dt * 2.5f;
+        if (tgt < cur) cur = tgt;
+    } else {
+        cur = tgt;
+    }
+    m_CurrentVol = cur;
+
+    if (cur > 0.0f) {
+        if (m_pSound == nullptr) {
+            Mortar::Delegate1<bool, Mortar::MortarSound*> empty;
+            m_pSound = game_work.mGameSound->SFXPlay(m_pLoopName, 1.0f, 1.0f, empty, 0.0f);
+        }
+        if (m_pSound != nullptr) {
+            m_pSound->SetVolume(m_CurrentVol);
+        }
+    } else if (m_pSound != nullptr) {
+        game_work.mGameSound->Release(m_pSound, m_pLoopName);
+        m_pSound = nullptr;
+    }
 }
 
-// TODO: SetLoopDesiredVol (binary address unknown) — sets desired/target loop volume.
-// Called from ItemManager::SetSwipeLoodVol. Stores vol for use by the looping-sound
-// update path. Full implementation requires RE of LoopingSound's vol-lerp logic.
+// ASM-spec v1.6.1 LoopingSound::SetLoopDesiredVol @ 0x001382fc — the guard reads
+// +0x0c (m_pLoopName) and the store lands on +0x00, so a mod with no loop name can
+// never be given a non-zero target. Called from ItemManager::SetSwipeLoodVol.
 void LoopingSound::SetLoopDesiredVol(float vol) {
-    (void)vol;
+    if (m_pLoopName != nullptr) {
+        m_DesiredVol = vol;
+    }
 }
 
 // External fn defined in SlashModifier.cpp; v1.6.1 @ 0x0017b4a8.
@@ -417,12 +458,12 @@ SlashModInfo::~SlashModInfo() {
     free(m_pReleaseParticle);
 }
 
-// SlashModInfo::UnEquip @ 0x00112424
+// SlashModInfo::UnEquip @ 0x0013893c
 void SlashModInfo::UnEquip() {
     m_LoopingSound.Reset();
 }
 
-// SlashModInfo::SetEquipped @ 0x00112430 (vtable slot +0x0c)
+// SlashModInfo::SetEquipped @ 0x00138944 (vtable slot +0x0c)
 void SlashModInfo::SetEquipped() {
     SlashEntity::SetModColours(
         m_pColours,               // +0x48
@@ -449,12 +490,12 @@ void SlashModInfo::SetEquipped() {
     m_ComboSounds.Reset();   // +0xdc
 }
 
-// SlashModInfo::Parse @ 0x0013935c wraps the inner ParseSlashModInfo @ 0x001126c0.
+// SlashModInfo::Parse @ 0x0013935c wraps the inner ParseSlashModInfo @ 0x00138d00.
 // DIFFERS: binary ParseSlashModInfo does NOT call ItemInfo::Parse and reads
 // slash-specific attributes directly from the root element (no child wrapper).
 // Port adaptation keeps ItemInfo::Parse + <slashModInfo> child navigation
 // because the asset XML schema nests slash attributes in a child element
-// (v1.6.1 ParseSlashModInfo @0x001126c0).
+// (v1.6.1 ParseSlashModInfo @0x00138d00).
 void SlashModInfo::Parse(TiXmlElement* e) {
     ItemInfo::Parse(e);
 
@@ -468,7 +509,7 @@ void SlashModInfo::Parse(TiXmlElement* e) {
 
         // DIFFERS: binary allocates 64-byte buffer + snprintf("%s.tex") for m_pTextureName2.
         // Port stores the raw attribute value directly because the asset XML may or may not
-        // include ".tex" in the attribute value (v1.6.1 ParseSlashModInfo @0x001126c0).
+        // include ".tex" in the attribute value (v1.6.1 ParseSlashModInfo @0x00138d00).
         const char* tex2 = smi.Attribute("texture");
         CloneString(&m_pTextureName2, tex2);
 

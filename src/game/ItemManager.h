@@ -117,13 +117,13 @@ public:
     // Returns PlaySound's m_bPlayOntop result: true suppresses the default Sword-swipe SFX;
     // false (no blade mod, no swipe sounds, or play_ontop="true") lets it play.
     bool PlayAlternateSwipeSound(float volume, float pitch);
-    // SetSwipeLoodVol @ v1.6.1 0x00138308 — set looping-swipe desired volume on the
+    // SetSwipeLoodVol @ v1.6.1 0x0013830c — set looping-swipe desired volume on the
     // equipped blade mod: if m_DefaultItems[0], call its
     // m_LoopingSound.SetLoopDesiredVol(vol).
     void SetSwipeLoodVol(float);
     // UnequipItem @ 0x0010314c — unequip item by hash; returns true if found.
     bool UnequipItem(unsigned long hash);
-    // Update @ v1.6.1 0x00139a38 — per-frame update of equipped blade mod sounds:
+    // Update @ v1.6.1 0x00139a34 — per-frame update of equipped blade mod sounds:
     // if m_DefaultItems[0], call SlashModInfo::UpdateSounds(dt).
     void Update(float);
     // ---- end additional API ----

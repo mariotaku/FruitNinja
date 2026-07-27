@@ -235,7 +235,7 @@ void ItemManager::SetEquippedItem(ItemType type, ItemInfo* item) {
             SlashEntity::InitModColours();
             SlashEntity::SetModScales(1.0f, 1.0f, 0.0f, 1.0f, false, false, 0.0f);
         } else {
-            item->SetEquipped();  // virtual call -> SlashModInfo::SetEquipped @ 0x00112430
+            item->SetEquipped();  // virtual call -> SlashModInfo::SetEquipped @ 0x00138944
         }
     }
     // DONE:
@@ -475,7 +475,7 @@ bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
     return mod->m_SwipeSounds.PlaySound(-1, volume, pitch);
 }
 // -----------------------------------------------------------------------
-// SetSwipeLoodVol @ v1.6.1 0x00138308
+// SetSwipeLoodVol @ v1.6.1 0x0013830c
 // Binary: field0_0x0 is the equipped blade mod (m_DefaultItems[0], typed
 // SlashModInfo*). If non-null, forward the volume to its looping-swipe sound.
 //   if (m_DefaultItems[0]) m_DefaultItems[0]->m_LoopingSound.SetLoopDesiredVol(vol);
@@ -488,7 +488,7 @@ void ItemManager::SetSwipeLoodVol(float vol) {
 }
 
 // -----------------------------------------------------------------------
-// Update @ v1.6.1 0x00139a38 — per-frame update of equipped blade mod sounds.
+// Update @ v1.6.1 0x00139a34 — per-frame update of equipped blade mod sounds.
 // Binary: field0_0x0 is m_DefaultItems[0] (SlashModInfo*); if non-null,
 // SlashModInfo::UpdateSounds(m_DefaultItems[0], dt).
 // -----------------------------------------------------------------------
