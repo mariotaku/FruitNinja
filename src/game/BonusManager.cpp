@@ -118,7 +118,7 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
     };
 
     // Get best from each BonusType and push directly into m_BestBonuses.
-    // TODO: v1.6.1 0x0011096c (BonusManager::SetUpBonusScreen) — shuffle indices via
+    // TODO: v1.6.1 0x0012ede8 (BonusManager::SetUpBonusScreen) — shuffle indices via
     // Math::g_random before iterating (Fisher-Yates), matching binary.
     for (size_t i = 0; i < m_AllBonuses.size(); ++i) {
         Bonus* b = m_AllBonuses[i].GetBest();

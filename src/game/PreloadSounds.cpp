@@ -22,7 +22,7 @@ static const char* const k_PreloadedSounds[24] = {
     "achievement", "Bonus-count-up", "Pause", "time-up",
 };
 
-// ASM-verified: 2026-05-03T15:05 v1.6.1 PreloadSounds @ 0x001107e0 (asm-inspector)
+// ASM-verified: 2026-05-03T15:05 v1.6.1 PreloadSounds @ 0x0011bb94 (asm-inspector)
 void PreloadSounds() {
     Mortar::SoundManager* sm = &Mortar::SoundManager::GetInstance();
     sm->Initialise(nullptr);

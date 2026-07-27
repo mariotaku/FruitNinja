@@ -179,8 +179,8 @@ void Bonus::Parse(TiXmlElement* e) {
 }
 
 // ---------------------------------------------------------------------------
-// Bonus::IsAchieved -- Binary @ 0x001064c4
-// ASM-verified: 2026-06-07 v1.6.1 Bonus::IsAchieved @ 0x001064c4 (disassemble_function diff)
+// Bonus::IsAchieved -- Binary @ 0x0012e708
+// ASM-verified: 2026-06-07 v1.6.1 Bonus::IsAchieved @ 0x0012e708 (disassemble_function diff)
 //
 // Faithful port of the binary control flow:
 //   1. Gate (0010df3e-0010df62, all unconditional -- NO `>0` guards):
@@ -340,7 +340,7 @@ void BonusType::Parse(TiXmlElement* e) {
 // Forward declaration (defined below). Binary: _Z13GetBonusTotalm @0x0012e4c4
 int GetBonusTotal(unsigned long hash);
 
-// ASM-verified: 2026-05-22 v1.6.1 BonusType::GetBest @ 0x0010ecc8 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 BonusType::GetBest @ 0x0012e91c (re-analyst).
 Bonus* BonusType::GetBest() {
     int totalAcrossFruits = 0;
     for (std::map<unsigned long, int>::iterator it = m_RequiredHashes.begin();
@@ -381,8 +381,8 @@ int GetBonusTotal(unsigned long hash) {
 }
 
 // ---------------------------------------------------------------------------
-// BonusType::UnlockAchievements -- Binary @ 0x00108eb0
-// ASM-verified: 2026-05-18 v1.6.1 BonusType::UnlockAchievements @ 0x00108eb0 (re-analyst Claude #49)
+// BonusType::UnlockAchievements -- Binary @ 0x0012e9f4
+// ASM-verified: 2026-05-18 v1.6.1 BonusType::UnlockAchievements @ 0x0012e9f4 (re-analyst Claude #49)
 //
 // Pre-pass: refresh per-fruit totals into m_RequiredHashes values (the map
 // keys were populated by Parse from the "requires" CSV; values get overwritten

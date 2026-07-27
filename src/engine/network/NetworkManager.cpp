@@ -93,6 +93,6 @@ void CurrentUserName(char* buf, int size, Mortar::NetworkProvider /*provider*/) 
     }
 }
 
-// Defunct: GameCenter callback -- no-op stub; v1.6.1 GPostCallback @0x0010c144
+// Defunct: GameCenter callback -- no-op stub; v1.6.1 GPostCallback @0x0011c144
 void GPostCallback(int /*result*/) {
 }

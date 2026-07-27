@@ -18,7 +18,7 @@
 //   GetInstance                   0x00108f64
 //   LoadAchievementInfo           0x00118198
 //   UnLoadAchievementInfo         0x00108fb4
-//   AchievementExists             0x00108ea4
+//   AchievementExists             0x00116ea8
 //   UnlockBonusAchievement        0x00108af0  (was 0x00108de4)
 //   UnlockComboAchievement        0x00108a10  (was 0x00108b3c)
 //   UnlockComboStarAchievement    0x00108c40  (was incorrectly namespaced in old stub)
@@ -117,14 +117,14 @@ public:
     // Binary @ 0x00108fb4 — free m_All entries, clear all maps
     void UnLoadAchievementInfo();
 
-    // Binary @ 0x00108ea4 — returns iterator index if hash found, -1 otherwise
+    // Binary @ 0x00116ea8 — returns iterator index if hash found, -1 otherwise
     int  AchievementExists(uint32_t hash);
 
     // Unlock paths — Binary addresses above
-    // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::AchievementExists @ 0x00105230 (asm-inspector)
+    // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::AchievementExists @ 0x00116ea8 (asm-inspector)
     // TODO: confirm decl<->addr pairing (marker was cross-pasted from .cpp; may annotate UnlockBonusAchievement not AchievementExists)
     unsigned int UnlockBonusAchievement(unsigned long bonusId);
-    // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::AchievementExists @ 0x00105230 (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::AchievementExists @ 0x00116ea8 (re-analyst)
     // TODO: confirm decl<->addr pairing (marker was cross-pasted from .cpp; may annotate UnlockComboAchievement not AchievementExists)
     int  UnlockComboAchievement(int comboLen, int* fruitArr);
     int  UnlockComboStarAchievement(int combo, uint32_t starTypeHash);
@@ -179,7 +179,7 @@ static_assert(offsetof(AchievementManager, m_AllHashes) == 0x120, "m_AllHashes o
 class TiXmlElement;
 class FruitSaveData;
 
-// Defunct: achievements parse -- no-op stub; v1.6.1 ParseAchievements @0x001094ec
+// Defunct: achievements parse -- no-op stub; v1.6.1 ParseAchievements @0x00154830
 void ParseAchievements(TiXmlElement* root, FruitSaveData* save, bool reset);
 
 #endif // FN_ACHIEVEMENT_MANAGER_H

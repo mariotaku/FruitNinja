@@ -143,7 +143,7 @@ public:
     // StartZoomOut = TransitionOut(): no args, sets ONLY m_CameraMode=3.
     void StartZoomOut();
 
-    // ASM-spec v1.6.1 FruitCamera::IsTransitionIn @0x00105954 (thunk 0x001bedf4): m_CameraMode==2.
+    // ASM-spec v1.6.1 FruitCamera::IsTransitionIn @0x001bedf4: m_CameraMode==2.
     bool IsTransitionIn() const { return m_CameraMode == 2; }
 
     // --- Debug input handlers (binary @ addresses below) ---

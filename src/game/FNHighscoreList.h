@@ -23,7 +23,7 @@
 
 class FNHighscoreList {
 public:
-    // Defunct: FNHighscoreList -- no-op stub; v1.6.1 FNHighscoreList::FNHighscoreList @0x00106500
+    // Defunct: FNHighscoreList -- no-op stub; v1.6.1 FNHighscoreList::FNHighscoreList @0x00136d30
     FNHighscoreList()
         : m_flag8(false)
         , m_flag9(false)
@@ -32,7 +32,7 @@ public:
         , m_flagC(false)
     {}
 
-    // Defunct: FNHighscoreList -- no-op stub; v1.6.1 FNHighscoreList::AddPlayerScore @ 0x00113fa8
+    // Defunct: FNHighscoreList -- no-op stub; v1.6.1 FNHighscoreList::AddPlayerScore @ 0x00137444
     static void AddPlayerScore(long long /*score*/) {}
 
     void* GetFirst() { return nullptr; }

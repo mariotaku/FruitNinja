@@ -326,7 +326,7 @@ public:
     // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e8b8
     void SetP2PVoiceChatOpponentSpeakingCallback(void* /*cb*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 NetworkManager::SetGameCenterInitializationCallback @ 0x001044fc
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 NetworkManager::SetGameCenterInitializationCallback @ 0x0011e288
     void SetGameCenterInitializationCallback(void* /*cb*/) {}
 
     // Defunct: NetworkManager -- no-op stub (symbol in list_methods)
@@ -418,7 +418,7 @@ void CustomNotificationCallback(const char* name, int i1, int i2);
 // Fills buf with an empty string (online services not available).
 void CurrentUserName(char* buf, int size, Mortar::NetworkProvider provider);
 
-// Defunct: GameCenter callback -- no-op stub; v1.6.1 GPostCallback @0x0010c144
+// Defunct: GameCenter callback -- no-op stub; v1.6.1 GPostCallback @0x0011c144
 // Called by GameCenter integration layer with a result code.
 void GPostCallback(int result);
 

@@ -267,8 +267,8 @@ void SlashSoundMods::Update(float dt) {
     PlaySoundIdx(GetNextSound());
 }
 
-// SlashSoundMods::GetNextSound @ 0x0010a234
-// ASM-verified: 2026-05-20 v1.6.1 SlashSoundMods::GetNextSound @ 0x0010a234 (asm-inspector)
+// SlashSoundMods::GetNextSound @ 0x00139630
+// ASM-verified: 2026-05-20 v1.6.1 SlashSoundMods::GetNextSound @ 0x00139630 (asm-inspector)
 int SlashSoundMods::GetNextSound() {
     if (!m_SoundNames || m_SoundCount <= 0) return -1;
     if (m_SoundCount == 1) return 0;

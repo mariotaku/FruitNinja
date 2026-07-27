@@ -12,8 +12,8 @@
 // Call graph sequence converges; struct layout intentionally does not — the binary
 // never exposes internal TiXml node layout via a public API we'd need to match.
 // v1.6.1 TiXmlDocument ctor @0x00110fc4, TiXmlDocument::LoadFile @0x001157a4,
-// TiXmlNode::FirstChildElement @0x00112d0c, TiXmlNode::NextSiblingElement @0x00111210,
-// TiXmlElement::Attribute @0x00111120, TiXmlElement::QueryIntAttribute @0x0011689c,
+// TiXmlNode::FirstChildElement @0x0021ffa0, TiXmlNode::NextSiblingElement @0x00220044,
+// TiXmlElement::Attribute @0x00221ca0, TiXmlElement::QueryIntAttribute @0x00221c74,
 // TiXmlAttribute::Parse @0x00102d20.
 //
 // This header is tinyxml2-FREE — it must compile in the asm-verify cross-build
@@ -50,8 +50,8 @@ public:
 };
 
 // TiXmlNode — base class for TiXmlElement and TiXmlDocument.
-// v1.6.1 TiXmlNode::FirstChildElement @0x00112d0c
-// v1.6.1 TiXmlNode::NextSiblingElement @0x00111210
+// v1.6.1 TiXmlNode::FirstChildElement @0x0021ffa0
+// v1.6.1 TiXmlNode::NextSiblingElement @0x00220044
 // DIFFERS: binary TiXmlNode is an 80-byte heap-linked node struct; port wraps void*.
 class TiXmlNode {
 public:
@@ -61,9 +61,9 @@ public:
     explicit TiXmlNode(void* node);
 
     // Navigation (name=0 means "any name" — matches tinyxml2 nullptr behavior).
-    // ASM-spec v1.6.1 TiXmlNode::FirstChildElement @0x00112d0c
+    // ASM-spec v1.6.1 TiXmlNode::FirstChildElement @0x0021ffa0
     TiXmlElement FirstChildElement(const char* name = 0) const;
-    // ASM-spec v1.6.1 TiXmlNode::NextSiblingElement @0x00111210
+    // ASM-spec v1.6.1 TiXmlNode::NextSiblingElement @0x00220044
     TiXmlElement NextSiblingElement(const char* name = 0) const;
 
     const char* Value() const;
@@ -81,8 +81,8 @@ public:
 };
 
 // TiXmlElement — wraps tinyxml2::XMLElement*.
-// v1.6.1 TiXmlElement::Attribute @0x00111120
-// v1.6.1 TiXmlElement::QueryIntAttribute @0x0011689c
+// v1.6.1 TiXmlElement::Attribute @0x00221ca0
+// v1.6.1 TiXmlElement::QueryIntAttribute @0x00221c74
 // DIFFERS: binary TiXmlElement is a 44-byte node; port wraps void* handle.
 class TiXmlElement : public TiXmlNode {
 public:
@@ -93,11 +93,11 @@ public:
     const char* Name() const;
 
     // --- Read API ---
-    // ASM-spec v1.6.1 TiXmlElement::Attribute @0x00111120
+    // ASM-spec v1.6.1 TiXmlElement::Attribute @0x00221ca0
     const char* Attribute(const char* name)                        const;
     const char* Attribute(const char* name, const char* def)       const;
     const char* GetText()                                          const;
-    // ASM-spec v1.6.1 TiXmlElement::QueryIntAttribute @0x0011689c
+    // ASM-spec v1.6.1 TiXmlElement::QueryIntAttribute @0x00221c74
     int QueryIntAttribute(const char* name, int* outVal)           const;
     int QueryFloatAttribute(const char* name, float* outVal)       const;
     int QueryDoubleAttribute(const char* name, double* outVal)     const;

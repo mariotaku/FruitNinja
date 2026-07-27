@@ -16,9 +16,9 @@
 //   Mortar::StringTable::Clear                 0x22d6b4
 //   Mortar::StringTable::FileHeader::Check     0x22d598
 //   GETSTRING                          0x14c9a0
-//   GETSTRING_STR                      0x0011fb40
-//   GETSTRING_CAST_0                   0x0010cff0
-//   GETSTRING_CAST_0_STR               0x00109ec0
+//   GETSTRING_STR                      0x0014ccf8
+//   GETSTRING_CAST_0                   0x0011eb9c
+//   GETSTRING_CAST_0_STR               0x001195f4
 
 #include "StringTable.h"
 #include "asset/File.h"

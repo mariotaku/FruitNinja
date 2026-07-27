@@ -65,10 +65,11 @@ inline bool IsTimedGame(uint8_t gameMode) {
     return ((uint8_t)(gameMode - 2u)) < 2u;
 }
 
-// Binary @ 0x00111f54. Probes accelerometer via Game+0x1a4; that field is
-// never set in the shipped binary (dead initialisation path), so the function
-// unconditionally returns 0. Gating the ShopListItem locked-state-1 red prompt.
-// Defunct: accelerometer DeviceUpsideDown -- no-op stub; v1.6.1 IsDeviceUpsideDown @ 0x00111f54
+// ASM-spec v1.6.1 IsDeviceUpsideDown @0x0011a154: reads the float at Game+0x1b0
+// (vldr.32 s15,[r3,#0x1b0]) and returns x > 0. That accelerometer field is never
+// written in the shipped binary (dead initialisation path), so it always returns 0.
+// Gates the ShopListItem locked-state-1 red prompt.
+// Defunct: accelerometer DeviceUpsideDown -- no-op stub; v1.6.1 IsDeviceUpsideDown @ 0x0011a154
 inline bool IsDeviceUpsideDown() {
     return false;
 }

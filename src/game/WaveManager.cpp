@@ -235,7 +235,7 @@ void WaveManager::Init() {
         TiXmlElement root = doc.RootElement();
         if (!root) continue;
 
-        // ASM-verified: 2026-05-27 v1.6.1 WaveManager::Init @ 0x001144e8 (asm-inspector)
+        // ASM-verified: 2026-05-27 v1.6.1 WaveManager::Init @ 0x00129934 (asm-inspector)
         // -- pre-loop Reset + single-pass dispatch + per-defaults re-Reset +
         //    coin_chances/WaveInfo/defaults/OverideProbability strings all match.
         // Binary resets DEFAULT_WAVE_INFO before the loop so an XML missing

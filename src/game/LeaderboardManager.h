@@ -32,13 +32,13 @@ public:
         return &s_instance;
     }
 
-    // Defunct: LeaderboardManager -- no-op stub; v1.6.1 LeaderboardManager::RefreshLeaderboard @ 0x00102c78
+    // Defunct: LeaderboardManager -- no-op stub; v1.6.1 LeaderboardManager::RefreshLeaderboard @ 0x0013713c
     FNHighscoreList* RefreshLeaderboard(int /*gameMode*/, int /*boardId*/) { return nullptr; }
 
-    // Defunct: LeaderboardManager -- no-op stub; v1.6.1 LeaderboardManager::GetLeaderboard @ 0x0010f908
+    // Defunct: LeaderboardManager -- no-op stub; v1.6.1 LeaderboardManager::GetLeaderboard @ 0x00136d0c
     FNHighscoreList* GetLeaderboard(int /*gameMode*/, int /*boardId*/) { return nullptr; }
 
-    // Defunct: LeaderboardManager -- no-op stub; v1.6.1 LeaderboardManager::ClearScores @ 0x0010f314
+    // Defunct: LeaderboardManager -- no-op stub; v1.6.1 LeaderboardManager::ClearScores @ 0x00136da4
     void ClearScores(int /*gameMode*/, int /*boardId*/) {}
 
 private:

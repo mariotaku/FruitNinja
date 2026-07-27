@@ -9,7 +9,7 @@
 // Binary refs:
 //   StringTableUtilLoadStrings      0x0014cccc  -> Localisation::Load
 //   StringTableUtilLoadStringsTable 0x0014ca5c  -> Localisation::Load (inner)
-//   GETSTRING_CAST_0_STR            0x00109ec0  -> Localisation::Get
+//   GETSTRING_CAST_0_STR            0x001195f4  -> Localisation::Get
 //   StringTableUtilLoaded           0x0014c984  -> Localisation::IsLoaded
 //   StringTableUtilUnload           0x0014ca24  -> Localisation::Unload
 
@@ -28,7 +28,7 @@ public:
     static void Unload();
 
     // Look up key, return translated string or key itself on miss.
-    // Mirrors GETSTRING_CAST_0_STR @ 0x00109ec0 -> GETSTRING_STR(key, 0).
+    // Mirrors GETSTRING_CAST_0_STR @ 0x001195f4 -> GETSTRING_STR(key, 0).
     static const char* Get(const char* key);
 
     // Returns true if Load() has been called and succeeded.

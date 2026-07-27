@@ -62,7 +62,7 @@ TiXmlAttribute::operator bool() const { return m_attr != 0; }
 TiXmlNode::TiXmlNode() : m_node(0) {}
 TiXmlNode::TiXmlNode(void* node) : m_node(node) {}
 
-// ASM-spec v1.6.1 TiXmlNode::FirstChildElement @0x00112d0c
+// ASM-spec v1.6.1 TiXmlNode::FirstChildElement @0x0021ffa0
 TiXmlElement TiXmlNode::FirstChildElement(const char* name) const {
     if (!m_node) return TiXmlElement();
     // tinyxml2 FirstChildElement(nullptr) returns all children regardless of name.
@@ -72,7 +72,7 @@ TiXmlElement TiXmlNode::FirstChildElement(const char* name) const {
     // used for future mutation calls so const-cast is safe.
     return TiXmlElement(const_cast<tinyxml2::XMLElement*>(AsNodeC(m_node)->FirstChildElement(name)));
 }
-// ASM-spec v1.6.1 TiXmlNode::NextSiblingElement @0x00111210
+// ASM-spec v1.6.1 TiXmlNode::NextSiblingElement @0x00220044
 TiXmlElement TiXmlNode::NextSiblingElement(const char* name) const {
     if (!m_node) return TiXmlElement();
     const tinyxml2::XMLElement* e = AsNodeC(m_node)->ToElement();
@@ -118,7 +118,7 @@ TiXmlElement::TiXmlElement(void* elem) : TiXmlNode(elem) {}
 const char* TiXmlElement::Name() const {
     return m_node ? AsElemC(m_node)->Name() : 0;
 }
-// ASM-spec v1.6.1 TiXmlElement::Attribute @0x00111120
+// ASM-spec v1.6.1 TiXmlElement::Attribute @0x00221ca0
 const char* TiXmlElement::Attribute(const char* name) const {
     return m_node ? AsElemC(m_node)->Attribute(name) : 0;
 }
@@ -129,7 +129,7 @@ const char* TiXmlElement::Attribute(const char* name, const char* def) const {
 const char* TiXmlElement::GetText() const {
     return m_node ? AsElemC(m_node)->GetText() : 0;
 }
-// ASM-spec v1.6.1 TiXmlElement::QueryIntAttribute @0x0011689c
+// ASM-spec v1.6.1 TiXmlElement::QueryIntAttribute @0x00221c74
 int TiXmlElement::QueryIntAttribute(const char* name, int* outVal) const {
     if (!m_node) return TIXML_NO_ATTRIBUTE;
     tinyxml2::XMLError err = AsElemC(m_node)->QueryIntAttribute(name, outVal);

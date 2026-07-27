@@ -32,10 +32,10 @@ void DefaultP2PVoiceChatOpponentSpeakingCallback(bool isSpeaking);
 
 } // namespace Mortar
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 P2PConnect @0x0010c36c
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 P2PConnect @0x0011c36c
 void P2PConnect(bool host);
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 DisconnectP2P @0x0010a0e0
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 DisconnectP2P @0x00157634 (empty body)
 void DisconnectP2P(bool sendDisconnect);
 
 // Defunct: P2P multiplayer -- no-op stub; v1.6.1 binary @ 0x157640 (returns false)

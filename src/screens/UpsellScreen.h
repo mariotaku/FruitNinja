@@ -193,7 +193,7 @@ public:
     // Defunct: UpsellScreen monetization -- dtor; v1.6.1 binary @ 0x00166324
     ~UpsellScreenElement() {}
 
-    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreenElement::SetTexture @ 0x00108504
+    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreenElement::SetTexture @ 0x001c386c
     void SetTexture(float, float, float, float, float, _Vector3<float>* /*pos*/, void* /*tex*/) {}
 
     // Defunct: UpsellScreen monetization -- no-op stub

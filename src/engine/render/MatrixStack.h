@@ -44,30 +44,31 @@ struct MatrixStack {
         m_Version = 1;
     }
 
-    // ASM-spec v1.6.1 MatrixStack::Reset @0x0010436c: standalone symbol resolved
-    // (supersedes the stale 0x001175d4 v1.5.x citation, which maps to
-    // QueAchievement in v1.6.1). SpeedControl.cpp's Draw call sites use this
-    // through MatrixManager::GetWorldStack().Reset().
+    // ASM-spec v1.6.1 MatrixStack::Reset @0x0013f98c: identity m_Current and
+    // m_Stack[0], Depth=0, ++Version. SpeedControl.cpp's Draw call sites use
+    // this through MatrixManager::GetWorldStack().Reset().
     void Reset();
 
-    // Port specific: no binary equivalent (GL push/pop happens inside
-    // MatrixManager::_UploadCurrentMatrices). Port keeps this abstraction
-    // so callers can save/restore m_Current without touching GL directly.
+    // DIFFERS: original = slot-indexed Store(uint8)/Restore(uint8) (v1.6.1
+    // MatrixStack::Store @0x001a3624 / MatrixStack::Restore @0x001a3654), using
+    // depth-based Push/Pop because the port's draw call sites nest save/restore
+    // around transforms and never allocate slot ids, so a depth cursor gives the
+    // same m_Current save/restore against m_Stack with no caller-side slot
+    // bookkeeping. Store does NOT bump m_Version in the binary (only Restore
+    // does); the port's Push bumps it, costing one redundant matrix re-upload.
     void Push();
     void Pop();
 
-    // ASM-spec v1.6.1 MatrixStack::Scale @0x0010c428: standalone symbol resolved
-    // (PLT; called from MenuButton::Draw sparkle-ring block @0x0019cca4).
+    // ASM-spec v1.6.1 MatrixStack::Scale @0x0015d100 (called from MenuButton::Draw
+    // sparkle-ring block @0x0019cca4).
     void Scale(const _Vector3<float>& s);
 
-    // ASM-spec v1.6.1 MatrixStack::Translate @0x00107d84: standalone symbol resolved
-    // (supersedes the stale 0x0012f97c v1.5.x citation, which maps to a
-    // BonusManager static-ctor blob in v1.6.1).
+    // ASM-spec v1.6.1 MatrixStack::Translate @0x0015d040: world-space offset added
+    // to the translation column (T*M).
     void Translate(const _Vector3<float>& t);
 
-    // TODO: re-verify v1.6.1 MatrixStack::SetCurrentMatrix address (cited 0x0011a130
-    // was stale v1.5.x -- resolves to SetMissCount in v1.6.1; method is inlined into
-    // MatrixManager, no standalone symbol confirmed)
+    // ASM-spec v1.6.1 MatrixStack::SetCurrentMatrix @0x00143720: copy mat into
+    // m_Current, ++Version.
     void SetCurrentMatrix(const Matrix44& mat);
 
     // ASM-spec v1.6.1 MatrixStack::RotZ @0x001d0b80: convert deg to a 16-bit angle

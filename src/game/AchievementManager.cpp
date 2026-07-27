@@ -283,7 +283,7 @@ void AchievementManager::UnLoadAchievementInfo() {
 }
 
 // ---------------------------------------------------------------------------
-// AchievementExists  (Binary @ 0x00108ea4)
+// AchievementExists  (Binary @ 0x00116ea8)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::AchievementExists(uint32_t hash) {
@@ -292,8 +292,8 @@ int AchievementManager::AchievementExists(uint32_t hash) {
 }
 
 // ---------------------------------------------------------------------------
-// QueAchievement  (Binary @ 0x001106a4)
-// ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x001106a4 (re-analyst)
+// QueAchievement  (Binary @ 0x0011750c)
+// ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x0011750c (re-analyst)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::QueAchievement(AchievementInfo* info,
@@ -354,11 +354,11 @@ int AchievementManager::UnlockedAchievement(uint32_t hash, HUD* hud) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockAchievementInNetwork  (Binary @ 0x0010bd34)
+// UnlockAchievementInNetwork  (Binary @ 0x00116ee4)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockAchievementInNetwork(const char* /*name*/) {
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 AchievementManager::UnlockAchievementInNetwork @ 0x0010bd34
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 AchievementManager::UnlockAchievementInNetwork @ 0x00116ee4
     return 0;
 }
 
@@ -482,8 +482,8 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockBonusAchievement  (Binary @ 0x0010f7c4)
-// ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0010f7c4 (asm-inspector)
+// UnlockBonusAchievement  (Binary @ 0x0011773c)
+// ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0011773c (asm-inspector)
 // ---------------------------------------------------------------------------
 
 unsigned int AchievementManager::UnlockBonusAchievement(unsigned long bonusId) {
@@ -644,7 +644,7 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         //   no timer HUD), reject. If comboLen <= 2, reject. If countdown still
         //   running, reject. Only when the Arcade/Zen-timed countdown has hit 0.0f
         //   does the achievement become eligible.
-        // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x001106a4 (re-analyst)
+        // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x0011750c (re-analyst)
         // (IsGameOver gate is a mid-function range within QueAchievement; exact offset unverified -- asm-inspector to pin)
         if (info->m_IsGameOver) {
             Game* g = Game::GetInstance();
@@ -662,7 +662,7 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
     return unlocked;
 }
 
-// ASM-spec v1.6.1 ParseAchievements @0x001094ec
+// ASM-spec v1.6.1 ParseAchievements @0x00154830
 // Loads the per-<ach> achievement records out of a <que> (pending) or <unlocked>
 // (confirmed) container into the FruitSaveData maps. Invoked by ParseSaveFile:
 // que -> pending=true (also reads the "time" countdown attr), unlocked -> pending=false.

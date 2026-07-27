@@ -30,12 +30,12 @@ void DefaultP2PVoiceChatOpponentSpeakingCallback(bool isSpeaking) {
 
 } // namespace Mortar
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 P2PConnect @0x0010c36c
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 P2PConnect @0x0011c36c
 void P2PConnect(bool host) {
     (void)host;
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 DisconnectP2P @0x001053b4
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 DisconnectP2P @0x00157634 (empty body)
 void DisconnectP2P(bool sendDisconnect) {
     (void)sendDisconnect;
 }
@@ -81,31 +81,34 @@ void P2PInitializationCompleteHandler(bool success, bool isHost) {
     (void)isHost;
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsMultiplayer @0x00105ea0
+// Defunct: P2P multiplayer; v1.6.1 IsMultiplayer @0x0011a094 is literally
+// `mov r0,#0; bx lr` -- returning false here is faithful, not a port-side stub.
 bool IsMultiplayer() {
     return false;
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsOnlineMultiplayer @0x00105ea4
+// Defunct: P2P multiplayer; v1.6.1 IsOnlineMultiplayer @0x0011a09c is literally
+// `mov r0,#0; bx lr` -- returning false here is faithful, not a port-side stub.
 bool IsOnlineMultiplayer() {
     return false;
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 IsSameScreenMultiplayer @0x00105ea8
+// Defunct: P2P multiplayer; v1.6.1 IsSameScreenMultiplayer @0x0011a0a4 is
+// `IsMultiplayer() && ...`, and IsMultiplayer() is a hard 0, so false is faithful.
 bool IsSameScreenMultiplayer() {
     return false;
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RetryOnlineMultiplayerGame @0x001053e4
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RetryOnlineMultiplayerGame @0x00157624
 void RetryOnlineMultiplayerGame() {
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 AcceptCallback @0x001053ec
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 AcceptCallback @0x00184bc0
 // Binary: handles incoming P2P game invite acceptance.
 void AcceptCallback(int /*sessionId*/) {
 }
 
-// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RejectCallback @0x001053f4
+// Defunct: P2P multiplayer -- no-op stub; v1.6.1 RejectCallback @0x00184bf4
 // Binary: handles incoming P2P game invite rejection.
 void RejectCallback(int /*sessionId*/) {
 }

@@ -15,9 +15,9 @@
 //   Mortar::StringTable::GetString(char*)      0x14d1f8
 //   Mortar::StringTable::GetInfo(char*)        0x22d630
 //   GETSTRING                          0x14c9a0
-//   GETSTRING_STR                      0x0011fb40
-//   GETSTRING_CAST_0                   0x0010cff0
-//   GETSTRING_CAST_0_STR               0x00109ec0
+//   GETSTRING_STR                      0x0014ccf8
+//   GETSTRING_CAST_0                   0x0011eb9c
+//   GETSTRING_CAST_0_STR               0x001195f4
 //   LoadStringsTable                   0x14ca5c
 //
 // See docs/engine/localisation.md for full format + algorithm.
@@ -152,7 +152,7 @@ struct StringTableData {
 // NON-POLYMORPHIC: no vtable, no inheritance.
 // Instances are slots in a static array (stride 0x50, base at +0x5b4 within the
 // string-table globals block) indexed by language/table ID.
-// StringTableUtilLoadStringsTable @0x0011f9dc computes element address as
+// StringTableUtilLoadStringsTable @0x0014ca5c computes element address as
 // base + index*0x50 + 0x5b4, proving the stride.
 //
 // Instance layout:
@@ -284,18 +284,18 @@ bool StringTableUtilLoadStringsTable(int slot);
 // sets tables_loaded=1 UNCONDITIONALLY (even on failure).
 bool StringTableUtilLoadStrings();
 
-// Free wrapper: binary @ 0x0011f958.
+// Free wrapper: binary @ 0x0014c9a0.
 // Looks up string ID in table index tableIdx (0 = default table).
 const char* GETSTRING(LocalizedString id, int tableIdx);
 
-// Free wrapper: binary @ 0x0011fb40.
+// Free wrapper: binary @ 0x0014ccf8.
 // Looks up string key in table index tableIdx (0 = default table).
 const char* GETSTRING_STR(const char* key, int tableIdx);
 
-// Thunk to GETSTRING(id, 0): binary @ 0x0010cff0.
+// Thunk to GETSTRING(id, 0): binary @ 0x0011eb9c.
 const char* GETSTRING_CAST_0(LocalizedString id);
 
-// Thunk to GETSTRING_STR(key, 0): binary @ 0x00109ec0.
+// Thunk to GETSTRING_STR(key, 0): binary @ 0x001195f4.
 const char* GETSTRING_CAST_0_STR(const char* key);
 
 #endif // FN_ENGINE_UTIL_STRINGTABLE_H

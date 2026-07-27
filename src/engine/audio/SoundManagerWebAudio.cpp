@@ -200,7 +200,7 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
         },
 
         // Throttle. PreloadSounds (src/game/PreloadSounds.cpp, ASM-verified
-        // faithful to v1.6.1 PreloadSounds @0x001107e0) calls PreLoadSound
+        // faithful to v1.6.1 PreloadSounds @0x0011bb94) calls PreLoadSound
         // ~40-70 times back to back at boot. Handing every one of those to
         // decodeAudioData simultaneously overwhelmed weaker browsers (webOS
         // TV), which then failed the LAST decodes of the burst -- the swipe and

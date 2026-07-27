@@ -1,7 +1,7 @@
 #include "render/MatrixStack.h"
 #include "math/MathUtil.h"
 
-// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x001175d4 (asm-inspector)
+// ASM-spec v1.6.1 MatrixStack::Reset @0x0013f98c
 void MatrixStack::Reset() {
     m_Current.Identity();
     StackAt(0).Identity();
@@ -9,10 +9,13 @@ void MatrixStack::Reset() {
     m_Version++;
 }
 
-// Port specific: per-stack Push/Pop. The binary has no MatrixStack
-// method by this name -- GL push/pop happens via glPushMatrix/
-// glPopMatrix inside MatrixManager::_UploadCurrentMatrices, not on
-// the C++ stack.
+// DIFFERS: original = slot-indexed Store(uint8)/Restore(uint8) (v1.6.1
+// MatrixStack::Store @0x001a3624 / MatrixStack::Restore @0x001a3654), using
+// depth-based Push/Pop because the port's draw call sites nest save/restore
+// around transforms and never allocate slot ids, so a depth cursor gives the
+// same m_Current save/restore with no caller-side slot bookkeeping.
+// Store does NOT bump m_Version in the binary (only Restore does); the port's
+// Push bumps it, costing at most one redundant matrix re-upload.
 void MatrixStack::Push() {
     // assert(m_Depth < 31);
     StackAt(m_Depth) = m_Current;
@@ -27,19 +30,19 @@ void MatrixStack::Pop() {
     m_Version++;
 }
 
-// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012fa34 (asm-inspector)
+// ASM-spec v1.6.1 MatrixStack::Scale @0x0015d100
 void MatrixStack::Scale(const _Vector3<float>& s) {
     m_Current.ApplyScale(s.x, s.y, s.z);
     m_Version++;
 }
 
-// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0012f97c (asm-inspector)
+// ASM-spec v1.6.1 MatrixStack::Translate @0x0015d040
 void MatrixStack::Translate(const _Vector3<float>& t) {
     m_Current.GlobalTranslate44(t);
     m_Version++;
 }
 
-// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x0011a130 (asm-inspector)
+// ASM-spec v1.6.1 MatrixStack::SetCurrentMatrix @0x00143720
 void MatrixStack::SetCurrentMatrix(const Matrix44& mat) {
     m_Current = mat;
     m_Version++;
