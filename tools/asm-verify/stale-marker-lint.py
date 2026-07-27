@@ -34,6 +34,31 @@ Verdicts per marker:
                      name (if any) matches the containing function -- a genuine
                      deliberate mid-function reference. report.json contains
                      'containing_sym' and 'containing_addr'.
+  PLT-THUNK       -- addr lands inside the .plt import-stub block and decodes to
+                     a real PLT entry. Ghidra names PLT stubs after their
+                     target, so a marker written by searching a symbol name and
+                     taking the FIRST hit records the thunk, not the function
+                     body. The thunk's GOT slot is matched to its ARM_JUMP_SLOT
+                     relocation, the relocation's symbol is looked up in the
+                     symbol table, and (per trap (a) below) any 4-byte 'b'
+                     veneer at that landing point is followed until a real body
+                     is reached. report.json carries 'plt_target_addr' /
+                     'plt_target_sym' / 'plt_target_dem' / 'plt_hops' /
+                     'plt_chain' / 'plt_target_matches_cited'.
+                     plt_hops > 1 means a SECOND veneer layer had
+                     to be traversed (proven cases: the TiXml non-const
+                     FirstChildElement/NextSiblingElement 4-byte stubs at
+                     0x0011953c / 0x0012210c, whose real bodies are the const
+                     overloads in the 0x0022xxxx tinyxml block).
+  PLT-RANGE-UNMAPPED -- addr is inside the .plt address range but is NOT the
+                     start of a decodable PLT entry (nor its Thumb 'bx pc'
+                     interworking preamble). The address is FABRICATED, not a
+                     thunk -- hand-derived ('<sym>_plt + 4' / '+ 8'), a
+                     one-nibble typo (0x0010c144 for 0x0011c144), or a landing
+                     inside a static-initialiser blob. This is a MORE serious
+                     finding than PLT-THUNK: there is no target to restamp to,
+                     the marker must be re-RE'd from scratch.
+                     report.json carries 'plt_reason'.
   UNRESOLVED      -- addr not found as a known symbol start, and NOT within any
                      symbol's size range. Truly unknown.
   OK-NO-SYM       -- has v1.6.1 but no symbol name in the marker (old 'binary @')
@@ -43,6 +68,22 @@ All NO-VERSION variants carry a sub-verdict:
   NO-VERSION+STALE -- addr resolves but symbol name doesn't match
   NO-VERSION+MID-SYMBOL -- addr is inside a function body (valid mid-func ref)
   NO-VERSION+UNRESOLVED -- addr not found at all
+
+Cross-cutting audit class (orthogonal to 'verdict', reported separately):
+
+  NO-SYMBOL -- the marker names NO symbol at all (bare '// ... binary @ 0x...' /
+      '// ASM-spec for binary @ 0x...'). There is nothing to cross-check, so
+      such markers used to fall silently into OK-NO-SYM / MID-SYMBOL, which
+      READS AS "fine". That exact shape hid both hand-proven GameSound bugs
+      ('Update @0x0012930c' was list/map template code; 'Release @0x0012917c'
+      was std::map::operator[]). Every symbol-less marker is now reported with
+      the symbol that ACTUALLY contains (or starts at) its address, so a human
+      can eyeball plausibility. Markers whose resolved symbol is STL/compiler
+      internal (std::, __gnu_cxx::, _Rb_tree, _GLOBAL__, ...) are ranked HIGH:
+      gameplay/UI code citing template guts is the strongest mis-stamp tell.
+      Fields: 'symbol_less', 'resolved_kind' (exact/contained/plt/none),
+      'resolved_addr', 'resolved_sym', 'resolved_dem', 'no_symbol_priority'.
+      report.json['symbol_less_markers'] carries the full ranked list.
 
 report.json per-marker fields of note (added by this revision):
   correct_addr        -- int Ghidra addr where the cited symbol really lives
@@ -115,6 +156,7 @@ import argparse
 import json
 import pathlib
 import re
+import struct
 import sys
 
 try:
@@ -189,6 +231,34 @@ _BLOCKER_RE = re.compile(
 # are the documented tell; found MatrixManager/ColSphere/Utf8 bugs this way).
 # Secondary to Check B's blocker-reason validation.
 DEFERRED_RATIO_THRESHOLD = 1.5
+
+# ---------------------------------------------------------------------------
+# PLT resolution (blind spot 1) / NO-SYMBOL ranking (blind spot 2)
+# ---------------------------------------------------------------------------
+# Ghidra loads this ELF at image_base 0x10000; LIEF reports raw ELF values.
+GHIDRA_IMAGE_BASE = 0x10000
+
+# Max thunk/veneer hops to follow before declaring a cycle. Two hops is the
+# deepest proven real case (PLT stub -> 4-byte 'b' veneer -> PLT stub -> body);
+# the extra headroom just keeps pathological input from looping.
+PLT_MAX_HOPS = 6
+
+# A symbol whose body is exactly this many bytes and is a single ARM 'b' is a
+# branch veneer, not a real function body (trap (a)).
+VENEER_SIZE = 4
+
+# Resolved symbols matching these are STL / compiler-internal: a symbol-less
+# marker in gameplay/UI code that resolves into one of these is the strongest
+# mis-stamp tell (both hand-proven GameSound bugs had this shape).
+_STL_INTERNAL_RE = re.compile(
+    r'^std::'
+    r'|^__gnu_cxx::'
+    r'|^_GLOBAL__'
+    r'|\b_Rb_tree\b'
+    r'|\b_Vector_base\b'
+    r'|\b_List_base\b'
+    r'|^_ZNSt|^_ZSt|^_ZNKSt'
+    r'|^_ZN9__gnu_cxx')
 
 
 # ---------------------------------------------------------------------------
@@ -518,6 +588,55 @@ def _forward_lookup(cited_sym: str,
     return results
 
 
+_BINARY_CACHE = {}
+
+
+def _parse_binary(binary_path: pathlib.Path):
+    """lief.parse() the ELF once and cache it (the symbol loader and the PLT
+    loader both need it; parsing this 3MB binary twice is pure waste)."""
+    key = str(binary_path)
+    if key not in _BINARY_CACHE:
+        b = lief.parse(key)
+        if b is None:
+            sys.exit(f"ERROR: lief could not parse {binary_path}")
+        _BINARY_CACHE[key] = b
+    return _BINARY_CACHE[key]
+
+
+def _iter_symbols(b):
+    """Yield (ghidra_addr, mangled_name, type_str, size) for every usable ELF
+    symbol, applying the shared normalisation rules:
+
+      - skip value==0, unnamed, '$'-prefixed ARM mapping symbols, '.'-prefixed
+        ELF specials, and FILE / SECTION entries;
+      - mask the Thumb bit out of STT_FUNC values (see below);
+      - convert to GHIDRA convention (LIEF value + 0x10000).
+
+    ARM/Thumb: an STT_FUNC symbol value carries the Thumb bit in bit 0, so a
+    Thumb function at 0x0022e544 has symbol value 0x0022e545. Source markers
+    (and asm-verify's report.json) cite the real, even function start. Without
+    masking, every such marker misses the addr lookup and then lands inside the
+    PRECEDING function's [start, start+size) range, producing a bogus
+    MID-SYMBOL-MISMATCH whose "correct" address is the Thumb-tagged one --
+    applying that suggestion would corrupt a correct marker.
+    """
+    for sym in b.symbols:
+        raw_val = sym.value
+        if raw_val == 0:
+            continue
+        name = sym.name
+        if not name:
+            continue
+        if name.startswith('$') or name.startswith('.'):
+            continue
+        sym_type_str = str(sym.type)
+        if sym_type_str in ('TYPE.FILE', 'TYPE.SECTION'):
+            continue
+        if sym_type_str == 'TYPE.FUNC':
+            raw_val &= ~1
+        yield (raw_val + GHIDRA_IMAGE_BASE, name, sym_type_str, sym.size)
+
+
 def load_binary_symbols(binary_path: pathlib.Path):
     """Return (addr_to_mangled, addr_to_demangled, sym_ranges) from the ELF.
 
@@ -527,51 +646,18 @@ def load_binary_symbols(binary_path: pathlib.Path):
                       all symbols with size > 0. Used for CONTAINMENT check.
 
     All addresses use GHIDRA convention: LIEF_value + 0x10000.
+    Validated anchors (Ghidra convention, confirmed via GhidraMCP):
+      GameOverScreen::Update  @ 0x00186c80  (LIEF 0x176c80 + 0x10000)
+      Fruit::RandomFruit      @ 0x001dc5d8  (LIEF 0x1cc5d8 + 0x10000)
+      Fruit::CollisionResponse@ 0x001dd500  (LIEF 0x1cd500 + 0x10000)
     """
-    b = lief.parse(str(binary_path))
-    if b is None:
-        sys.exit(f"ERROR: lief could not parse {binary_path}")
-
-    # Ghidra loads this ELF at image_base 0x10000. Every source-side marker and
-    # every asm-verify disasm uses Ghidra addresses. LIEF reports raw ELF .st_value
-    # fields, so we must add 0x10000 to convert.
-    # Validated anchors (Ghidra convention, confirmed via GhidraMCP):
-    #   GameOverScreen::Update  @ 0x00186c80  (LIEF 0x176c80 + 0x10000)
-    #   Fruit::RandomFruit      @ 0x001dc5d8  (LIEF 0x1cc5d8 + 0x10000)
-    #   Fruit::CollisionResponse@ 0x001dd500  (LIEF 0x1cd500 + 0x10000)
-    GHIDRA_IMAGE_BASE = 0x10000
+    b = _parse_binary(binary_path)
 
     addr_to_mangled = {}
     addr_to_demangled = {}
     sym_ranges = []
 
-    for sym in b.symbols:
-        raw_val = sym.value
-        if raw_val == 0:
-            continue
-        name = sym.name
-        if not name:
-            continue
-        # Skip ARM mapping symbols and ELF special symbols
-        if name.startswith('$') or name.startswith('.'):
-            continue
-        # Skip FILE / SECTION type entries
-        sym_type_str = str(sym.type)
-        if sym_type_str in ('TYPE.FILE', 'TYPE.SECTION'):
-            continue
-        # ARM/Thumb: an STT_FUNC symbol value carries the Thumb bit in bit 0, so
-        # a Thumb function at 0x0022e544 has symbol value 0x0022e545. Source
-        # markers (and asm-verify's report.json) cite the real, even function
-        # start. Without masking, every such marker misses addr_to_mangled and
-        # then lands inside the PRECEDING function's [start, start+size) range,
-        # producing a bogus MID-SYMBOL-MISMATCH whose "correct" address is the
-        # Thumb-tagged one -- applying that suggestion would corrupt a correct
-        # marker. Mask it off so both the lookup map and the containment ranges
-        # below use true function starts.
-        if sym_type_str == 'TYPE.FUNC':
-            raw_val &= ~1
-        addr = raw_val + GHIDRA_IMAGE_BASE
-
+    for (addr, name, sym_type_str, size) in _iter_symbols(b):
         dem = _demangle(name)
 
         if addr not in addr_to_mangled:
@@ -584,7 +670,6 @@ def load_binary_symbols(binary_path: pathlib.Path):
                 addr_to_demangled[addr] = dem
 
         # Collect size-bearing symbols for containment check
-        size = sym.size
         if size > 0:
             sym_ranges.append((addr, addr + size, name))
 
@@ -592,6 +677,232 @@ def load_binary_symbols(binary_path: pathlib.Path):
     sym_ranges.sort(key=lambda t: t[0])
 
     return addr_to_mangled, addr_to_demangled, sym_ranges
+
+
+def _arm_expand_imm(word: int) -> int:
+    """Decode an ARM data-processing modified-immediate (imm8 ror 2*rot)."""
+    imm8 = word & 0xff
+    rot  = ((word >> 8) & 0xf) * 2
+    if rot == 0:
+        return imm8
+    return ((imm8 >> rot) | (imm8 << (32 - rot))) & 0xffffffff
+
+
+def load_plt_info(binary_path: pathlib.Path) -> dict:
+    """Decode the .plt import-stub block and build a thunk -> target map.
+
+    Resolution is done from REAL ELF data, not a heuristic:
+      1. Every .plt entry is decoded as the classic 3-instruction ARM PLT stub
+             add ip, pc, #imm ; add ip, ip, #imm ; ldr pc, [ip, #imm]!
+         which yields the exact .got.plt slot it dereferences.
+      2. That slot is matched against the ARM_JUMP_SLOT relocations in
+         .rel.plt, giving the target's MANGLED SYMBOL NAME.
+      3. The name is looked up in the symbol table for its definition address.
+    A stub preceded by the 4-byte Thumb interworking preamble 'bx pc ; nop'
+    (46c0 4778) is aliased so a marker citing the preamble address resolves to
+    the same target.
+
+    Returns a dict with:
+      plt_start / plt_end   -- Ghidra address range of .plt (end exclusive)
+      entry_target          -- {ghidra_plt_addr: mangled_target_name}
+      name_to_addrs         -- {mangled: [ghidra_addr, ...]} definition sites
+      sections              -- [(start, end, bytes)] for code reads
+      addr_to_size          -- {ghidra_addr: size} (veneer detection)
+      counts                -- decode statistics (informational)
+    """
+    b = _parse_binary(binary_path)
+
+    sections = []
+    plt_start = plt_end = None
+    plt_bytes = None
+    for s in b.sections:
+        va = s.virtual_address
+        if va == 0:
+            continue
+        try:
+            content = bytes(s.content)
+        except Exception:
+            continue
+        if not content:
+            continue
+        start = va + GHIDRA_IMAGE_BASE
+        sections.append((start, start + len(content), content))
+        if s.name == '.plt':
+            plt_start, plt_end, plt_bytes = start, start + len(content), content
+    sections.sort(key=lambda t: t[0])
+
+    info = {
+        'plt_start':    plt_start,
+        'plt_end':      plt_end,
+        'entry_target': {},
+        'name_to_addrs': {},
+        'sections':     sections,
+        'addr_to_size': {},
+        'counts':       {'entries': 0, 'thumb_aliases': 0, 'undecoded_words': 0,
+                         'no_reloc': 0},
+    }
+
+    # Definition sites + sizes (same normalisation as load_binary_symbols).
+    for (addr, name, sym_type_str, size) in _iter_symbols(b):
+        lst = info['name_to_addrs'].setdefault(name, [])
+        if addr not in lst:
+            lst.append(addr)
+        if size > info['addr_to_size'].get(addr, 0):
+            info['addr_to_size'][addr] = size
+
+    if plt_bytes is None:
+        return info
+
+    # GOT slot -> target symbol name, from the ARM_JUMP_SLOT relocations.
+    got_to_name = {}
+    for r in b.pltgot_relocations:
+        if r.has_symbol and r.symbol is not None and r.symbol.name:
+            got_to_name[r.address] = r.symbol.name
+
+    n = len(plt_bytes)
+    i = 0x14                       # skip the 20-byte PLT0 header
+    prev_was_thumb_preamble_at = None
+    while i + 12 <= n:
+        w0, w1, w2 = struct.unpack_from('<3I', plt_bytes, i)
+        is_entry = ((w0 & 0xffffff00) == 0xe28fc600 and     # add ip, pc, #imm
+                    (w1 & 0xfffff000) == 0xe28cc000 and     # add ip, ip, #imm
+                    (w2 & 0xfffff000) == 0xe5bcf000)        # ldr pc, [ip,#imm]!
+        if is_entry:
+            va  = plt_start + i
+            # pc reads as (insn addr + 8); the GOT slot is a LIEF/ELF address,
+            # so strip the Ghidra base back off before matching relocations.
+            got = ((va - GHIDRA_IMAGE_BASE) + 8
+                   + _arm_expand_imm(w0) + _arm_expand_imm(w1)
+                   + (w2 & 0xfff)) & 0xffffffff
+            name = got_to_name.get(got)
+            if name is None:
+                info['counts']['no_reloc'] += 1
+            else:
+                info['entry_target'][va] = name
+                info['counts']['entries'] += 1
+                if prev_was_thumb_preamble_at is not None:
+                    info['entry_target'][prev_was_thumb_preamble_at] = name
+                    info['counts']['thumb_aliases'] += 1
+            prev_was_thumb_preamble_at = None
+            i += 12
+            continue
+        # 'bx pc ; nop' Thumb->ARM interworking preamble immediately preceding
+        # an entry (encoded as the single word 0x46c04778).
+        if w0 == 0x46c04778:
+            prev_was_thumb_preamble_at = plt_start + i
+        else:
+            prev_was_thumb_preamble_at = None
+            info['counts']['undecoded_words'] += 1
+        i += 4
+
+    return info
+
+
+def _read_u32(plt_info: dict, addr: int):
+    """Read a little-endian 32-bit word at a Ghidra address, or None."""
+    for (start, end, data) in plt_info['sections']:
+        if start <= addr and addr + 4 <= end:
+            return struct.unpack_from('<I', data, addr - start)[0]
+    return None
+
+
+def _branch_veneer_target(addr: int, plt_info: dict):
+    """If addr is a 4-byte symbol whose single instruction is an unconditional
+    ARM 'b <target>', return the branch target; else None.
+
+    This is trap (a): some .text "bodies" are themselves 4-byte veneers that
+    branch straight back into the .plt (proven: the TiXml non-const
+    FirstChildElement @0x0011953c and NextSiblingElement @0x0012210c, whose
+    real bodies are the const overloads in the 0x0022xxxx tinyxml block). A
+    resolver that stops at the first non-thunk hit reports the veneer as if it
+    were the answer.
+    """
+    if plt_info['addr_to_size'].get(addr) != VENEER_SIZE:
+        return None
+    w = _read_u32(plt_info, addr)
+    if w is None or (w & 0xff000000) != 0xea000000:   # cond=AL, B (imm24)
+        return None
+    imm = w & 0x00ffffff
+    if imm & 0x00800000:
+        imm -= 0x01000000
+    return (addr + 8 + imm * 4) & 0xffffffff
+
+
+def _pick_definition(name: str, plt_info: dict):
+    """Pick the definition address for a mangled name, preferring the largest
+    (a 4-byte veneer and a real body can share a name across a build)."""
+    addrs = plt_info['name_to_addrs'].get(name) or []
+    if not addrs:
+        return None
+    return max(addrs, key=lambda a: (plt_info['addr_to_size'].get(a, 0), -a))
+
+
+def resolve_plt_chain(addr: int, plt_info: dict,
+                      addr_to_mangled: dict, addr_to_demangled: dict) -> dict:
+    """Follow a .plt thunk (and any 4-byte 'b' veneer behind it) to a real body.
+
+    Returns a dict:
+      status  -- 'ok'        : final_addr is a real body
+                 'unmapped'  : addr is inside .plt but is not a decodable entry
+                               (FABRICATED address -- see PLT-RANGE-UNMAPPED)
+                 'no-def'    : the relocation names a symbol with no definition
+                 'cycle'     : hop limit / loop hit
+      chain       -- list of {kind, from, sym, to} hops taken
+      final_addr / final_sym / final_dem
+      hops        -- number of thunk/veneer hops traversed (2+ == trap (a))
+    """
+    out = {'status': 'unmapped', 'chain': [], 'final_addr': None,
+           'final_sym': None, 'final_dem': None, 'hops': 0, 'note': None}
+    plt_start, plt_end = plt_info['plt_start'], plt_info['plt_end']
+    if plt_start is None:
+        out['note'] = 'no .plt section in binary'
+        return out
+
+    cur = addr
+    seen = set()
+    for _ in range(PLT_MAX_HOPS):
+        if cur in seen:
+            out['status'] = 'cycle'
+            return out
+        seen.add(cur)
+
+        if plt_start <= cur < plt_end:
+            name = plt_info['entry_target'].get(cur)
+            if name is None:
+                out['status'] = 'unmapped'
+                out['note'] = ('0x%08x is inside .plt but is not the start of a '
+                               'decodable PLT entry' % cur)
+                return out
+            tgt = _pick_definition(name, plt_info)
+            if tgt is None:
+                out['status'] = 'no-def'
+                out['final_sym'] = name
+                out['final_dem'] = _demangle(name)
+                out['note'] = 'relocation target has no definition in symtab'
+                return out
+            out['chain'].append({'kind': 'plt', 'from': hex(cur),
+                                 'sym': name, 'to': hex(tgt)})
+            out['hops'] += 1
+            cur = tgt
+            continue
+
+        vt = _branch_veneer_target(cur, plt_info)
+        if vt is not None:
+            out['chain'].append({'kind': 'veneer', 'from': hex(cur),
+                                 'sym': addr_to_mangled.get(cur),
+                                 'to': hex(vt)})
+            out['hops'] += 1
+            cur = vt
+            continue
+
+        out['status']     = 'ok'
+        out['final_addr'] = cur
+        out['final_sym']  = addr_to_mangled.get(cur)
+        out['final_dem']  = addr_to_demangled.get(cur) or out['final_sym']
+        return out
+
+    out['status'] = 'cycle'
+    return out
 
 
 def _containment_check(addr: int, sym_ranges: list):
@@ -695,7 +1006,8 @@ def _resolve_cited(cited_sym, cited_addr, addr_to_mangled, addr_to_demangled):
 def classify(markers: list,
              addr_to_mangled: dict,
              addr_to_demangled: dict,
-             sym_ranges: list) -> list:
+             sym_ranges: list,
+             plt_info: dict = None) -> list:
     """Add 'verdict' and auxiliary fields to each marker dict.
 
     Fields added:
@@ -755,6 +1067,38 @@ def classify(markers: list,
             m['binary_sym']       = None
             m['binary_demangled'] = None
 
+            # ------------------------------------------------------------
+            # Step 2a: .plt import-stub check (blind spot 1). A cited address
+            # inside .plt is NEVER the function body -- Ghidra names PLT stubs
+            # after their target, so name-search-then-take-first-hit records
+            # the thunk. Resolve it, or call out a fabricated address.
+            # ------------------------------------------------------------
+            if (plt_info and plt_info.get('plt_start') is not None
+                    and plt_info['plt_start'] <= addr < plt_info['plt_end']):
+                res = resolve_plt_chain(addr, plt_info,
+                                        addr_to_mangled, addr_to_demangled)
+                m['plt_chain'] = res['chain']
+                m['plt_hops']  = res['hops']
+                if res['status'] == 'ok':
+                    m['verdict']         = 'PLT-THUNK'
+                    m['plt_target_addr'] = res['final_addr']
+                    m['plt_target_sym']  = res['final_sym']
+                    m['plt_target_dem']  = res['final_dem']
+                    # Extra signal: does the resolved body actually match the
+                    # name the marker cites? A mismatch means the restamp
+                    # target still needs a human look.
+                    if cited_sym and res['final_sym']:
+                        m['plt_target_matches_cited'] = _symbol_matches(
+                            cited_sym, res['final_sym'], res['final_dem'] or '')
+                else:
+                    m['verdict']    = 'PLT-RANGE-UNMAPPED'
+                    m['plt_reason'] = res.get('note') or res['status']
+                    m['plt_status'] = res['status']
+                    if res.get('final_sym'):
+                        m['plt_target_sym'] = res['final_sym']
+                        m['plt_target_dem'] = res['final_dem']
+                continue
+
             container = _containment_check(addr, sym_ranges)
             if container:
                 (c_start, c_end, c_mangled) = container
@@ -801,24 +1145,108 @@ def classify(markers: list,
 
 
 _VERDICT_ORDER = {
-    'MID-SYMBOL-MISMATCH':     0,
-    'STALE-MISMATCH':          1,
-    'STALE-AMBIGUOUS':         2,
-    'STALE':                   3,
-    'NO-VERSION+STALE':        4,
-    'NO-VERSION':              5,
-    'NO-VERSION+MID-SYMBOL':   6,
-    'NO-VERSION+UNRESOLVED':   7,
-    'UNRESOLVED':              8,
-    'MID-SYMBOL':              9,
-    'OK-NO-SYM':               10,
-    'OK':                      11,
+    'PLT-RANGE-UNMAPPED':      0,
+    'MID-SYMBOL-MISMATCH':     1,
+    'PLT-THUNK':               2,
+    'STALE-MISMATCH':          3,
+    'STALE-AMBIGUOUS':         4,
+    'STALE':                   5,
+    'NO-VERSION+STALE':        6,
+    'NO-VERSION':              7,
+    'NO-VERSION+MID-SYMBOL':   8,
+    'NO-VERSION+UNRESOLVED':   9,
+    'UNRESOLVED':              10,
+    'MID-SYMBOL':              11,
+    'OK-NO-SYM':               12,
+    'OK':                      13,
 }
 
 # Verdicts that --check treats as actionable bugs (exit non-zero).
-_CHECK_FAIL_VERDICTS = {'MID-SYMBOL-MISMATCH', 'STALE-MISMATCH', 'STALE'}
+# PLT-THUNK / PLT-RANGE-UNMAPPED are carved out of what used to be reported as
+# UNRESOLVED; both are hard bugs (the marker cites an import stub, or an
+# address that is not code at all), so they gate --check.
+_CHECK_FAIL_VERDICTS = {'MID-SYMBOL-MISMATCH', 'STALE-MISMATCH', 'STALE',
+                        'PLT-THUNK', 'PLT-RANGE-UNMAPPED'}
 # Additionally failed under --strict.
 _CHECK_STRICT_EXTRA = {'NO-VERSION', 'NO-VERSION+STALE'}
+
+
+def _is_stl_internal(mangled: str, demangled: str) -> bool:
+    """True if the symbol is STL / compiler-internal template guts."""
+    for s in (demangled or '', mangled or ''):
+        if s and _STL_INTERNAL_RE.search(s):
+            return True
+    return False
+
+
+def annotate_symbol_less(markers: list) -> list:
+    """Blind spot 2: promote symbol-less markers to a first-class audit class.
+
+    A marker like '// Binary @ 0x00129138' names no symbol, so there is nothing
+    to cross-check and it silently files as OK-NO-SYM / MID-SYMBOL -- which
+    reads as "fine". Both hand-proven GameSound bugs had exactly this shape.
+
+    For every marker with no cited symbol we record WHAT THE ADDRESS ACTUALLY
+    IS (exact symbol start / containing function / PLT target), so a human can
+    eyeball whether it is plausible for the surrounding code. Markers resolving
+    into STL / compiler-internal template code are ranked HIGH -- gameplay or
+    UI source citing std::_Rb_tree guts is the strongest mis-stamp tell.
+
+    Returns the ranked list of symbol-less marker rows (also annotated in
+    place on the marker dicts).
+    """
+    rows = []
+    for m in markers:
+        if m.get('cited_sym'):
+            m['symbol_less'] = False
+            continue
+        m['symbol_less'] = True
+
+        if m.get('binary_sym'):
+            kind = 'exact'
+            r_addr = m['cited_addr']
+            r_sym  = m['binary_sym']
+            r_dem  = m['binary_demangled'] or r_sym
+        elif m.get('containing_sym'):
+            kind = 'contained'
+            r_addr = m.get('containing_addr')
+            r_sym  = m['containing_sym']
+            r_dem  = m.get('containing_dem') or r_sym
+        elif m.get('plt_target_sym'):
+            kind = 'plt'
+            r_addr = m.get('plt_target_addr')
+            r_sym  = m['plt_target_sym']
+            r_dem  = m.get('plt_target_dem') or r_sym
+        else:
+            kind = 'none'
+            r_addr = r_sym = r_dem = None
+
+        priority = 'HIGH' if (r_sym and _is_stl_internal(r_sym, r_dem)) else 'NORMAL'
+        # An address that resolves to nothing at all is not "fine" either.
+        if kind == 'none':
+            priority = 'HIGH'
+
+        m['resolved_kind']      = kind
+        m['resolved_addr']      = r_addr
+        m['resolved_sym']       = r_sym
+        m['resolved_dem']       = r_dem
+        m['no_symbol_priority'] = priority
+
+        rows.append({
+            'file':      m['file'],
+            'line':      m['line'],
+            'kind':      m['kind'],
+            'verdict':   m['verdict'],
+            'addr_str':  m['addr_str'],
+            'resolved_kind':      kind,
+            'resolved_addr':      r_addr,
+            'resolved_sym':       r_sym,
+            'resolved_dem':       r_dem,
+            'no_symbol_priority': priority,
+        })
+    rows.sort(key=lambda r: (r['no_symbol_priority'] != 'HIGH',
+                             r['file'], r['line']))
+    return rows
 
 
 def _dedupe_sort(markers: list) -> list:
@@ -1173,6 +1601,16 @@ def main():
     print(f"  {len(addr_to_mangled)} unique symbol addresses loaded.")
     print(f"  {len(sym_ranges)} symbols with size (for containment check).")
 
+    print("Decoding .plt import stubs (relocation-backed) ...", flush=True)
+    plt_info = load_plt_info(binary_path)
+    if plt_info['plt_start'] is None:
+        print("  WARNING: no .plt section found -- PLT-THUNK detection disabled.")
+    else:
+        pc = plt_info['counts']
+        print(f"  .plt 0x{plt_info['plt_start']:08x}-0x{plt_info['plt_end'] - 1:08x}"
+              f"  {pc['entries']} entries, {pc['thumb_aliases']} thumb aliases,"
+              f" {pc['no_reloc']} unrelocated, {pc['undecoded_words']} undecoded words.")
+
     # addr -> size for exact symbol-start lookups (Check A). Keep the largest
     # when multiple size-bearing symbols share a start address (thunks).
     addr_to_size = {}
@@ -1185,8 +1623,9 @@ def main():
     markers = scan_sources(src_dir)
     print(f"  {len(markers)} markers found.")
 
-    print("Classifying (forward + containment checks) ...", flush=True)
-    markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges)
+    print("Classifying (forward + containment + PLT checks) ...", flush=True)
+    markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges,
+                       plt_info)
     markers = _dedupe_sort(markers)
 
     # -----------------------------------------------------------------------
@@ -1201,8 +1640,19 @@ def main():
               f"  zero_match={fix_counts['zero_match']}  skipped={fix_counts['skipped']}")
         # Re-scan & re-classify against the rewritten sources.
         markers = scan_sources(src_dir)
-        markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges)
+        markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges,
+                           plt_info)
         markers = _dedupe_sort(markers)
+
+    # -----------------------------------------------------------------------
+    # NO-SYMBOL audit class (blind spot 2): annotate every symbol-less marker
+    # with what its address ACTUALLY is, ranked STL-internal-first.
+    # -----------------------------------------------------------------------
+    symbol_less_markers = annotate_symbol_less(markers)
+    _nosym_high = sum(1 for r in symbol_less_markers
+                      if r['no_symbol_priority'] == 'HIGH')
+    print(f"  {len(symbol_less_markers)} symbol-less marker(s) "
+          f"({_nosym_high} HIGH priority).")
 
     # -----------------------------------------------------------------------
     # Check A: HOLLOW-MARKER -- ASM-verified/ASM-spec marker on a trivial
@@ -1231,6 +1681,7 @@ def main():
         json.dump({
             'markers':             markers,
             'hollow_markers':      hollow_markers,
+            'symbol_less_markers': symbol_less_markers,
             'deferred_no_blocker': deferred_no_blocker,
             'deferred_high_ratio': deferred_high_ratio,
         }, f, indent=2)
@@ -1251,6 +1702,8 @@ def main():
         if c:
             print(f"  {v:<32}: {c}")
     print(f"  {'HOLLOW-MARKER':<32}: {len(hollow_markers)}")
+    print(f"  {'NO-SYMBOL (audit class)':<32}: {len(symbol_less_markers)} "
+          f"({_nosym_high} HIGH)")
     print(f"  {'DEFER-NO-BLOCKER':<32}: {len(deferred_no_blocker)}")
     print(f"  {'DEFERRED-HIGH-RATIO':<32}: {len(deferred_high_ratio)}")
     print()
@@ -1294,6 +1747,63 @@ def main():
             print(f"  {d['symbol']}  ratio={d['ratio']:.2f}x  score={d['score']}/{d['max_score']}  "
                   f"reaffirm_count={d['reaffirm_count']}")
             print(f"    reason: {reason}")
+        print()
+
+    # --- PLT-RANGE-UNMAPPED -- FABRICATED address inside .plt. Most serious:
+    # there is no target to restamp to, the marker must be re-RE'd.
+    pltbad_rows = [m for m in markers if m['verdict'] == 'PLT-RANGE-UNMAPPED']
+    if pltbad_rows:
+        print(f"--- PLT-RANGE-UNMAPPED ({len(pltbad_rows)}) -- addr is in .plt but is NOT a "
+              f"real thunk; the address is FABRICATED ---")
+        for m in pltbad_rows:
+            print(f"  {m['file']}:{m['line']}  {m['cited_sym'] or '(none)'} "
+                  f"@ {m['addr_str']}")
+            print(f"    {_ascii_safe(m.get('plt_reason') or 'not a decodable PLT entry')}")
+            print(f"    no restamp target -- re-RE the cited symbol from scratch")
+        print()
+
+    # --- PLT-THUNK -- cited address is an import stub, not the body.
+    plt_rows = [m for m in markers if m['verdict'] == 'PLT-THUNK']
+    if plt_rows:
+        print(f"--- PLT-THUNK ({len(plt_rows)}) -- cited addr is a .plt import stub, "
+              f"not the function body ---")
+        for m in plt_rows:
+            tgt_d = m.get('plt_target_dem') or m.get('plt_target_sym') or '?'
+            if len(tgt_d) > 55:
+                tgt_d = tgt_d[:52] + '...'
+            hops = m.get('plt_hops', 0)
+            extra = '  [2-HOP: veneer behind the thunk]' if hops > 1 else ''
+            print(f"  {m['file']}:{m['line']}  {m['cited_sym'] or '(none)'} "
+                  f"@ {m['addr_str']} -> real entry "
+                  f"0x{m['plt_target_addr']:08x}{extra}")
+            mism = ('  [NAME MISMATCH -- verify before restamping]'
+                    if m.get('plt_target_matches_cited') is False else '')
+            print(f"    target: {_ascii_safe(tgt_d)}{mism}")
+            if hops > 1:
+                for hop in m.get('plt_chain', []):
+                    hop_sym = _ascii_safe(_demangle(hop['sym'])) if hop.get('sym') else ''
+                    if len(hop_sym) > 45:
+                        hop_sym = hop_sym[:42] + '...'
+                    print(f"      hop[{hop['kind']}] {hop['from']} -> {hop['to']}"
+                          f"{('  ' + hop_sym) if hop_sym else ''}")
+        print()
+
+    # --- NO-SYMBOL (audit class) -- marker names no symbol, so nothing could be
+    # cross-checked; show what the address ACTUALLY is. HIGH rows first.
+    if symbol_less_markers:
+        shown = 30
+        print(f"--- NO-SYMBOL ({len(symbol_less_markers)}, {_nosym_high} HIGH) -- marker "
+              f"names no symbol; showing what the addr actually is ---")
+        for r in symbol_less_markers[:shown]:
+            dem = _ascii_safe(r['resolved_dem'] or '(nothing -- addr in no symbol range)')
+            if len(dem) > 62:
+                dem = dem[:59] + '...'
+            tag = 'HIGH' if r['no_symbol_priority'] == 'HIGH' else '    '
+            print(f"  [{tag}] {r['file']}:{r['line']}  @ {r['addr_str']} -> "
+                  f"{r['resolved_kind']} in {dem}")
+        if len(symbol_less_markers) > shown:
+            print(f"  ... and {len(symbol_less_markers) - shown} more "
+                  f"(full list in report.json['symbol_less_markers'])")
         print()
 
     # Show MID-SYMBOL-MISMATCH rows FIRST (the real bugs: cited name lands
