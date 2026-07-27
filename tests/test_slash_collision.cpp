@@ -23,13 +23,17 @@
 //   m_SegLenSq = |mid - tail|^2
 //   CollideWithEntity: early-returns true when |anchor - eCenter|^2 < r^2.
 //
-// No SDL_Init, no GL, no GameInit, no audio.
+// No SDL_Init, no GL, no GameInit, no audio. The one global the fixture must
+// still provide is game_work.mHud (see main() -- PlaySwipe derefs it unguarded,
+// as the binary does); the HUD ctor allocates nothing but the object itself.
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
 #include "entities/SlashEntity.h"
 #include "entities/Entity.h"
 #include "collision/ColSphere.h"
 #include "engine/input/InputEvent.h"
+#include "game/GameWork.h"
+#include "hud/HUD.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -251,6 +255,26 @@ static void test_near_boundary() {
 // ---------------------------------------------------------------------------
 int main() {
     std::printf("test_slash_collision: start\n");
+
+    // The Update(0.0f) calls below reach SlashEntity::Update's swipe-sound step
+    // (SlashEntity.cpp:2067-2072): |m_BladeDir| > 35 fires PlaySwipe(). The touch
+    // steps here are 60 units (test_crossing_hit) and 50 units (test_near_boundary
+    // near-hit), so it does fire. PlaySwipe reads
+    // game_work.mHud->m_globalTimeScale UNGUARDED for its SFX gain
+    // (SlashEntity.cpp:552) -- faithful to v1.6.1 SlashEntity::PlaySwipe
+    // @0x001e8550, whose vmla at 0x1e85cc has no null check because boot always
+    // creates the HUD first. Mirror that guarantee exactly as real boot does:
+    // GameInit step 1 (GameInit.cpp:79) allocates the HUD before any SlashEntity
+    // exists. The ctor leaves m_globalTimeScale at 1.0 (HUD.cpp:16), so the test
+    // exercises the normal-speed gain 0.4 + 0.6*1.0 = 1.0 rather than 0.
+    //
+    // Nothing else on the PlaySwipe path needs booting: ItemManager::GetInstance()
+    // lazily constructs with m_DefaultItems[0] == NULL, so
+    // PlayAlternateSwipeSound returns false (stock-swipe branch taken);
+    // game_work.mGameSound stays NULL and is checked at the SFXPlay call site, so
+    // no audio is played; ActorManager::GetNumEntities returns 0 with no type
+    // lists allocated.
+    game_work.mHud = new HUD();
 
     test_crossing_hit();
     test_blank_miss();

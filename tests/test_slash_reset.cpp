@@ -26,6 +26,14 @@
 // This test FAILS on the old Reset (only-colour) and PASSES with the fix.
 // It does NOT use SDL, GL, SoundManager, or any game singleton.
 //
+// FIXTURE INVARIANT: this file drives only the Touch API and Reset(), never
+// SlashEntity::Update(). That matters -- Update's swipe-sound step calls
+// PlaySwipe (v1.6.1 SlashEntity::PlaySwipe @0x001e8550) once |m_BladeDir| > 35,
+// and PlaySwipe derefs game_work.mHud unguarded (SlashEntity.cpp:552), faithful
+// to the binary, which relies on GameInit having created the HUD. If an
+// Update() call is ever added here, the fixture must first do what boot does --
+// game_work.mHud = new HUD() -- as test_slash_collision.cpp already does.
+//
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
 #include "entities/SlashEntity.h"
