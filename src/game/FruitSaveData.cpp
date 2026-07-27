@@ -148,8 +148,9 @@ int FruitSaveData::GetTotal(uint32_t hash) {
 }
 
 // ClearTotals -- wipes the entire m_Totals map.
-// Binary @ 0x00153ebc (PauseScreen::QuitGameCallback), 0x00153f68 (RetryGameCallback),
-// and GameOverScreen state-0 exit path.
+// Callers: v1.6.1 PauseScreen::QuitGameCallback @0x001a55e0,
+// PauseScreen::RetryGameCallback @0x001a5800, and the GameOverScreen state-0
+// exit path.
 void FruitSaveData::ClearTotals() {
     m_Totals.clear();
 }

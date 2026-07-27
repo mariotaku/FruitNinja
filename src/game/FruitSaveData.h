@@ -320,9 +320,9 @@ public:
     // Checks m_Totals first, then falls back to m_SessionTotals.
     int GetTotal(uint32_t hash);
 
-    // Binary @ 0x00153ebc (via PauseScreen::QuitGameCallback) -- wipes entire m_Totals map.
-    // Called from PauseScreen::QuitGameCallback, PauseScreen::RetryGameCallback, and
-    // GameOverScreen state-0 exit.
+    // Wipes the entire m_Totals map. Called from v1.6.1
+    // PauseScreen::QuitGameCallback @0x001a55e0, PauseScreen::RetryGameCallback
+    // @0x001a5800, and the GameOverScreen state-0 exit.
     void ClearTotals();
 
     // Clears a single entry in m_Totals by hash (binary addr TBD; called by ResetSpeed/AddSpeed).
