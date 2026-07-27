@@ -122,8 +122,8 @@ static Mortar::FontCacheObjectTTF* GetGameOverTTFFont() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-static int GetCurrentScore(int playerIdx) {
-    if (playerIdx != 0) return 0;
+// ASM-spec v1.6.1 GetCurrentScore @0x0011a0cc: playerIdx is ignored by the binary.
+static int GetCurrentScore(int /*playerIdx*/) {
     Game* g = Game::GetInstance();
     return g ? game_work.currentScore : 0;
 }

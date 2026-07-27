@@ -28,9 +28,9 @@
 #include "render/BakedStringBox.h"
 #include <cstdint>
 
-// GetCurrentScore -- v1.6.1 GetCurrentScore @ 0x00113704. Player 1 (idx=0) uses
-// game_work.currentScore; any other index returns 0 (P2 same-screen split does
-// not persist a separate score). Defined in ScoreControl.cpp.
+// GetCurrentScore -- v1.6.1 GetCurrentScore @0x0011a0cc. Always returns
+// game_work.currentScore; playerIdx is ignored by the binary (no per-player
+// score split exists). Defined in ScoreControl.cpp.
 int GetCurrentScore(int playerIdx);
 
 class ScoreControl : public HUDControl3d {

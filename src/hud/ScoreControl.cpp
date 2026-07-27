@@ -68,13 +68,9 @@ static float s_SfxCooldown     = 0.0f;  // bonus SFX rate-limiter
 static float s_StaticTimer      = 0.0f;  // non-Classic digit gate (0.25s)
 static uint16_t s_BannerSinIdx = 0;     // sin-table idx for new-best colour pulse
 
-// GetCurrentScore: returns score for the given player index.
-// Player 1 (idx=0) uses game_work.currentScore. Player 2 is not yet ported.
-// ASM-verified: 2026-05-18 v1.6.1 GetCurrentScore @ 0x00113704 (re-analyst)
-// Stat persistence for P2 happens in GameOverScreen::Update @ 0x00141b34, not here.
-// Same-screen MP does not split saved stats; no "Score_P2" key exists.
-int GetCurrentScore(int playerIdx) {
-    if (playerIdx != 0) return 0;
+// ASM-spec v1.6.1 GetCurrentScore @0x0011a0cc: body is `return game_work.currentScore;`
+// -- playerIdx is accepted and then ignored entirely; there is no per-player split.
+int GetCurrentScore(int /*playerIdx*/) {
     Game* game = Game::GetInstance();
     return game ? game_work.currentScore : 0;
 }
@@ -85,8 +81,8 @@ int GetScoreMultiplyer(int /*playerIdx*/) {
     return PowerUpManager::GetInstance()->GetScoreGainMultiplier();
 }
 
-// ASM-verified: 2026-05-03T00:00 v1.6.1 GetCurrentModeHighscore @ 0x00115444 (asm-inspector)
-// Binary: GetCurrentModeHighscore @ 0x00115444.
+// ASM-verified: 2026-05-03T00:00 v1.6.1 GetCurrentModeHighscore @ 0x00119ee4 (asm-inspector)
+// Binary: GetCurrentModeHighscore @ 0x00119ee4.
 // pSaveData has highscore array at +0x44 (m_ModeHighScores[4]), indexed by gameMode (0..3).
 int GetCurrentModeHighscore() {
     Game* gd = Game::GetInstance();
