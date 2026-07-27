@@ -164,7 +164,12 @@ void GameSound::Unpause() {
     }
 }
 
-// ASM-verified: 2026-05-04T11:00 v1.6.1 binary @ 0x0012930c (asm-inspector)
+// ASM-verified: 2026-05-04T11:00 v1.6.1 GameSound::Update @ 0x00151e60 (asm-inspector; address restamped 2026-07-27, decompile re-checked)
+// NOTE the per-slot re-apply below: (1 - (1-master)*vol) * PITCH runs every
+// frame for every live slot with vol > 0 -- for a slot played with gain 0
+// (e.g. SpeedControl's first Combo-Blitz-Backing SFXPlay) this writes volume
+// byte 0 each frame, which is what silences that stream the moment
+// SpeedControl::Update stops re-raising it (pause/menu: bM_Mode gate).
 void GameSound::Update() {
     if (m_PausedForInterrupt) {
         SoundManager& mgr = SoundManager::GetInstance();

@@ -137,10 +137,11 @@ struct SlashSoundMods {
     // Reset — called from Parse and from SlashModInfo::SetEquipped
     void Reset();
 
-    // PlaySound @ 0x00112fd4 — plays sound by idx (-1 = auto-pick); returns m_bPlayOntop != 0
+    // PlaySound @ v1.6.1 0x00139a44 — plays sound by idx (-1 = auto-pick); returns
+    // m_bPlayOntop != 0 (false when m_SoundCount == 0 — empty set never suppresses).
     bool PlaySound(int idx, float volume, float pitch);
 
-    // PlaySoundIdx @ 0x00112e94 — plays a specific sound slot via GameSound::SFXPlay
+    // PlaySoundIdx @ v1.6.1 0x001398b0 — plays a specific sound slot via GameSound::SFXPlay
     void PlaySoundIdx(int i);
 
     // GetNextSound @ 0x00112cf0 — sequential mode (m_PlaySequentialy >= 0)

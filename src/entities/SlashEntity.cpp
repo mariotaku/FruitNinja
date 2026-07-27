@@ -526,6 +526,8 @@ void SlashEntity::PreUpdate(float dt) {
 
 // ASM-spec v1.6.1 SlashEntity::PlaySwipe @0x001e8550:
 //   if (ItemManager::PlayAlternateSwipeSound(1.0, 1.0) == 0) {   // gate @0x1e857c -- alternate
+//       // (callee = v1.6.1 ItemManager::PlayAlternateSwipeSound @0x00139b04; returns the
+//       //  SlashSoundMods m_bPlayOntop byte, 0 when the equipped blade has no swipe sounds)
 //       idx  = Math::Random::Rand32(g_random, 6) + 1;            // swipe SUPPRESSES sword swipe
 //       OS_SPrintf(buf, 0x40, "Sword-swipe-%d", idx);
 //       gain = 0.4f + 0.6f * hud->m_globalTimeScale;             // vmla @0x1e85cc; pool literals
@@ -535,7 +537,9 @@ void SlashEntity::PreUpdate(float dt) {
 //   RandF(0.5);                          // result discarded -- advances the shared g_Random stream
 //   ActorManager::GetNumEntities(0);     // result discarded
 //   ActorManager::GetNumEntities(1);     // result discarded (@0x1e862c-0x1e8648)
-//   m_SwipeSoundTimer = 6.0f;            // +0x144 @0x1e8650
+//   m_ComboScoreScale = 6.0f;            // +0x144 @0x1e8650 (vstr s15,[r6,#0x144]) -- NOT the
+//                                        // swipe cooldown; the caller (Update @0x1e96b4..0x1e96bc)
+//                                        // writes m_SwipeSoundTimer (+0xb8) = 0.05f after the call.
 // Trailing discarded calls are kept for RNG-stream / call-ordering fidelity.
 void SlashEntity::PlaySwipe() {
     ItemManager* im = ItemManager::GetInstance();
@@ -558,7 +562,7 @@ void SlashEntity::PlaySwipe() {
         (void)am->GetNumEntities(1);
     }
 
-    m_SwipeSoundTimer = 6.0f;
+    m_ComboScoreScale = 6.0f;
 }
 
 // ASM-verified: 2026-06-16 v1.6.1 GetHeadThicknessScale @ 0x1e684c (re-analyst). Head thickness scale =

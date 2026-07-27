@@ -444,7 +444,7 @@ bool ItemManager::UnequipItem(unsigned long hash) {
     return true;
 }
 
-// PlayAlternateComboSound @ v1.6.1 0x00139aac
+// PlayAlternateComboSound @ v1.6.1 0x00139ad0
 bool ItemManager::PlayAlternateComboSound(int comboIdx) {
     SlashModInfo* m = static_cast<SlashModInfo*>(m_DefaultItems[0]);
     if (!m) return false;
@@ -463,8 +463,11 @@ bool ItemManager::PlayAlternateImpactSound(float volume, float pitch) {
 }
 
 // -----------------------------------------------------------------------
-// PlayAlternateSwipeSound @ v1.6.1 0x00139ad8
-// Binary: *(int*)this == m_DefaultItems[0]; calls m_SwipeSounds.PlaySound(-1, vol, pitch).
+// PlayAlternateSwipeSound @ v1.6.1 0x00139b04
+// Binary: *(int*)this == m_DefaultItems[0]; calls m_SwipeSounds.PlaySound(-1, vol, pitch)
+// on the mod's +0x84 SlashSoundMods. Returns PlaySound's result verbatim
+// (m_bPlayOntop byte; 0 when the equipped blade has no swipe sounds), which
+// SlashEntity::PlaySwipe @0x001e8550 uses to gate the stock "Sword-swipe-%d".
 // -----------------------------------------------------------------------
 bool ItemManager::PlayAlternateSwipeSound(float volume, float pitch) {
     SlashModInfo* mod = static_cast<SlashModInfo*>(m_DefaultItems[0]);

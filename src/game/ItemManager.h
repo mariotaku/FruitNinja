@@ -106,15 +106,16 @@ public:
     // ---- Additional ItemManager public API (binary missing-symbol set) ----
     // EquipItem @ 0x00103198 — equip item by hash; returns 1 on success.
     int EquipItem(unsigned long hash);
-    // PlayAlternateComboSound @ v1.6.1 0x00139aac — plays combo sound from equipped blade mod.
+    // PlayAlternateComboSound @ v1.6.1 0x00139ad0 — plays combo sound from equipped blade mod.
     // Returns true if an alternate sound was played (suppresses default combo SFX).
     bool PlayAlternateComboSound(int);
     // PlayAlternateImpactSound @ v1.6.1 0x00139aec — delegates to m_pCurrentSlashMod->m_ImpactSounds.PlaySound.
     // Returns true iff an alternate sound played (suppresses per-fruit impact SFX iteration).
     // ASM-verified: 2026-05-23 v1.6.1 ItemManager::PlayAlternateImpactSound @ 0x00139aec (re-analyst)
     bool PlayAlternateImpactSound(float volume, float pitch);
-    // PlayAlternateSwipeSound @ v1.6.1 0x00139ad8 — delegates to m_pCurrentSlashMod->m_SwipeSounds.PlaySound.
-    // Returns true iff an alternate sound played (suppresses default Sword-swipe SFX).
+    // PlayAlternateSwipeSound @ v1.6.1 0x00139b04 — delegates to m_DefaultItems[0]->m_SwipeSounds.PlaySound.
+    // Returns PlaySound's m_bPlayOntop result: true suppresses the default Sword-swipe SFX;
+    // false (no blade mod, no swipe sounds, or play_ontop="true") lets it play.
     bool PlayAlternateSwipeSound(float volume, float pitch);
     // SetSwipeLoodVol @ v1.6.1 0x00138308 — set looping-swipe desired volume on the
     // equipped blade mod: if m_DefaultItems[0], call its

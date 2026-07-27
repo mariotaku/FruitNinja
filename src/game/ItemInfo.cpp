@@ -269,7 +269,7 @@ int SlashSoundMods::GetNextSound() {
     return pick;
 }
 
-// SlashSoundMods::PlaySoundIdx @ 0x00112e94
+// SlashSoundMods::PlaySoundIdx @ v1.6.1 0x001398b0
 void SlashSoundMods::PlaySoundIdx(int i) {
     if (i < 0) return;
     if (i > m_SoundCount - 1) i = m_SoundCount - 1;
@@ -281,7 +281,10 @@ void SlashSoundMods::PlaySoundIdx(int i) {
     gs->SFXPlay(name, m_LastPitch, vol, empty);
 }
 
-// SlashSoundMods::PlaySound @ 0x00112fd4
+// SlashSoundMods::PlaySound @ v1.6.1 0x00139a44 -- returns the m_bPlayOntop byte
+// (+0x20) whenever m_SoundCount != 0, and 0 when the set is empty. Callers
+// (PlayAlternateSwipeSound @0x00139b04 / ImpactSound @0x00139aec) forward the
+// result verbatim as their "suppress the default SFX" flag.
 bool SlashSoundMods::PlaySound(int idx, float volume, float pitch) {
     if (m_SoundCount == 0) return false;
     m_LastPitch  = pitch;

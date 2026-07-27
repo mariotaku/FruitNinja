@@ -32,7 +32,7 @@
 //   TouchDown       0x17D61C
 //   TouchMoveX      0x17C50C
 //   TouchMoveY      0x17C490
-//   PlaySwipe       0x17CCDC
+//   PlaySwipe       v1.6.1 0x001e8550
 //   GetHeadThicknessScale v1.6.1 0x1e684c
 //   CreateGhost     0x17B82C
 //   MissControlDeleted    0x17B388
@@ -103,7 +103,7 @@ public:
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B3B8 (re-analyst)
     void Draw(Renderer& r) override;
 
-    // Binary @ 0x17CCDC -- mod-override swipe SFX, else "Sword-swipe-%d" via Rand32.
+    // v1.6.1 SlashEntity::PlaySwipe @0x001e8550 -- mod-override swipe SFX, else "Sword-swipe-%d" via Rand32.
     void PlaySwipe();
 
     // v1.6.1 @ 0x1e684c -- derive head taper scale.

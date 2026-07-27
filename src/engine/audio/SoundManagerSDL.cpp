@@ -578,6 +578,9 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
         // voice is never killed by another play.
         if (!slot) {
             SDL_UnlockAudioDevice(m_AudioDevice);
+            // Port specific: the binary's drop is silent; log it so voice-pool
+            // exhaustion (a plausible "sound X never plays" report) is visible.
+            LOG_INFO("SFX", "SFXPlay('%s') DROPPED -- all %d voices busy", name, VOICE_COUNT);
             return 0;
         }
         slot->id      = newId;

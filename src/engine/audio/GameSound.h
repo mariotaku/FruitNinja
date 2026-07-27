@@ -84,7 +84,7 @@ public:
     // Binary @ 0x00129218
     void Unpause();
 
-    // Binary @ 0x0012930c
+    // v1.6.1 GameSound::Update @ 0x00151e60
     void Update();
 
     // Binary @ 0x00151b60 -- static
