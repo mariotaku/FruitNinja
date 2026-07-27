@@ -13,7 +13,7 @@
 //
 // SHAPE: thin per-line FancyBakedString dispatcher (matches v1.6.1 exactly).
 // m_Lines is a std::vector<FancyBakedString*> -- one 6-layer FancyBakedString
-// per wrapped line -- NOT raw glyph quads. RebuildMeshes() @0x002469c0 wraps
+// per wrapped line -- NOT raw glyph quads. RebuildMeshes() @0x00246944 wraps
 // m_Text into m_WrappedLines, builds one FancyBakedString per line (17-arg
 // ctor), applies the active gradient/stroke-gradient, and stores each line's
 // LOCAL draw offset (horizontal align + vertical baseline) into the line's
@@ -130,7 +130,11 @@ public:
 
     // SetWorldspaceClipping  binary @ 0x0015ab58 (AddLine call site)
     // Sets a world-space clip rect for Draw. (x0, y0) = top-left corner; w, h = width/height in worldspace units.
-    // ASM-spec v1.6.1 Mortar::BakedStringBox::SetWorldspaceClipping @0x00114554: (int x0, int y0, int w, int h).
+    // ASM-spec v1.6.1 Mortar::BakedStringBox::SetWorldspaceClipping @0x00245c28: (int x0, int y0, int w, int h).
+    // Stores the rect as int at +0x94..+0xa0, then sets m_HasClip(+0xa4) = true AND
+    // m_Visible(+0x01) = true. It also negates y0 when FontInterface::GetInstance()[+0x150]
+    // == -1.0f -- see the .cpp TODO; the port has no FontInterface singleton so that
+    // y-sign flip is not applied.
     // ASM-spec v1.6.1 AboutScreen::AddLine @0x0015aaf0: args are (-240, -46, 400, 108).
     // DIFFERS: original = CPU ClipAgainstPlanes geometry clip (v1.6.1 BakedStringBox::ClipToRectangle @0x00246358
     //   / RebuildClipping @0x002464d0), using glScissor because GLES2 has no fixed-function user clip planes
@@ -262,7 +266,7 @@ private:
     int     m_LineSpacing;         // +0x48 7th ctor arg
     float   m_BaseFontSize;        // +0x4c original font size (binary step formula base)
     FontCacheObjectTTF* m_Font;    // +0x50 non-owning ref (owned by Font + FontTTFRegistry)
-    // Per-line FancyBakedString layer params (v1.6.1 RebuildMeshes @0x002469c0 passes
+    // Per-line FancyBakedString layer params (v1.6.1 RebuildMeshes @0x00246944 passes
     // these into the 17-arg per-line build call):
     //   m_StrokeWidth/m_StrokeCol0        -> GLOW layer (glowSize/glowCol)
     //   m_StrokeLayerWidth/m_StrokeLayerColour -> m_pStroke layer (strokeSize/strokeCol)
@@ -303,7 +307,7 @@ private:
     float   m_FontSize;            // +0xc4 current render pixel size (shrunk by FitInto)
 
     // RebuildMeshes -- rebuild m_WrappedLines + m_Lines from m_Text at m_BaseFontSize.
-    // ASM-spec v1.6.1 Mortar::BakedStringBox::RebuildMeshes @0x002469c0: shrink-by-linecount
+    // ASM-spec v1.6.1 Mortar::BakedStringBox::RebuildMeshes @0x00246944: shrink-by-linecount
     // loop (FitStrings/MeasureWrap, floor 6.0px) picks m_FontSize; then one FancyBakedString
     // per wrapped line is constructed (17-arg ctor), the active gradient/stroke-gradient is
     // applied, and each line's LOCAL draw offset is written into its own LineOffset() via

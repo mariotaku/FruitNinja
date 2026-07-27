@@ -21,7 +21,7 @@
 // Analysed: 2026-04-12T16:45
 
 // ---------------------------------------------------------------------------
-// Key constants from binary (coin.md)
+// Key constants from binary (v1.6.1 Coin::_Update @0x001d81bc / InitCoin @0x001d7d84)
 // ---------------------------------------------------------------------------
 static const float COIN_SPEED_BASE      = 500.0f;   // base launch speed
 static const float COIN_SPEED_RAND      = 550.0f;   // random addend range
@@ -35,7 +35,7 @@ static const float COIN_SPIN_RATE       = 32760.0f * 500.0f; // spin = rate * dt
 static const _Vector3<float> COIN_DEFAULT_TARGET(220.0f, -140.0f, 0.0f);  // default homing target (was misnamed "gravity")
 static const _Vector3<float> COIN_SCALE(0.5f, 0.5f, 0.5f);   // entity visual scale
 
-// Screen bounds for spawn clamping (coin.md "Key Constants")
+// Screen bounds for spawn clamping (v1.6.1 Coin::MakeCoins @0x001d7ec8)
 static const float COIN_BOUND_Y_MIN = -240.0f;
 static const float COIN_BOUND_Y_MAX =  240.0f;
 static const float COIN_BOUND_X_MIN = -160.0f;
@@ -48,7 +48,7 @@ static const float COIN_FIXED_DT = 1.0f / 60.0f;
 // Static data
 // ---------------------------------------------------------------------------
 
-// 0x00173114 loaded flag.
+// v1.6.1 Coin::LoadContent @0x001d7920 loaded flag (s_isContentLoaded).
 static bool s_loaded = false;
 
 // v1.6.1 AddToScoreOnArrival @0x162ab8: file-static bonus-mode firework counter.
@@ -56,11 +56,11 @@ static bool s_loaded = false;
 // counts 3, 6, and >8 (0).
 static int g_oneInThree = 0;
 
-// Correction (2026-07-08): the 2026-05-23 comment above claiming "no model
-// file coin.mmd exists" was wrong -- FruitNinjaBada/Data/models/Fruit/coin.mmd
-// (+ coin.mad) is present, following the same "models/Fruit/<name>.mmd"
-// convention as Bomb::LoadContent's "models/Fruit/bomb.mmd" /
-// "models/Fruit/bomb_purple.mmd". LoadContent below now loads it.
+// The ASSET FruitNinjaBada/Data/models/Fruit/coin.mmd (+ coin.mad) does exist,
+// following the same "models/Fruit/<name>.mmd" convention as Bomb::LoadContent's
+// "models/Fruit/bomb.mmd". The BINARY, however, never loads it: s_coinModel's
+// only writers in v1.6.1 are the static-init zero and UnLoadContent's NULL, and
+// the string "coin.mmd" is absent from the image. See LoadContent's TODO.
 static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 
 // ---------------------------------------------------------------------------
@@ -116,13 +116,14 @@ void Coin::Release() {
 }
 
 // ---------------------------------------------------------------------------
-// Init @ 0x0019D5FC — base no-op; Coin uses base (vtable slot 2 = 0x0019d5fc).
+// Init — base no-op; Coin uses the base body (vtable slot 2 points at
+// v1.6.1 Mortar::Entity::Init @0x0025623c).
 // Coin is initialised via ctor + MakeCoins/InitCoin, never through factory-Init.
 // ---------------------------------------------------------------------------
 void Coin::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {}
 
 // ---------------------------------------------------------------------------
-// PostUpdate (DrawUpdate) @ 0x0017318C — empty in binary
+// PostUpdate — v1.6.1 Coin::DrawUpdate @0x001d79b8; body is `return this;` only
 // ---------------------------------------------------------------------------
 void Coin::PostUpdate(float /*dt*/) {}
 
@@ -440,7 +441,7 @@ void Coin::_Update(float dt) {
 }
 
 // ---------------------------------------------------------------------------
-// Update @ 0x001c7940 — fixed-timestep wrapper
+// Update — v1.6.1 Coin::Update @0x001d7940 — fixed-timestep wrapper
 // Binary ignores its own dt param and drives the substep loop from the
 // global game_work.dt (+0x38) instead; some call sites zero/alter the
 // passed dt for freeze effects (GameInit.cpp bomb-hit freeze, WaveManager.cpp
@@ -459,10 +460,12 @@ void Coin::Update(float /*dt*/) {
 }
 
 // ---------------------------------------------------------------------------
-// Draw @ 0x00173CC4
+// Draw — v1.6.1 Coin::Draw @0x001d8810
+// Verified structure: m_Silent gate -> model gate -> m_State<=1 early-out ->
+// Scale44 -> RotY44(spin) -> RotZ44(heading) -> GlobalTranslate44 -> Model::Draw.
 //
 // Binary check: `if (m_Silent == 0) return;`
-// This looks inverted but is replicated exactly as documented in coin.md.
+// This looks inverted but is replicated exactly as the binary has it.
 // Result: coins with m_Silent==0 (non-silent) do NOT render their model;
 // only coins launched with silent=true render. This may be a binary quirk
 // (possibly the model draw was intentionally gated on a different condition
@@ -490,7 +493,17 @@ void Coin::Draw(Renderer& /*r*/) {
 }
 
 // ---------------------------------------------------------------------------
-// LoadContent @ 0x00173114
+// LoadContent — v1.6.1 Coin::LoadContent @0x001d7920
+// The whole binary body is `s_isContentLoaded = 1; return;` (11 bytes): no
+// MeshManager load and no `if (s_loaded) return` guard -- the guard lives in
+// the caller, Coin::Coin @0x001d7b94 (`if (s_isContentLoaded == 0) LoadContent();`).
+//
+// TODO: v1.6.1 Coin::LoadContent @0x001d7920 — port loads models/Fruit/coin.mmd
+//   with no binary basis; s_coinModel is never assigned in v1.6.1 (its only two
+//   writers are the static-init zero and UnLoadContent's NULL, and the string
+//   "coin.mmd" does not exist in the binary), which implies Coin::Draw's
+//   `s_coinModel != NULL` gate is never true. Pending HLE confirmation before
+//   the load is removed -- leaving the port drawing the coin for now.
 // ---------------------------------------------------------------------------
 void Coin::LoadContent() {
     if (s_loaded) return;
@@ -500,7 +513,10 @@ void Coin::LoadContent() {
 }
 
 // ---------------------------------------------------------------------------
-// UnLoadContent @ 0x00173CA8
+// UnLoadContent — v1.6.1 Coin::UnLoadContent @0x001d87f0
+// The binary body is ONLY SmartPtr<Model>::SetPtr(&s_coinModel, NULL); it does
+// NOT reset the loaded flag. The `s_loaded = false` below has no binary basis
+// and is paired with the port-only model load in LoadContent (see its TODO).
 // ---------------------------------------------------------------------------
 void Coin::UnLoadContent() {
     s_coinModel.SetNull();

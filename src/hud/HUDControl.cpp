@@ -27,6 +27,7 @@ int DefaultSoundRemovedCallback(Mortar::MortarSound* /*snd*/)
     return 0;
 }
 
+// v1.6.1 HUDControl::HUDControl C1 @0x0018b354 / C2 @0x0018b440
 HUDControl::HUDControl()
     : m_Singular(0),                              // +0x04
       m_Timer(0.0f),                              // DIFFERS: binary leaves uninitialised; port zero-inits for determinism

@@ -118,7 +118,8 @@ void InputManager::OnAxisExtentsChanged() {
     }
 }
 
-// Binary @ 0x00196228 — lookup table of 7 action-name hashes -> event-type flag.
+// v1.6.1 Mortar::InputManager::ParseAction @0x00244060 — lookup table of 7
+// action-name hashes -> event-type flag.
 // Lazily builds a static {StringHash(name), flag} table (the binary guards it with
 // __cxa_guard; a function-local static gives the identical once-only init), then
 // linear-searches for `hash` and returns the matching flag, or 0 on no match.
@@ -148,11 +149,14 @@ unsigned long InputManager::ParseAction(unsigned long hash) const {
     return 0;
 }
 
-// Binary @ 0x0019630c — lookup of 61 key-name hashes -> key code.
+// v1.6.1 Mortar::InputManager::ParseKey @0x002438c8 — lookup of 61 (0x3d) key-name
+// hashes -> key code. The binary guards the table with __cxa_guard_acquire and scans
+// it linearly (`while (i != 0x3d)`), returning the paired value or 0.
 // Same lazily-built guarded static table pattern as ParseAction; linear-searches
 // for `hash`, returns the matching key code (InputKeys value), or 0 on no match.
 // Dead unless config-file parsing enabled (LoadConfigFile is a Defunct no-op stub).
-// Table source (strings @ 0x001c2603, value table @ 0x001f3ef8). Key codes:
+// Table source: ONE interleaved array @0x002d8dd8, stride 8 -- name hash at +0, key
+// code at +4 (it is NOT a separate name array plus value array). Key codes:
 //   MouseButton1..8        -> 0x6c..0x73
 //   MouseAxisX, MouseAxisY -> 0x74, 0x75
 //   Touch1..16             -> 0x89..0x98
@@ -202,7 +206,8 @@ unsigned long InputManager::ParseKey(unsigned long hash) const {
     return 0;
 }
 
-// Binary @ 0x0019683c — broadcast to devices (2-param; bindings live on device).
+// v1.6.1 Mortar::InputManager::RegisterInputCallback @0x0024475c — broadcast to
+// devices (2-param; bindings live on device).
 // DIFFERS: original = per-device binding store, see v1.6.1 Mortar::InputManager::RegisterInputCallback @0x0024475c
 void InputManager::RegisterInputCallback(unsigned long actionHash, InputCallback cb) {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();

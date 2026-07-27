@@ -20,6 +20,13 @@ struct Renderer;
 //
 // Analysed: 2026-05-04T00:00
 //
+// TODO: v1.6.1 Mortar::Entity — the remaining bare `Binary @ 0x0019dXXX` citations in
+//   this header / Entity.cpp (ctor, dtors, Release, Heap*, operator new/delete,
+//   ListenerCallback) are UNVERIFIED v1.5-era leftovers: that range is live .text in
+//   v1.6.1 but holds MenuButton/MissControl bodies, so they point at the wrong
+//   function. The vtable no-op slots that WERE re-resolved (Init/PostLoad/
+//   CollisionResponse/Collide/ReceiveMessage/InRect) are restamped below.
+//
 // Layout verified from ctor at 0x0019d88c (memset 0x3C bytes):
 //   +0x00: vtable (4B)
 //   +0x04: m_RuntimeID / uint32_t (4B) — RuntimeID / LoadEntity ID; matched by
@@ -126,11 +133,11 @@ public:
     // recycle path. Single instruction: strb r0,[r0,#0x0c] where r0=flags & ~1.
     void Activate() { flags &= ~static_cast<uint8_t>(0x01u); }
 
-    // Vtable slot 2 (+0x08): Init — Binary @ 0x0019d5fc (base no-op).
+    // Vtable slot 2 (+0x08): Init — v1.6.1 Mortar::Entity::Init @0x0025623c (base no-op).
     // Caller protocol: pos/vel pre-set, scale lives in p3 (nullable, default 1.0).
     // Bomb / Fruit / SlashEntity / BombBlast override; Coin uses base (no-op).
     // p1 and p2 are vestigial from the binary serialiser path; runtime callers
-    // always pass (nullptr, 0, &scale). Binary @ 0x0019d5fc.
+    // always pass (nullptr, 0, &scale).
     virtual void Init(void* /*payload, unused at runtime*/,
                       long   /*entityTypeOrLen, ignored except by .lvl loader*/,
                       _Vector3<float>* /*scaleOrNull; defaults to (1,1,1)*/);
@@ -150,32 +157,31 @@ public:
     // the gate `(flags & 0x11) == 0`.
     virtual void PostUpdate(float dt) = 0;
 
-    // Vtable slot 7 (+0x1C): PostLoad — Binary @ 0x0019d600 (base no-op)
+    // Vtable slot 7 (+0x1C): PostLoad — v1.6.1 Mortar::Entity::PostLoad @0x00256240 (base no-op)
     virtual void PostLoad();
 
-    // Vtable slot 8 (+0x20): InRect — Binary @ 0x0019d800
+    // Vtable slot 8 (+0x20): InRect — v1.6.1 Mortar::Entity::InRect @0x002562a0
     // Signature: void InRect(ColAABB*) — sphere-broadcast helper.
     // Body reads aabb->_field_0x38 (inner Col*), copies pos fields, dispatches.
     // Called by ActorManager::GetNumInAABB. Port: no-op in base (body is complex
     // internal Col dispatch; callers in port use CollideWithSphere directly).
-    // Binary @ 0x0019d800.
     virtual void InRect(ColAABB* aabb);
 
-    // Vtable slot 9 (+0x24): CollisionResponse — Binary @ 0x0019d604 (base returns 0)
+    // Vtable slot 9 (+0x24): CollisionResponse — v1.6.1 Mortar::Entity::CollisionResponse @0x00256244 (base returns 0)
     // Called when the blade collision sphere hits this entity.
     // Args 2/3 are always 0 at runtime (.lvl-loader vestige); kept in signature
     // for vtable parity. Returns int (Fruit: 1=already sliced, 0=ok; Bomb: 0;
-    // base: 0). Binary @ 0x0019d604.
+    // base: 0).
     virtual int CollisionResponse(Entity* hitter,
                                   unsigned long /*flagsA*/,
                                   unsigned long /*flagsB*/,
                                   _Vector3<float>* bladeVelocity);
 
-    // Vtable slot 10 (+0x28): Collide — Binary @ 0x0019d608
+    // Vtable slot 10 (+0x28): Collide — v1.6.1 Mortar::Entity::Collide @0x0025624c
     // If m_Col, dispatch m_Col->Collide(col, hitPos)
     virtual void Collide(Entity* other, Col* col, unsigned long* outFlags, _Vector3<float>* hitPos);
 
-    // Vtable slot 11 (+0x2C): ReceiveMessage — Binary @ 0x0019d61c
+    // Vtable slot 11 (+0x2C): ReceiveMessage — v1.6.1 Mortar::Entity::ReceiveMessage @0x00256274
     // msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE
     virtual void ReceiveMessage(Entity* sender, Mortar::Message* msg);
 

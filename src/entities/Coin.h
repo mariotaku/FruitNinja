@@ -5,24 +5,27 @@
 // Binary struct: 0x94 / 148 bytes. Pool-based via Mortar::ActorManager(2).
 //
 // Binary references:
-//   Coin::Coin   (C1)  0x00173394
-//   Coin::Coin   (C2)  0x001732D4
+//   Coin::Coin   (C1)  v1.6.1 @0x001d7b94
+//   Coin::Coin   (C2)  v1.6.1 @0x001d7c8c
 //   ~Coin        (D1)  v1.6.1 @0x001d7a90
 //   ~Coin        (D2)  v1.6.1 @0x001d7ae4  (base object dtor, identical body)
 //   ~Coin        (D0)  v1.6.1 @0x001d7b38
-//   Coin::Init        0x0019D5FC  (stub/empty)
+//   Coin::Init        v1.6.1 Mortar::Entity::Init @0x0025623c  (Coin has no own
+//                     override; vtable slot 2 points straight at the base no-op)
 //   Coin::Release     v1.6.1 @0x001d7a5c  (vtable-dispatch only; NOT called from dtor)
-//   Coin::Update      0x0017312C  (fixed-timestep wrapper)
-//   Coin::_Update     v1.6.1 @0x001d81bc  (5-state machine; v1.5.1 was 0x00173790)
-//   Coin::Draw        0x00173CC4
-//   Coin::DrawUpdate  0x0017318C  (empty)
-//   Coin::InitCoin    v1.6.1 @0x001d7d84  (v1.5.1 was 0x00173454)
-//   Coin::Arrived     0x00173190
-//   Coin::MakeCoins   v1.6.1 @0x001d7ec8  (v1.5.1 was 0x00173568)
+//   Coin::Update      v1.6.1 @0x001d7940  (fixed-timestep wrapper)
+//   Coin::_Update     v1.6.1 @0x001d81bc  (5-state machine)
+//   Coin::Draw        v1.6.1 @0x001d8810
+//   Coin::DrawUpdate  v1.6.1 @0x001d79b8  (body is `return this;` only)
+//   Coin::InitCoin    v1.6.1 @0x001d7d84
+//   Coin::Arrived     v1.6.1 @0x001d79bc
+//   Coin::MakeCoins   v1.6.1 @0x001d7ec8
 //   Coin::ClearCoins  v1.6.1 @0x001d7a00  (thunk 0x00106eb8)
-//   Coin::LoadContent   0x00173114
-//   Coin::UnLoadContent 0x00173CA8
-//   CoinArrived (free) 0x0017320C
+//   Coin::LoadContent   v1.6.1 @0x001d7920
+//   Coin::UnLoadContent v1.6.1 @0x001d87f0
+// TODO: v1.6.1 CoinArrived (_Z11CoinArrivedP4Coin) -- address UNVERIFIED. Coin.cpp
+//   cites @0x001d7a88 but that was not re-confirmed in the v1.6.1 address audit.
+//   Re-resolve before trusting it.
 //
 // Analysed: 2026-04-12T16:45
 
@@ -66,7 +69,8 @@ public:
 
     // --- Vtable overrides ------------------------------------------------
 
-    // 0x0019D5FC — Coin uses the base no-op Init (vtable slot 2 = base 0x0019d5fc).
+    // v1.6.1 Mortar::Entity::Init @0x0025623c — Coin uses the base no-op Init
+    // (vtable slot 2 points at the base body).
     // Coin is fully initialised by its ctor + MakeCoins/InitCoin; this override
     // is kept so the compiler knows the virtual is satisfied (same function ptr).
     void Init(void* p1, long p2, _Vector3<float>* p3) override;
@@ -75,13 +79,13 @@ public:
     // from the destructor (D1 body has no bl to Release; confirmed via xref check).
     void Release() override;
 
-    // 0x0017312C — fixed-timestep wrapper; subdivides dt by 1/60
+    // v1.6.1 Coin::Update @0x001d7940 — fixed-timestep wrapper; subdivides dt by 1/60
     void Update(float dt) override;
 
-    // 0x0017318C — empty in binary
+    // v1.6.1 Coin::DrawUpdate @0x001d79b8 — body is `return this;` only
     void PostUpdate(float dt) override;
 
-    // 0x00173CC4 — scale × RotY(spin) × RotZ(heading) × Translate
+    // v1.6.1 Coin::Draw @0x001d8810 — scale × RotY(spin) × RotZ(heading) × Translate
     void Draw(Renderer& r) override;
 
     // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
@@ -124,7 +128,7 @@ public:
                   unsigned long flyFXHash, unsigned long collectFXHash,
                   Mortar::Delegate1<void, Coin*> onArrived, float delay, bool silent);
 
-    // 0x00173190 — invoke m_OnArrived, cleanup emitters, mark dead
+    // v1.6.1 Coin::Arrived @0x001d79bc — invoke m_OnArrived, cleanup emitters, mark dead
     void Arrived();
 
     // ASM-spec v1.6.1 Coin::MakeCoins @0x001d7ec8 — spawn N coins via
@@ -154,15 +158,21 @@ public:
     // ORs ENT_INACTIVE|ENT_KILLED (0x11) directly.
     static void ClearCoins(bool arrive);
 
-    // Returns a Delegate1<void,Coin*> bound to the file-static CoinArrived helper
-    // (binary @ 0x0017320C). Callers outside Coin.cpp use this to obtain the
-    // standard arrived callback without needing to know CoinArrived's linkage.
+    // Returns a Delegate1<void,Coin*> bound to the file-static CoinArrived helper.
+    // Callers outside Coin.cpp use this to obtain the standard arrived callback
+    // without needing to know CoinArrived's linkage. (CoinArrived's own v1.6.1
+    // address is unverified -- see the file-header TODO.)
     static Mortar::Delegate1<void, Coin*> DefaultArrivedDelegate();
 
-    // 0x00173114 — set loaded flag; loads models/Fruit/coin.mmd via MeshManager
+    // v1.6.1 Coin::LoadContent @0x001d7920 — the binary body is ONLY
+    // `s_isContentLoaded = 1; return;` (11 bytes): no MeshManager load and no
+    // guard. The `if (s_isContentLoaded == 0)` test lives in the caller
+    // (Coin::Coin @0x001d7b94). See the .cpp TODO on the port's extra model load.
     static void LoadContent();
 
-    // 0x00173CA8 — null out model SmartPtr
+    // v1.6.1 Coin::UnLoadContent @0x001d87f0 — the binary body is ONLY
+    // SmartPtr<Model>::SetPtr(&s_coinModel, NULL). It does NOT reset the
+    // loaded flag; the port's `s_loaded = false` has no binary basis.
     static void UnLoadContent();
 
 private:

@@ -154,10 +154,12 @@ void InputDeviceBada::ClearActions(unsigned long actionHash, bool /*last*/) {
 #endif
 }
 
-// Binary @ 0x0019683c — per-device binding store.
+// TODO: v1.6.1 Mortar::InputDeviceBada::RegisterInputCallback -- address UNVERIFIED.
+//   The InputManager-side broadcaster re-resolved to @0x0024475c; this device-side
+//   callee was not re-resolved, so no address is cited here.
 // DIFFERS: original = per-device binding via InputActionMapper; port uses
 //   direct InputDeviceBinding list for SDL dispatch path (no InputActionMapper
-//   ctor ported yet). Binary @ 0x0019683c.
+//   ctor ported yet).
 void InputDeviceBada::RegisterInputCallback(unsigned long actionHash,
                                             InputDeviceCallback cb) {
 #if !defined(__bada__)

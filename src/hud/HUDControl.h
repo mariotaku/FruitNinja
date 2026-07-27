@@ -3,7 +3,9 @@
 
 //
 // HUDControl — base class for all HUD elements
-// Verified from Ghidra: ctor at 0x144104, size = 0x74
+// v1.6.1 HUDControl::HUDControl C1 @0x0018b354 / C2 @0x0018b440, size = 0x74.
+// TODO: v1.6.1 HUDControl -- the remaining bare `binary @ 0x0014xxxx` citations in this
+//   header / HUDControl.cpp are UNVERIFIED v1.5-era leftovers; re-resolve before use.
 //
 
 #include "math/_Vector3.h"

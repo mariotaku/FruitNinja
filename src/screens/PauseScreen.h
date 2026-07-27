@@ -7,8 +7,9 @@
 //
 // Binary refs:
 //   ctor   PauseScreen::PauseScreen @ 0x001a7204 (thunk @ 0x001102e4)
-//   Init   vtable[2] @ 0x00153e28 -- forwards to Reset() / HUDControl::Reset
-//   Update vtable[10] @ 0x00154468
+//   Init   vtable[2] v1.6.1 PauseScreen::Init @0x001a5554 -- forwards to Reset()
+//                     (its body is a single vptr[4] call = PauseScreen::Reset @0x001a58ac)
+//   Update vtable[10] v1.6.1 PauseScreen::Update @0x001a5ebc
 //   size   operator_new(0xdc)
 //   stored at g_TaskState +0x04
 //
@@ -92,8 +93,10 @@ public:
     // +0xc4: retry_button.tex
     Mortar::SmartPtr<Mortar::Texture> m_RetryButtonTex;
 
-    // +0xc8: index of last-hit button; ctor = -1; QuitGameCallback sets 0
-    int m_LastHitButton;
+    // +0xc8: which menu bomb the exit white-flash fires at; ctor = -1 (none),
+    // QuitGameCallback sets 0 (P1 quit button), QuitGameCallback2 sets 1 (P2, MP).
+    // Update's QUIT_EXIT branch reads it and resets it to -1 after HitMenuBomb.
+    int m_MenuBombIndex;
 
     // +0xcc: 0 default; PauseGameCallback2 (Retry) sets 1
     int m_PressIndex;
@@ -133,7 +136,8 @@ public:
     // Binary sig is non-const (matches ABI for symbol-diff pairing).
     float GetTime();
 
-    // vtable[2]: Init -- forwards to Reset() per binary 0x00153e28
+    // vtable[2]: Init -- v1.6.1 PauseScreen::Init @0x001a5554; body is a single
+    // vptr[4] call, i.e. it forwards to PauseScreen::Reset @0x001a58ac
     void Init() override;
 
     // vtable[3]: Release -- nulls all owned SmartPtr textures, then deletes + nulls
@@ -181,19 +185,21 @@ public:
     // v1.6.1 PauseScreen::PauseGameCallback @0x001a5978
     void PauseGameCallback();
     void PauseGameCallback2();    // v1.6.1 @0x001a5b38 -- wraps PauseGameCallback, sets m_PressIndex=1
-    void QuitGameCallback();
-    void QuitGameCallback2();     // binary @ 0x00153ef8 — P2-Quit (MP path)
-    void RetryGameCallback();     // binary @ 0x00153f68 — P1 SP Retry
+    void QuitGameCallback();      // v1.6.1 @0x001a55e0 — P1 SP Quit
+    void QuitGameCallback2();     // v1.6.1 @0x001a5634 — P2-Quit (MP path)
+    void RetryGameCallback();     // v1.6.1 @0x001a5800 — P1 SP Retry
 
-    // vtable[?]: IsEnabled -- binary @ 0x00153e4c
+    // vtable[?]: IsEnabled -- v1.6.1 PauseScreen::IsEnabled @0x001a5588
     // Returns false while transition is in-flight or bomb hit timer running.
     bool IsEnabled();
 
-    // Binary @ 0x00153fe8 -- ContinueGameCallback: if m_State==3, set m_State=4
+    // TODO: v1.6.1 PauseScreen::ContinueGameCallback -- address UNVERIFIED.
+    // ContinueGameCallback: if m_State==3, set m_State=4
     //   (RESUME_EXIT); if Game-state +0x85 tutorial-shown flag was set, re-seed the
     //   global RNG from Game-state +0x194, then clear the flag. (impl in .cpp)
     void ContinueGameCallback();
-    // Binary @ 0x00153e34 -- SkipTo: jump straight to ACTIVE overlay
+    // TODO: v1.6.1 PauseScreen::SkipTo -- address UNVERIFIED.
+    // SkipTo: jump straight to ACTIVE overlay
     //   (m_State=3, m_Alpha=1.0). (impl in .cpp)
     void SkipTo();
 };
@@ -230,7 +236,7 @@ void SkipToPause(bool force);
 //   m_PlayButtonTex  +0xbc
 //   m_QuitTitleTex   +0xc0
 //   m_RetryButtonTex +0xc4
-//   m_LastHitButton  +0xc8
+//   m_MenuBombIndex  +0xc8
 //   m_PressIndex     +0xcc
 //   m_RevealTimer    +0xd0
 //   m_PausedText     +0xd4
@@ -249,7 +255,7 @@ static_assert(offsetof(PauseScreen, m_ButtonOriginPos)== 0x8c, "m_ButtonOriginPo
 static_assert(offsetof(PauseScreen, m_ResumeButton)   == 0x98, "m_ResumeButton offset");
 static_assert(offsetof(PauseScreen, m_ButtonFadeAlpha)== 0xb4, "m_ButtonFadeAlpha offset");
 static_assert(offsetof(PauseScreen, m_PauseButtonTex) == 0xb8, "m_PauseButtonTex offset");
-static_assert(offsetof(PauseScreen, m_LastHitButton)  == 0xc8, "m_LastHitButton offset");
+static_assert(offsetof(PauseScreen, m_MenuBombIndex)  == 0xc8, "m_MenuBombIndex offset");
 static_assert(offsetof(PauseScreen, m_RevealTimer)    == 0xd0, "m_RevealTimer offset");
 static_assert(offsetof(PauseScreen, m_PausedText)     == 0xd4, "m_PausedText offset");
 static_assert(offsetof(PauseScreen, m_State)          == 0xd8, "m_State offset");

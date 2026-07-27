@@ -252,7 +252,7 @@ void BonusScreen::AwardScores() {
     // ASM-spec v1.6.1 BonusScreen::AwardScores @0x0016393c: coins spawned here pass
     // AddToScoreOnArrival (v1.6.1 @0x00162ab8), which credits coin->m_CoinValue to
     // game_work.currentScore, NOT Coin::DefaultArrivedDelegate()/CoinArrived
-    // (@0x0017320C), which credits the coin wallet. The bonus-board tally must land
+    // (address unverified -- see Coin.h), which credits the coin wallet. The bonus-board tally must land
     // in the arcade score / high score.
     if (total < 6) {
         Coin::MakeCoins(total, 6, base, 0, 0xff3a,

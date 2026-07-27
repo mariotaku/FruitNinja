@@ -52,7 +52,7 @@ void Entity::HeapDestroy() {
     }
 }
 
-// Binary @ 0x0019d5fc — base Init: no-op (vtable slot 2).
+// v1.6.1 Mortar::Entity::Init @0x0025623c — base Init: no-op (vtable slot 2).
 // Runtime callers pass (nullptr, 0, &scale). .lvl loader passes header data;
 // FruitNinja never loads .lvl files so that path is dead.
 void Entity::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {}
@@ -66,16 +66,16 @@ void Entity::Release() {
     }
 }
 
-// Binary @ 0x0019d600 — base PostLoad: no-op
+// v1.6.1 Mortar::Entity::PostLoad @0x00256240 — base PostLoad: no-op
 void Entity::PostLoad() {}
 
-// Binary @ 0x0019d800 — base InRect: sphere-broadcast helper (no-op in port base).
+// v1.6.1 Mortar::Entity::InRect @0x002562a0 — base InRect: sphere-broadcast helper (no-op in port base).
 // Body in binary dispatches via inner Col* inside aabb->_field_0x38; the full
 // internals of ColAABB spatial search are not yet ported. Port callers use
 // CollideWithSphere directly instead of this vtable path.
 void Entity::InRect(ColAABB* /*aabb*/) {}
 
-// Binary @ 0x0019d604 — base CollisionResponse: returns 0 (no-op).
+// v1.6.1 Mortar::Entity::CollisionResponse @0x00256244 — base CollisionResponse: returns 0 (no-op).
 // Vtable slot 9. Args 2/3 always 0 at runtime (.lvl-loader vestige).
 int Entity::CollisionResponse(Entity* /*hitter*/,
                                unsigned long /*flagsA*/,
@@ -84,14 +84,14 @@ int Entity::CollisionResponse(Entity* /*hitter*/,
     return 0;
 }
 
-// Binary @ 0x0019d608 — slot 10: if m_Col and col, dispatch m_Col->Collide(col, hitPos)
+// v1.6.1 Mortar::Entity::Collide @0x0025624c — slot 10: if m_Col and col, dispatch m_Col->Collide(col, hitPos)
 void Entity::Collide(Entity* /*other*/, Col* col, unsigned long* /*outFlags*/, _Vector3<float>* hitPos) {
     if (m_Col && col) {
         m_Col->Collide(col, hitPos);
     }
 }
 
-// Binary @ 0x0019d61c — slot 11: msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE
+// v1.6.1 Mortar::Entity::ReceiveMessage @0x00256274 — slot 11: msg->type 0 -> clear INACTIVE; type 1 -> set INACTIVE
 void Entity::ReceiveMessage(Entity* /*sender*/, Mortar::Message* msg) {
     if (!msg) return;
     int t = msg->type;

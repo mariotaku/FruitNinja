@@ -64,15 +64,18 @@ public:
     // Binary @ 0x00196bc8 — OnAxisExtentsChanged: broadcast.
     void OnAxisExtentsChanged();
 
-    // Binary @ 0x00196228 — ParseAction: lookup table of 6 hashes -> flag.
+    // v1.6.1 Mortar::InputManager::ParseAction @0x00244060 — lookup table of 7
+    //   action-name hashes -> event-type flag.
     //   Dead unless config-file parsing enabled.
     unsigned long ParseAction(unsigned long hash) const;
 
-    // Binary @ 0x0019630c — ParseKey: lookup of 60 key-name hashes -> bitmask.
+    // v1.6.1 Mortar::InputManager::ParseKey @0x002438c8 — lookup of 61 (0x3d)
+    //   key-name hashes -> KEY CODE (not a bitmask). Covers Mouse buttons/axes,
+    //   Touch1..16, TouchAxisX/Y1..16 and AccelAxisX/Y/Z; see the .cpp for the table.
     //   Dead unless config-file parsing enabled.
     unsigned long ParseKey(unsigned long hash) const;
 
-    // Binary @ 0x0019683c — RegisterInputCallback: broadcast to devices.
+    // v1.6.1 Mortar::InputManager::RegisterInputCallback @0x0024475c — broadcast to devices.
     // NB: 2-param signature — NO actionFlags 3rd param (port previously had
     // a fictitious 3rd param; corrected here per RE evidence).
     void RegisterInputCallback(unsigned long actionHash, InputCallback cb);

@@ -32,8 +32,9 @@ public:
 // SeedGlobalRng() at PauseScreen retry/continue/pause boundaries.
 extern Random g_Random;
 
-// Re-seed g_Random with `seed` and reset all per-multiplier constants
-// (binary @ 0x00153f20). Called by PauseScreen Retry/Continue/Pause
+// Re-seed g_Random with `seed` and reset all per-multiplier constants.
+// (Inlined into its callers in the binary -- see v1.6.1
+// PauseScreen::RetryGameCallback @0x001a5800.) Called by PauseScreen Retry/Continue/Pause
 // callbacks with seed = Game::m_FrameTimer to make replays reproducible
 // from frame-counter state.
 void SeedGlobalRng(uint32_t seed);

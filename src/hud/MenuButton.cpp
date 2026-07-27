@@ -964,7 +964,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
     // the quad draw (HUDControl3d::Draw-shaped) rather than calling the base,
     // adding on top of it: the shake jitter, the press-dim RGB tint and the
     // anim-alpha override. There is NO m_DrawColour.a==0 gate here (unlike
-    // HUDControl3d::Draw @0x0014428c).
+    // v1.6.1 HUDControl3d::Draw @0x0018b544).
     if (m_Texture.IsValid()) {
         m_Texture->Set();
         MatrixManager& mm = MatrixManager::GetInstance();

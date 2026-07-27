@@ -3,7 +3,7 @@
 
 // Mortar::Message and Mortar::MessageListener — POD envelope + filter record.
 // Binary layout confirmed from Mortar::ActorManager::SendMessage @ 0x0016ffd8 and
-// Mortar::Entity::ReceiveMessage @ 0x0019d61c.
+// v1.6.1 Mortar::Entity::ReceiveMessage @ 0x00256274.
 //
 // Defunct: Mortar messaging — no-op stub; v1.6.1 binary @ 0x0016ffd8 (Send),
 //   0x0017085c (Add), 0x00170124 (Remove). Listener subsystem wired but
@@ -17,7 +17,7 @@ namespace Mortar {
 
 // Mortar::Message — 8-byte POD message envelope; binary @ no class ctor (plain POD).
 // SendMessage @ 0x0016ffd8 reads msg->type at +4;
-// Mortar::Entity::ReceiveMessage @ 0x0019d61c does the same.
+// v1.6.1 Mortar::Entity::ReceiveMessage @ 0x00256274 does the same.
 struct Message {
     unsigned int  reserved0;  // +0x00 — unread by SendMessage/ReceiveMessage; opaque sender slot
     int           type;       // +0x04 — primary discriminator (filter key)

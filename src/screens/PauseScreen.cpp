@@ -179,10 +179,10 @@ void SkipToPause(bool force) {
 }
 
 // -------------------------------------------------------------------------
-// IsEnabled (binary @ 0x00153e4c)
+// IsEnabled -- v1.6.1 PauseScreen::IsEnabled @0x001a5588
 // -------------------------------------------------------------------------
 
-// ASM-verified: 2026-05-09 v1.6.1 binary @ 0x00153e4c (re-analyst)
+// ASM-verified: 2026-05-09 v1.6.1 PauseScreen::IsEnabled @ 0x001a5588 (re-analyst)
 // Returns TRUE when pause overlay is available -- transition timer at rest
 // (|t| < 0.001), no bomb-hit pause, and levelTransitionFlag == 0. Earlier port had
 // the comparison inverted -- the binary uses `bpl` after vcmpe which means
@@ -277,7 +277,7 @@ PauseScreen::PauseScreen()
       m_RetryButton(nullptr),
       m_P2RetryButton(nullptr),
       m_ButtonFadeAlpha(1.0f),
-      m_LastHitButton(-1),
+      m_MenuBombIndex(-1),
       m_PressIndex(0),
       m_RevealTimer(0.0f),
       m_PausedText(nullptr),
@@ -583,11 +583,11 @@ void PauseScreen::PauseGameCallback2() {
     // state 5 is unreachable from this callback in single-player
 }
 
-// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153ebc (re-analyst)
-// Binary @ 0x00153ebc QuitGameCallback():
+// ASM-verified: 2026-05-08T00:00 v1.6.1 PauseScreen::QuitGameCallback @ 0x001a55e0 (re-analyst)
+// Binary body:
 //   if (m_State != 3) return;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
-//   game_work.m_bResumeSnapshotPresent = 0; m_LastHitButton = 0; m_State = 6;
+//   game_work.m_bResumeSnapshotPresent = 0; m_State = 6; m_MenuBombIndex = 0;
 // NOTE: m_Alpha *= 0.5 and SaveCurrentData happen in Update case-6 entry, NOT here.
 // NOTE: SFX "MenuQuit" also happens in Update state-6 path, not this callback.
 void PauseScreen::QuitGameCallback() {
@@ -595,29 +595,29 @@ void PauseScreen::QuitGameCallback() {
     if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
     game_work.m_bResumeSnapshotPresent = 0;
-    m_LastHitButton = 0;
-    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x00153ebc");
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_QUIT_EXIT), "QuitGameCallback @ 0x001a55e0");
     m_State = PAUSE_STATE_QUIT_EXIT;
+    m_MenuBombIndex = 0;
 }
 
-// Binary @ 0x00153ef8 QuitGameCallback2():
-//   QuitGameCallback(); m_LastHitButton = 1; g->field_0x85 = 0;
+// v1.6.1 PauseScreen::QuitGameCallback2 @0x001a5634:
+//   QuitGameCallback(); m_MenuBombIndex = 1; g->field_0x85 = 0;
 // Used by P2-Quit button in MP path.
-// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153ef8 (re-analyst)
+// ASM-verified: 2026-05-08T00:00 v1.6.1 PauseScreen::QuitGameCallback2 @ 0x001a5634 (re-analyst)
 // Defunct: multiplayer Quit2 path -- single-player port still wires the
 // tutorial-clear write so the cb retains its post-call observable state.
 void PauseScreen::QuitGameCallback2() {
     QuitGameCallback();
-    m_LastHitButton = 1;
+    m_MenuBombIndex = 1;
     game_work.m_bResumeSnapshotPresent = 0;
 }
 
-// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153f68 (re-analyst)
-// Binary @ 0x00153f68 RetryGameCallback():
+// ASM-verified: 2026-05-08T00:00 v1.6.1 PauseScreen::RetryGameCallback @ 0x001a5800 (re-analyst)
+// Binary body:
 //   if (m_State != 3) return;
 //   if (game_work.m_ElapsedGameTime < 10.5f)
 //       FruitSaveData::AddToTotal("retries_in_a_row", hash, 1, true, true);
-//   Math::SeedGlobalRng(game_work.m_FrameTimer);  // binary @ 0x00153f20
+//   Math::SeedGlobalRng(game_work.m_FrameTimer);  // inline inside 0x001a5800
 //   game_work.m_bResumeSnapshotPresent = 0;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
 //   m_State = 5;
@@ -629,14 +629,14 @@ void PauseScreen::RetryGameCallback() {
         game_work.m_SaveData->AddToTotal(kKey, ::StringHash(kKey),
                                     1, true, true);
     }
-    // Binary @ 0x00153f20: re-seed Mortar::Random g_Random with frame
-    // counter so retried runs are deterministic-from-frame-state rather
-    // than boot-clock-seeded. Re-analyst confirmed g_Random @ 0x0026C8B0.
+    // v1.6.1 PauseScreen::RetryGameCallback @0x001a5800: re-seed Mortar::Random
+    // g_Random with the frame counter so retried runs are deterministic-from-
+    // frame-state rather than boot-clock-seeded. g_Random @ 0x0026C8B0.
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
     game_work.m_bResumeSnapshotPresent = 0;
     if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();
     if (game_work.m_SaveData) game_work.m_SaveData->ClearCombo();
-    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x00153f68");
+    LOG_INFO("SCREEN/PauseScreen", "%d -> %d (%s)", (int)(m_State), (int)(PAUSE_STATE_RETRY_EXIT), "RetryGameCallback @ 0x001a5800");
     m_State = PAUSE_STATE_RETRY_EXIT;
 }
 
@@ -859,7 +859,7 @@ void PauseScreen::Update(float dt) {
             QuitToMenu();
             // White-flash via HitMenuBomb at the hit button's pos. Index 0 is
             // the P1 quit button (m_QuitButton); index 1 would be P2 in MP.
-            if (m_LastHitButton >= 0 && m_QuitButton) {
+            if (m_MenuBombIndex >= 0 && m_QuitButton) {
                 HitMenuBomb(m_QuitButton->pos);
                 LOG_INFO("BOMBHIT", "QuitToMenu fires HitMenuBomb at (%.1f,%.1f); bombHitTimer set to %.3f",
                          m_QuitButton->pos.x, m_QuitButton->pos.y,
@@ -869,7 +869,7 @@ void PauseScreen::Update(float dt) {
             // Earlier port wrote 0.0 which left the buttons at full opacity
             // straight through the bomb-flash phase.
             m_ButtonFadeAlpha = 1.0f;
-            m_LastHitButton   = -1;
+            m_MenuBombIndex   = -1;
             // Transition to BOMB_FLASH (1), NOT HIDDEN. The bomb-flash poll
             // in case 1 is what produces the visible white flash and tears
             // down the gameplay HUD; jumping straight to HIDDEN skipped both.
@@ -888,7 +888,7 @@ void PauseScreen::Update(float dt) {
     // --- Post-switch unconditional math (doc section 4 items 1-7) ---
 
     // 1. m_ButtonFadeAlpha decay / restore
-    // IsEnabled() reads g_GameData fields (binary @ 0x00153e4c).
+    // IsEnabled() reads g_GameData fields (v1.6.1 PauseScreen::IsEnabled @0x001a5588).
     // v1.6.1 PauseScreen::Update @0x001a5ebc post-switch block: decay clamps to
     // exact 0.0 once the DECAYED value drops below 0.001 (EXIT_THRESHOLD,
     // DAT_00154fc0) -- NOT a <0 clamp. The exact 0.0 is load-bearing: it is
@@ -1142,8 +1142,9 @@ void PauseScreen::UpdateRealtime(float dtSeconds) {
 }
 #endif
 
-// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153e34 (re-analyst)
-// Binary @ 0x00153e34: external entry — force overlay fully visible and
+// TODO: v1.6.1 PauseScreen::SkipTo -- address UNVERIFIED; the body claim below has not
+//   been re-checked against v1.6.1.
+// External entry — force overlay fully visible and
 // jump to state 3. Used by the Bada-app-side "skip intro" handler.
 void PauseScreen::SkipTo() {
     m_State = PAUSE_STATE_ACTIVE;
@@ -1157,15 +1158,16 @@ float PauseScreen::GetTime() {
     return m_Alpha;
 }
 
-// ASM-verified: 2026-05-08T00:00 v1.6.1 binary @ 0x00153fe8 (re-analyst)
-// Binary @ 0x00153fe8: external entry (no in-screen button binds it).
+// TODO: v1.6.1 PauseScreen::ContinueGameCallback -- address UNVERIFIED; the body claim
+//   below has not been re-checked against v1.6.1.
+// External entry (no in-screen button binds it).
 // Likely call site: shop/tutorial popup-dismiss handler. Advances state
 // 3 -> 4 and clears the tutorial-shown flag.
 void PauseScreen::ContinueGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
     m_State = PAUSE_STATE_RESUME_EXIT;
     if (game_work.m_bResumeSnapshotPresent != 0) {
-        // Binary @ 0x00153f20: re-seed g_Random; see RetryGameCallback notes.
+        // v1.6.1 PauseScreen::RetryGameCallback @0x001a5800: re-seed g_Random; see its notes.
         Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
     }
     game_work.m_bResumeSnapshotPresent = 0;

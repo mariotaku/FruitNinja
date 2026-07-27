@@ -1,7 +1,6 @@
 //
 // HUDControl3d — base class for 3D-positioned HUD widgets.
-// All methods verified zero-divergence against binary; see
-// tmp/symdiff/hudcontrol3d-spec.md for full RE notes.
+// All methods verified zero-divergence against binary.
 //
 
 #include "HUDControl3d.h"
@@ -12,10 +11,12 @@
 #include "math/MathUtil.h"
 #include <cmath>
 
-// Rotation speed constant (binary .rodata @ 0x001443dc = 0x43360000 = 182.0f)
+// Rotation speed constant (0x43360000 = 182.0f; .rodata literal read by
+// v1.6.1 HUDControl3d::Draw @0x0018b544)
 static const float ROT_SPEED = 182.0f;
 
-// HUD screen-anchor constants (binary .rodata @ 0x001443e0..0x001443e8):
+// HUD screen-anchor constants (.rodata literals read by v1.6.1
+// HUDControl3d::Draw @0x0018b544):
 //   0x43F00000 = 480.0f (width)
 //   0x43A00000 = 320.0f (height)
 //   0x00000000 = 0.0f   (z)
@@ -24,7 +25,7 @@ static const float HUD_SCREEN_W = 480.0f;
 static const float HUD_SCREEN_H = 320.0f;
 static const float HUD_SCREEN_Z = 0.0f;
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x0014428c (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::Draw @ 0x0018b544 (re-analyst)
 //   - texture validity gate, m_DrawColour.a gate
 //   - Scale44(size) -> optional RotZ44(SinIdx, CosIdx) -> GlobalTranslate44
 //   - translate = pos + Vec3(480, 320, 0) * m_HudScale  (screen-anchor offset)
@@ -53,7 +54,7 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
         mat.RotZ44(SinIdx(idx), CosIdx(idx));
     }
 
-    // binary @ 0x00144328..0x0014435c: translation = pos + (Vec3(480,320,0) * m_HudScale)
+    // v1.6.1 HUDControl3d::Draw @0x0018b544: translation = pos + (Vec3(480,320,0) * m_HudScale)
     _Vector3<float> screenAnchor(HUD_SCREEN_W, HUD_SCREEN_H, HUD_SCREEN_Z);
     _Vector3<float> scaledAnchor(screenAnchor.x * m_HudScale.x,
                                  screenAnchor.y * m_HudScale.y,
@@ -64,7 +65,7 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    // binary @ 0x00144380..0x001443c0: TintColour(m_DrawColour, hudScale) then DrawQuad.
+    // v1.6.1 HUDControl3d::Draw @0x0018b544: TintColour(m_DrawColour, hudScale) then DrawQuad.
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
     game->renderer.DrawQuad(tinted, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
@@ -72,7 +73,8 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
     m_Texture->UnSet();
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144434 (HUDControl3d::HUDControl3d)
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::HUDControl3d C1 @ 0x0018b72c (re-analyst)
+// (C2 variant @0x0018b6dc; C1 is the one CoinCounter and friends call.)
 // Structure: base ctor (implicit) → vtable (implicit) → SetNull(m_Texture) → SetNull(m_Model) → m_Timer = 0.
 HUDControl3d::HUDControl3d() {
     m_Texture.SetNull();
@@ -80,7 +82,8 @@ HUDControl3d::HUDControl3d() {
     m_Timer = 0.0f;
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00144474 / 0x001444e0 / 0x00144548 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::~HUDControl3d D0 @ 0x0018b77c /
+//   D1 @ 0x0018b814 / D2 @ 0x0018b8a4 (re-analyst)
 // Binary body: vtable<- HUDControl3d::vtable; Release(); ~SmartPtr(m_Model);
 // ~SmartPtr(m_Texture); ~HUDControl(); [operator delete for D0 variant].
 // C++ auto-emits SmartPtr dtors in reverse declaration order, which matches
@@ -89,17 +92,17 @@ HUDControl3d::HUDControl3d() {
 HUDControl3d::~HUDControl3d() {
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143fc4 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::Release @ 0x0018b134 (re-analyst)
 // Single bx lr; does NOT chain to HUDControl::Release.
 void HUDControl3d::Release() {}
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143fc8 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::PreDraw @ 0x0018b138 (re-analyst)
 // Single bx lr; no-op.
 void HUDControl3d::PreDraw(float* hudScale) {
     (void)hudScale;
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00143fcc (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::Update @ 0x0018b13c (re-analyst)
 // Tail-calls HUDControl::Update(this, dt).
 void HUDControl3d::Update(float dt) {
     HUDControl::Update(dt);

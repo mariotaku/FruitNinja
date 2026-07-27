@@ -541,7 +541,7 @@ float BakedStringBox::TotalHeight() const {
 }
 
 // RebuildMeshes -- thin per-line FancyBakedString dispatcher build path.
-// ASM-spec v1.6.1 Mortar::BakedStringBox::RebuildMeshes @0x002469c0: shrink-by-linecount
+// ASM-spec v1.6.1 Mortar::BakedStringBox::RebuildMeshes @0x00246944: shrink-by-linecount
 // loop (FitStrings/MeasureWrap, floor 6.0px) picks m_FontSize; DeleteStrings() frees the
 // previous line set; then one FancyBakedString per wrapped line is constructed (17-arg
 // ctor), the active gradient/stroke-gradient is applied, and each line's LOCAL draw
@@ -622,7 +622,7 @@ void BakedStringBox::RebuildMeshes() {
             m_ShadowFlag, m_ExtraWidth, m_ExtraParam,
             m_Extra1Colour, m_Extra2Colour);
 
-        // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: m_MetallicFlag ->
+        // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x00246944: m_MetallicFlag ->
         // ApplyMetallicGradient; else m_ColourMode==2 -> ApplyGradient(top,bottom);
         // ==3 -> ApplyGradient(top,mid,bottom). Mode 1 (solid) needs no extra call --
         // mainCol already carries m_GradTop from the ctor above.
@@ -636,7 +636,7 @@ void BakedStringBox::RebuildMeshes() {
             line->ApplyGradient(m_GradTop, m_GradBottom, m_GradCol2);
         }
 
-        // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x002469c0: m_StrokeCount(+0x58)
+        // ASM-spec v1.6.1 BakedStringBox::RebuildMeshes @0x00246944: m_StrokeCount(+0x58)
         // 2 -> ApplyStrokeGradient(Col0,Col1); 3 -> ApplyStrokeGradient(Col0,Col1,Col2);
         // 1 -> solid Col0 (already the glowCol passed to the ctor above; no extra call).
         if (m_StrokeCount == 2) {
