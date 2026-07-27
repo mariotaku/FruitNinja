@@ -325,7 +325,9 @@ void DojoScreen::CreateButtons() {
     // --- field_0x94: Back/Play button ---
     // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: bomb type, pos=(0,0,0),
     //   m_Texture=m_RingTex[16] (red_ring), m_HudScale.x=0.375, m_HudScale.y=-0.3,
-    //   m_RestScale*=0.825, m_bRespondsToBackKey=1.
+    //   m_RestScale*=0.825, m_bBackdropActive=1. (Corrected #84: this block's only
+    //   byte store is m_bBackdropActive, not m_bRespondsToBackKey -- see the
+    //   Port specific marker on the m_bRespondsToBackKey write below.)
     if (m_pBackButton == nullptr) {
         const int bombFruitType = FruitInfo_GetCount();
         m_pBackButton = new MenuButton();
@@ -341,6 +343,13 @@ void DojoScreen::CreateButtons() {
         m_pBackButton->Init(POS_BACK_BUTTON,
                             Mortar::Delegate0<void>::Make(this, &DojoScreen::PlayCallback),
                             bombFruitType, _Vector3<float>(0, 0, 0), nullptr);
+        // Port specific: no binary counterpart at this call site (v1.6.1
+        // CreateButtons @0x0016ad9c -- disassembly's only byte store here is
+        // m_bBackdropActive, #84). Sets MenuButton's back-key-responder flag,
+        // which also gates MenuButton::Update's touch-slot-retention-on-drag-off
+        // behaviour (MenuButton.cpp ~858-863). Why the port adds it here is not
+        // established -- desktop ESC-as-back (GameSDL.cpp) keys off
+        // m_bBackdropActive only, not this field, so that isn't the reason.
         m_pBackButton->m_bRespondsToBackKey = 1;
         m_pBackButton->m_bBackdropActive = 1; // v1.6.1 DojoScreen::CreateButtons @0x0016afe8
         m_pBackButton->m_LayerFlags = Mortar::HUD_LAYER_MENU_BG;

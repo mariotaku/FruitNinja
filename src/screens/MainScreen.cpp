@@ -1296,6 +1296,13 @@ void MainScreen::CreateQuitButton() {
 
     m_pQuitButton = new MenuButton();
     m_pQuitButton->m_Texture = texQuit;
+    // Port specific: no confirmed binary counterpart at this call site (v1.6.1
+    // CreateQuitButton, part of MainScreen::CreateButtons @0x001961f8) -- not
+    // disassembly-checked in this pass (#84). Flagged for follow-up: other
+    // screens' equivalent back/quit buttons DO have an ASM-confirmed store of
+    // this same field (GameModeScreen::CreateMenuItems @0x0013e86a, ShopScreen
+    // @0x0015e3c6), so this may in fact be genuine binary behaviour not yet
+    // located here rather than a port addition -- don't treat as settled.
     m_pQuitButton->m_bRespondsToBackKey = 1;
     int fruitCount = FruitInfo_GetCount();
     // ASM-spec v1.6.1 MainScreen::CreateButtons @0x0019687c: quit button Init pos = (0,0,0)
