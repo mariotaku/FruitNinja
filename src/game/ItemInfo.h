@@ -114,7 +114,11 @@ struct SlashSoundMods {
     float    m_TimePerSound;
     // +0x10  int32_t  m_PlaySequentialy         "play_sequentialy"=="true" ? 0 : -1; default -1
     int32_t  m_PlaySequentialy;
-    // +0x14  float    m_TimeUntilNextSound      auto-decay timer; >0 throttles random pick
+    // +0x14  float    m_TimeUntilNextSound      fractional QUEUE DEPTH (not a timer).
+    // PlaySound seeds it to 0.999f (integer part 0) after firing a sound, and each
+    // further auto-pick request while it is > 0 adds 1.0f instead of playing. Update()
+    // decays it by dt/m_TimePerSound and releases exactly one queued sound each time
+    // the truncated integer part drops. 0 == nothing queued, free to play immediately.
     float    m_TimeUntilNextSound;
     // +0x18  float    m_LastVolume              stored by PlaySound for use by PlaySoundIdx
     float    m_LastVolume;
@@ -137,6 +141,13 @@ struct SlashSoundMods {
     // Reset — called from Parse and from SlashModInfo::SetEquipped
     void Reset();
 
+    // Update @ v1.6.1 0x00139988 — per-frame decay of the m_TimeUntilNextSound queue
+    // depth; releases one deferred sound each time the integer part crosses down.
+    // Must be called every frame (via SlashModInfo::UpdateSounds <- ItemManager::Update)
+    // or a mod with time_per_sound set plays exactly one sound and then stays queued
+    // forever. Uses m_LastPitch / m_LastVolume captured by the suppressed PlaySound.
+    void Update(float dt);
+
     // PlaySound @ v1.6.1 0x00139a44 — plays sound by idx (-1 = auto-pick); returns
     // m_bPlayOntop != 0 (false when m_SoundCount == 0 — empty set never suppresses).
     bool PlaySound(int idx, float volume, float pitch);
@@ -144,7 +155,7 @@ struct SlashSoundMods {
     // PlaySoundIdx @ v1.6.1 0x001398b0 — plays a specific sound slot via GameSound::SFXPlay
     void PlaySoundIdx(int i);
 
-    // GetNextSound @ 0x00112cf0 — sequential mode (m_PlaySequentialy >= 0)
+    // GetNextSound @ 0x0010a234 — sequential mode (m_PlaySequentialy >= 0)
     // or random with recent-ring avoidance. ASM-verified 2026-05-20.
     int GetNextSound();
 };
@@ -171,6 +182,12 @@ struct LoopingSound {
 
     // Reset — binary: LoopingSound::Reset (called from SlashModInfo::UnEquip @ 0x00112424)
     void Reset();
+
+    // TODO: v1.6.1 0x0013975c (SlashModInfo::LoopingSound::Update) — body unported;
+    // the field layout above is also known-wrong (+0x08/+0x0c swapped vs binary,
+    // which is m_DesiredVol/m_CurrentVol/MortarSound* m_pSound/char* m_pLoopName).
+    // Called unconditionally from UpdateSounds; currently a no-op.
+    void Update(float dt);
 
     // TODO: SetLoopDesiredVol (binary address unknown) — sets desired/target loop volume;
     // called from ItemManager::SetSwipeLoodVol. Full behavior requires RE of the looping
@@ -244,9 +261,10 @@ public:
     // vtable[+0x10] Parse override — ParseSlashModInfo @ 0x001126c0
     virtual void Parse(TiXmlElement* e) override;
 
-    // TODO: UpdateSounds (binary address unknown) — per-frame update for the mod's looping
-    // ambient sound; called from ItemManager::Update. Full behavior requires RE of the
-    // looping-sound interpolation path (likely drives LoopingSound vol lerp + SFXPlay).
+    // UpdateSounds @ v1.6.1 0x001399f0 — per-frame tick of all four sound members.
+    // Driven by ItemManager::Update(dt) from GameUpdate with the RAW frame dt (no
+    // quickener / slow-mo scaling). Not calling it every frame leaves any mod with a
+    // time_per_sound attribute permanently queued after its first sound.
     void UpdateSounds(float dt);
 };
 

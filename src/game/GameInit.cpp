@@ -447,6 +447,9 @@ void GameUpdate(float dt, bool active) {
     // Binary gates this on LoadingJob::IsLoaded(); port calls unconditionally.
     game_work.mGameSound->Update();
     UpdateMusic(dt);
+    // ASM-spec v1.6.1 GameUpdate @0x001cf7c8: ItemManager::Update runs here, after
+    // UpdateMusic and before UpdateUpsideDown, with the RAW frame dt (pre quickener/slow-mo).
+    ItemManager::GetInstance()->Update(dt);
 
     // --- Per-frame slot-array re-snap + touch-released dispatch (0x001cf63c..0x001cf6a8) ---
     game_work.m_bTouchDownThisFrame = 0;

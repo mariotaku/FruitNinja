@@ -247,6 +247,26 @@ void SlashSoundMods::Reset() {
     }
 }
 
+// ASM-spec v1.6.1 SlashSoundMods::Update @ 0x00139988:
+//  - m_TimeUntilNextSound is a fractional QUEUE DEPTH, not a timer.
+//  - if <= 0 return; n = t - dt / m_TimePerSound; clamp n to 0;
+//    store; if (int)t != (int)n -> PlaySoundIdx(GetNextSound()) (releases one queued sound).
+// The division is safe unguarded exactly as in the binary: PlaySound only ever seeds
+// m_TimeUntilNextSound when m_TimePerSound > 0, and Reset()/the ctor leave it at 0, so
+// the early-out fires before the vdiv whenever m_TimePerSound is 0.
+void SlashSoundMods::Update(float dt) {
+    float t = m_TimeUntilNextSound;
+    if (t <= 0.0f) return;
+
+    float n = t - dt / m_TimePerSound;
+    if (n <= 0.0f) n = 0.0f;
+    m_TimeUntilNextSound = n;
+
+    if ((int)t == (int)n) return;
+
+    PlaySoundIdx(GetNextSound());
+}
+
 // SlashSoundMods::GetNextSound @ 0x0010a234
 // ASM-verified: 2026-05-20 v1.6.1 SlashSoundMods::GetNextSound @ 0x0010a234 (asm-inspector)
 int SlashSoundMods::GetNextSound() {
@@ -298,7 +318,7 @@ bool SlashSoundMods::PlaySound(int idx, float volume, float pitch) {
             int picked = GetNextSound();
             PlaySoundIdx(picked);
             if (picked >= 0 && m_TimePerSound > 0.0f) {
-                m_TimeUntilNextSound = 0.99898f;  // DAT_00113038 = 0x3F7FBE77
+                m_TimeUntilNextSound = 0.999f;  // DAT_00113038 = 0x3F7FBE77
             }
         }
     }
@@ -330,6 +350,11 @@ void LoopingSound::Reset() {
     m_SoundId = 0.0f;
     m_Phase   = 0.0f;
     m_State   = 0;
+}
+
+// TODO: v1.6.1 0x0013975c (SlashModInfo::LoopingSound::Update) — body unported; layout fix pending
+void LoopingSound::Update(float dt) {
+    (void)dt;
 }
 
 // TODO: SetLoopDesiredVol (binary address unknown) — sets desired/target loop volume.
@@ -549,9 +574,12 @@ void SlashModInfo::Parse(TiXmlElement* e) {
     }
 }
 
-// TODO: UpdateSounds (binary address unknown) — per-frame update for the mod's looping
-// ambient sound. Called from ItemManager::Update. Full implementation requires RE of
-// LoopingSound's vol-lerp and SFXPlay loop management.
+// ASM-spec v1.6.1 SlashModInfo::UpdateSounds @0x001399f0:
+//  - m_SwipeSounds/+0x84, m_ImpactSounds/+0xb0, m_ComboSounds/+0xdc .Update(dt), then
+//    m_LoopingSound/+0x108 .Update(dt) (tail call). No gating.
 void SlashModInfo::UpdateSounds(float dt) {
-    (void)dt;
+    m_SwipeSounds.Update(dt);
+    m_ImpactSounds.Update(dt);
+    m_ComboSounds.Update(dt);
+    m_LoopingSound.Update(dt);
 }
