@@ -641,29 +641,71 @@ void ShopListItem::DrawDescription() {
     bool isLocked = (m_pItemInfo->IsLocked() != 0);
     int8_t purchaseState = m_pItemInfo->m_RequirementType;
 
-    // bVar6: locked AND requirement type 1 or 2.
-    bool bVar6 = isLocked && (purchaseState == 1 || purchaseState == 2);
+    // ASM-verified: 2026-07-27T00:00Z v1.6.1 ShopListItem::DrawDescription @ 0x001b1f20 (asm-inspector)
+    // Binary 0x001b1f74-0x001b2084: the prompt colour AND the prompt string id are
+    // recomputed EVERY frame, before any box bookkeeping:
+    //   Colour colour(0xBD,0,0,0xFF);                       // 0x001b1f7c mov r1,#0xbd
+    //   if (IsLocked() && reqType != 0 && reqType != 3) {   // 0x001b1fa8/0x001b1fb0
+    //       ... colour = Colour(0xA0,0xDC,0,0xFF) when met  // 0x001b1fd8 / 0x001b203c
+    //       promptStr = GETSTRING_CAST_0(id);               // 0x001b2068
+    //       colour.a = alpha;                               // 0x001b2070 strb r10,[sp,#0x47]
+    //       reqFlag = 1;                                    // 0x001b2074
+    //   }
+    // reqType is 0..3 only (ItemInfo.h +0x24), so "!=0 && !=3" == "==1 || ==2".
+    Colour promptColour(0xBD, 0, 0, 0xFF);
+    const char* promptStr = NULL;
+    uint8_t reqFlag = 0;
 
-    // Determine base height and fontSize for box3.
-    float descH = bVar6 ? 62.0f : 82.0f;
-    float fontSize = 14.0f;
+    bool bVar6 = isLocked && (purchaseState == 1 || purchaseState == 2);
+    if (bVar6) {
+        LocalizedString promptId;
+        if (purchaseState == 1) {
+            bool upsideDown = Mortar::IsDeviceUpsideDown();
+            if (upsideDown) promptColour = Colour(0xA0, 0xDC, 0, 0xFF);
+            promptId = upsideDown
+                ? LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN   // 0xD8 (met)
+                : LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP;  // 0xD7 (not met)
+        } else {
+            bool playedToday = (game_work.m_SaveData != nullptr)
+                && game_work.m_SaveData->PlayedModeToday(GAME_MODE_ZEN);
+            if (playedToday) promptColour = Colour(0xA0, 0xDC, 0, 0xFF);
+            promptId = playedToday
+                ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY       // 0xCF (met)
+                : LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY;  // 0xCE (not met)
+        }
+        promptStr = GETSTRING_CAST_0(promptId);
+        promptColour.a = alpha;
+        reqFlag = 1;
+    }
+
     // v1.6.1 DrawDescription @0x001b1f20: 0x14=Arabic, 0x0c=Japanese (NOT Korean/Chinese)
     bool isArabic = (game_work.languageFlag == 0x14);
     bool isJapanese = (game_work.languageFlag == 0x0C);
 
-    if (isArabic) {
-        descH -= 20.0f;
-        fontSize = 14.0f;
-    } else if (isJapanese) {
-        fontSize = 12.0f;
-        // Side-effect-only GETSTRING call for Japanese locale.
-        // Binary @0x001b1f20: GETSTRING_CAST_0(0x111) result discarded.
-        (void)GETSTRING_CAST_0((LocalizedString)0x111);
+    // Binary 0x001b2084-0x001b20d8: on a reqFlag change BOTH boxes are destroyed
+    // (m_pBox3 @+0x298 at 0x001b2090, m_pBox4 @+0x29C at 0x001b20b4), then
+    // m_TrailFlag (+0x2A0) is updated -- not just box3.
+    if (m_TrailFlag != reqFlag) {
+        delete m_pBox3;
+        m_pBox3 = NULL;
+        delete m_pBox4;
+        m_pBox4 = NULL;
+        m_TrailFlag = reqFlag;
     }
 
-    // Rebuild box3 when nullptr or bVar6 cache changed.
-    if (!m_pBox3 || m_TrailFlag != (uint8_t)(bVar6 ? 1 : 0)) {
-        delete m_pBox3;
+    // Binary 0x001b20dc: box3 is (re)built only when the pointer is null.
+    if (!m_pBox3) {
+        // Base height and fontSize (binary 0x001b20e8-0x001b2124).
+        float descH = reqFlag ? 62.0f : 82.0f;   // 0x3e : 0x52
+        float fontSize = 14.0f;                  // 0xe
+        if (isArabic) {
+            descH -= 20.0f;
+        } else if (isJapanese) {
+            fontSize = 12.0f;                    // 0xc
+            // Side-effect-only GETSTRING call for Japanese locale.
+            // Binary @0x001b211c: GETSTRING_CAST_0(0x111) result discarded.
+            (void)GETSTRING_CAST_0((LocalizedString)0x111);
+        }
         // ASM-verified v1.6.1 DrawDescription @0x001b1f20: desc align=0x0F (center), maxLines=7, lineSpacing=4.
         m_pBox3 = new Mortar::BakedStringBox(ttfFont, fontSize, 160, (int)descH, (Mortar::ALIGNMENT_TYPE)0x0f, 7, 4);
         m_pBox3->SetText(m_DescText);
@@ -671,52 +713,25 @@ void ShopListItem::DrawDescription() {
         m_pBox3->FitIntoVerticalBounds();
     }
 
-    // Rebuild box4 (prompt) only when bVar6.
-    if (bVar6) {
-        if (!m_pBox4) {
-            delete m_pBox4;
-            // ASM-verified v1.6.1 DrawDescription @0x001b1f20: prompt align=0x0F (center), maxLines=2, lineSpacing=4.
-            m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, (Mortar::ALIGNMENT_TYPE)0x0f, 2, 4);
-
-            // Determine prompt string id and colour.
-            LocalizedString promptId;
-            bool conditionMet = false;
-            if (purchaseState == 1) {
-                bool upsideDown = Mortar::IsDeviceUpsideDown();
-                conditionMet = upsideDown;
-                promptId = upsideDown
-                    ? LSTR_DJ_DARK_BLADE_UNLOCK_UPSIDEDOWN   // 0xD8 (met)
-                    : LSTR_DJ_DARK_BLADE_UNLOCK_RIGHTWAYUP;  // 0xD7 (not met)
-            } else {
-                bool playedToday = (game_work.m_SaveData != nullptr)
-                    && game_work.m_SaveData->PlayedModeToday(GAME_MODE_ZEN);
-                conditionMet = playedToday;
-                promptId = playedToday
-                    ? LSTR_DJ_BAMBOO_BLADE_PLAYED_TODAY       // 0xCF (met)
-                    : LSTR_DJ_BAMBOO_BLADE_NOT_PLAYED_TODAY;  // 0xCE (not met)
-            }
-            const char* promptStr = GETSTRING_CAST_0(promptId);
-            if (promptStr) m_pBox4->SetText(promptStr);
-            m_pBox4->Update();
-            m_pBox4->FitIntoVerticalBounds();
-
-            // Colour: red if not met, green if met.
-            Colour promptColour = conditionMet
-                ? Colour(0xA0, 0xDC, 0, alpha)
-                : Colour(0xBD, 0, 0, alpha);
-            m_pBox4->SetColour(promptColour, 1);
-        }
+    // Binary 0x001b2194-0x001b2220: build box4 when a prompt string exists and
+    // the box is null. No SetColour here -- the colour is applied at draw time.
+    if (promptStr && !m_pBox4) {
+        // ASM-verified v1.6.1 DrawDescription @0x001b1f20: prompt align=0x0F (center), maxLines=2, lineSpacing=4.
+        m_pBox4 = new Mortar::BakedStringBox(ttfFont, 12.0f, 160, 21, (Mortar::ALIGNMENT_TYPE)0x0f, 2, 4);
+        m_pBox4->SetText(promptStr);
+        m_pBox4->Update();
+        m_pBox4->FitIntoVerticalBounds();
     }
 
-    // Update bVar6 cache for next frame.
-    m_TrailFlag = (uint8_t)(bVar6 ? 1 : 0);
-
-    // Draw box4 (prompt) first when bVar6.
+    // Binary 0x001b2224-0x001b22b0: drawn whenever m_pBox4 != NULL (NOT gated on
+    // reqFlag), and SetColour(colour, 1) runs EVERY frame at 0x001b229c so the
+    // prompt tracks both the live m_CostAlpha fade and the live met/unmet colour.
     float xPos = m_pShopScreen->GetDescriptionTextXPos();
-    if (bVar6 && m_pBox4) {
+    if (m_pBox4) {
         // Position: (xPos, Arabic(0x14) ? -5 : -20, 0).
         float promptY = isArabic ? -5.0f : -20.0f;
         m_pBox4->SetTranslation(_Vector3<float>(xPos, promptY, 0.0f), 0);
+        m_pBox4->SetColour(promptColour, 1);
         m_pBox4->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 0);
     }
 

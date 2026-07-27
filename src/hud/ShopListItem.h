@@ -175,14 +175,24 @@ public:
     // DrawDescription -- TTF description + unlock-requirement prompt.
     // v1.6.1 ShopListItem::DrawDescription @0x001b1f20:
     //   Gate: m_pShopScreen!=0 && m_pItemInfo!=0 && alpha>0.
-    //   bVar6 = isLocked && m_RequirementType in {1,2}.
-    //   Lazily builds m_pBox3 (desc body, w=160, h=62|82 based on bVar6
-    //   and language; Korean h-=20; Chinese fontSize=12 else 14).
-    //   When bVar6: builds m_pBox4 (prompt, 160x21, fontSize=12).
+    //   bVar6/reqFlag = isLocked && m_RequirementType != 0 && != 3
+    //   (m_RequirementType is 0..3, so equivalently: in {1,2}).
+    //   Prompt string id AND prompt colour are recomputed EVERY frame
+    //   (0x001b1f74-0x001b2084), never cached on the box.
+    //   On a reqFlag change BOTH m_pBox3 and m_pBox4 are destroyed
+    //   (0x001b2090 / 0x001b20b4) before m_TrailFlag is updated.
+    //   Lazily builds m_pBox3 (desc body, w=160, h=62|82 based on reqFlag
+    //   and language; Arabic h-=20; Japanese fontSize=12 else 14).
+    //   Builds m_pBox4 (prompt, 160x21, fontSize=12) when a prompt string
+    //   exists and the box is null -- SetColour is NOT called at build time.
     //   Category strings: LSTR_SHOP_BLADE(0xCA)/BACKGROUND(0xC9)/
     //                     FULL_VERSION(0xCB)/SPECIAL(0x12F) per m_Type.
-    //   Chinese side-effect: GETSTRING_CAST_0(0x111) called and discarded.
-    //   box4 colour: red(0xBD,0,0,alpha) or green(0xA0,0xDC,0,alpha) on met.
+    //   Japanese side-effect: GETSTRING_CAST_0(0x111) called and discarded
+    //   (inside the box3-build block, 0x001b211c).
+    //   box4 draw (0x001b2224): gated only on m_pBox4 != NULL; per-frame
+    //   SetTranslation -> SetColour(colour,1) @0x001b229c -> Draw, so the
+    //   prompt follows the live m_CostAlpha fade and the live met/unmet
+    //   colour: red(0xBD,0,0,alpha) unmet or green(0xA0,0xDC,0,alpha) met.
     //   box3 colour: white (locked) or (0x74,0x5D,0x3B,alpha) (unlocked).
     void DrawDescription();
 
