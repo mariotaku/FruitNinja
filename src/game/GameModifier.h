@@ -112,7 +112,11 @@ public:
     // fold m_Duration into m_BonusAccum + pExtra clamp + overtime/freeze
     // PowerUpManager clamp+scale. Subclasses call this via super() as the last
     // step of their own override (see #331); the port body delegates to
-    // OnDeferComplete() so both call sites share one implementation.
+    // OnDeferComplete() so both call sites share one implementation. That
+    // delegation is QUALIFIED (GameModifier::OnDeferComplete) and must stay so:
+    // the base body is a super() target and never re-enters the vtable. Making
+    // it virtual recurses forever through any subclass overriding both slots
+    // (WaveModifier does) -- see the comment on the definition in GameModifier.cpp.
     virtual void ApplyModifier(bool isPurchased, float* extra) = 0;
 
     // [9] ParseSpecific — PURE in binary (0x360434)
