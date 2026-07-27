@@ -7,6 +7,12 @@
 using namespace Mortar;
 
 
+// ASM-spec v1.6.1 GameSound::GameSound @0x00151ff4 (C1) / @0x001520a0 (C2, identical):
+// per slot writes sound = SoundManager::CreateNewSound(), isFree = 1, pad09 = 0,
+// pausedBySystem = 0, id = 0, volume = 1.0f -- then m_MasterVolume = 1.0f and
+// m_PausedForInterrupt = false. It never writes pitch (+0x10).
+// DIFFERS: original leaves Slot::pitch indeterminate at construction; the port seeds
+// it to 1.0f so a slot read before SFXPlay writes it can't hit an indeterminate float.
 GameSound::GameSound()
     : m_MasterVolume(1.0f)
     , m_PausedForInterrupt(false)
@@ -36,7 +42,8 @@ GameSound::~GameSound() {
     }
 }
 
-// Binary @ 0x001290e8
+// ASM-spec v1.6.1 GameSound::FindFree @0x00151a7c: scans the 32 slots (stride 0x3c)
+// testing isFree at slot+0x08; returns the index, or -1 when the pool is full.
 int GameSound::FindFree() {
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (m_Slots[i].isFree) return i;
@@ -94,33 +101,40 @@ bool GameSound::IsPlaying(const char* name) {
     return IsPlaying(StringHash(name));
 }
 
-// Binary @ 0x00129138
+// ASM-spec v1.6.1 GameSound::IsValid @0x00151b04: breaks the scan at the FIRST slot
+// whose sound pointer matches -- no isFree test, and the id is NOT part of the loop
+// condition -- then returns that slot's id == hash. A later slot holding the same
+// pointer is never reached.
 bool GameSound::IsValid(MortarSound* sound, const char* name) {
     uint32_t hash = StringHash(name);
     for (int i = 0; i < MAX_SLOTS; i++) {
-        if (!m_Slots[i].isFree && m_Slots[i].sound == sound &&
-            m_Slots[i].id == hash) {
-            return true;
+        if (m_Slots[i].sound == sound) {
+            return m_Slots[i].id == hash;
         }
     }
     return false;
 }
 
-// Binary @ 0x0012917c
+// ASM-spec v1.6.1 GameSound::Release @0x00151b68: matches on (sound && id) with no
+// isFree test, stops the voice only while it is still playing, then destroys the
+// sound internals and frees the slot (id=0, isFree=1, pad09=0).
 void GameSound::Release(MortarSound* sound, const char* name) {
     uint32_t hash = StringHash(name);
     for (int i = 0; i < MAX_SLOTS; i++) {
-        if (!m_Slots[i].isFree && m_Slots[i].sound == sound &&
-            m_Slots[i].id == hash) {
-            m_Slots[i].sound->Stop(0.0f);
-            m_Slots[i].isFree = true;
+        if (m_Slots[i].sound == sound && m_Slots[i].id == hash) {
+            if (sound->IsPlaying()) {
+                sound->Stop(0.0f);
+            }
+            DestroySoundInternals(sound);
             m_Slots[i].id     = 0;
+            m_Slots[i].isFree = true;
+            m_Slots[i].pad09  = 0;
             return;
         }
     }
 }
 
-// Binary @ 0x00151c00 -- per-slot Stop+DestroySoundInternals gated on !isFree;
+// ASM-spec v1.6.1 GameSound::KillAll @0x00151c00 -- per-slot Stop+DestroySoundInternals gated on !isFree;
 // isFree/pausedBySystem/id reset unconditionally for every slot.
 void GameSound::KillAll() {
     for (int i = 0; i < MAX_SLOTS; i++) {
@@ -137,7 +151,7 @@ void GameSound::KillAll() {
     }
 }
 
-// Binary @ 0x00129248
+// ASM-spec v1.6.1 GameSound::Pause @0x00151cb8
 void GameSound::Pause() {
     for (int i = 0; i < MAX_SLOTS; i++) {
         Slot* s = &m_Slots[i];
@@ -148,7 +162,7 @@ void GameSound::Pause() {
     }
 }
 
-// Binary @ 0x00129218
+// ASM-spec v1.6.1 GameSound::Unpause @0x00151c60
 void GameSound::Unpause() {
     SoundManager& mgr = SoundManager::GetInstance();
     if (mgr.IsInterrupted()) {
@@ -164,7 +178,7 @@ void GameSound::Unpause() {
     }
 }
 
-// ASM-verified: 2026-05-04T11:00 v1.6.1 GameSound::Update @ 0x00151e60 (asm-inspector; address restamped 2026-07-27, decompile re-checked)
+// ASM-verified: 2026-05-04T11:00 v1.6.1 GameSound::Update @ 0x00151dd0 (asm-inspector)
 // NOTE the per-slot re-apply below: (1 - (1-master)*vol) * PITCH runs every
 // frame for every live slot with vol > 0 -- for a slot played with gain 0
 // (e.g. SpeedControl's first Combo-Blitz-Backing SFXPlay) this writes volume
@@ -201,7 +215,9 @@ void GameSound::Update() {
     }
 }
 
-// Binary @ 0x00151b60 -- static
+// ASM-spec v1.6.1 GameSound::DestroySoundInternals @0x00151b60 -- one-line body.
+// The binary passes `this` (it is a non-static member); the port declares it static
+// since the body never touches the pool. Itanium mangling is identical either way.
 void GameSound::DestroySoundInternals(MortarSound* sound) {
     sound->Destroy();
 }

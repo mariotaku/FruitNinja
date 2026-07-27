@@ -10,7 +10,10 @@
 
 // GameSound -- pool-based sound manager with 32 slots.
 // sizeof 0x788 (ARM32, 4-byte ptrs): 8 header + 32 * 0x3c = 0x788. No vtable.
-// v1.6.1 GameSound ctor @0x001290e8.
+// GameSound is never operator new'd (it is an embedded member), so the size comes
+// from layout: v1.6.1 GameSound::FindFree @0x00151a7c proves slot base = this+0x08,
+// isFree at slot+0x08 and stride 0x3c over 0x20 slots.
+// v1.6.1 GameSound::GameSound @0x00151ff4 (C1) / @0x001520a0 (C2, identical body).
 class GameSound {
 public:
     static const int MAX_SLOTS = 32;
@@ -28,8 +31,8 @@ public:
         uint8_t                               pad09;          // +0x09: set 0 at init
         uint8_t                               pausedBySystem; // +0x0A: set 1 by Pause(), cleared by Unpause()
         uint8_t                               pad0B;          // +0x0B: alignment
-        float                                 volume;         // +0x0C: default 1.0
-        float                                 pitch;          // +0x10: default 1.0
+        float                                 volume;         // +0x0C: ctor writes 1.0
+        float                                 pitch;          // +0x10: ctor does NOT write it; SFXPlay stores `gain` here
         uint8_t                               _pad14[4];      // +0x14: alignment pad (8-byte align for Delegate1)
         Mortar::Delegate1<bool, Mortar::MortarSound*> finishCallback; // +0x18 (36 bytes; fills +0x18..+0x3b)
     };
@@ -53,7 +56,7 @@ public:
     GameSound();
     ~GameSound();
 
-    // Binary @ 0x001290e8
+    // v1.6.1 GameSound::FindFree @0x00151a7c -- index of the first isFree slot, or -1.
     int FindFree();
 
     // v1.6.1 GameSound::SFXPlay @0x00151d04 -- single 5-param symbol. Trailing float = pitch;
@@ -69,31 +72,38 @@ public:
     // v1.6.1 GameSound::IsPlaying(char const*) @0x00151ae4 -- hashes name, delegates to IsPlaying(int).
     bool IsPlaying(const char* name);
 
-    // Binary @ 0x00129138
+    // v1.6.1 GameSound::IsValid @0x00151b04 -- first-match short-circuit on the SOUND
+    // POINTER (isFree is not tested), then returns that one slot's id == hash. Ask it
+    // "is this handle still the sound I played under `name`", not "is it live".
     bool IsValid(Mortar::MortarSound* sound, const char* name);
 
-    // Binary @ 0x0012917c
+    // v1.6.1 GameSound::Release @0x00151b68 -- frees the slot holding (sound, hash(name)):
+    // stops the voice if still playing, calls DestroySoundInternals (which frees the
+    // MortarSound's name buffer), then clears id/pad09 and marks the slot free. isFree
+    // is NOT part of the match. The MortarSound object itself survives and is replayable;
+    // callers must drop their cached pointer regardless, since the slot can be reused.
     void Release(Mortar::MortarSound* sound, const char* name);
 
-    // Binary @ 0x00151c00
+    // v1.6.1 GameSound::KillAll @0x00151c00
     void KillAll();
 
-    // Binary @ 0x00129248
+    // v1.6.1 GameSound::Pause @0x00151cb8
     void Pause();
 
-    // Binary @ 0x00129218
+    // v1.6.1 GameSound::Unpause @0x00151c60
     void Unpause();
 
-    // v1.6.1 GameSound::Update @ 0x00151e60
+    // v1.6.1 GameSound::Update @0x00151dd0
     void Update();
 
-    // Binary @ 0x00151b60 -- static
+    // v1.6.1 GameSound::DestroySoundInternals @0x00151b60 -- static in the port,
+    // non-static member in the binary (identical Itanium mangling).
     static void DestroySoundInternals(Mortar::MortarSound* sound);
 };
 
 #ifdef __bada__
 // sizeof needs the complete type -- assert after the class definition.
-static_assert(sizeof(GameSound) == 0x788, "GameSound size mismatch (v1.6.1 @0x001290e8)");
+static_assert(sizeof(GameSound) == 0x788, "GameSound size mismatch (v1.6.1 GameSound::FindFree @0x00151a7c: 8 + 32*0x3c)");
 #endif
 
 #endif // FN_ENGINE_AUDIO_GAMESOUND_H
