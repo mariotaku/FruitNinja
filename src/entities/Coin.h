@@ -23,9 +23,9 @@
 //   Coin::ClearCoins  v1.6.1 @0x001d7a00  (thunk 0x00106eb8)
 //   Coin::LoadContent   v1.6.1 @0x001d7920
 //   Coin::UnLoadContent v1.6.1 @0x001d87f0
-// TODO: v1.6.1 CoinArrived (_Z11CoinArrivedP4Coin) -- address UNVERIFIED. Coin.cpp
-//   cites @0x001d7a88 but that was not re-confirmed in the v1.6.1 address audit.
-//   Re-resolve before trusting it.
+//   CoinArrived       v1.6.1 @0x001d7a88  (_Z11CoinArrivedP4Coin) — 2 instructions:
+//                     ldr r0,[r0,#0x3c] (m_CoinValue) then b -> PLT thunk 0x0010c734
+//                     -> GOT 0x002d45b0 -> AddCoins @0x00119f78
 //
 // Analysed: 2026-04-12T16:45
 
@@ -160,8 +160,8 @@ public:
 
     // Returns a Delegate1<void,Coin*> bound to the file-static CoinArrived helper.
     // Callers outside Coin.cpp use this to obtain the standard arrived callback
-    // without needing to know CoinArrived's linkage. (CoinArrived's own v1.6.1
-    // address is unverified -- see the file-header TODO.)
+    // without needing to know CoinArrived's linkage.
+    // (v1.6.1 CoinArrived @0x001d7a88 — see the file header.)
     static Mortar::Delegate1<void, Coin*> DefaultArrivedDelegate();
 
     // v1.6.1 Coin::LoadContent @0x001d7920 — the binary body is ONLY

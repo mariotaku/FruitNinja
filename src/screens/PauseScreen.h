@@ -193,14 +193,13 @@ public:
     // Returns false while transition is in-flight or bomb hit timer running.
     bool IsEnabled();
 
-    // TODO: v1.6.1 PauseScreen::ContinueGameCallback -- address UNVERIFIED.
-    // ContinueGameCallback: if m_State==3, set m_State=4
-    //   (RESUME_EXIT); if Game-state +0x85 tutorial-shown flag was set, re-seed the
-    //   global RNG from Game-state +0x194, then clear the flag. (impl in .cpp)
+    // ASM-spec v1.6.1 PauseScreen::ContinueGameCallback @0x001a56b8
+    // If m_State==3, advance to 4 (RESUME_EXIT); if the game_work +0x89
+    //   resume-snapshot flag is set, re-seed the global RNG from game_work
+    //   +0x19c (m_FrameTimer), then clear the flag. (impl in .cpp)
     void ContinueGameCallback();
-    // TODO: v1.6.1 PauseScreen::SkipTo -- address UNVERIFIED.
-    // SkipTo: jump straight to ACTIVE overlay
-    //   (m_State=3, m_Alpha=1.0). (impl in .cpp)
+    // ASM-spec v1.6.1 PauseScreen::SkipTo @0x001a5568
+    // Jump straight to ACTIVE overlay (m_State=3, m_Alpha=1.0). (impl in .cpp)
     void SkipTo();
 };
 

@@ -601,11 +601,13 @@ void PauseScreen::QuitGameCallback() {
 }
 
 // v1.6.1 PauseScreen::QuitGameCallback2 @0x001a5634:
-//   QuitGameCallback(); m_MenuBombIndex = 1; g->field_0x85 = 0;
+//   QuitGameCallback(); m_MenuBombIndex = 1; game_work.m_bResumeSnapshotPresent = 0;
+// (`strb r2,[r3,#0x89]` at 0x001a565c — +0x89, matching QuitGameCallback's own
+//  `strb r3,[r4,#0x89]` at 0x001a5624.)
 // Used by P2-Quit button in MP path.
 // ASM-verified: 2026-05-08T00:00 v1.6.1 PauseScreen::QuitGameCallback2 @ 0x001a5634 (re-analyst)
 // Defunct: multiplayer Quit2 path -- single-player port still wires the
-// tutorial-clear write so the cb retains its post-call observable state.
+// resume-snapshot-flag clear so the cb retains its post-call observable state.
 void PauseScreen::QuitGameCallback2() {
     QuitGameCallback();
     m_MenuBombIndex = 1;
@@ -617,7 +619,9 @@ void PauseScreen::QuitGameCallback2() {
 //   if (m_State != 3) return;
 //   if (game_work.m_ElapsedGameTime < 10.5f)
 //       FruitSaveData::AddToTotal("retries_in_a_row", hash, 1, true, true);
-//   Math::SeedGlobalRng(game_work.m_FrameTimer);  // inline inside 0x001a5800
+//   Math::SeedGlobalRng(game_work.m_FrameTimer);  // T.1054 @0x001a566c, called
+//                                                 // UNCONDITIONALLY at 0x001a5878
+//                                                 // (no +0x89 test, unlike Pause/Continue)
 //   game_work.m_bResumeSnapshotPresent = 0;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
 //   m_State = 5;
@@ -1142,8 +1146,8 @@ void PauseScreen::UpdateRealtime(float dtSeconds) {
 }
 #endif
 
-// TODO: v1.6.1 PauseScreen::SkipTo -- address UNVERIFIED; the body claim below has not
-//   been re-checked against v1.6.1.
+// ASM-spec v1.6.1 PauseScreen::SkipTo @0x001a5568
+// Binary body is exactly `m_State = 3; m_Alpha = 1.0f;`.
 // External entry — force overlay fully visible and
 // jump to state 3. Used by the Bada-app-side "skip intro" handler.
 void PauseScreen::SkipTo() {
@@ -1158,16 +1162,20 @@ float PauseScreen::GetTime() {
     return m_Alpha;
 }
 
-// TODO: v1.6.1 PauseScreen::ContinueGameCallback -- address UNVERIFIED; the body claim
-//   below has not been re-checked against v1.6.1.
+// ASM-spec v1.6.1 PauseScreen::ContinueGameCallback @0x001a56b8
+// Binary body:
+//   if (m_State != 3) return;
+//   m_State += 1;
+//   if (game_work.m_bResumeSnapshotPresent /* +0x89 */)
+//       T.1054(game_work.m_FrameTimer /* +0x19c */);   // = Math::Random::Seed
+//   game_work.m_bResumeSnapshotPresent = 0;
 // External entry (no in-screen button binds it).
-// Likely call site: shop/tutorial popup-dismiss handler. Advances state
-// 3 -> 4 and clears the tutorial-shown flag.
+// Likely call site: shop/tutorial popup-dismiss handler.
 void PauseScreen::ContinueGameCallback() {
     if (m_State != PAUSE_STATE_ACTIVE) return;
+    // Binary does `m_State += 1`; equivalent to this assignment under the `== 3` guard.
     m_State = PAUSE_STATE_RESUME_EXIT;
     if (game_work.m_bResumeSnapshotPresent != 0) {
-        // v1.6.1 PauseScreen::RetryGameCallback @0x001a5800: re-seed g_Random; see its notes.
         Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
     }
     game_work.m_bResumeSnapshotPresent = 0;

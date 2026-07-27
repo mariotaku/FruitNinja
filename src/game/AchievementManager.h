@@ -9,29 +9,26 @@
 //   m_All          : std::map<uint32_t, AchievementInfo*>  @ 0x000 (owns heap entries)
 //   m_ByType[11]   : std::map<uint32_t, AchievementInfo*>  @ 0x018..0x108 (non-owning views)
 //
-// Binary addresses:
-//   ctor (real)                   0x00108930
-//   ctor (alias)                  0x00108954
-//   ctor thunk                    0x001059c0
-//   dtor (regular)                0x00109028
-//   dtor (deleting)               0x00109078
-//   GetInstance                   0x00108f64
+// Binary addresses (all v1.6.1 entry points; cite the entry, never a PLT thunk):
+//   ctor                          0x00117494, 0x001174d0  (two emitted variants)
+//   dtor                          0x00117f58, 0x00117ff8  (regular / deleting)
+//   GetInstance                   0x00117e08
 //   LoadAchievementInfo           0x00118198
-//   UnLoadAchievementInfo         0x00108fb4
+//   UnLoadAchievementInfo         0x00117ea4
 //   AchievementExists             0x00116ea8
-//   UnlockBonusAchievement        0x00108af0  (was 0x00108de4)
-//   UnlockComboAchievement        0x00108a10  (was 0x00108b3c)
-//   UnlockComboStarAchievement    0x00108c40  (was incorrectly namespaced in old stub)
-//   UnlockConsecutiveAchievement  0x00108c40
-//   UnlockEndScoreAchievement     0x00117880  (was stale v1.5.x 0x00108e14)
-//   UnlockScoreAchievement        0x00117bd0  (was stale v1.5.x 0x00108d44)
-//   UnlockScoreUnsulliedAchievement 0x00117c8c  (was stale v1.5.x 0x00108d94 -- that addr now resolves to SystemManager::QuitGame)
-//   UnlockSpecificFruitAchievement  0x00108a88
-//   UnlockSpecificOrderAchievement  0x00108b58  (was 0x001089cc -- that addr is SpecificOrder::Check)
-//   UnlockTotalFruitAchievement   0x00108eec
+//   UnlockBonusAchievement        0x0011773c
+//   UnlockComboAchievement        0x001175e8
+//   UnlockComboStarAchievement    0x00117b20
+//   UnlockConsecutiveAchievement  0x00117948
+//   UnlockEndScoreAchievement     0x00117880
+//   UnlockScoreAchievement        0x00117bd0
+//   UnlockScoreUnsulliedAchievement 0x00117c8c
+//   UnlockSpecificFruitAchievement  0x00117a68
+//   UnlockSpecificOrderAchievement  0x001177e0
+//   UnlockTotalFruitAchievement   0x00117d48
 //   UnlockedAchievement           0x001180a8
-//   UnlockAchievementInNetwork    0x001085a0
-//   QueAchievement                0x00108978  (was 0x001084a0)
+//   UnlockAchievementInNetwork    0x00116ee4
+//   QueAchievement                0x0011750c
 
 #include <cstdint>
 #include <map>
@@ -108,24 +105,25 @@ static_assert(__builtin_offsetof(AchievementInfo, m_SpecificOrder)      == 0xa4,
 
 class AchievementManager {
 public:
-    // Binary @ 0x00108f64 — Meyers singleton
+    // v1.6.1 AchievementManager::GetInstance @0x00117e08 — Meyers singleton
     static AchievementManager* GetInstance();
 
-    // Binary @ 0x00109200 — parse xml/achievementList.xml (camelCase, per v1.6.1 literal)
+    // v1.6.1 AchievementManager::LoadAchievementInfo @0x00118198 — parse
+    // xml/achievementList.xml (camelCase, per v1.6.1 literal)
     void LoadAchievementInfo();
 
-    // Binary @ 0x00108fb4 — free m_All entries, clear all maps
+    // v1.6.1 AchievementManager::UnLoadAchievementInfo @0x00117ea4 — free m_All
+    // entries, clear all maps
     void UnLoadAchievementInfo();
 
-    // Binary @ 0x00116ea8 — returns iterator index if hash found, -1 otherwise
+    // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::AchievementExists @ 0x00116ea8 (asm-inspector)
+    // Returns iterator index if hash found, -1 otherwise.
     int  AchievementExists(uint32_t hash);
 
     // Unlock paths — Binary addresses above
-    // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::AchievementExists @ 0x00116ea8 (asm-inspector)
-    // TODO: confirm decl<->addr pairing (marker was cross-pasted from .cpp; may annotate UnlockBonusAchievement not AchievementExists)
+    // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0011773c (asm-inspector)
     unsigned int UnlockBonusAchievement(unsigned long bonusId);
-    // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::AchievementExists @ 0x00116ea8 (re-analyst)
-    // TODO: confirm decl<->addr pairing (marker was cross-pasted from .cpp; may annotate UnlockComboAchievement not AchievementExists)
+    // ASM-spec v1.6.1 AchievementManager::UnlockComboAchievement @ 0x001175e8
     int  UnlockComboAchievement(int comboLen, int* fruitArr);
     int  UnlockComboStarAchievement(int combo, uint32_t starTypeHash);
     int  UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash);
@@ -136,17 +134,19 @@ public:
     int  UnlockSpecificOrderAchievement(uint32_t newFruitHash);
     int  UnlockTotalFruitAchievement(int total);
 
-    // Binary @ 0x001180a8 — show popup via NotificationControl (v1.6.1 AchievementManager::UnlockedAchievement)
+    // v1.6.1 AchievementManager::UnlockedAchievement @0x001180a8 — show popup via
+    // NotificationControl
     int  UnlockedAchievement(uint32_t hash, HUD* hud);
 
-    // Binary @ 0x001085a0 — Defunct: NetworkManager — no-op stub
+    // Defunct: NetworkManager — no-op stub; v1.6.1 AchievementManager::UnlockAchievementInNetwork @ 0x00116ee4
     int  UnlockAchievementInNetwork(const char* name);
 
 private:
     AchievementManager();
     ~AchievementManager();
 
-    // Binary @ 0x001084a0 — queue unlock; removes entry from m_ByType on success
+    // v1.6.1 AchievementManager::QueAchievement @0x0011750c — queue unlock; removes
+    // entry from m_ByType on success
     int  QueAchievement(AchievementInfo* info,
                         std::map<uint32_t, AchievementInfo*>::iterator& it);
 
@@ -158,8 +158,7 @@ public:
     //
     // Binary layout (v1.6.1 ctor @0x00117494): 12 std::map<uint32_t,AchievementInfo*>
     // (each 24 bytes, ARM32 Sourcery) at +0x000..+0x120, then a std::vector<uint32_t>
-    // at +0x120. sizeof == 0x12c. (Prior comment cited stale v1.5.x ctor 0x00108930 +
-    // omitted the vector -> asserted the port's own wrong 0x120.)
+    // at +0x120. sizeof == 0x12c.
     // Preamble textures (DAT_001096a8/ac/b0) are module-level statics in BSS, NOT struct members.
     std::map<uint32_t, AchievementInfo*> m_All;         // +0x000 (owns)
     std::map<uint32_t, AchievementInfo*> m_ByType[11];  // +0x018..+0x108 (non-owning views)

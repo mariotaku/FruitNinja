@@ -33,10 +33,14 @@ public:
 extern Random g_Random;
 
 // Re-seed g_Random with `seed` and reset all per-multiplier constants.
-// (Inlined into its callers in the binary -- see v1.6.1
-// PauseScreen::RetryGameCallback @0x001a5800.) Called by PauseScreen Retry/Continue/Pause
-// callbacks with seed = Game::m_FrameTimer to make replays reproducible
-// from frame-counter state.
+// v1.6.1: no exported SeedGlobalRng symbol; the binary emits file-local T.1054
+// @0x001a566c = Math::Random::Seed(&Math::g_random, seed) (out-of-line
+// Seed @0x0012c998), a compiler-OUTLINED helper shared by the PauseScreen TU's
+// callers. Called by PauseScreen Retry/Continue/Pause callbacks with
+// seed = Game::m_FrameTimer to make replays reproducible from frame-counter state.
+// Gating differs per caller: RetryGameCallback (@0x001a5800) seeds
+// UNCONDITIONALLY, while PauseGameCallback / ContinueGameCallback gate on
+// game_work.m_bResumeSnapshotPresent (+0x89) != 0.
 void SeedGlobalRng(uint32_t seed);
 
 } // namespace Math

@@ -54,10 +54,10 @@ float Random::RandF(float range) {
 // Engine-wide RNG instance (binary @ 0x0026C8B0).
 Random g_Random;
 
-// ASM-spec v1.6.1: the seed sequence is inlined into its callers (e.g.
-// PauseScreen::RetryGameCallback @0x001a5800); no standalone symbol was resolved.
-// TODO: v1.6.1 Math::SeedGlobalRng -- own address UNVERIFIED (no standalone symbol
-//   resolved; the sequence is inlined into its callers).
+// v1.6.1: no exported SeedGlobalRng symbol; the binary emits file-local T.1054
+// @0x001a566c = Math::Random::Seed(&Math::g_random, seed) (out-of-line
+// Seed @0x0012c998). It is a compiler-OUTLINED helper shared by the PauseScreen
+// TU's callers -- not inlined into each one.
 //   void Seed(uint32_t seed):
 //     state[0]=seed; state[1]=0;
 //     state[2]=0x6C078965; state[3]=0x5D588B65;     // -> m_Mult (LE 64-bit)

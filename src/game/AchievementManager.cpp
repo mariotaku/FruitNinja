@@ -1,5 +1,5 @@
 // Analysed: 2026-04-30T00:00
-// AchievementManager -- Binary @ 0x00108930 (ctor), 0x00108f64 (GetInstance)
+// AchievementManager -- v1.6.1 ctor @0x00117494, GetInstance @0x00117e08
 // Full implementation from RE §7.
 //
 // Note: NetworkManager/OpenFeint/GameCenter paths are defunct in port.
@@ -26,7 +26,7 @@
 using Mortar::TextureManager;
 
 // ---------------------------------------------------------------------------
-// AchievementInfo ctor/dtor  (Binary @ ctor ~0x00109200 inner block)
+// AchievementInfo ctor/dtor  (inlined in v1.6.1 LoadAchievementInfo @0x00118198)
 // ---------------------------------------------------------------------------
 
 AchievementInfo::AchievementInfo()
@@ -49,7 +49,7 @@ AchievementInfo::~AchievementInfo() {
 }
 
 // ---------------------------------------------------------------------------
-// AchievementManager ctor/dtor  (Binary @ 0x00108930 / 0x00109028)
+// AchievementManager ctor/dtor  (v1.6.1 ctor @0x00117494 / dtor @0x00117f58)
 // ---------------------------------------------------------------------------
 
 AchievementManager::AchievementManager() {
@@ -62,7 +62,7 @@ AchievementManager::~AchievementManager() {
 }
 
 // ---------------------------------------------------------------------------
-// GetInstance  (Binary @ 0x00108f64)
+// GetInstance  (v1.6.1 AchievementManager::GetInstance @0x00117e08)
 // ---------------------------------------------------------------------------
 
 AchievementManager* AchievementManager::GetInstance() {
@@ -266,7 +266,7 @@ void AchievementManager::LoadAchievementInfo() {
 }
 
 // ---------------------------------------------------------------------------
-// UnLoadAchievementInfo  (Binary @ 0x00108fb4)
+// UnLoadAchievementInfo  (v1.6.1 AchievementManager::UnLoadAchievementInfo @0x00117ea4)
 // ---------------------------------------------------------------------------
 
 void AchievementManager::UnLoadAchievementInfo() {
@@ -299,7 +299,7 @@ int AchievementManager::AchievementExists(uint32_t hash) {
 int AchievementManager::QueAchievement(AchievementInfo* info,
                                         std::map<uint32_t, AchievementInfo*>::iterator& it)
 {
-    // Binary @ 0x00108978: call FruitSaveData::AddToQue(name, hash);
+    // v1.6.1 @0x0011750c: call FruitSaveData::AddToQue(name, hash);
     // on success pre-advance caller's iterator, then erase from m_ByType[typeIdx].
     // Pre-advance before erase so callers iterating m_All or m_ByType[x]
     // can unconditionally continue without using the erased iterator.
@@ -376,7 +376,7 @@ static int ModeBitmaskAllows(uint32_t bitmask) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockTotalFruitAchievement  (Binary @ 0x00108eec)
+// UnlockTotalFruitAchievement  (v1.6.1 @0x00117d48)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockTotalFruitAchievement(int total) {
@@ -497,7 +497,7 @@ unsigned int AchievementManager::UnlockBonusAchievement(unsigned long bonusId) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockSpecificFruitAchievement  (Binary @ 0x00108a88)
+// UnlockSpecificFruitAchievement  (v1.6.1 @0x00117a68)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockSpecificFruitAchievement(int fruitTypeHash, unsigned int count) {
@@ -514,11 +514,11 @@ int AchievementManager::UnlockSpecificFruitAchievement(int fruitTypeHash, unsign
 }
 
 // ---------------------------------------------------------------------------
-// UnlockConsecutiveAchievement  (Binary @ 0x00108c40)
+// UnlockConsecutiveAchievement  (v1.6.1 @0x00117948)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash) {
-    // Binary @ 0x00108c40: two bucket lookups.
+    // v1.6.1 @0x00117948: two bucket lookups.
     // Bucket CONSECUTIVE (5): keyed by fruitTypeHash; threshold <= count + mode gate.
     // Bucket CONSECUTIVE_ANY (6): keyed by count itself (m_Total == count).
     int awarded = 0;
@@ -550,7 +550,7 @@ int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fru
 }
 
 // ---------------------------------------------------------------------------
-// UnlockComboStarAchievement  (Binary @ 0x00108c40 — overlapping address note)
+// UnlockComboStarAchievement  (v1.6.1 @0x00117b20)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::UnlockComboStarAchievement(int combo, uint32_t starTypeHash) {
@@ -637,7 +637,7 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
             }
         }
 
-        // RequiresUnsullied gate (binary @ 0x00108aa0-0x00108ab6):
+        // RequiresUnsullied gate (mid-body of v1.6.1 UnlockComboAchievement @0x001175e8):
         //   Despite the XML attribute name, this gates on the TIMED-MODE COUNTDOWN
         //   having expired, NOT on Game::m_bUnsullied. Binary reads
         //   g_GameData->pTimeCtrl->m_TimeRemaining. If pTimeCtrl is NULL (Classic mode,
