@@ -42,7 +42,8 @@ const char* GetVersionString();
 // Construction / destruction
 // ----------------------------------------------------------------------
 
-// Matches binary ctor @ 0x00129e74. Defaults from doc + RE.
+// ASM-spec v1.6.1 FruitSaveData::FruitSaveData() @0x00152874 (C1) / @0x00152ab4 (C2);
+// copy-ctor @0x001d1114. Defaults from doc + RE.
 FruitSaveData::FruitSaveData()
     : m_reserved30(0)
     , m_bHasActiveGame(0)
@@ -215,8 +216,10 @@ bool FruitSaveData::SetCurrentModeHighscore(int newScore) {
 // Achievements
 // ----------------------------------------------------------------------
 
-// 0x00129c50 -- returns 2 if pending, 1 if unlocked, 0 otherwise.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00129c50 (re-analyst)
+// ASM-spec v1.6.1 FruitSaveData::IsAchievementUnlocked(unsigned long) @0x001527e8 --
+// returns 2 if pending, 1 if unlocked, 0 otherwise.
+// (The prior ASM-verified stamp cited a v1.5 address landing in unrelated code, so it
+// never applied to v1.6.1. Downgraded to ASM-spec -- needs a fresh asm-inspector run.)
 int FruitSaveData::IsAchievementUnlocked(uint32_t hash) {
     if (m_PendingUnlocks.find(hash) != m_PendingUnlocks.end()) return 2;
     return (m_UnlockedAchievements.find(hash) != m_UnlockedAchievements.end()) ? 1 : 0;
@@ -266,8 +269,8 @@ int FruitSaveData::AddToQue(const char* name, uint32_t hash) {
 // (2-instruction thunk; dead code -- zero callers in the binary). m_WaveStates /
 // m_bHasActiveGame are reset elsewhere (WaveManager::SaveWaveInfo @0x001254b0 on a
 // throwaway copy; GameInit toggles bHasActiveGame), NOT here -- the port previously
-// double-reset them, wiping wave-resume state at this call site. (Old marker cited
-// 0x00129ca8, which is inside WaveManager::Init.)
+// double-reset them, wiping wave-resume state at this call site. (The old marker here
+// cited a v1.5 address that lands inside WaveManager::Init.)
 void FruitSaveData::SaveGameState() {
     m_EntityStates.clear();
 }
@@ -1067,13 +1070,14 @@ unsigned int FruitSaveData::SetTotal(char const* name, int value,
     return old;
 }
 
-// Binary @ 0x0012a0fc -- TotalExists(name): hash the name, delegate to TotalExists(hash).
+// ASM-spec v1.6.1 FruitSaveData::TotalExists(char const*) @0x00152e38 -- hash the name,
+// delegate to TotalExists(hash).
 bool FruitSaveData::TotalExists(char const* name) {
     return TotalExists(StringHash(name));
 }
 
-// Binary @ 0x00129bb4 -- TotalExists(hash): true if hash is present in
-// m_Totals (+0x00) or m_SessionTotals (+0x18).
+// ASM-spec v1.6.1 FruitSaveData::TotalExists(unsigned long) @0x001526e8 -- true if hash
+// is present in m_Totals (+0x00) or m_SessionTotals (+0x18).
 bool FruitSaveData::TotalExists(unsigned long hash) {
     if (m_Totals.find(hash) != m_Totals.end()) return true;
     return m_SessionTotals.find(hash) != m_SessionTotals.end();

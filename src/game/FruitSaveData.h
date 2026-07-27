@@ -295,7 +295,8 @@ public:
     // Construction
     // ------------------------------------------------------------------
 
-    // 0x00129e74 -- default ctor; zeros fields + sets documented defaults.
+    // v1.6.1 FruitSaveData::FruitSaveData() @0x00152874 (C1) / @0x00152ab4 (C2) --
+    // default ctor; zeros fields + sets documented defaults.
     FruitSaveData();
 
     // 0x0010ce90.
@@ -353,8 +354,9 @@ public:
     // Achievements
     // ------------------------------------------------------------------
 
-    // 0x00129c50. Checks whether hash is pending (returns 2) or already
-    // unlocked (returns 1), or absent (returns 0).
+    // v1.6.1 FruitSaveData::IsAchievementUnlocked(unsigned long) @0x001527e8.
+    // Checks whether hash is pending (returns 2) or already unlocked (returns 1),
+    // or absent (returns 0).
     // Binary: non-static; checks m_PendingUnlocks then m_UnlockedAchievements.
     int IsAchievementUnlocked(uint32_t hash);
 
@@ -402,9 +404,9 @@ public:
     // Binary @ 0x0012b2b0 -- SetTotal: hash name, compute delta vs GetTotal,
     // AddToTotal(delta); returns the OLD total (uint) prior to the set.
     unsigned int SetTotal(char const* name, int value, bool trackSession, bool achievementGate);
-    // Binary @ 0x0012a0fc -- TotalExists(name): hash name, delegate to TotalExists(hash).
+    // v1.6.1 TotalExists(char const*) @0x00152e38 -- hash name, delegate to TotalExists(hash).
     bool TotalExists(char const* name);
-    // Binary @ 0x00129bb4 -- TotalExists(hash): true if hash present in m_Totals or m_SessionTotals.
+    // v1.6.1 TotalExists(unsigned long) @0x001526e8 -- true if hash present in m_Totals or m_SessionTotals.
     bool TotalExists(unsigned long hash);
 };
 
