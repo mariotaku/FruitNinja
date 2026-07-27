@@ -115,8 +115,15 @@ void GameModifier::ParseSpecific(TiXmlElement* /*xml*/) {
 // is still reached polymorphically via vtable slot 5 from Update); ApplyModifier
 // delegates to it so both call sites run byte-identical logic, matching the
 // binary's single merged function.
+// The delegation is QUALIFIED on purpose: subclass overrides reach this base body
+// through a direct `bl 0x00140890` (GOT thunk 0x00114f04), a non-virtual super()
+// call -- the base body never re-enters the vtable. Leaving it unqualified makes
+// any subclass that overrides BOTH ApplyModifier and OnDeferComplete recurse
+// forever (base -> virtual OnDeferComplete -> subclass -> base ...); that is
+// exactly what deadlocked the freeze/frenzy powerups, which drive a WaveModifier.
+// The genuinely polymorphic slot-5 dispatch lives in Update(), not here.
 void GameModifier::ApplyModifier(bool isPurchased, float* extra) {
-    OnDeferComplete(isPurchased, extra);
+    GameModifier::OnDeferComplete(isPurchased, extra);
 }
 
 // Binary @ 0x00117DA0 -- GameModifier::Parse(TiXmlElement*)

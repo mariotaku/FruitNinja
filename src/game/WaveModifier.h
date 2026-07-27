@@ -55,6 +55,10 @@ public:
     // body slot 8 uses (same ICF merge as the base class -- see GameModifier.cpp).
     // Kept as a C++ method purely so slot-5 dispatch from GameModifier::Update
     // reaches that body; it just forwards to ApplyModifier.
+    //
+    // NOTE this is the ONLY OnDeferComplete override in the GameModifier
+    // hierarchy, and it is why GameModifier::ApplyModifier's internal delegation
+    // must stay QUALIFIED (non-virtual) -- see GameModifier.cpp.
     void OnDeferComplete(bool unused, float* pExtra) override;
 
     int GetType() override { return 3; }  // binary @ 0x00150d40 returns 3
