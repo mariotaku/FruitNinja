@@ -225,8 +225,10 @@ public:
 
     // Binary @ 0x001bd4d8 (DrawExplosion): draws the two shockwave rings.
     void DrawExplosion();
-    // Binary @ 0x001bd4d8 (DrawRing): one ShockWaveTexture ring of radius r,
-    // fading over the 0.25s window ending at `base`.
+    // Port-side extraction of the ring body that v1.6.1
+    // SuperFruitControl::DrawExplosion @0x001bd4d8 has inlined twice -- there is
+    // no separate DrawRing symbol. One ShockWaveTexture ring of radius r, fading
+    // over the 0.25s window ending at `base`.
     void DrawRing(float r, float base);
 
     // Binary @ 0x1baeb8. Per-frame shockwave: writes PSPParticleManager globals

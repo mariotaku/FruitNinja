@@ -301,70 +301,31 @@ WaveModifier::WaveModifier()
 
 WaveModifier::~WaveModifier() {}
 
-// @ 0x0015068c -- WaveModifier overrides GameModifier vtable slot [5]
-// (OnDeferComplete, base @ 0x00140890). Ghidra mislabels this "ApplyModifier"
-// because the body chains the base slot-5 function; the vtable proves it is the
-// OnDeferComplete slot (WaveModifier vtable @ 0x2cc8b0 slot[5]=0x0015068c,
-// base GameModifier vtable @ 0x2cc6d8 slot[5]=0x00140890=OnDeferComplete).
-// Body (verbatim from binary):
-//   (1) chain GameModifier::OnDeferComplete(unused, pExtra).
-//   (2) if m_OverideProbabilityPool < 10000 && !unused(=isPurchased) &&
-//       m_OverideProbabilityPool < WaveManager current-wave-counter:
+// v1.6.1 WaveModifier::ApplyModifier @0x0015068c is the ONE compiled function
+// behind both of this class's virtual slots: it overrides GameModifier's slot 5
+// (base body @0x00140890) and slot 8. That mirrors the base class, where
+// 0x00140890 is likewise the single ICF-merged body serving OnDeferComplete and
+// ApplyModifier (see GameModifier.cpp). There is no separate OnDeferComplete
+// symbol in the binary; the port keeps the C++ method only so slot-5 virtual
+// dispatch from GameModifier::Update reaches this body, and forwards.
+void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
+    ApplyModifier(unused, pExtra);
+}
+
+// v1.6.1 WaveModifier::ApplyModifier @0x0015068c. After chaining the base body:
+//   (1) if m_OverideProbabilityPool < 10000 && !isPurchased &&
+//       m_OverideProbabilityPool < WaveManager current wave, rewind via
 //       SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0).
 //       Binary reads the counter at WaveManager+0x238 (confirmed via
 //       SetCurrentWave @ 0x00125d1c writing (playerIdx+0x8e)*4 = 0x238 for P0);
 //       the port maps that slot as m_WaveCount[0] per WaveManager.h's 64-bit
 //       DIFFERS block, matching the rest of this file's convention.
-//   (3) if m_OverideEntries empty, return.
-//   (4) SelectType() each of the first m_OverrideCount override entries.
-//   (5) PREPEND the whole m_OverideEntries range (dst.insert(dst.begin(), ...))
-//       into the WaveManager current override list (GetCurrentOverideList(0) ==
-//       m_ProbabilityOverride[gameMode]), then clear m_OverideEntries. See TODO
-//       below: this method's own insert direction was not independently
-//       disassembled, inferred from the ApplyModifier sibling body.
-void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
-    GameModifier::OnDeferComplete(unused, pExtra);
-
-    if (m_OverideProbabilityPool < 10000 && !unused) {
-        WaveManager* w = WaveManager::GetInstance();
-        if (m_OverideProbabilityPool < w->m_WaveCount[0]) {
-            WaveManager::GetInstance()->SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0);
-        }
-    }
-
-    if (m_OverideEntries.empty()) {
-        return;
-    }
-
-    for (int i = 0; i < m_OverrideCount &&
-                    i < (int)m_OverideEntries.size(); ++i) {
-        m_OverideEntries[i].SelectType();
-    }
-
-    std::vector<PROBABILITY_OVERIDE>& dst =
-        WaveManager::GetInstance()->m_ProbabilityOverride[game_work.gameMode];
-    // TODO: v1.6.1 0x0015068c (WaveModifier::OnDeferComplete) -- the dst.insert
-    //   direction here (front vs back) was inferred from ApplyModifier's
-    //   independently-disassembled sibling body (@0x001282d4, confirmed
-    //   dst.insert(dst.begin(), ...)), not from this method's own instructions.
-    //   Re-verify against OnDeferComplete's actual disassembly if it is ever
-    //   independently checked.
-    dst.insert(dst.begin(), m_OverideEntries.begin(), m_OverideEntries.end());
-    m_OverideEntries.clear();
-}
-
-// Binary @ 0x001282d4. After chaining base ApplyModifier:
-//   (1) if m_OverideProbabilityPool <= 9999 (i.e. < 10000) && !isPurchased &&
-//       m_OverideProbabilityPool < WaveManager current wave, rewind via
-//       SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0).
 //   (2) call SelectType() on every m_OverideEntries entry, then PREPEND them all
 //       (dst.insert(dst.begin(), ...)) into the WaveManager's current override
-//       list (GetCurrentOverideList(0)), then clear m_OverideEntries. Front-
-//       insertion matters: UpdateWave's override picker walks front-to-back and
-//       stops at the first cumulative-probability match, so insert order picks
-//       the winner when multiple overrides are active.
-// Binary reads WaveManager+0x230 as the current wave counter; in SP that slot is
-// m_WaveCount[0] (see WaveManager.h +0x230 dual-purpose note).
+//       list (GetCurrentOverideList(0) == m_ProbabilityOverride[gameMode]), then
+//       clear m_OverideEntries. Front-insertion matters: UpdateWave's override
+//       picker walks front-to-back and stops at the first cumulative-probability
+//       match, so insert order picks the winner when multiple overrides are active.
 void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
 
@@ -400,7 +361,7 @@ void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
 // m_OverideProbabilityPool <= that counter and we're not in online MP, reset the
 // wave to SetCurrentWave(5, 0.25f, 0). Then, regardless of that gate, erase the
 // FRONT m_OverrideCount entries from m_ProbabilityOverride[gameMode] -- undoing
-// the PREPEND that ApplyModifier/OnDeferComplete performed when the modifier
+// the PREPEND that ApplyModifier performed when the modifier
 // was applied.
 void WaveModifier::RemoveModifier() {
     WaveManager* w = WaveManager::GetInstance();

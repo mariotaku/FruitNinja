@@ -20,12 +20,17 @@ static const float OFFSCREEN_Y = -480.0f;
 static const float FLING_VEL   = -10.0f;
 
 // ===================================================================
-// Matches ScreenButton::ShrinkButtonCall @ 0x001300f0
+// Matches ScreenButton::ShrinkButtonCall @ 0x0015f53c
 //
 // Called when the fruit shrink animation fires on the MenuButton.
 // Saves current fruit pos into m_SecondPos (backup for ControlDeleted),
 // then zeros vel, m_SecondVel, and m_Gravity to freeze the fruit in
 // place while the shrink visual plays.
+//
+// Disasm-confirmed field offsets: m_pButton @+0x04, MenuButton::m_pTrackedFruit
+// @+0x14C, m_bShrunk @+0xC4 (strb 1 @0x0015f5a0), fruit pos copy +0x10 -> +0xC8
+// (m_SecondPos), and zero-vec3 stores to fruit +0x1c/+0xa0/+0xd4
+// (vel / m_SecondVel / m_Gravity).
 //
 // The shrink target Vec3 is at GOT+0x73EC → BSS (zero-initialized).
 // = Vec3(0, 0, 0) — stops all motion.
@@ -35,7 +40,7 @@ void ScreenButton::ShrinkButtonCall() {
 
     Fruit* fruit = m_pButton->m_pTrackedFruit;
 
-    // Save current pos → m_SecondPos (binary: +0xb8 = m_HalfB_pos)
+    // Save current pos → m_SecondPos (binary: fruit+0x10 -> fruit+0xc8)
     fruit->m_SecondPos = fruit->pos;
 
     m_bShrunk = 1;

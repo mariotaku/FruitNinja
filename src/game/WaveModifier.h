@@ -50,10 +50,11 @@ public:
     // @ 0x00150378
     int UpdateSpecific(float dt) override;
 
-    // @ 0x0015068c — OnDeferComplete (vtable slot 5). Chains base, then rewinds
-    // WaveManager to m_OverideProbabilityPool wave (if applicable), SelectType()s
-    // the first m_OverrideCount entries, and appends them into WaveManager's
-    // current override list.
+    // vtable slot 5. The binary has NO separate OnDeferComplete symbol: slot 5
+    // stores WaveModifier::ApplyModifier @0x0015068c, the same single compiled
+    // body slot 8 uses (same ICF merge as the base class -- see GameModifier.cpp).
+    // Kept as a C++ method purely so slot-5 dispatch from GameModifier::Update
+    // reaches that body; it just forwards to ApplyModifier.
     void OnDeferComplete(bool unused, float* pExtra) override;
 
     int GetType() override { return 3; }  // binary @ 0x00150d40 returns 3
@@ -71,7 +72,7 @@ public:
     //   and not online MP, reset WaveManager current wave to (5, 0.25, 0). Then
     //   always erases the front m_OverrideCount entries from
     //   WaveManager::m_ProbabilityOverride[gameMode], undoing the prepend done by
-    //   ApplyModifier/OnDeferComplete.
+    //   ApplyModifier.
     void RemoveModifier() override;
     // @ 0x00150374 -- empty override in binary (no specific reset work); no-op is faithful.
     void ResetSpecific() override;

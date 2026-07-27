@@ -709,9 +709,11 @@ void SuperFruitControl::DrawExplosion()
     DrawRing(m_OuterRadius, m_Lifetime + 2.05f);   // +0xec
 }
 
-// ASM-spec v1.6.1 SuperFruitControl::DrawRing @0x001bd4d8. One ShockWaveTexture
-// ring: scaled to r, alpha fading over the 0.25s window ending at `base`. Same
-// Reset/Scale/Translate/Upload/DrawQuadUnCached idiom as BombHit::DrawCritHit.
+// ASM-spec v1.6.1 SuperFruitControl::DrawExplosion @0x001bd4d8 (DrawRing is a
+// port-side extraction of the twice-inlined ring body; no separate symbol).
+// One ShockWaveTexture ring: scaled to r, alpha fading over the 0.25s window
+// ending at `base`. Same Reset/Scale/Translate/Upload/DrawQuadUnCached idiom as
+// BombHit::DrawCritHit.
 void SuperFruitControl::DrawRing(float r, float base)
 {
     Mortar::Texture* tex = ShockWaveTexture.Get();

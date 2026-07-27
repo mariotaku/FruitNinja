@@ -15,7 +15,7 @@
 // Binary refs:
 //   ~ScreenButton           0x00131628 (destroys 5 delegate/SmartPtr members)
 //   ControlDeleted          0x00130f40 (called when MenuButton is removed by HUD)
-//   ShrinkButtonCall        0x001300f0 (called when fruit shrink animation completes)
+//   ShrinkButtonCall        0x0015f53c (called when fruit shrink animation completes)
 //   DefaultCreateDelegate   0x001300e8 (always returns true)
 //   DefaultButtonDelegate   0x001300ec (always returns false)
 //
@@ -97,10 +97,9 @@ struct ScreenButton {
     // open. ASM v1.6.1 UpdateButtons @0x001604ec/0x001604f4 (vcmp #0, beq 0x160570).
     float m_bRotateGate;
 
-    // +0xC4: flag set by ShrinkButtonCall (fruit shrink done).
-    // TODO: v1.6.1 ScreenButton::ShrinkButtonCall @0x001300f0 -- this offset was
-    // assumed, not confirmed by UpdateButtons' own disasm (which never reads it).
-    // Re-verify against ShrinkButtonCall's disassembly before trusting +0xC4.
+    // +0xC4: flag set by ShrinkButtonCall (fruit shrink done). Offset confirmed
+    // from v1.6.1 ScreenButton::ShrinkButtonCall @0x0015f53c -- `strb r3,[r5,#0xc4]`
+    // @0x0015f5a0 with r5 = this. UpdateButtons never reads it; ControlDeleted does.
     uint8_t m_bShrunk;
 
     ScreenButton()
@@ -121,7 +120,7 @@ struct ScreenButton {
     // Called when HUD removes the MenuButton.
     void ControlDeleted(HUDControl* ctrl);
 
-    // Matches ScreenButton::ShrinkButtonCall @ 0x001300f0.
+    // Matches ScreenButton::ShrinkButtonCall @ 0x0015f53c.
     // Called when fruit shrink animation completes.
     void ShrinkButtonCall();
 
