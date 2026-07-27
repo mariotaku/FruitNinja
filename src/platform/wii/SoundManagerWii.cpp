@@ -21,8 +21,9 @@
 // verbatim on Wii (see src/platform/wii/README.md "Assets -- uncompressed").
 // No >>4 sample shift -- full scale like SDL/WebAudio (see the DIFFERS
 // marker in SoundManagerSDL.cpp LoadSound for the binary rationale).
-// Per-voice volume is the binary's >5 threshold GATE, not a gain (see
-// SoundManager.h Voice doc), expressed as ASND volume 255-or-0.
+// Per-voice volume is the raw 0-255 byte handed to ASND as a linear voice
+// volume, 1:1 (see SoundManager.h Voice doc -- the binary used the same byte as
+// a >5 on/off gate, which the port deliberately does not reproduce).
 //
 // Endianness: libogc's asndlib DOES have a little-endian mono voice format --
 // VOICE_MONO_16BIT_LE -- which consumes 16-bit samples as-is with no DSP-side
@@ -533,9 +534,10 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     if (!slot) return 0;
     int asndVoice = (int)(slot - m_Voices);
 
-    // Fresh voice starts audible (gate byte 255, matches SDL); express the
+    // Fresh voice starts at full volume (byte 255, matches SDL); express the
     // live SFX-category mute as ASND volume 0 -- ASND has no separate mute,
-    // and the gated voice must keep playing to completion, not pause.
+    // and a silenced voice must keep playing to completion, not pause. The
+    // per-play level arrives one call later via SFXSetVolume.
     int vol255 = s_SFXMuted ? 0 : 255;
 
     slot->id      = newId;
@@ -611,20 +613,26 @@ void SoundManager::SFXResume(uint32_t handle) {
     }
 }
 
-// SetVolume: vol is the raw 0-255 byte from MortarSound::SetVolume. It is a
-// GATE, not a gain (see SoundManager.h Voice doc / v1.6.1
-// MAMAudioThread::FillBuffer @0x0022f7f0): audible iff vol > 5, at full
-// amplitude. Expressed as ASND volume 255-or-0 -- a zero-volume ASND voice
-// keeps consuming samples (silent, not paused), so a gated voice still
-// completes and its loop tail still arms via FinishLoopCallback. The
-// LoopInfo vol is updated too so the tail armed AFTER a mute doesn't come
-// back audible.
+// SetVolume: vol is the raw 0-255 byte from MortarSound::SetVolume, handed
+// straight to ASND as this voice's linear volume (ASND's 0-255 voice volume is
+// the same scale, so the mapping is 1:1).
+//
+// DIFFERS: original = mute gate, byte > 5 plays at FULL amplitude with samples
+// mixed raw (v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0); port scales by the
+// byte instead because reproducing the gate turns every in-game fade into an
+// abrupt on/off and forces sounds the game intends at 1-7% to full volume -- a
+// limitation of the 2010 mixer rather than a design choice.
+//
+// A zero-volume ASND voice keeps consuming samples (silent, not paused) -- that
+// part IS faithful -- so a silenced voice still completes and its loop tail
+// still arms via FinishLoopCallback. The LoopInfo vol is updated too so a tail
+// armed AFTER the volume change doesn't come back at the old level.
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (!m_AudioDevice || handle == 0) return;
     Voice* v = FindVoice(handle);
     if (v) {
         v->volume = vol;
-        int vol255 = (s_SFXMuted || vol <= 5) ? 0 : 255;
+        int vol255 = s_SFXMuted ? 0 : (int)vol;
         s_LoopInfo[v->cursor].vol = vol255;
         ASND_ChangeVolumeVoice(v->cursor, vol255, vol255);
     }
@@ -867,8 +875,8 @@ void SoundManager::SyncMutes() {
     if (s_SFXMuted != wasSFXMuted) {
         for (int i = 0; i < VOICE_COUNT; i++) {
             if (m_Voices[i].id == 0) continue;
-            // volume is the raw gate byte: audible iff > 5 (see SFXSetVolume).
-            int vol255 = (s_SFXMuted || m_Voices[i].volume <= 5) ? 0 : 255;
+            // volume is the raw byte and IS the ASND volume 1:1 (see SFXSetVolume).
+            int vol255 = s_SFXMuted ? 0 : (int)m_Voices[i].volume;
             s_LoopInfo[m_Voices[i].cursor].vol = vol255;
             ASND_ChangeVolumeVoice(m_Voices[i].cursor, vol255, vol255);
         }

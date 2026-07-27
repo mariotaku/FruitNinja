@@ -109,22 +109,26 @@ EM_JS(void, fnaudio_init, (const char* dataDirPtr, double masterSfxGain, double 
     // Brick-wall limiter: WebAudio sums every playing SFX/music node in
     // float on the AudioContext's own graph, so stacked SFX can push the
     // summed signal past |1.0| (0dBFS) -- the browser's device output then
-    // hard-clips, same distortion the SDL soft-knee limiter above this
-    // backend's SDL sibling (SoundManagerSDL.cpp SoftClipSample) exists to
-    // avoid. DynamicsCompressorNode is the browser-native way to tame that:
-    // configured with a hard knee and high ratio it behaves as a limiter
-    // rather than a musical compressor. threshold=-1dB sits just under
-    // full scale, so a single (or a couple of moderate) sounds pass through
-    // essentially unaffected -- only summed peaks near/over 0dBFS actually
-    // get caught, matching the SDL limiter's "singles full, only stacks
-    // compressed" behaviour. Both master buses feed this ONE shared limiter
-    // before the destination, so SFX-vs-music stacking is caught too.
+    // hard-clips. DynamicsCompressorNode is the browser-native way to tame
+    // that: with a hard knee and a high ratio it behaves as a limiter rather
+    // than a musical compressor.
+    //
+    // threshold is 0dB, i.e. exactly full scale -- NOT below it. The SFX
+    // assets are mastered to 0dBFS, so a threshold under full scale catches
+    // every LONE sound and ducks it by ~1dB with a 3ms attack, which is
+    // audible pumping on literally every slice. At 0dB a single sound sits at
+    // the threshold and passes essentially untouched, and only a genuine SUM
+    // over full scale is limited -- the same "singles pass bit-exact, only
+    // stacks are reduced" contract as the SDL backend's peak limiter
+    // (SoundManagerSDL.cpp, kLimiterCeiling). Both master buses feed this ONE
+    // shared limiter before the destination, so SFX-vs-music stacking is
+    // caught too.
     var limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -1.0;  // dB, just below 0dBFS
+    limiter.threshold.value = 0.0;   // dB, full scale -- safety net, not a bus compressor
     limiter.knee.value = 0.0;        // hard knee -> brick-wall
     limiter.ratio.value = 20.0;      // limiting (not gentle compression)
-    limiter.attack.value = 0.003;    // fast, catch transients
-    limiter.release.value = 0.10;
+    limiter.attack.value = 0.002;    // fast, catch stacked transients
+    limiter.release.value = 0.15;
     limiter.connect(ctx.destination);
 
     masterSfx.connect(limiter);
@@ -741,20 +745,20 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
 }
 
 // Initial per-source GainNode value handed to playSfx. Unity: the 0-255 byte
-// that actually decides audibility only arrives one call later, via
+// that actually decides the level only arrives one call later, via
 // SFXSetVolume (MortarSound::SetVolume), which retargets this same node to
-// 1.0 or 0.0. Named so the dev-tool readout below cannot drift from the value
+// byte/255. Named so the dev-tool readout below cannot drift from the value
 // really passed.
 static const double INITIAL_SFX_GAIN = 1.0;
 
 // Port specific: handle of the most recent play that posted an OSD toast, so
-// SFXSetVolume can complete that toast with the gate byte. 0 = nothing
+// SFXSetVolume can complete that toast with the volume byte. 0 = nothing
 // pending (already completed, or the flag is off).
 static uint32_t s_OsdVolHandle = 0;
 
 // Assign monotonic handle, kick a JS source. Volume arrives right after via
-// SFXSetVolume (GameSound::SFXPlay computes the per-play byte; it gates,
-// never scales -- see SFXSetVolume below).
+// SFXSetVolume (GameSound::SFXPlay computes the per-play byte, applied as a
+// linear gain -- see SFXSetVolume below).
 uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     if (!name || !*name) return 0;
 
@@ -781,13 +785,14 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     //                                   succeeds)
     //   d=F decode PERMANENTLY failed (retry budget spent) -> play DROPPED.
     //       A "DECODE DEAD <name>: <reason>" OSD line names the cause.
-    //   g=  initial GainNode value passed to playSfx (NOT the gate byte)
+    //   g=  initial GainNode value passed to playSfx (NOT the volume byte)
     //   c=r ctx running  c=s suspended (no user gesture -> everything silent)
     //   c=c closed/other  c=? no AudioContext at all
     //   m=1 SFX bus muted (masterSfx gain forced to 0); m=0 unmuted
     //   M=0 masterSfx gain is 0 despite m=0 (bus zeroed by teardown)
-    //   v=  the 0-255 gate byte, appended by SFXSetVolume -- audible iff > 5.
-    //       A line with NO v= never got a SetVolume for this handle.
+    //   v=  the raw 0-255 volume byte, appended by SFXSetVolume -- the source's
+    //       linear gain is v/255 (255 full, 0 silent, 20 about 8%). A line with
+    //       NO v= never got a SetVolume for this handle.
     if (FN::g_bOsdSfx) {
         const int diag = fnaudio_sfx_diag(lower.c_str());
         static const char kDecChar[8] = { '0', '1', 'P', 'F', 'R', '?', '?', '?' };
@@ -834,16 +839,22 @@ void SoundManager::SFXResume(uint32_t handle) {
     fnaudio_resume(handle);
 }
 
-// vol is the raw 0-255 byte from MortarSound::SetVolume. It is a GATE, not a
-// gain (see SoundManager.h Voice doc / v1.6.1 MAMAudioThread::FillBuffer
-// @0x0022f7f0): audible iff vol > 5, at full amplitude. Expressed as
-// GainNode gain 1-or-0 rather than raw int accumulation -- a zero-gain
-// source keeps playing (silent, not paused), so a gated sound still runs to
-// completion and its onended handler still retires the handle.
+// vol is the raw 0-255 byte from MortarSound::SetVolume, applied as this
+// source's linear GainNode gain (vol/255).
+//
+// DIFFERS: original = mute gate, byte > 5 plays at FULL amplitude with samples
+// mixed raw (v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0); port scales by the
+// byte instead because reproducing the gate turns every in-game fade into an
+// abrupt on/off and forces sounds the game intends at 1-7% to full volume -- a
+// limitation of the 2010 mixer rather than a design choice.
+//
+// A zero-gain source keeps playing (silent, not paused) -- that part IS
+// faithful -- so a silenced sound still runs to completion and its onended
+// handler still retires the handle.
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (handle == 0) return;
 
-    // Port specific: dev-tool -- complete this play's OSD line with the gate
+    // Port specific: dev-tool -- complete this play's OSD line with the volume
     // byte (SFXPlay had to toast before MortarSound::SetVolume computed it).
     // One-shot per play: later volume changes on the same handle (bomb-fuse
     // ramp) do not re-append. Display-only, never gates the call below.
@@ -854,7 +865,7 @@ void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
         OSD_AppendToLast(suffix);
     }
 
-    fnaudio_set_volume(handle, (vol > 5) ? 1.0 : 0.0);
+    fnaudio_set_volume(handle, (double)vol / 255.0);
 }
 
 bool SoundManager::SFXIsActive(uint32_t handle) {

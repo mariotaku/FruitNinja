@@ -30,18 +30,26 @@ struct SoundBuffer {
 
 // 16-voice table (matches MAMAudioThread voice count)
 //
-// volume is the raw voice byte (voice+0xf in the binary) and is a THRESHOLD
-// GATE, not a gain: v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0 reads it
-// exactly once, as `cmp #5` -- byte <= 5 mixes NOTHING, byte >= 6 mixes the
-// raw samples at FULL amplitude. There is no multiply/shift/table anywhere in
-// the mixer, so intermediate values (6..255) are indistinguishable from 255.
-// A gated (silent) voice is NOT paused: its cursor keeps advancing, loops
-// wrap, and completion is still detected -- muting never stalls playback.
+// volume is stored as the RAW voice byte (voice+0xf in the binary), exactly as
+// MortarSound::SetVolume produced it -- including its truncate-and-wrap
+// behaviour above 1.0. Every backend converts it to a linear gain at the point
+// it mixes (byte * 1/255), so the byte here always matches what the game wrote
+// and stays meaningful to the SFX OSD's `v=` readout.
+//
+// DIFFERS: original = mute gate, byte > 5 plays at FULL amplitude with samples
+// mixed raw (v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0); port scales by the
+// byte instead because reproducing the gate turns every in-game fade into an
+// abrupt on/off and forces sounds the game intends at 1-7% to full volume -- a
+// limitation of the 2010 mixer rather than a design choice.
+//
+// A silent (byte 0) voice is NOT paused: its cursor keeps advancing, loops
+// wrap, and completion is still detected -- muting never stalls playback. That
+// part IS faithful and is load-bearing (GameSound reaps the slot on completion).
 struct Voice {
     uint32_t   id;           // monotonic ID; 0 = idle
     SoundBuffer* buf;        // pointer into s_soundCache
     int        cursor;       // current sample position
-    uint8_t    volume;       // raw 0-255 volume byte; audible iff > 5 (gate, see above)
+    uint8_t    volume;       // raw 0-255 volume byte; linear gain = volume/255
     bool       playing;      // true = active; false = paused or idle
     Voice() : id(0), buf(nullptr), cursor(0), volume(255), playing(false) {}
 };
@@ -101,11 +109,12 @@ public:
     virtual void SFXPause(uint32_t handle);
     virtual void SFXResume(uint32_t handle);
     // vol is the raw 0-255 byte from MortarSound::SetVolume (truncated
-    // vol*255, wraps above 1.0 -- see MortarSound.cpp). It is a GATE, not a
-    // gain: the voice is audible iff vol > 5, at full amplitude (v1.6.1
-    // MAMAudioThread::FillBuffer @0x0022f7f0 / SetSoundVolume @0x0022f3ec).
-    // A gated voice keeps playing silently to completion on every backend.
-    virtual void SFXSetVolume(uint32_t handle, uint8_t vol);   // 0-255 gate byte
+    // vol*255, wraps above 1.0 -- see MortarSound.cpp). Stored verbatim in
+    // Voice::volume; each backend applies it as a LINEAR GAIN (vol/255) when
+    // it mixes -- see the DIFFERS on Voice above, the binary treated the same
+    // byte as a >5 on/off gate. A silent (vol 0) voice keeps playing to
+    // completion on every backend rather than pausing.
+    virtual void SFXSetVolume(uint32_t handle, uint8_t vol);   // 0-255 volume byte
 
     // Query whether a voice is still active (not finished, not stopped).
     // Used by MortarSound::IsPlaying/IsPaused to detect voice completion.

@@ -45,7 +45,7 @@ void OSD_AddMessage(const char* s, float ttl);
 // unchanged); ignored when the store is empty or the line is already full.
 // For diagnostics whose last field only becomes known after the toast was
 // posted -- e.g. SoundManager::SFXPlay toasts a play, then
-// SoundManager::SFXSetVolume appends the gate byte that arrives one call
+// SoundManager::SFXSetVolume appends the volume byte that arrives one call
 // later. Only meaningful when nothing else posted a toast in between (the
 // caller owns that ordering).
 void OSD_AppendToLast(const char* s);

@@ -8,7 +8,10 @@
 // PCM format: S16LE, 16kHz mono (MAMAudioThread sampleRate = 16000).
 // .wav.pcm header: 5 x int32 = 20 bytes (type, sampleRate, bitDepth, sampleCount, loop).
 // Sample level: full scale / unity, no pre-attenuation (kSfxHeadroomShift=0 in
-// LoadSound; binary's MAMAudioController::LoadSound used >>4 -- see comment there).
+// LoadSound; binary's MAMAudioController::LoadSound used >>4 -- see comment
+// there). Per-voice level comes from the 0-255 volume byte applied as a linear
+// gain at mix time; summed peaks are caught by the output limiter (see
+// kLimiterCeiling), which is inert unless the mix actually exceeds full scale.
 // Voices: 16 entries (MAMAudioThread voice limit).
 // Music: TODO -- stub, mp3 streaming not implemented.
 // DIFFERS: music is stubbed (no Osp::Media::Player equivalent yet).
@@ -71,6 +74,11 @@ float SoundManager::s_SFXVolume   = 0.4f;
 float SoundManager::s_MusicVolume = 0.45f;
 bool  SoundManager::s_SFXMuted    = false;
 bool  SoundManager::s_MusicMuted  = false;
+
+// Device sample rate actually granted by SDL_OpenAudioDevice (see Init). Only
+// the output limiter reads it, to keep its release time constant in seconds
+// rather than in callback blocks.
+static int s_DeviceRate = 16000;
 
 SoundManager::SoundManager()
     : m_AudioDevice(0)
@@ -162,6 +170,8 @@ void SoundManager::Init() {
         LOG_ERROR("SoundManager", "SDL_OpenAudioDevice failed: %s", SDL_GetError());
         return;
     }
+
+    s_DeviceRate = (got.freq > 0) ? got.freq : want.freq;
 
     LOG_INFO("SoundManager", "Audio opened: freq=%d ch=%d fmt=%d samples=%d",
              got.freq, got.channels, got.format, got.samples);
@@ -324,11 +334,11 @@ SoundBuffer* SoundManager::LoadSound(const char* name) {
     // MAMAudioController::LoadSound @0x0022f46c: `ldrsh / mov r1,r1,asr #0x4 /
     // strh` on every sample -- constant, never volume-dependent) relying on
     // device amp compensation (Osp::Media::AudioOut::SetVolume was the real
-    // output stage, applied after the shift); port mixes full-scale behind a
-    // soft limiter (SoftClipSample below) because it has no make-up gain
-    // stage -- adopting >>4 verbatim would play ~24 dB quieter than the game
-    // felt on-device, and the limiter already covers the 16-voice pile-up
-    // headroom the shift existed for.
+    // output stage, applied after the shift); port mixes full-scale behind the
+    // output peak limiter (see kLimiterCeiling below) because it has no make-up
+    // gain stage -- adopting >>4 verbatim would play ~24 dB quieter than the
+    // game felt on-device, and the limiter covers the voice pile-up headroom
+    // the shift existed for without touching a mix that already fits.
     static const int kSfxHeadroomShift = 0;  // unity: no pre-attenuation (full scale)
     if (kSfxHeadroomShift > 0) {
         for (int i = 0; i < sampleCount; i++) {
@@ -354,43 +364,42 @@ Voice* SoundManager::FindVoice(uint32_t id) {
     return nullptr;
 }
 
-// Soft-knee limiter: linear passthrough below kSoftClipThreshold, smooth
-// asymptotic saturation from there up to the int16 ceiling.
+// Output-stage peak limiter (port-specific mixer stage; the binary had no
+// equivalent -- see LoadSound's DIFFERS about the fixed >>4 it used instead).
 //
-// Rationale (port-specific mixer stage, not a binary behaviour -- no
-// DIFFERS marker per the SDL-only-file convention): the binary's
-// MAMAudioThread::FillBuffer mixed samples pre-attenuated by >>4 at load
-// time (see LoadSound's kSfxHeadroomShift comment), which gave 16 stacked
-// voices headroom before the raw add could saturate. The port plays SFX at
-// unity gain (kSfxHeadroomShift=0) instead, matching the Wii backend and
-// how the game actually felt through AudioOut's device volume stage. That
-// means a SINGLE voice already sits near full scale, so summing several
-// voices with the old per-voice saturating clamp pinned the total to
-// +-32767 almost immediately -- a harsh, order-dependent hard clip once any
-// voice pushed the running sum past the ceiling (later voices in the mix
-// loop stopped contributing at all). Accumulating every voice into an
-// int32 buffer first and applying ONE soft-knee curve at the end fixes
-// this: sums that stay under the threshold (a single SFX, or a couple of
-// quiet ones) pass through bit-identical to unity, and only genuinely loud
-// stacks get compressed, smoothly, instead of clipped.
-static const int32_t kSoftClipThreshold = 22937;  // 0.7 * 32767 -- linear knee point
-static const int32_t kSoftClipCeiling   = 32767;
+// The port mixes at unity so a sound reaches the device at the level it was
+// authored, and every voice is scaled by its own volume byte before it lands
+// in the accumulator. The only thing left to protect against is SUMMING: the
+// SFX assets are mastered to 0dBFS (121 of the 134 shipped .wav.pcm files peak
+// above 0.7 full scale), so two loud sounds landing on the same sample can
+// exceed the int16 ceiling.
+//
+// This is a GAIN-REDUCTION limiter, not a waveshaper. A waveshaping soft clip
+// with a knee below full scale would fire on nearly every LONE sound, because
+// nearly every lone sound already crosses such a knee -- it would round the
+// peaks of every single sound in the game, permanently, and be a constant
+// participant in the signal path. Instead: measure the block's peak and, only
+// when the summed mix would actually exceed the ceiling, scale the whole block
+// down by exactly enough to fit. A mix that fits is copied out with no
+// arithmetic at all, bit-identical -- so one sound played alone is untouched.
+//
+// Attack is instantaneous: this block's gain comes from this block's own peak,
+// so a block can never overshoot and the clamp below is unreachable in
+// practice. Release is exponential back to unity (kLimiterReleaseSec) so the
+// mix recovers smoothly instead of stepping back at the next block boundary.
+// Gain is constant across a block (256 samples = 16ms at the device rate) and
+// only moves at block boundaries; during release it moves a few percent of the
+// remaining distance per block, far too small to zipper, and the one large step
+// it can take (attack) lands on the transient that caused it.
+//
+// Matches the Web Audio backend's shared DynamicsCompressorNode limiter
+// (SoundManagerWebAudio.cpp), which is likewise thresholded at full scale so
+// singles pass untouched and only sums are caught.
+static const int32_t kLimiterCeiling    = 32767;
+static const float   kLimiterReleaseSec = 0.25f;
 
-static int16_t SoftClipSample(int32_t x) {
-    int32_t sign = (x < 0) ? -1 : 1;
-    int32_t ax   = (x < 0) ? -x : x;
-    if (ax <= kSoftClipThreshold) {
-        return (int16_t)x;  // linear region: bit-exact passthrough
-    }
-    // Asymptotic soft-saturation of the excess above the knee, approaching
-    // kSoftClipCeiling but never reaching/crossing it.
-    float excess = (float)(ax - kSoftClipThreshold);
-    float range  = (float)(kSoftClipCeiling - kSoftClipThreshold);
-    float y = range * (1.0f - expf(-excess / range));
-    int32_t out = kSoftClipThreshold + (int32_t)y;
-    if (out > kSoftClipCeiling) out = kSoftClipCeiling;
-    return (int16_t)(sign * out);
-}
+// Limiter gain carried across callbacks. Audio-thread only.
+static float s_LimiterGain = 1.0f;
 
 // SDL2 audio callback. Runs on the audio thread.
 // Mixes all active voices + music voice into the output buffer.
@@ -403,8 +412,8 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
     // Zero output
     SDL_memset(stream, 0, (size_t)len);
 
-    // Per-callback int32 mix accumulator (no per-voice clamping -- see
-    // SoftClipSample rationale above). Sized to the largest callback frame
+    // Per-callback int32 mix accumulator (no per-voice clamping -- see the
+    // output-limiter rationale above). Sized to the largest callback frame
     // count actually requested (want.samples: 256 @16kHz desktop, 4096
     // @48kHz emscripten -- see Init()).
     static const int kMaxCallbackSamples = 4096;
@@ -415,30 +424,38 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
 
     // Mix each SFX voice.
     // ASM-verified: 2026-07-26T09:09Z v1.6.1 MAMAudioThread::FillBuffer @ 0x0022f7f0 (asm-inspector)
-    // The per-voice volume byte (voice+0xf) is a pure ON/OFF GATE, never a
-    // gain: the binary reads it exactly once, as `cmp r3,#0x5 / bls skip` --
-    // byte <= 5 takes the skip-mix path, byte >= 6 mixes RAW at full
-    // amplitude (`mixbuf[i] += src[i]`, no multiply/shift/table anywhere in
-    // the function). The category flag (voice+0x42) selects which mute byte
+    // What the binary does: the per-voice volume byte (voice+0xf) is a pure
+    // ON/OFF GATE, never a gain. It is read exactly once, as `cmp r3,#0x5 /
+    // bls skip` -- byte <= 5 takes the skip-mix path, byte >= 6 mixes RAW at
+    // full amplitude (`mixbuf[i] += src[i]`, no multiply/shift/table anywhere
+    // in the function). The category flag (voice+0x42) selects which mute byte
     // applies (this+0xc / this+0xd) -- that is the SFX-vs-music mute split,
     // mapped here onto s_SFXMuted / s_MusicMuted.
     //
-    // A gated voice is NOT paused: the binary's skip path (@0x0022f950-58)
-    // still advances the play cursor by the full chunk and still runs
-    // loop-wrap + finished handling, so muting never stalls playback or
-    // defers completion. The loop below matches: cursor/loop/completion
-    // bookkeeping runs unconditionally; only the accumulate is gated.
+    // DIFFERS: original = mute gate, byte > 5 plays at FULL amplitude with
+    // samples mixed raw (v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0); port
+    // scales by the byte instead because reproducing the gate turns every
+    // in-game fade into an abrupt on/off and forces sounds the game intends at
+    // 1-7% to full volume -- a limitation of the 2010 mixer rather than a
+    // design choice.
+    //
+    // Faithful and load-bearing: a silent voice is NOT paused. The binary's
+    // skip path (@0x0022f950-58) still advances the play cursor by the full
+    // chunk and still runs loop-wrap + finished handling, so muting never
+    // stalls playback or defers completion (GameSound reaps the slot off that
+    // completion). The loop below matches: cursor/loop/completion bookkeeping
+    // runs unconditionally; only the accumulate is scaled.
     //
     // Accumulates into s_MixAccum (int32, unclamped) instead of out[]
-    // directly -- see SoftClipSample rationale above.
+    // directly -- see the limiter rationale above.
     for (int vi = 0; vi < VOICE_COUNT; vi++) {
         Voice& v = self->m_Voices[vi];
         if (v.id == 0 || !v.playing || !v.buf) continue;
 
         int16_t* src = v.buf->samples;
         int total    = v.buf->sampleCount;
-        // Gate: audible iff volume byte > 5 AND the SFX category isn't muted.
-        const bool audible = !s_SFXMuted && v.volume > 5;
+        // Linear gain from the raw volume byte; the SFX category mute forces 0.
+        const float voiceVol = s_SFXMuted ? 0.0f : (float)v.volume * (1.0f / 255.0f);
 
         for (int s = 0; s < nSamples; ) {
             if (v.cursor >= total) {
@@ -452,8 +469,8 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
                     break;
                 }
             }
-            if (audible && s < mixSamples) {
-                s_MixAccum[s] += src[v.cursor];
+            if (voiceVol > 0.0f && s < mixSamples) {
+                s_MixAccum[s] += (int32_t)((float)src[v.cursor] * voiceVol);
             }
             v.cursor++;
             s++;
@@ -496,12 +513,41 @@ void SoundManager::AudioCallback(void* userdata, uint8_t* stream, int len) {
         }
     }
 
-    // Final stage: one soft-knee limiter pass, int32 accumulator -> int16
-    // output. Replaces the old per-voice saturating hard clamp (see
-    // SoftClipSample rationale above).
+    // Output stage: gain-reduction limiter, int32 accumulator -> int16 out.
+    // See the kLimiterCeiling block above for the design. Gain 1.0 (the normal
+    // case) copies the accumulator straight out, untouched.
+    int32_t peak = 0;
     for (int s = 0; s < mixSamples; s++) {
-        out[s] = SoftClipSample(s_MixAccum[s]);
+        int32_t a = s_MixAccum[s];
+        if (a < 0) a = -a;
+        if (a > peak) peak = a;
     }
+
+    float gain = s_LimiterGain;
+    if (peak > kLimiterCeiling) {
+        const float needed = (float)kLimiterCeiling / (float)peak;
+        if (needed < gain) gain = needed;   // instantaneous attack
+    }
+
+    if (gain >= 1.0f) {
+        // peak <= kLimiterCeiling here, so the cast cannot overflow.
+        for (int s = 0; s < mixSamples; s++) {
+            out[s] = (int16_t)s_MixAccum[s];
+        }
+    } else {
+        for (int s = 0; s < mixSamples; s++) {
+            int32_t v = (int32_t)((float)s_MixAccum[s] * gain);
+            if (v >  kLimiterCeiling) v =  kLimiterCeiling;
+            if (v < -kLimiterCeiling) v = -kLimiterCeiling;
+            out[s] = (int16_t)v;
+        }
+    }
+
+    // Release toward unity for the next block.
+    const float tauSamples = kLimiterReleaseSec * (float)s_DeviceRate;
+    const float coef = 1.0f - expf(-(float)mixSamples / tauSamples);
+    s_LimiterGain = gain + (1.0f - gain) * coef;
+    if (s_LimiterGain > 1.0f) s_LimiterGain = 1.0f;
 }
 
 // 0x0018cab8 -- allocates MortarSoundMAM (port: plain MortarSound)
@@ -524,7 +570,7 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
 }
 
 // Port specific: handle of the most recent play that posted an OSD toast, so
-// SFXSetVolume can complete that toast with the gate byte. 0 = nothing
+// SFXSetVolume can complete that toast with the volume byte. 0 = nothing
 // pending (already completed, or the dev flag is off).
 static uint32_t s_OsdVolHandle = 0;
 
@@ -562,10 +608,11 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
     // Web Audio backend's readout where the quantity exists on both:
     //   a=N/16 voices busy at request time -- a=16/16 means this play is
     //          DROPPED (the binary never steals a playing voice)
-    //   m=1    SFX muted (AudioCallback's `!s_SFXMuted && volume > 5` gate)
-    //   v=     the 0-255 gate byte, appended by SFXSetVolume -- audible iff
-    //          > 5. A line with NO v= never got a SetVolume for this handle
-    //          (e.g. it was dropped, so MortarSound::m_Handle stayed 0).
+    //   m=1    SFX muted (AudioCallback forces the per-voice gain to 0)
+    //   v=     the raw 0-255 volume byte, appended by SFXSetVolume -- the
+    //          voice's linear gain is v/255, so v=255 is full, v=0 silent,
+    //          v=20 about 8%. A line with NO v= never got a SetVolume for this
+    //          handle (e.g. it was dropped, so MortarSound::m_Handle stayed 0).
     // The web backend's d= (deferred decode) and c= (AudioContext state) have
     // no SDL equivalent -- loading here is synchronous and a load failure
     // returns above, before this toast -- so they are omitted, not faked.
@@ -608,7 +655,7 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
         slot->id      = newId;
         slot->buf     = buf;
         slot->cursor  = 0;
-        slot->volume  = 255;  // fresh voice starts audible (gate byte, see AudioCallback)
+        slot->volume  = 255;  // fresh voice starts at full gain (volume byte, see AudioCallback)
         slot->playing = true;
     }
     SDL_UnlockAudioDevice(m_AudioDevice);
@@ -658,13 +705,15 @@ void SoundManager::SFXResume(uint32_t handle) {
     SDL_UnlockAudioDevice(m_AudioDevice);
 }
 
-// SetVolume: vol is the raw 0-255 byte from MortarSound::SetVolume. Plain
-// byte store, no arithmetic -- the mixer treats it as a >5 gate.
+// SetVolume: vol is the raw 0-255 byte from MortarSound::SetVolume. Plain byte
+// store, no arithmetic -- exactly as the binary does it. AudioCallback then
+// applies it as a linear gain (the binary applied it as a >5 gate; see the
+// DIFFERS there).
 // ASM-verified: 2026-07-26T09:09Z v1.6.1 MAMAudioThread::SetSoundVolume @ 0x0022f3ec (asm-inspector)
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (!m_AudioDevice || handle == 0) return;
 
-    // Port specific: dev-tool -- complete this play's OSD line with the gate
+    // Port specific: dev-tool -- complete this play's OSD line with the volume
     // byte (SFXPlay had to toast before MortarSound::SetVolume computed it).
     // One-shot per play: later volume changes on the same handle (bomb-fuse
     // ramp) do not re-append. Display-only, never gates the store below.

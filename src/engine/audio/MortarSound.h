@@ -26,11 +26,19 @@ public:
     bool IsIdle() { return m_State == 0; }
 
     // Maps float to a 0-255 byte (vol*255, TRUNCATED -- wraps above 1.0, see
-    // MortarSound.cpp) and calls backend SFXSetVolume. Downstream the byte is
-    // a THRESHOLD GATE, not a gain: the voice plays at full amplitude iff
-    // byte > 5, else silent (v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0).
-    // So SetVolume(0.0f) mutes and any vol >= ~0.024 is full volume; a muted
-    // sound keeps playing (cursor advances, loops wrap, completion fires).
+    // MortarSound.cpp) and calls backend SFXSetVolume. Every port backend
+    // applies that byte as a LINEAR GAIN (byte/255), so SetVolume(0.0f) is
+    // silent, 1.0f is full, and everything between fades smoothly.
+    //
+    // DIFFERS: original = mute gate, byte > 5 plays at FULL amplitude with
+    // samples mixed raw (v1.6.1 MAMAudioThread::FillBuffer @0x0022f7f0); port
+    // scales by the byte instead because reproducing the gate turns every
+    // in-game fade into an abrupt on/off and forces sounds the game intends at
+    // 1-7% to full volume -- a limitation of the 2010 mixer rather than a
+    // design choice.
+    //
+    // A silenced sound keeps playing regardless (cursor advances, loops wrap,
+    // completion fires) -- that part IS faithful.
     void SetVolume(float vol);
 
     // If m_State==0: calls SoundManager::SFXPlay, m_State=2 (0x0018c850)

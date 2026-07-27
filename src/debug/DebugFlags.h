@@ -29,11 +29,12 @@ namespace Mortar { class FontCacheObjectTTF; }
 //                   Toggle F7.
 // g_bOsdSfx:        posts an OSD toast per SFX played, carrying why it might
 //                   be silent (SoundManager::SFXPlay + SFXSetVolume, which
-//                   appends the gate byte one call later).
+//                   appends the volume byte one call later).
 //                   SDL   : "[tick] <name> a=<busy>/16 m=<sfxMuted> v=<byte>"
 //                   Web   : "[tick] <name> d=<decode> g=<initial gain>
 //                            c=<ctx state> m=<sfxMuted> v=<byte>"
-//                   v is the 0-255 gate byte (audible iff > 5); no v= means
+//                   v is the raw 0-255 volume byte and the voice's linear gain
+//                   is v/255 (255 full, 0 silent, 20 about 8%); no v= means
 //                   SetVolume never arrived for that handle. Web d=: 1
 //                   decoded, 0 undecoded (deferred), P decoding, F failed
 //                   (play dropped); c=: r running, s suspended (no audio
