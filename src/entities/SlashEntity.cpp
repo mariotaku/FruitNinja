@@ -1563,9 +1563,10 @@ void SlashEntity::Update(float dt) {
                 if (g_ScaleFlag1) CreateGhost();
                 // ModParticlesReleaseHash = g_SecondHash (particle2 slot in SetModColours).
                 if (g_SecondHash != 0) {
+                    // ASM-spec v1.6.1 SlashEntity::DrawSlice @0x001e841c: r2=NULL, r3=1.
                     PSPParticleEmitter* eBurst =
                         PSPParticleManager::GetInstance().AddEmitter(
-                            g_SecondHash, nullptr, /*persistent=*/false);
+                            g_SecondHash, nullptr, /*updateWhenPaused=*/true);
                     if (eBurst) eBurst->m_Pos = pos;
                 }
             }
@@ -1583,7 +1584,9 @@ void SlashEntity::Update(float dt) {
         const bool wantTrail = bladeActiveByte && g_DirectionalFlag != 0 && g_TrailHash != 0;
         if (wantTrail) {
             if (!m_TrailEmitter) {
-                m_TrailEmitter = pm.AddEmitter(g_TrailHash, &m_TrailEmitter, true);
+                // ASM-spec v1.6.1 SlashEntity::Update @0x001e8b54: r3=1.
+                m_TrailEmitter = pm.AddEmitter(g_TrailHash, &m_TrailEmitter,
+                                               /*updateWhenPaused=*/true);
                 if (m_TrailEmitter) {
                     m_TrailEmitter->m_bUpdateWhenPaused = true;
                 }
@@ -2167,9 +2170,10 @@ void SlashEntity::DrawSlice() {
                 if (g_ScaleFlag1) CreateGhost();
                 // ModParticlesReleaseHash = g_SecondHash (particle2 slot in SetModColours).
                 if (g_SecondHash != 0) {
+                    // ASM-spec v1.6.1 SlashEntity::DrawSlice @0x001e841c: r2=NULL, r3=1.
                     PSPParticleEmitter* eBurst =
                         PSPParticleManager::GetInstance().AddEmitter(
-                            g_SecondHash, nullptr, /*persistent=*/false);
+                            g_SecondHash, nullptr, /*updateWhenPaused=*/true);
                     if (eBurst) eBurst->m_Pos = pos;
                 }
             }
@@ -2478,9 +2482,9 @@ void SlashEntity::ColoursChanged() {
     if (g_DirectionalFlag != 0 && g_TrailHash != 0) {
         // ASM-spec v1.6.1 PSPParticleManager::AddEmitter @0x0013c1b8
         // auto-null contract: ppRef=&m_TrailEmitter so reap/ClearEmitter nulls it
-        // (binary ColoursChanged @~0x1e76fc + SlashEntity::Update :1280 site).
+        // ASM-spec v1.6.1 SlashEntity::ColoursChanged @0x001e778c: r3=1.
         m_TrailEmitter = PSPParticleManager::GetInstance()
-            .AddEmitter(g_TrailHash, &m_TrailEmitter, /*persistent=*/true);
+            .AddEmitter(g_TrailHash, &m_TrailEmitter, /*updateWhenPaused=*/true);
         if (m_TrailEmitter) {
             m_TrailEmitter->m_bUpdateWhenPaused = true;
         }

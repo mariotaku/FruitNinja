@@ -1285,8 +1285,10 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         const uint32_t hitHash   = isCritical ? kHashCritHit      : info->m_NameHash;
         const uint32_t trailHash = isCritical ? kHashCritHitStars : info->m_SlicedHash;
 
+        // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001ddbd4: updateWhenPaused =
+        //   (game_work.m_PauseAmount(+0xc) < 1.0f) -- same idiom as SuperFruitControl::Sliced.
         PSPParticleEmitter* eHit = pm.AddEmitter(
-            hitHash, nullptr, /*persistent=*/false);
+            hitHash, nullptr, /*updateWhenPaused=*/game_work.m_PauseAmount < 1.0f);
         if (eHit) {
             eHit->m_Pos     = pos;
             eHit->m_DirCos  =  cosf(sliceRad);   // cos theta
@@ -1301,8 +1303,9 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // The reap condition (binary @ 0x00115ed8: keep if timer<maxLifetime || maxLifetime<=0
         // && !Ends()) never frees them while Fruit holds the pointer. For most fruits the
         // template does not exist at all -> AddEmitter returns nullptr on hash-miss, safe.
-        m_pEmitter1 = pm.AddEmitter(trailHash, nullptr, /*persistent=*/true);
-        m_pEmitter2 = pm.AddEmitter(trailHash, nullptr, /*persistent=*/true);
+        // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001ddc70 / @0x001ddc88: r2=NULL, r3=1.
+        m_pEmitter1 = pm.AddEmitter(trailHash, nullptr, /*updateWhenPaused=*/true);
+        m_pEmitter2 = pm.AddEmitter(trailHash, nullptr, /*updateWhenPaused=*/true);
         if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
         if (m_pEmitter2) m_pEmitter2->m_Pos = m_SecondPos;
     }
@@ -2958,7 +2961,8 @@ bool Fruit::SetTrailParticles(unsigned long emitterHash) {
     // (fruit_flight, scorex2_trail, blue_fruit_flight, dragon_trail, etc.) have
     // <life>0</life> with every set having stop="0" and perSec>0 -> naturally-infinite.
     // Reap (binary @ 0x00115ed8) never frees them while Fruit holds the pointer.
-    m_pEmitter1 = pm.AddEmitter((uint32_t)emitterHash, nullptr, /*persistent=*/true);
+    // ASM-spec v1.6.1 Fruit::SetTrailParticles @0x001db33c: r3=1 (mov r3,#0x1).
+    m_pEmitter1 = pm.AddEmitter((uint32_t)emitterHash, nullptr, /*updateWhenPaused=*/true);
     if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
     return m_pEmitter1 != nullptr;
 }

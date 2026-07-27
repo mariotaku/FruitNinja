@@ -878,8 +878,9 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
                 if (pm.EmitterExists(emitterHash)) {
                     // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbd8c: AddEmitter's
                     //   updateWhenPaused arg = (game_work.flM_PauseAmount(+0xc) < 1.0).
+                    //   Call site @0x001bbdb4.
                     PSPParticleEmitter* e = pm.AddEmitter(emitterHash, 0,
-                                                          game_work.m_PauseAmount < 1.0f);
+                                                          /*updateWhenPaused=*/game_work.m_PauseAmount < 1.0f);
                     if (e) {
                         uint16_t negArc = (uint16_t)(-(int16_t)m_pHostFruit->m_SliceArcAngle);
                         e->m_DirCos = CosIdx(negArc);

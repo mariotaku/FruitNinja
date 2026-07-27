@@ -359,7 +359,8 @@ void Bomb::Update(float dt) {
         pos.x <= BOUNDS_MIN_X || pos.x >= BOUNDS_MAX_X) {
         KillBomb();
     } else if (!m_pEmitter) {
-        // ASM-spec v1.6.1 Bomb::Update @ 0x1d6098: index particleHash directly by m_BombVariant
+        // ASM-spec v1.6.1 Bomb::Update @ 0x001d6098: index particleHash directly by m_BombVariant.
+        // AddEmitter call site is @0x001d6728; updateWhenPaused = (game_work.m_PauseAmount == 0.0f).
         const int variant = m_BombVariant;
         const uint32_t hash = g_bombData.fuseHash[(variant != 0) ? 1 : 0];
         m_pEmitter = PSPParticleManager::GetInstance().AddEmitter(
