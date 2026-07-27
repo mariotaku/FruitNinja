@@ -21,6 +21,7 @@
 #include "hud/MenuButton.h"
 #include "hud/MissControl.h"
 #include "screens/SettingsScreen.h"
+#include "screens/MainScreen.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
@@ -669,32 +670,40 @@ void HitBomb(_Vector3<float> pos) {
         game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
 }
 
-// ASM-spec v1.6.1 HitMenuBomb @ 0x1cf42c
-// Arcade/menu bomb hit: timer=2.0, flash-flag=1, SFX, store hit pos.
-// TODO: v1.6.1 0x1cf42c (HitMenuBomb) -- body not fully decompiled; keeping port semantics
+// ASM-spec v1.6.1 HitMenuBomb @0x001cf42c:
+//  - early-out when s_mainScreen && MainScreen::m_State (+0x118) == 1 (menu-idle);
+//    no SFX, no timer, no flash in that state.
+//  - SFXPlay("menu-bomb", vol=1.0, gain=1.0, Delegate1(), pitch=0.0)
+//  - m_BombHitTimer = 2.0f; g_BombHitPos = pos; s_menuBombHit = 1
+//  - no camera shake (unlike HitBomb) -- the shake is at the CollisionResponse call site
 void HitMenuBomb(_Vector3<float> pos) {
+    if (game_work.mMainScreen && game_work.mMainScreen->m_State == STATE_CREATE_BUTTONS)
+        return;
+
+    if (game_work.mGameSound)
+        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    game_work.m_BombHitTimer = 2.0f;
     g_BombHitPos = pos;
     if (GameTaskState* ts = GetTaskState()) {
         ts->m_bMenuBombFlashFlag = 1;
     }
-    game_work.m_BombHitTimer = 2.0f;
-    if (game_work.mGameSound)
-        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
 }
 
 // --- Bomb-hit overlay ---
 
 _Vector3<float> g_BombHitPos(0.0f, 0.0f, 0.0f);
 
-static const float BOMB_FLASH_START     = 1.55f;   // DAT_0016b864
-static const float BOMB_FLASH_DUR_RECIP = -0.45f;  // DAT_0016b868
-static const float BOMB_FLASH_MAX_SCALE = 20000.0f; // DAT_0016b870
-static const float BOMB_FLASH_ALPHA_MUL = 255.0f;  // DAT_0016b874
+static const float BOMB_FLASH_START     = 1.55f;      // v1.6.1 DrawBombHit pool @0x001cd338
+static const float BOMB_FLASH_DUR_RECIP = -0.45f;     // v1.6.1 @0x001cd33c (bee66668 = -0.45000005f, 1 ULP)
+static const float BOMB_FLASH_MAX_SCALE = 20000.0f;   // v1.6.1 @0x001cd344
+static const float BOMB_FLASH_ALPHA_MUL = 255.0f;     // v1.6.1 @0x001cd348
 static const float BOMB_FLASH_THRESHOLD = 2.0f;
 
 static Mortar::SmartPtr<Mortar::Texture> s_BombFlashTex;
 
-// ASM-spec v1.6.1 DrawBombHit @ 0x001cd1a0
+// ASM-spec v1.6.1 DrawBombHit @0x001cd1a0
+// GameDraw @0x001cdc98 gates this call on (0.0 < m_BombHitTimer), between
+// HUD::Draw(0x100) and HUD::Draw(0x200) -- already matched by the port's call site.
 void DrawBombHit() {
     const float timer = game_work.m_BombHitTimer;
     if (timer <= 0.0f || timer >= BOMB_FLASH_THRESHOLD) return;

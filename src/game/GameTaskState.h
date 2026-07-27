@@ -125,6 +125,10 @@ struct GameTaskState {
     // trigger so that Quit-from-GameOverScreen / PauseScreen quit / Zen-mode bomb
     // penalty animations don't re-fire GameOver.
     // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b270 / 0x0016b154 / 0x0016c2bc (re-analyst)
+    // NOTE: this is NOT the binary's layout -- the flag is a standalone file-static
+    // byte (s_menuBombHit @0x0031677A), not a GameTaskState member; this offset is
+    // port-local only. The cited addresses above are stale v1.5.1. Tracked separately
+    // as v1.5.1-residue; do not restructure here.
     uint8_t m_bMenuBombFlashFlag;          // +0xf8
     uint8_t _gap_f9[0x03];                 // +0xf9..+0xfb pad
 
