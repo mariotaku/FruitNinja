@@ -41,6 +41,15 @@ const char* OSD_AddMessage(const char* s);
 // Text is copied (truncated to 63 chars). Null/empty text is ignored.
 void OSD_AddMessage(const char* s, float ttl);
 
+// Port specific: append text to the NEWEST toast in place (no new slot, ttl
+// unchanged); ignored when the store is empty or the line is already full.
+// For diagnostics whose last field only becomes known after the toast was
+// posted -- e.g. SoundManager::SFXPlay toasts a play, then
+// SoundManager::SFXSetVolume appends the gate byte that arrives one call
+// later. Only meaningful when nothing else posted a toast in between (the
+// caller owns that ordering).
+void OSD_AppendToLast(const char* s);
+
 // Port specific: age active messages by dt seconds; expired ones are freed.
 void OSD_Update(float dt);
 
@@ -52,6 +61,7 @@ void OSD_Draw();
 
 // Port specific: the toast system does not exist on the cross-build target.
 inline void OSD_AddMessage(const char*, float) {}
+inline void OSD_AppendToLast(const char*) {}
 inline void OSD_Update(float) {}
 inline void OSD_Draw() {}
 

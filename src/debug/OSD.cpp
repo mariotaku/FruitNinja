@@ -95,6 +95,17 @@ void OSD_AddMessage(const char* s, float ttl) {
     ++s_MsgCount;
 }
 
+// Port specific: append to the newest toast in place (contract in OSD.h).
+void OSD_AppendToLast(const char* s) {
+    if (!s || !s[0] || s_MsgCount == 0) return;
+
+    OSDMsg& m = s_Msgs[0];
+    size_t used = strlen(m.text);
+    if (used + 1 >= sizeof(m.text)) return;   // no room left
+    strncpy(m.text + used, s, sizeof(m.text) - used - 1);
+    m.text[sizeof(m.text) - 1] = '\0';
+}
+
 // Port specific: binary-stub-compatible form -- default lifetime, returns
 // the argument unchanged like the binary's identity stub did.
 const char* OSD_AddMessage(const char* s) {

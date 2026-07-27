@@ -27,8 +27,18 @@ namespace Mortar { class FontCacheObjectTTF; }
 //                   render-only QoL knob for high-refresh desktop/web panels.
 // g_DebugTimeScale: multiplies fixed dt=1/60. 1.0 = normal, 0.1 = slow-mo.
 //                   Toggle F7.
-// g_bOsdSfx:        posts an OSD toast "[tick] <name>" for every SFX played
-//                   (SoundManager::SFXPlay, src/engine/audio/SoundManagerSDL.cpp).
+// g_bOsdSfx:        posts an OSD toast per SFX played, carrying why it might
+//                   be silent (SoundManager::SFXPlay + SFXSetVolume, which
+//                   appends the gate byte one call later).
+//                   SDL   : "[tick] <name> a=<busy>/16 m=<sfxMuted> v=<byte>"
+//                   Web   : "[tick] <name> d=<decode> g=<initial gain>
+//                            c=<ctx state> m=<sfxMuted> v=<byte>"
+//                   v is the 0-255 gate byte (audible iff > 5); no v= means
+//                   SetVolume never arrived for that handle. Web d=: 1
+//                   decoded, 0 undecoded (deferred), P decoding, F failed
+//                   (play dropped); c=: r running, s suspended (no audio
+//                   gesture), c closed, ? no context. Field meanings are
+//                   spelled out at each backend's readout block.
 //                   Display-only -- never gates actual audio. Toggle F4,
 //                   or launch with --osd-sfx (desktop) / web ?osdsfx=1.
 // g_MotionMode:     host-only velocity-gated pointer slash -- the pointer

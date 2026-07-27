@@ -523,6 +523,11 @@ void SoundManager::PreLoadSoundEx(const char* name, bool /*preload*/) {
     PreLoadSound(name);
 }
 
+// Port specific: handle of the most recent play that posted an OSD toast, so
+// SFXSetVolume can complete that toast with the gate byte. 0 = nothing
+// pending (already completed, or the dev flag is off).
+static uint32_t s_OsdVolHandle = 0;
+
 // 0x0018d388 -- loads buffer if not cached, finds free voice, assigns ID.
 // If sound != NULL, stores the new handle into sound->m_Handle.
 uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
@@ -546,21 +551,38 @@ uint32_t SoundManager::SFXPlay(const char* name, MortarSound* sound) {
         }
     }
 
-    // Port specific: dev-tool SFX readout -- when FN::g_bOsdSfx is ON, toast
-    // "[tick] <name>" for every SFX play request that reaches voice
-    // allocation (a request dropped below because all voices are busy still
-    // toasts). Display-only; the audio path below is never gated. OSD stacks
-    // up to 6 toasts (oldest evicted), so several SFX in one frame remain
-    // visible in sequence.
-    if (FN::g_bOsdSfx) {
-        char osd[64];
-        snprintf(osd, sizeof(osd), "[%06u] %s", Debug::g_LogTick, name);
-        OSD_AddMessage(osd);
-    }
-
     // Assign new monotonic ID (matches MAMAudioController::m_NextSoundId increment)
     uint32_t newId = m_NextSoundId++;
     if (m_NextSoundId == 0) m_NextSoundId = 1;  // skip 0 (idle sentinel)
+
+    // Port specific: dev-tool SFX readout -- when FN::g_bOsdSfx is ON, toast
+    // one line for every SFX play request that reaches voice allocation (a
+    // request dropped below because all voices are busy still toasts).
+    // Display-only; the audio path below is never gated. Fields, matching the
+    // Web Audio backend's readout where the quantity exists on both:
+    //   a=N/16 voices busy at request time -- a=16/16 means this play is
+    //          DROPPED (the binary never steals a playing voice)
+    //   m=1    SFX muted (AudioCallback's `!s_SFXMuted && volume > 5` gate)
+    //   v=     the 0-255 gate byte, appended by SFXSetVolume -- audible iff
+    //          > 5. A line with NO v= never got a SetVolume for this handle
+    //          (e.g. it was dropped, so MortarSound::m_Handle stayed 0).
+    // The web backend's d= (deferred decode) and c= (AudioContext state) have
+    // no SDL equivalent -- loading here is synchronous and a load failure
+    // returns above, before this toast -- so they are omitted, not faked.
+    if (FN::g_bOsdSfx) {
+        int busy = 0;
+        SDL_LockAudioDevice(m_AudioDevice);
+        for (int i = 0; i < VOICE_COUNT; i++) {
+            if (m_Voices[i].id != 0) busy++;
+        }
+        SDL_UnlockAudioDevice(m_AudioDevice);
+
+        char osd[64];
+        snprintf(osd, sizeof(osd), "[%06u] %s a=%d/%d m=%d",
+                 Debug::g_LogTick, name, busy, VOICE_COUNT, s_SFXMuted ? 1 : 0);
+        OSD_AddMessage(osd);
+        s_OsdVolHandle = newId;
+    }
 
     // Find a free voice and assign it (SDL_LockAudioDevice guards voice table)
     SDL_LockAudioDevice(m_AudioDevice);
@@ -641,6 +663,18 @@ void SoundManager::SFXResume(uint32_t handle) {
 // ASM-verified: 2026-07-26T09:09Z v1.6.1 MAMAudioThread::SetSoundVolume @ 0x0022f3ec (asm-inspector)
 void SoundManager::SFXSetVolume(uint32_t handle, uint8_t vol) {
     if (!m_AudioDevice || handle == 0) return;
+
+    // Port specific: dev-tool -- complete this play's OSD line with the gate
+    // byte (SFXPlay had to toast before MortarSound::SetVolume computed it).
+    // One-shot per play: later volume changes on the same handle (bomb-fuse
+    // ramp) do not re-append. Display-only, never gates the store below.
+    if (FN::g_bOsdSfx && handle == s_OsdVolHandle) {
+        s_OsdVolHandle = 0;
+        char suffix[16];
+        snprintf(suffix, sizeof(suffix), " v=%u", (unsigned)vol);
+        OSD_AppendToLast(suffix);
+    }
+
     SDL_LockAudioDevice(m_AudioDevice);
     Voice* v = FindVoice(handle);
     if (v) {
