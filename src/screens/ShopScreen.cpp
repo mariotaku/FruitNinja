@@ -260,7 +260,7 @@ ShopScreen::ShopScreen(DojoScreen* parent)
     // Update). Binary @ 0x0015cdac does not init +0x80; the first Update sets it
     // before the first Draw. We init to 0x80 (HUD_LAYER_POST_ACTOR) defensively --
     // matches the only pre-Update value reachable. Update demotes it to 0x40 only
-    // while NumActiveSplats()==0 (binary @ 0x0015e216), so splats (alive only during
+    // while NumActiveSplats()==0 (v1.6.1 ShopScreen::Update @0x001b321c), so splats (alive only during
     // buy/transition) are never on-screen while the panel is at 0x40 -> never
     // overdrawn. This is the binary's data-state gate, not a fixed layer.
     , m_LayerFlagsAlt(Mortar::HUD_LAYER_POST_ACTOR)
@@ -912,7 +912,7 @@ void ShopScreen::Update(float dt) {
     float prevAlpha = m_TransitionAlpha;
 
 #ifndef __bada__
-    // Port specific: DIFFERS: v1.6.1 ShopScreen::Update @0x0015e1f4 eases
+    // Port specific: DIFFERS: v1.6.1 ShopScreen::Update @0x001b321c eases
     // m_TransitionAlpha per 60Hz sim tick; port eases it per rendered frame
     // (dt-scaled) so the transition tracks display refresh. __bada__ keeps
     // the faithful 60Hz path. The easing itself has already been advanced by
@@ -921,7 +921,7 @@ void ShopScreen::Update(float dt) {
     // the (rate-independent, threshold-based) state transitions below.
 #endif
 
-    // Binary @ 0x0015e216: demote the panel to 0x40 ONLY when no splats are alive.
+    // Binary (v1.6.1 ShopScreen::Update @0x001b321c): demote the panel to 0x40 ONLY when no splats are alive.
     // 0x40 draws before SplatEntity::DrawActiveSplats, but splats only exist during
     // the buy/transition states (never plain browsing), so the 0x40 frames never
     // coincide with a live splat -> no overdraw. While any splat is alive Alt keeps
@@ -1235,7 +1235,7 @@ void ShopScreen::Update(float dt) {
         m_TransitionAlpha = 0.0f;
 
         // Binary: create new MenuButton at POS_BACK_BUTTON_NEW (185, -105, 0)
-        // with same QuitShopCallback. Texture from *(GameTask + 0x17c).
+        // with same QuitShopCallback. Texture from *(GameTask + 0x180).
         // Fruit type: **(GameTask + DAT_0015e938) (another pre-stored int).
         // Port uses same backFruitType (bomb) as state 0.
         // After AddControl (LAB_0015e874):
@@ -1245,11 +1245,11 @@ void ShopScreen::Update(float dt) {
             const int backFruitType = FruitInfo_GetCount();
             m_pBuyButton = new MenuButton();
             // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: state-3 (post-purchase) back
-            // button uses game_work+0x180 (m_CountdownTex), NOT m_RingTex[16] -- confirmed
+            // button uses game_work+0x180 (m_BackIconTex), NOT m_RingTex[16] -- confirmed
             // via disasm `add r1,r1,#0x180` @0x001b3ac0 inside the case-3 handler
             // (case-3 jump target 0x001b3a80). Distinct from the state-0 creation below
             // (line ~829), which correctly uses m_RingTex[16].
-            m_pBuyButton->m_Texture = game_work.m_CountdownTex;
+            m_pBuyButton->m_Texture = game_work.m_BackIconTex;
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
@@ -1365,7 +1365,7 @@ void ShopScreen::Update(float dt) {
 // Under __bada__ this function does not exist (see ShopScreen.h); Update()
 // eases m_TransitionAlpha inline per-state, byte-identical to the binary.
 //
-// DIFFERS: v1.6.1 ShopScreen::Update @0x0015e1f4 eases m_TransitionAlpha per
+// DIFFERS: v1.6.1 ShopScreen::Update @0x001b321c eases m_TransitionAlpha per
 // 60Hz sim tick; port eases it per rendered frame (dt-scaled) so the
 // transition tracks display refresh. __bada__ keeps the faithful 60Hz path.
 // ---------------------------------------------------------------------------

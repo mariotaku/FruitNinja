@@ -126,7 +126,11 @@ struct GameWork {
     //   Used ONLY by GameOverScreen::Update state-6 to pass to UnlockTotalFruitAchievement.
     void*   m_pLastScoredSaveEntry; // +0x178
     CoinCounter* mCoinCounter;     // +0x17C
-    Mortar::SmartPtr<Mortar::Texture> m_CountdownTex; // +0x180: countdown background texture (Ghidra: m_CountdownTex)
+    // +0x180: localised "back_icon.tex", loaded once by GameInitialise
+    // (v1.6.1 GameInitialise @0x0011d22c). Used as the texture of ShopScreen's
+    // state-3 (post-purchase) back button. Ghidra's "m_CountdownTex" name was a
+    // misnomer -- it has nothing to do with the countdown.
+    Mortar::SmartPtr<Mortar::Texture> m_BackIconTex;
     TimeControl* mCountDown;       // +0x184
     void*   _slot_0x188;           // +0x188: null ptr slot (Ghidra: pM_pControlSlot188)
     GameSound* mGameSound;         // +0x18C
@@ -265,7 +269,7 @@ static_assert(offsetof(GameWork, m_FingerSpawnPos)      == 0xa4,  "GameWork::m_F
 static_assert(offsetof(GameWork, mMainScreen)           == 0x164, "GameWork::mMainScreen");
 static_assert(offsetof(GameWork, m_TutorialControl)     == 0x16c, "GameWork::m_TutorialControl");
 static_assert(offsetof(GameWork, mCoinCounter)          == 0x17c, "GameWork::mCoinCounter");
-static_assert(offsetof(GameWork, m_CountdownTex)        == 0x180, "GameWork::m_CountdownTex");
+static_assert(offsetof(GameWork, m_BackIconTex)         == 0x180, "GameWork::m_BackIconTex");
 static_assert(offsetof(GameWork, mCountDown)            == 0x184, "GameWork::mCountDown");
 static_assert(offsetof(GameWork, mGameSound)            == 0x18c, "GameWork::mGameSound");
 static_assert(offsetof(GameWork, m_FrameTimer)          == 0x19c, "GameWork::m_FrameTimer");

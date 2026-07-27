@@ -13,7 +13,7 @@
 //   LoadContent      0x001b2a20  (static, loads 10 textures; PLT thunk @0x001047b8;
 //                                older 0x001b61c8/0x0015cb08 were stale)
 //   UnLoadContent    0x0015d080  (static, clears all textures)
-//   Update           0x0015e1f4  (387 lines)
+//   Update           0x001b321c  (387 lines)
 //   Draw             0x0015dd50
 //   SetSelected      0x0015c870
 //   ShrinkBuyButton  0x0015c4cc
@@ -109,7 +109,7 @@ public:
     // Matches vtable Release slot
     void Release() override;
 
-    // Matches ShopScreen::Update(float) @ 0x0015e1f4 (387 lines)
+    // Matches v1.6.1 ShopScreen::Update(float) @ 0x001b321c (387 lines)
     void Update(float dt) override;
 
 #ifndef __bada__

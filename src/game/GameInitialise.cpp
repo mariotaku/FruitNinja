@@ -43,6 +43,7 @@
 #include "render/MatrixManager.h"
 #include "render/DisplayManager.h"
 #include "asset/MeshManager.h"
+#include "asset/TextureManager.h"
 #include "asset/AnimationManager.h"
 #include "core/SystemManager.h"
 #include "particle/PSPParticleManager.h"
@@ -425,12 +426,13 @@ void GameInitialise(void* window, const char* config) {
     // key depends on m_GlobalSizeScale/m_FontScale). See PreloadFontsTTF.h.
     WarmTTFGlyphCache();
 
-    // Step 22: LoadLocalisedTexture -> game_work.m_CountdownTex (+0x180).
-    // Binary order @0x0011da48-0x0011da6c: LoadLocalisedTexture -> assign -> MenuButton::LoadContent.
-    // TODO: v1.6.1 0x0011da48 (GameInitialise::InitialiseData) -- resolve exact .tex filename
-    // (GOT/GOTOFF chase to ~0x2CBCE2 did not yield readable ASCII this pass). Left unassigned
-    // (null-safe: ShopScreen's state-3 back button just draws without a texture) until resolved.
-    // game_work.m_CountdownTex = Mortar::TextureManager::LoadLocalisedTexture("<TBD>.tex");
+    // Step 22: LoadLocalisedTexture -> game_work.m_BackIconTex (+0x180).
+    // v1.6.1 GameInitialise @0x0011d22c, sequence @0x0011da48-0x0011da6c:
+    // LoadLocalisedTexture("back_icon.tex") -> SmartPtr<Texture>::operator= into
+    // game_work+0x180 -> temp dtor, then MenuButton::LoadContent. Filename resolved
+    // via the GOTOFF literal at 0x0011d73c (0xfffaebb2) off GOT base 0x002d1130 ->
+    // 0x0027fce2 = "back_icon.tex".
+    game_work.m_BackIconTex = Mortar::TextureManager::LoadLocalisedTexture("back_icon.tex");
 
     // Step 23: MenuButton::LoadContent()
     MenuButton::LoadContent();
