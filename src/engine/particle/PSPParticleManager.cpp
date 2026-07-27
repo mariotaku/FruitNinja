@@ -218,14 +218,13 @@ static inline float QuadrantMirror(float v) {
 // Returns 0 on failure (no free slots).
 static uint16_t AddParticle(PSPParticle* buf, uint16_t& freeHead,
                              PSPParticleTemplate* tmpl,
-                             PSPParticleEmitter& emitter, const PSPParticleSet& set,
-                             int32_t setIdx) {
+                             PSPParticleEmitter& emitter, const PSPParticleSet& set) {
     uint16_t idx = freeHead;
     if (idx == 0) return 0;
     freeHead = buf[idx].m_NextLink;
 
     PSPParticle& p = buf[idx];
-    p.m_SetIdx = setIdx;
+    p.m_pOwnerEmitter = &emitter;
     p.m_Pos = emitter.m_Pos;
 
     // Set-level velocity: randomized per component, halved.
@@ -370,13 +369,13 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt,
                 int desired = (int)(rate * ((currentTime + dtScaled * e.m_RateScale) - startT))
                             - (int)(rate * (currentTime - startT));
                 for (int i = 0; i < desired; ++i)
-                    AddParticle(buf, freeHead, tmpl, e, *set, si);
+                    AddParticle(buf, freeHead, tmpl, e, *set);
             }
         }
 
         if (currentTime <= startT && startT < newTime) {
             for (int i = 0; i < (int)set->m_InitCount; ++i)
-                AddParticle(buf, freeHead, tmpl, e, *set, si);
+                AddParticle(buf, freeHead, tmpl, e, *set);
             if (e.m_RateScale == 0.0f) e.m_Timer += dt;
         }
     }
@@ -385,7 +384,10 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt,
     e.m_Pos += e.m_Vel;
 }
 
-// v1.6.1 PSPParticleManager::Update @0x00105ed8
+// v1.6.1 PSPParticleManager::Update @0x0013cee8
+// ASM-spec v1.6.1 PSPParticleManager::Update @0x0013cee8: callers pass
+// paused = (game_work.bM_Mode != 0); the per-emitter gate below is
+// m_bStarted && m_RateScale != 0 && (!paused || m_bUpdateWhenPaused).
 void PSPParticleManager::Update(float dt, bool paused) {
     if (!m_pParticles || !m_pEmitterPool) return;
 
@@ -478,8 +480,14 @@ static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
 // iterates particle templates, not emitter templates). We iterate m_NumParticleTemplates.
 // TODO: v1.6.1 PSPParticleManager::Draw @0x0013eccc — confirm outer loop count
 //   (m_NumParticleTemplates vs m_NumEmitterTemplates) against binary disassembly.
+// ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: callers pass
+// paused = (game_work.bM_Mode != 0). A per-particle gate
+// `if (!paused || p->m_pOwnerEmitter->m_bUpdateWhenPaused)` wraps the rotation,
+// velocity, position and lifetime integration; vertex emission stays outside it,
+// so frozen particles keep rendering at their last state. Every ScreenEffect
+// emitter is created via ScreenEffect::Activate @0x00148f08 -> AddEmitter(hash,
+// NULL, false), i.e. m_bUpdateWhenPaused = 0, so the frenzy overlay freezes.
 void PSPParticleManager::Draw(float dt, bool paused, int layer) {
-    (void)paused;
     if (!m_pParticles || !m_pTemplates) return;
 
     MatrixManager& mm = MatrixManager::GetInstance();
@@ -513,8 +521,16 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
                 continue;
             }
 
+            // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc (local_174):
+            // per-particle dt is scaled by the owning emitter's m_TimeScale.
+            const float pdt = p.m_pOwnerEmitter
+                ? dt * p.m_pOwnerEmitter->m_TimeScale
+                : dt;
+            const bool integrate = !paused
+                || (p.m_pOwnerEmitter && p.m_pOwnerEmitter->m_bUpdateWhenPaused);
+
             // Integrate / age.
-            p.m_Age += dt;
+            if (integrate) p.m_Age += pdt;
             if (p.m_Age >= p.m_Life) {
                 // Dead: splice out of live-list, return to free-list.
                 *prevLink = p.m_NextLink;
@@ -526,10 +542,10 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
             const float life = (p.m_Life > 0.0f) ? p.m_Life : 1.0f;
             const float t = p.m_Age / life;
 
-            p.m_Vel += p.m_Gravity * dt;
+            if (integrate) {
+                p.m_Vel += p.m_Gravity * pdt;
 
-            // Velocity damping from particle template (per-component lerp over life).
-            {
+                // Velocity damping from particle template (per-component lerp over life).
                 const float dampX = tmpl->m_VelocityMin[0]
                     + (tmpl->m_VelocityMax[0] - tmpl->m_VelocityMin[0]) * t;
                 const float dampY = tmpl->m_VelocityMin[1]
@@ -539,16 +555,16 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
                 p.m_Vel.x *= dampX;
                 p.m_Vel.y *= dampY;
                 p.m_Vel.z *= dampZ;
+
+                p.m_Pos += p.m_Vel * pdt;
+
+                const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
+                p.m_Rotation += spin * pdt;
+
+                p.m_RotCyclePhase += p.m_RotCycleRate * pdt * 6.2831853f;
+                p.m_CycleXPhase   += p.m_CycleXRate   * pdt * 6.2831853f;
+                p.m_CycleYPhase   += p.m_CycleYRate   * pdt * 6.2831853f;
             }
-
-            p.m_Pos += p.m_Vel * dt;
-
-            const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
-            p.m_Rotation += spin * dt;
-
-            p.m_RotCyclePhase += p.m_RotCycleRate * dt * 6.2831853f;
-            p.m_CycleXPhase   += p.m_CycleXRate   * dt * 6.2831853f;
-            p.m_CycleYPhase   += p.m_CycleYRate   * dt * 6.2831853f;
 
             // Batch flush on template change.
             if (tmpl != curTmpl) {

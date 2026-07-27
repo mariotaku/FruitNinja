@@ -641,15 +641,14 @@ void GameUpdate(float dt, bool active) {
         if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
             particleDtNorm = 1.0f;
         }
-        // Port specific: pause particles while the (port-only) Settings modal is
-        // open -- SettingsScreen has no binary counterpart (see its header), so
-        // freezing here is a port-only QoL addition, not a fidelity concern.
-        // dt=0 (not the paused=true arg) because PSPParticleManager::Draw's own
-        // `paused` parameter is currently dead (see Draw below) -- zeroing dt is
-        // the only thing that actually halts Update's per-emitter aging/spawn too.
-        float particleDt = fVar9 / particleDtNorm;
-        if (SettingsScreen::IsOpen()) particleDt = 0.0f;
-        PSPParticleManager::GetInstance().Update(particleDt, false);
+        const float particleDt = fVar9 / particleDtNorm;
+        // ASM-spec v1.6.1 PSPParticleManager::Update @0x0013cee8: GameUpdate passes
+        // paused = (bM_Mode != 0). The extra SettingsScreen term is port specific --
+        // that modal has no binary counterpart (see its header) and does not set
+        // bM_Mode, so it is OR'd into the same `paused` argument rather than carrying
+        // a second freeze mechanism.
+        const bool particlesPaused = (game_work.bM_Mode != 0) || SettingsScreen::IsOpen();
+        PSPParticleManager::GetInstance().Update(particleDt, particlesPaused);
     }
 
     // --- FruitCamera::Update(fVar10) -- varies by bomb-hit phase ---
@@ -878,6 +877,7 @@ void GameDraw(float dt, bool active) {
     // pm.Draw call (v1.6.1 @0x001cda20/0x001cdafc/0x001cdbc4). Mirror the same derivation
     // used by the Update path (GameInit.cpp lines 484-493).
     float particleDt;
+    bool particlesPaused;
     {
         float particleDtNorm = 1.0f;
         WaveManager* wm = WaveManager::GetInstance();
@@ -889,18 +889,17 @@ void GameDraw(float dt, bool active) {
             particleDtNorm = 1.0f;
         }
         particleDt = dt / particleDtNorm;
-        // Port specific: freeze particles (no integrate, no advance) while the
-        // (port-only) Settings modal is open. dt=0 rather than paused=true --
-        // PSPParticleManager::Draw's `paused` parameter is currently unused
-        // ((void)paused; -- Draw's fused integrate+render body never gates on
-        // it), so only zeroing dt actually halts the per-particle age/position
-        // integration below. See the matching GameUpdate freeze above.
-        if (SettingsScreen::IsOpen()) particleDt = 0.0f;
+        // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: GameDraw passes
+        // paused = (bM_Mode != 0) to all three pm.Draw calls. The extra
+        // SettingsScreen term is port specific -- that modal has no binary
+        // counterpart and does not set bM_Mode, so it is OR'd into the same
+        // `paused` argument rather than carrying a second freeze mechanism.
+        particlesPaused = (game_work.bM_Mode != 0) || SettingsScreen::IsOpen();
     }
 
     // === 3. Background particles ===
     // Binary pm.Draw(-1) @ v1.6.1 0x001cda34 -- drawn BEHIND the logo/shade.
-    pm.Draw(particleDt, false, -1);
+    pm.Draw(particleDt, particlesPaused, -1);
 
     // v1.6.1 GameDraw @0x001cd720 after pm.Draw(-1): SetDepthBuffer(0) turns
     // depth test off before the SlashEntity DrawSlice loop x16 and all
@@ -916,7 +915,7 @@ void GameDraw(float dt, bool active) {
 
     // === 4. Mid particles + slice lines + main-screen logo ===
     // Binary pm.Draw(0) @ v1.6.1 0x001cdb10
-    pm.Draw(particleDt, false, 0);
+    pm.Draw(particleDt, particlesPaused, 0);
 
     // DrawSlices (v1.6.1 GameDraw @0x001cd720) -- slash-line pool
     DrawSlices(dt, false);   // pass=false: draw modelIdx!=3 nodes
@@ -937,7 +936,7 @@ void GameDraw(float dt, bool active) {
     game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
 
     // pm.Draw(1) -- foreground particles @ v1.6.1 0x001cdbd8
-    pm.Draw(particleDt, false, 1);
+    pm.Draw(particleDt, particlesPaused, 1);
 
     // v1.6.1 GameDraw @0x001cd720: reset HUD tint scales to 1.0f after the 0x01 pass so the
     // 0x08/0x400/0x100/0x200 overlay passes (combo icons, sensei head, pause, fades) are NOT

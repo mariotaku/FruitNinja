@@ -188,9 +188,12 @@ static_assert(__builtin_offsetof(PSPEmitterBlob, m_Hash)        == 0x40, "");
 static_assert(__builtin_offsetof(PSPEmitterBlob, m_MaxLifetime) == 0x44, "");
 static_assert(__builtin_offsetof(PSPEmitterBlob, m_NumSets)     == 0x4B, "");
 
+struct PSPParticleEmitter;
+
 // ----------------------------------------------------------------------------
 // Per-particle runtime state. Binary: 0xA4 (164) bytes, non-polymorphic.
 // +0x40: uint16 m_NextLink — free-list / live-list chain (0=end).
+// +0xA0: PSPParticleEmitter* m_pOwnerEmitter — set by AddParticle, read by Draw.
 // ----------------------------------------------------------------------------
 struct PSPParticle {
     _Vector3<float> m_Pos;             // +0x00
@@ -232,7 +235,11 @@ struct PSPParticle {
     float    m_Basis2Sin;       // +0x98  secondary basis sin*1.41 (Draw flM_Basis2Sin)
     uint8_t  m_NoAttract;       // +0x9C  per-particle flag: when set, skip global-origin attractor pull (Draw local_d3 gate)
     uint8_t  m_pad9d[3];        // +0x9D
-    int32_t  m_SetIdx;          // +0xA0  port: set index within emitter template (binary nM_field0xA0; written by AddParticle as (float)this)
+    // +0xA0  owning emitter. ASM-spec v1.6.1 PSPParticleManager::AddParticle @0x0013c554
+    // stores the emitter `this` here (the decompiler renders the store as (float)this);
+    // Draw @0x0013eccc dereferences it for +0x4C m_bUpdateWhenPaused (per-particle pause
+    // gate) and +0x2C m_TimeScale (per-particle dt scale).
+    PSPParticleEmitter* m_pOwnerEmitter;
 
     PSPParticle()
         : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
@@ -251,7 +258,7 @@ struct PSPParticle {
         , m_AlphaBase(0), m_AlphaMidDelta(0), m_AlphaEndDelta(0), m_pad82(0)
         , m_BasisX(0,0), m_BasisY(0,0)
         , m_Basis2Cos(0), m_Basis2Sin(0)
-        , m_NoAttract(0), m_SetIdx(0)
+        , m_NoAttract(0), m_pOwnerEmitter(0)
     {
         m_pad9d[0] = m_pad9d[1] = m_pad9d[2] = 0;
     }
@@ -278,7 +285,7 @@ static_assert(__builtin_offsetof(PSPParticle, m_BasisX)       == 0x84, "");
 static_assert(__builtin_offsetof(PSPParticle, m_BasisY)       == 0x8C, "");
 static_assert(__builtin_offsetof(PSPParticle, m_Basis2Cos)    == 0x94, "");
 static_assert(__builtin_offsetof(PSPParticle, m_NoAttract)    == 0x9C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_SetIdx)       == 0xA0, "");
+static_assert(__builtin_offsetof(PSPParticle, m_pOwnerEmitter) == 0xA0, "");
 #endif
 
 // ----------------------------------------------------------------------------
@@ -369,10 +376,18 @@ public:
     // v1.6.1 PSPParticleManager::ClearEmitter @0x0013c088
     void ClearEmitter(PSPParticleEmitter* emitter);
 
-    // v1.6.1 PSPParticleManager::Update @0x00105ed8
+    // v1.6.1 PSPParticleManager::Update @0x0013cee8 — emitter spawn + reap pass.
+    // `paused` (callers pass game_work.bM_Mode != 0): per-emitter gate is
+    // m_bStarted && m_RateScale != 0 && (!paused || m_bUpdateWhenPaused), so a
+    // paused emitter neither spawns nor advances its timer.
     void Update(float dt, bool paused = false);
 
     // v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
+    // `paused` (callers pass game_work.bM_Mode != 0) freezes each particle whose
+    // owning emitter has m_bUpdateWhenPaused == 0: rotation, velocity, position and
+    // age stop advancing. Vertex emission is UNCONDITIONAL — frozen particles keep
+    // drawing at their last state. Per-particle dt is scaled by the owning emitter's
+    // m_TimeScale.
     void Draw(float dt, bool paused, int layer = 0);
 
     // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c
