@@ -236,23 +236,24 @@ float FruitInfo_GetBombCollision();
 // and CriticalFlash tint colour, and by Fruit::Slice @0x001dcba0 for the
 // juice-burst count / spread / scale.
 //
-// IMPORTANT -- these must be READ THROUGH THESE ACCESSORS, never copied as
-// constants into a consumer. The binary's .data initialisers are pre-XML link-
-// time values that Fruit::LoadInfo overwrites before any slice happens; the
-// shipped fruitlist.xml values are what actually run. Splats went 10 -> 15,
-// scale 1.5 -> 1.25, spread 1.2 -> 1.25 when that trap was fixed (#114).
-int   FruitInfo_GetCriticalNewLifeAt();        // "new_life_at" attr -> NEW_LIFE_AT @0x002d8d60 (default 100; XML omits it)
-int   FruitInfo_GetCriticalScore();            // "score" attr      -> CRITICAL_SCORE @0x002d8d48
-int   FruitInfo_GetCriticalChance();           // "chance" attr     -> CRITICAL_CHANCE @0x002d8d4c
-int   FruitInfo_GetCriticalChanceStartInc();   // "chance_inc" attr -> CRITICAL_CHANCE_START_INC
-int   FruitInfo_GetCriticalSplats();           // "splats" attr     -> CRITICAL_SPLATS @0x002d8d38
-float FruitInfo_GetCriticalSplatScale();       // "scale" attr      -> CRITICAL_SPLAT_SCALE @0x002d8d3c
-float FruitInfo_GetCriticalSplatSpread();      // "spread" attr     -> CRITICAL_SPLAT_SPREAD @0x002d8d40
-// "disappear_speed" -> CRITICAL_DISAPPEAR_SPEED @0x002d8d44. Parsed but never
-// read anywhere in v1.6.1 .text; accessor exists for shape only.
-float FruitInfo_GetCriticalDisappearSpeed();
+// The scalar members of the family live on class Fruit as the binary's plain
+// globals -- Fruit::CRITICAL_SPLATS / _SPLAT_SCALE / _SPLAT_SPREAD /
+// _DISAPPEAR_SPEED / CRITICAL_SCORE / CRITICAL_CHANCE / CRITICAL_CHANCE_START_INC
+// / NEW_LIFE_AT (see the contract block in Fruit.h). FruitInfo_Load writes them
+// directly; consumers read them directly. There are deliberately no accessors:
+// an accessor call is a structural divergence from the binary's global load in
+// every consumer.
+//
+// Never copy any of them as a literal into a consumer either. The binary's
+// .data initialisers are pre-XML link-time values that Fruit::LoadInfo
+// overwrites before any slice happens; the shipped fruitlist.xml values are
+// what actually run. Splats went 10 -> 15, scale 1.5 -> 1.25, spread 1.2 -> 1.25
+// when that trap was fixed (#114).
+//
 // "colour" CSV -> direct R,G,B,A field order (NOT byte-swapped like the
-// per-fruit m_FruitColour BGRA parse above).
+// per-fruit m_FruitColour BGRA parse above). Staged in a file static here and
+// copied into Fruit::CRITICAL_COLOUR by Fruit::LoadInfo; consumers already read
+// that global directly.
 const Colour& FruitInfo_GetCriticalColour();
 
 // Shadow texture (FRUIT_INFO_HEADER->shadowTex equivalent, binary +0xC0).

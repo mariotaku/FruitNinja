@@ -3,6 +3,7 @@
 // Matches v1.6.1 Fruit::LoadInfo @0x001e1084 (509 lines)
 
 #include "FruitInfo.h"
+#include "Fruit.h"
 #include "util/StringHash.h"
 #include "Game.h"
 #include "asset/TextureManager.h"
@@ -23,18 +24,17 @@ static int s_FruitInfoCount = 0;
 static float s_BombSize      = 55.0f;  // default from original fruitlist.xml
 static float s_BombCollision = 25.0f;  // default from original fruitlist.xml
 
-// Parsed from <critical .../>. Binary: game globals @0x002d8d48 etc (NOT
-// per-FruitInfo). ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084.
-// Defaults match the shipped fruitlist.xml <critical> block so behaviour is
-// sane even before the XML loads.
-static int   s_CriticalNewLifeAt      = 100;  // NEW_LIFE_AT @0x002d8d60 .data init; XML omits the attr
-static int   s_CriticalScore          = 10;
-static int   s_CriticalChance         = 50;
-static int   s_CriticalChanceStartInc = 30;
-static int   s_CriticalSplats         = 15;
-static float s_CriticalSplatScale     = 1.25f;
-static float s_CriticalSplatSpread    = 1.25f;
-static float s_CriticalDisappearSpeed = 1.0f;
+// Parsed from <critical .../>. Binary: game globals @0x002d8d38..0x002d8d60 (NOT
+// per-FruitInfo). ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084. The parse below
+// writes them in place, exactly as the binary does -- storage and .data defaults
+// live on class Fruit (declared in Fruit.h, defined in Fruit.cpp) so consumers
+// emit a direct global load instead of an accessor call.
+//
+// CRITICAL_COLOUR @0x00332a20 is the one member of the family still staged
+// through a file static: Fruit::LoadInfo copies it out via
+// FruitInfo_GetCriticalColour() after this parse. Consumers already read
+// Fruit::CRITICAL_COLOUR directly, so the call-shape divergence the globals
+// conversion targets does not apply to it.
 static Colour s_CriticalColour(0, 140, 245, 170);
 
 // --- Helpers ---
@@ -99,17 +99,17 @@ void FruitInfo_Load(const char* xmlPath)
     TiXmlElement critElem = root.FirstChildElement("critical");
     if (critElem)
     {
-        critElem.QueryIntAttribute("new_life_at",      &s_CriticalNewLifeAt);
-        critElem.QueryIntAttribute("score",             &s_CriticalScore);
-        critElem.QueryIntAttribute("chance",            &s_CriticalChance);
-        critElem.QueryIntAttribute("chance_inc",        &s_CriticalChanceStartInc);
-        critElem.QueryIntAttribute("splats",            &s_CriticalSplats);
-        critElem.QueryFloatAttribute("scale",           &s_CriticalSplatScale);
-        critElem.QueryFloatAttribute("spread",          &s_CriticalSplatSpread);
+        critElem.QueryIntAttribute("new_life_at",      &Fruit::NEW_LIFE_AT);
+        critElem.QueryIntAttribute("score",             &Fruit::CRITICAL_SCORE);
+        critElem.QueryIntAttribute("chance",            &Fruit::CRITICAL_CHANCE);
+        critElem.QueryIntAttribute("chance_inc",        &Fruit::CRITICAL_CHANCE_START_INC);
+        critElem.QueryIntAttribute("splats",            &Fruit::CRITICAL_SPLATS);
+        critElem.QueryFloatAttribute("scale",           &Fruit::CRITICAL_SPLAT_SCALE);
+        critElem.QueryFloatAttribute("spread",          &Fruit::CRITICAL_SPLAT_SPREAD);
         // CRITICAL_DISAPPEAR_SPEED @0x002d8d44 is parsed here and then never
         // read: zero READ xrefs anywhere in v1.6.1 .text. Kept for load-path
         // fidelity -- do not invent a consumer.
-        critElem.QueryFloatAttribute("disappear_speed", &s_CriticalDisappearSpeed);
+        critElem.QueryFloatAttribute("disappear_speed", &Fruit::CRITICAL_DISAPPEAR_SPEED);
 
         const char* colourStr = critElem.Attribute("colour");
         if (colourStr && *colourStr)
@@ -435,15 +435,6 @@ float FruitInfo_GetBombCollision()
 {
     return s_BombCollision;
 }
-
-int FruitInfo_GetCriticalNewLifeAt()      { return s_CriticalNewLifeAt; }
-int FruitInfo_GetCriticalScore()          { return s_CriticalScore; }
-int FruitInfo_GetCriticalChance()         { return s_CriticalChance; }
-int FruitInfo_GetCriticalChanceStartInc() { return s_CriticalChanceStartInc; }
-int FruitInfo_GetCriticalSplats()         { return s_CriticalSplats; }
-float FruitInfo_GetCriticalSplatScale()     { return s_CriticalSplatScale; }
-float FruitInfo_GetCriticalSplatSpread()    { return s_CriticalSplatSpread; }
-float FruitInfo_GetCriticalDisappearSpeed() { return s_CriticalDisappearSpeed; }
 
 const Colour& FruitInfo_GetCriticalColour()
 {

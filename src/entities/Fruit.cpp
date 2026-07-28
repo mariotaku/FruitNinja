@@ -54,6 +54,21 @@
 // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084 / SlashEntity::UpdatePoints @0x001e6914.
 Colour Fruit::CRITICAL_COLOUR(255, 128, 0, 255);
 
+// <critical> tuning globals -- see the contract block in Fruit.h. These are the
+// binary's .data initialisers; the <critical> parse inside Fruit::LoadInfo
+// (v1.6.1 @0x001e1084, port body in FruitInfo.cpp) overwrites all but
+// NEW_LIFE_AT from the shipped fruitlist.xml before any slice happens.
+// Non-const on purpose: LoadInfo writes them and consumers must emit a global
+// load, not a folded literal.
+int   Fruit::CRITICAL_SPLATS           = 15;    // @0x002d8d38
+float Fruit::CRITICAL_SPLAT_SCALE      = 1.25f; // @0x002d8d3c
+float Fruit::CRITICAL_SPLAT_SPREAD     = 1.25f; // @0x002d8d40
+float Fruit::CRITICAL_DISAPPEAR_SPEED  = 1.0f;  // @0x002d8d44 (parsed, never read)
+int   Fruit::CRITICAL_SCORE            = 10;    // @0x002d8d48
+int   Fruit::CRITICAL_CHANCE           = 50;    // @0x002d8d4c
+int   Fruit::CRITICAL_CHANCE_START_INC = 30;    // @0x002d8d50
+int   Fruit::NEW_LIFE_AT               = 100;   // @0x002d8d60 (XML omits the attr)
+
 // File-scope global: multicast event fired on every fruit slice.
 // Binary: file-static in Fruit.cpp, ctor'd in global.ctors (v1.6.1 global.constructors.keyed.to.Fruit.cpp @0x001e206c).
 // GOT-resolved address: 0x00332a34.
@@ -1232,8 +1247,8 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     //          on crit hit: m_ScoreThreshold = CRITICAL_CHANCE_START_INC + CRITICAL_CHANCE.
     // Previously hardcoded 5/30 -- the wrong bound (5 instead of 50) made crits
     // fire far more often than the original.
-    const int kCritScoreBound = FruitInfo_GetCriticalChance();
-    const int kCritResetBase  = FruitInfo_GetCriticalChanceStartInc();
+    const int kCritScoreBound = CRITICAL_CHANCE;
+    const int kCritResetBase  = CRITICAL_CHANCE_START_INC;
 
     // FruitInfo +0x318 is m_bScorable: 1 = can receive critical hit.
     const bool canCritFruit = info->m_bScorable;
@@ -1435,7 +1450,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // The only x2 in the binary is on COINS, not score -- no score *= 2.
         {
             int score = info->m_Score;
-            if (m_bCritical) score += FruitInfo_GetCriticalScore();
+            if (m_bCritical) score += CRITICAL_SCORE;
             // TODO: v1.6.1 -- verify CoinsMin/Max score-override; binary uses these for
             // coin count only, not score
             if (info->m_CoinsMax > 0 && info->m_CoinsMin < info->m_CoinsMax) {
@@ -1456,7 +1471,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                         coinCount = info->m_CoinsMin + (int)Math::g_Random.Rand32(coinRange);
                     }
                 }
-                if (m_bCritical) coinCount = (FruitInfo_GetCriticalScore() / 2) * coinCount;
+                if (m_bCritical) coinCount = (CRITICAL_SCORE / 2) * coinCount;
                 if (coinCount > 0) {
                     const uint16_t coinAngleSpread =
                         (uint16_t)Math::Min((coinCount + 1) * 8190, 65520);
@@ -1720,7 +1735,7 @@ void Fruit::Slice() {
         // (@0x002d8d38), the XML-configured juice-burst count -- NOT
         // splatCount += 2. impulse *= 1.5.
         impulse *= 1.5f;
-        splatCount = FruitInfo_GetCriticalSplats();
+        splatCount = CRITICAL_SPLATS;
         // v1.6.1 Fruit::Slice @0x001dcba0: single-player crit popup (MissControl::MakeCritical),
         // gated m_bCritical && m_PlayerIdx<2. (No-op until the MissControl pool lands -- GetFree
         // returns nullptr -- but the call-shape is binary-faithful. #132 wrongly stripped this via
@@ -1736,7 +1751,7 @@ void Fruit::Slice() {
     // @0x001dce80 reads the SAME CRITICAL_SPLATS global as the crit block.
     if (info->m_Score == 0x32 || info->m_bIsSuperFruit) {
         impulse *= 1.5f;
-        splatCount = FruitInfo_GetCriticalSplats();
+        splatCount = CRITICAL_SPLATS;
     }
 
     // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
@@ -1795,10 +1810,10 @@ void Fruit::Slice() {
             else if (factor >= 1.0f)           factor = 1.0f;
             s->m_Vel.z *= factor;
             if (i > 2) {
-                const float spread = FruitInfo_GetCriticalSplatSpread();
+                const float spread = CRITICAL_SPLAT_SPREAD;
                 s->m_Vel.y *= spread;
                 s->m_Vel.x *= spread;
-                s->m_Scale *= FruitInfo_GetCriticalSplatScale();
+                s->m_Scale *= CRITICAL_SPLAT_SCALE;
             }
         }
     }

@@ -54,8 +54,37 @@ static_assert(sizeof(FruitModelInfo) == 0x24, "FruitModelInfo sizeof must match 
 // against Ghidra struct + Init/Update/Ctor/IsOffscreen disassembly.
 class Fruit : public Mortar::Entity {  // Entity = 60 bytes, ends at +0x3B
 public:
-    // ASM-spec v1.6.1 Fruit::NEW_LIFE_AT: score-milestone that restores one life in AddToCurrentScore.
-    static const int NEW_LIFE_AT = 100;
+    // --- <critical> tuning globals (fruitlist.xml) --------------------------
+    //
+    // These are BINARY GLOBALS, not compile-time constants and not per-FruitInfo
+    // fields. Fruit::LoadInfo's <critical> parse (v1.6.1 @0x001e1084) writes them
+    // straight from QueryIntAttribute / QueryFloatAttribute; every consumer then
+    // reads them with a plain global load. The port mirrors that shape: read them
+    // DIRECTLY (`Fruit::CRITICAL_SPLATS`), never through an accessor and never as
+    // an inlined literal -- an accessor call is a permanent structural divergence
+    // in every consumer, and a copied literal silently pins the pre-XML .data
+    // default instead of the shipped value.
+    //
+    // The initialisers below are the binary's .data defaults, i.e. the values in
+    // effect only between static init and Fruit::LoadInfo. The shipped
+    // fruitlist.xml supplies every attr except new_life_at, so the runtime values
+    // are: splats 15, scale 1.25, spread 1.25, disappear_speed 1, score 10,
+    // chance 50, chance_inc 30, new_life_at 100 (.data default stands).
+    // Do NOT make any of these `const` -- LoadInfo writes them, and constness
+    // would let the compiler fold the pre-XML default into the consumer.
+    static int   CRITICAL_SPLATS;           // @0x002d8d38 "splats"     -- juice-burst count, Fruit::Slice
+    static float CRITICAL_SPLAT_SCALE;      // @0x002d8d3c "scale"      -- per-splat scale mul, Fruit::Slice (i > 2)
+    static float CRITICAL_SPLAT_SPREAD;     // @0x002d8d40 "spread"     -- per-splat x/y vel mul, Fruit::Slice (i > 2)
+    // @0x002d8d44 "disappear_speed" -- parsed by LoadInfo and then never read:
+    // zero READ xrefs anywhere in v1.6.1 .text. Kept for load-path fidelity.
+    // Do NOT invent a consumer for it.
+    static float CRITICAL_DISAPPEAR_SPEED;
+    static int   CRITICAL_SCORE;            // @0x002d8d48 "score"      -- crit score bonus + coin multiplier, Fruit::CollisionResponse
+    static int   CRITICAL_CHANCE;           // @0x002d8d4c "chance"     -- crit roll bound, Fruit::CollisionResponse / WaveManager::CriticalMode
+    static int   CRITICAL_CHANCE_START_INC; // @0x002d8d50 "chance_inc" -- crit threshold reset base, Fruit::CollisionResponse
+    // @0x002d8d60 "new_life_at" -- score milestone that restores one life in
+    // AddToCurrentScore. The shipped XML omits the attr, so the .data 100 stands.
+    static int   NEW_LIFE_AT;
 
     uint8_t  m_FruitType;                  // +0x3C  (binary: u8, NOT int)
     uint8_t  m_bNoPowerUp;                 // +0x3D

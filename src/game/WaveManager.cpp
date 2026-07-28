@@ -2270,10 +2270,10 @@ float WaveManager::GetCriticalChance(int playerIdx) {
 
 bool WaveManager::CriticalMode(int playerIdx) {
     // ASM-spec v1.6.1 WaveManager::CriticalMode @0x00123194: GetCriticalChance(p) > (float)(Fruit::CRITICAL_CHANCE / 2)
-    // (integer div-by-2 BEFORE the float cast; Fruit::CRITICAL_CHANCE == FruitInfo_GetCriticalChance(), fruitlist.xml
+    // (integer div-by-2 BEFORE the float cast; Fruit::CRITICAL_CHANCE @0x002d8d4c, fruitlist.xml
     // <critical chance="50">). NOT a function of RNG state -- port previously compared against the raw LCG word,
     // which made this return true ~50% of frames and bumped trail-emitter blade m_Scale/colour every other tick.
-    return GetCriticalChance(playerIdx) > (float)(FruitInfo_GetCriticalChance() / 2);
+    return GetCriticalChance(playerIdx) > (float)(Fruit::CRITICAL_CHANCE / 2);
 }
 
 float WaveManager::GetComboBonusProgression(int /*playerIdx*/) {
