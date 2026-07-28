@@ -157,7 +157,7 @@ MainScreen::MainScreen(Game& g)
 #ifndef __bada__
       , m_MoreGamesF0(0.0f)
       , m_TimeRemainingDisplay(-1.0f)
-      , m_GlobalAlphaTarget(1.0f), m_Time(0.0f)
+      , m_Time(0.0f)
       , m_bGameStartReset(false)
       , m_pDojoScreen(nullptr)
       , m_pSettingsButton(nullptr)
@@ -1092,6 +1092,11 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
     static const float BOUNCE_GRAVITY    = -55.0f;   // Gravity per unit of dt
     static const float ELAPSED_THRESHOLD = 0.99f;    // Settle gate on stateVar
 
+    // Binary's `tute` is a FUNCTION-LOCAL STATIC, not a member: it survives
+    // across screen re-entry and is only ever written by the two sites below.
+    // v1.6.1 MainScreen::UpdateScreenElements @0x00195a58.
+    static float s_Tute = 1.0f;
+
     if (dt > MAX_DT) {
         dt = MAX_DT;
     }
@@ -1122,13 +1127,11 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
     // Binary: tute = 1.0 while dt > 0 (which is always true during gameplay).
     // tute is a static local — it is NEVER reset to 0 when dt drops to 0.
     // The only path to tute = 0 is the floor-bounce settle below.
-#ifndef __bada__
     if (dt > 0.0f) {
-        m_GlobalAlphaTarget = 1.0f;
+        s_Tute = 1.0f;
     }
     // NOTE: No else branch. Binary's static tute keeps its last value when dt <= 0,
-    // unlike the old port code which incorrectly reset m_GlobalAlphaTarget to 0.
-#endif // !defined(__bada__)
+    // unlike the old port code which incorrectly reset it to 0.
 
     // Bounce floor: floorLimit = pos.y + 18 - 15 = pos.y + 3
     float floorLimit = floorPos - 15.0f;
@@ -1141,17 +1144,12 @@ void MainScreen::UpdateScreenElements(float dt, float transitionTimer) {
             transitionTimer > ELAPSED_THRESHOLD &&
             dt > 0.0f) {
             m_StateTimer = 0.0f;
-#ifndef __bada__
-            m_GlobalAlphaTarget = 0.0f;
-#endif // !defined(__bada__)
+            s_Tute = 0.0f;
         }
     }
 
     // m_Lean lerp: m_Lean += (tute - m_Lean) * 0.25
-    // tute = m_GlobalAlphaTarget
-#ifndef __bada__
-    m_Lean += (m_GlobalAlphaTarget - m_Lean) * ALPHA_LERP_RATE * FN::g_DebugTimeScale;
-#endif // !defined(__bada__)
+    m_Lean += (s_Tute - m_Lean) * ALPHA_LERP_RATE * FN::g_DebugTimeScale;
 
     // m_LogoPos = (-175, 26, 0) + (-120, -17, 0) * m_Lean * 2.0
     // fruit_text + sliceInstrBox draw position (binary @ 0x00195a58)

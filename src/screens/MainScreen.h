@@ -242,7 +242,8 @@ private:
     Mortar::SmartPtr<Mortar::Font> m_BakedStrSmart;
 
     // Camera transition lives on game_work.m_PauseAmount (binary single source of truth).
-    float m_GlobalAlphaTarget;
+    // (The logo-lean target formerly kept here is now UpdateScreenElements' function-local
+    // static `s_Tute`, matching the binary's static local -- see MainScreen.cpp.)
     float m_Time;
 
     // One-shot latch so STATE_GAME_START fires WaveManager::Reset once per entry.

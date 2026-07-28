@@ -1595,6 +1595,9 @@ void SlashEntity::Update(float dt) {
 #if !defined(__bada__)
                 // Port specific: binary reads live touch from InputEvent; port caches in m_RawTouchPos.
                 m_TrailEmitter->m_Pos = m_RawTouchPos;
+#else
+                // Binary source is Entity::pos, written by TouchMoveX/Y.
+                m_TrailEmitter->m_Pos = pos;
 #endif
             }
         } else if (!bladeActiveByte && m_TrailEmitter) {
@@ -2604,7 +2607,9 @@ bool SlashEntity::TouchMoveX(InputEvent* event) {
 #if !defined(__bada__)
     m_RawTouchPos.x = event->x;
 #else
-    (void)event;
+    // Binary writes Entity::pos directly (v1.6.1 SlashEntity::TouchMoveX @0x001e785c);
+    // m_RawTouchPos is the port-only SDL cache of the same value.
+    pos.x = event->x;
 #endif
     return true;
 }
@@ -2616,7 +2621,8 @@ bool SlashEntity::TouchMoveY(InputEvent* event) {
 #if !defined(__bada__)
     m_RawTouchPos.y = event->y;
 #else
-    (void)event;
+    // Binary writes Entity::pos directly (v1.6.1 SlashEntity::TouchMoveY @0x001e77b4).
+    pos.y = event->y;
 #endif
     return true;
 }

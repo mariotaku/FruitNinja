@@ -124,7 +124,10 @@ Texture2D_Bada::~Texture2D_Bada() {
 
 // Vtable slot 3 @0x00229710 -- bind this GL texture.
 void Texture2D_Bada::Set() {
-#if !defined(__bada__)
+    // Only the GL/Renderer bind is platform-gated. The m_TexId==0 early-out and
+    // both global stores are the binary's own control flow and must compile in
+    // every build -- Renderer::DrawQuad reads s_CurrentlySetTexture unguarded
+    // (the same predicate Mesh::DrawQuadUnCached @0x00240a70 evaluates).
     if (m_TexId == 0) {
         static bool s_warned = false;
         if (!s_warned) {
@@ -135,6 +138,7 @@ void Texture2D_Bada::Set() {
         Texture::s_CurrentlySetTexture = 0;
         return;
     }
+#if !defined(__bada__)
     // Port specific: sampling bind goes through the Renderer's lazy shadow
     // (real glBindTexture happens at the next draw). Bookkeeping unchanged.
     if (Renderer* r = Renderer::GetInstance()) {
@@ -143,9 +147,9 @@ void Texture2D_Bada::Set() {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, m_TexId);
     }
+#endif
     Texture::s_LastBoundTexId = m_TexId;
     Texture::s_CurrentlySetTexture = this;
-#endif
 }
 
 // Vtable slot 4 @0x002296ac -- unbind.
@@ -156,9 +160,9 @@ void Texture2D_Bada::UnSet(bool /*flag*/) {
     } else {
         glBindTexture(GL_TEXTURE_2D, 0);
     }
+#endif
     Texture::s_LastBoundTexId = 0;
     Texture::s_CurrentlySetTexture = 0;
-#endif
 }
 
 // Vtable slot 5 @0x0022964c -- return hash from source.

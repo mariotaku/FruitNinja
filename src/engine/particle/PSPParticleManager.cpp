@@ -1070,7 +1070,6 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             if (tex.IsValid()) {
                 if (texSlot < m_NumTextureRefs) {
                     m_pTextureRefs[texSlot] = tex;
-#if !defined(__bada__)
                     // Set aspect ratio in the blob (we already computed m_TextureIdx = texSlot in Pass 1).
                     // Find the particle template blob record that corresponds.
                     // m_TextureIdx was set to texSlot during Pass 1 iteration order.
@@ -1087,7 +1086,6 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
                             break;
                         }
                     }
-#endif
                 }
                 ++texSlot;
             }
