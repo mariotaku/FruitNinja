@@ -1,10 +1,7 @@
 //
-// BombBlast — shockwave ring. Ported from binary 0x171170..0x171aa0.
-// RE findings are reconciled inline below.
+// BombBlast — shockwave ring spawned by a slashed Bomb.
 //
-// Analysed: 2026-04-13T23:45
-//
-// Key RE facts (resolved via re-analyst 2026-04-13):
+// Key RE facts:
 //   - DrawBlast writes a 6-vertex parallelogram per blast: two
 //     triangles forming a kite whose wide end points along m_Vel2
 //     (perpendicular to the blast's random angle) and tapers near
@@ -15,8 +12,10 @@
 //   - Texture is `bomb_explode.tex`, loaded by Bomb::Init into
 //     g_bombData.m_blastTexture (+0x2C in the binary block @ 0x31785C).
 //     There is NO separate "blast ring" texture.
-//   - Init sets m_Scale = (5.0, 50.0, 1.0) as a Vec3 — unused in
-//     rendering but kept for struct fidelity.
+//   - Init seeds the INHERITED Entity::scale to (5.0, 50.0, 1.0). scale is
+//     not a render size here: scale.x/scale.y are the two independent
+//     expansion accumulators that Update integrates and multiplies into
+//     m_PosA/m_PosB, which DrawBlast then uses as the kite's axes.
 //
 
 #include "BombBlast.h"
@@ -24,6 +23,7 @@
 #include "ActorManager.h"
 #include "Game.h"
 #include "game/BombHit.h"
+#include "game/GameWork.h"
 #include "render/MatrixManager.h"
 #include "render/gl_funcs.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -35,10 +35,14 @@
 #include <cmath>
 #include <cstdio>
 
-// Binary constants (resolved from memory at agent-reported DAT addrs).
-static const float RADIUS_GROWTH = 100.0f;   // DAT_0017120c
-static const float BLAST_LIFE    = 3.0f;
-static const float BLAST_Z       = 0.0f;     // field_0x6c initial
+// Binary constants (v1.6.1 BombBlast::Update @ 0x001d4f2c).
+static const float SCALE_X_GROWTH = 100.0f;    // const @ 0x001d4fe0 (0x42c80000)
+static const float SCALE_Y_GROWTH = 2500.0f;   // const @ 0x001d4fe4 (0x451c4000)
+static const float BLAST_LIFE     = 3.0f;      // kill test is strictly greater-than
+
+// v1.6.1 BombBlast::Init @ 0x001d58f8 seeds Entity::scale with these.
+static const float SCALE_X_INIT   = 5.0f;
+static const float SCALE_Y_INIT   = 50.0f;
 
 // Shared texture — loaded by Bomb::Init into g_bombData.m_blastTexture, not re-loaded here.
 
@@ -50,9 +54,9 @@ static const int  MAX_BLASTS = 64;
 static const int  VERTS_PER_BLAST = 6;
 static QUADCUSTOMVERTEX s_BlastVerts[MAX_BLASTS * VERTS_PER_BLAST];
 
-// Running per-frame blast counter. Binary @ 0x171354 reads a global int*
-// (resolved via GOT off DAT_001714d8) and increments it once per blast in
-// DrawActiveBlasts (0x171aa0). DrawBlast keys its 6-vertex slot off this
+// Running per-frame blast counter. The binary's DrawBlast reads a global int*
+// (BombBlast::m_curr_drawing_blast) and increments it once per blast in
+// DrawActiveBlasts (v1.6.1 @ 0x001d67cc). DrawBlast keys its 6-vertex slot off this
 // counter; the port mirrors that with a file-static index.
 static int s_BlastCounter = 0;
 
@@ -64,9 +68,6 @@ BombBlast::BombBlast()
     , m_Vel1(0, 0, 0)
     , m_Vel2(0, 0, 0)
     , m_Lifetime(0.0f)
-#if !defined(__bada__)
-    , m_BlastRadius(0.0f)
-#endif
 {
     entityType = 4;
     m_Angle = 0;  // inherited from Mortar::Entity base at +0x36
@@ -81,19 +82,17 @@ BombBlast::~BombBlast() {}
 void BombBlast::LoadContent()    {}
 void BombBlast::ReleaseContent() {}
 
-// Binary @ 0x001718ac — vtable slot 2.
-// ASM-verified: 2026-05-04T08:23Z v1.6.1 binary @ 0x001718ac (asm-inspector)
-// Confirmed: Ghidra's void* p1 was a mis-decompile artifact -- the binary
-// writes through r0 which is `this`; runtime caller passes (this, 0, 0, 0).
-// Body operates exclusively on `this` and ignores all three explicit params.
+// ASM-spec v1.6.1 BombBlast::Init @ 0x001d58f8 — vtable slot 2.
+// Ghidra's void* p1 is a mis-decompile artifact -- the binary writes through
+// r0 which is `this`; runtime caller passes (this, 0, 0, 0). Body operates
+// exclusively on `this` and ignores all three explicit params. It does NOT
+// touch pos.
 void BombBlast::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {
 
     // Activate: clear ENT_INACTIVE | ENT_KILLED. Mortar::ActorManager::Add already
     // cleared these on the recycle path; redundant on the factory path
     // but harmless and matches the binary's explicit Init sequence.
     flags &= ~ENT_SKIP_MASK;
-
-    pos.z = BLAST_Z;
 
     // Random 16-bit angle. Binary uses Rand32(0x7FFFF) / 524288.0f * 360 * 182,
     // which compresses the 19-bit random into the 0..65535 angle range.
@@ -116,42 +115,49 @@ void BombBlast::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {
     m_PosA = m_Vel1;
     m_PosB = m_Vel2;
 
-#if !defined(__bada__)
-    m_BlastRadius = 0.0f;
-#endif
+    // The two expansion accumulators (inherited Entity::scale +0x28 / +0x2C).
+    scale = _Vector3<float>(SCALE_X_INIT, SCALE_Y_INIT, 1.0f);
+
     m_Lifetime = 0.0f;
 
     // m_Col stays null (inherited from Mortar::Entity ctor) — BombBlast doesn't collide.
 }
 
-// Matches BombBlast::Update (0x171170).
-void BombBlast::Update(float dt) {
+// ASM-spec v1.6.1 BombBlast::Update @ 0x001d4f2c
+//
+// The `dt` parameter is ignored; the binary loads game_work.dt (+0x38, GOT
+// slot 0x77f4). GameUpdate freezes ActorManager (dt=0) during a bomb hit, so
+// this bypass is what keeps blasts expanding through the freeze.
+void BombBlast::Update(float /*dt*/) {
     if (!IsActive()) return;
 
-#if !defined(__bada__)
-    m_BlastRadius += dt * RADIUS_GROWTH;
-#endif
-    m_Lifetime    += dt;
+    const float dtG = game_work.dt;
 
-    // Binary re-multiplies m_PosA/m_PosB by a growing factor each frame.
-    // Use the lifetime-scaled blast radius so the quad expands outward.
-#if !defined(__bada__)
-    m_PosA = m_Vel1 * m_BlastRadius;
-    m_PosB = m_Vel2 * m_BlastRadius;
-#endif
+    m_Lifetime += dtG;
 
-    if (m_Lifetime >= BLAST_LIFE) {
+    // Two independent accumulators with different seeds and different rates.
+    scale.x += dtG * SCALE_X_GROWTH;
+    m_PosA = m_Vel1 * scale.x;
+
+    scale.y += dtG * SCALE_Y_GROWTH;
+    m_PosB = m_Vel2 * scale.y;
+
+    if (m_Lifetime > BLAST_LIFE) {
         flags |= ENT_KILLED;
     }
 }
 
-// Binary @ 0x00171034 — vtable Draw: no-op. Rendering via DrawActiveBlasts.
+// v1.6.1 BombBlast::Draw @ 0x001d4dd0 — vtable Draw: no-op. Rendering via
+// DrawActiveBlasts.
 void BombBlast::Draw(Renderer& r) { (void)r; }
 
-// Binary @ 0x00171030 — vtable PostUpdate (DrawUpdate): no-op.
+// v1.6.1 BombBlast::DrawUpdate @ 0x001d4dcc — vtable PostUpdate slot: no-op.
 void BombBlast::PostUpdate(float /*dt*/) {}
 
-// Matches DrawActiveBlasts (0x171aa0).
+// Matches DrawActiveBlasts (v1.6.1 @ 0x001d67cc).
+//
+// TODO: v1.6.1 0x001d67cc (DrawActiveBlasts) — the control flow below was RE'd
+// against v1.5.1 and has NOT been re-verified against v1.6.1.
 //
 // Binary control flow:
 //   if (g_bombData.m_blastTexture is valid) {
@@ -216,9 +222,14 @@ void BombBlast::RemoveAll() {
     RemoveFlashEntities();
 }
 
-// Binary @ 0x171354 — emit this blast's 6 vertices (two triangles) into the
-// shared tri-list at the current frame-counter slot. Called per blast from
-// DrawActiveBlasts (vtable+0x34) with the global counter bumped after each.
+// v1.6.1 BombBlast::DrawBlast @ 0x001d51e8 — emit this blast's 6 vertices (two
+// triangles) into the shared tri-list at the current frame-counter slot. Called
+// per blast from DrawActiveBlasts (vtable+0x34) with the global counter bumped
+// after each.
+//
+// TODO: v1.6.1 0x001d51e8 (BombBlast::DrawBlast) — the geometry, UVs and colour
+// below were RE'd against v1.5.1 (the DAT_00171xxx addresses cited are v1.5.1
+// data addresses) and have NOT been re-verified against v1.6.1.
 //
 // Geometry (A = m_PosA = narrow axis, B = m_PosB = long axis):
 //   v0 = pos + A + B          // far corner, +A side
@@ -279,6 +290,6 @@ void BombBlast::DrawBlast() {
         v[i].colour = col;    // Colour::PlatformColour(global blast colour)
     }
 }
-// Binary @ 0x171030 — DrawUpdate(float): a bare `return;` (no-op). Realized
+// v1.6.1 BombBlast::DrawUpdate @ 0x001d4dcc: a bare `return;` (no-op). Realized
 // here as the standalone symbol; the PostUpdate vtable slot aliases it.
 void BombBlast::DrawUpdate(float) {}
