@@ -47,6 +47,24 @@
 set -euo pipefail
 
 PROJ="$(cd "$(dirname "$0")/../.." && pwd)"
+# Shared failure helpers: strict mode + an ERR trap that names the failing line,
+# command and exit status (this script's own preflight failures were already
+# specific; the trap covers the UNEXPECTED ones). See tools/web/config.sh.
+. "$(dirname "$0")/config.sh"
+fn_web_strict
+
+# This script takes ONE positional arg (OUT_DIR) and no flags. Anything
+# flag-shaped or extra is a hard error -- silently treating "--release" as an
+# output directory would create a directory of that name and "succeed".
+if [ "$#" -gt 1 ]; then
+    FN_WEB_FATAL_CODE=2 fn_web_fatal "build-gallery.sh takes at most one argument (OUT_DIR), got $#: $*" \
+        "Usage: tools/web/build-gallery.sh [OUT_DIR]   (default: pages/gallery)"
+fi
+case "${1:-}" in
+    -*) FN_WEB_FATAL_CODE=2 fn_web_fatal "build-gallery.sh: unknown flag: $1" \
+            "This script accepts no flags, only an optional OUT_DIR path." \
+            "Usage: tools/web/build-gallery.sh [OUT_DIR]   (default: pages/gallery)" ;;
+esac
 
 OUT_DIR="${1:-$PROJ/pages/gallery}"
 FN_DUMP="${FN_DUMP:-$PROJ/FruitNinjaBada}"
