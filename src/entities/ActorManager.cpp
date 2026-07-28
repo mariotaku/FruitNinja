@@ -10,9 +10,15 @@
 #include <cstring>
 
 // Binary-faithful ActorManager port.
-// Addresses tagged in method comments reference the original FruitNinja ARM32 binary.
+// Addresses tagged in method comments reference v1.6.1 FruitNinja.exe. The whole
+// TU lives at 0x001d2e80-0x001d4228; the older 0x0016fb..-0x00170.. addresses that
+// used to be cited here were the v1.5.1 layout of the same TU (identical ordinal
+// order) and have been remapped.
 //
-// Analysed: 2026-05-04T00:00
+// LIVENESS METHOD NOTE: this binary is PIC, so Ghidra's direct xrefs are useless --
+// every intra-image call routes through `.plt`. The liveness test for "is this
+// method ever called" is therefore "does the symbol have a .plt thunk". A `.got`
+// self-slot is just the PIC prologue and proves nothing either way.
 
 namespace Mortar {
 
@@ -31,9 +37,10 @@ ActorManager::ActorManager()
     , m_FactoryDelegate(nullptr)
     , m_HashDelegate(nullptr)
 {
-    // Binary ctor @ 0x00170500: constructs delegates (default/empty state)
-    // then clears m_Listeners; m_Listeners was default-constructed by the
-    // compiler, clear() matches the binary epilogue.
+    // Binary ctors @0x001d3d68 / @0x001d3e14 (base/complete): construct the
+    // delegates (default/empty state) then clear m_Listeners; m_Listeners was
+    // default-constructed by the compiler, clear() matches the binary epilogue.
+    // (dtors @0x001d3b9c / @0x001d3c20.)
     m_Listeners.clear();
 }
 
@@ -44,7 +51,8 @@ ActorManager::~ActorManager() {
 }
 
 ActorManager* ActorManager::GetInstance() {
-    // Binary: Meyers singleton at 0x001705f0 with __cxa_guard_acquire.
+    // Binary: Meyers singleton, v1.6.1 ActorManager::GetInstance @0x001d3ec0, with
+    // __cxa_guard_acquire.
     // Port: lazy-init via static pointer (single-thread SDL, no guard needed).
     if (s_Instance == nullptr) {
         s_Instance = new ActorManager();
@@ -54,20 +62,35 @@ ActorManager* ActorManager::GetInstance() {
 
 // --- Lifecycle ------------------------------------------------------------
 
-// 0x0017046c. Allocates the per-type list array from the LinkedHeap.
-// Port drops LinkedHeap and uses new[]; sets m_pHeap to a sentinel so the
-// null-guard in Update/Draw stays false.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0017046c (asm-inspector)
+// v1.6.1 ActorManager::Initialise @0x001d3ca4. Allocates a LinkedHeap
+// (`operator new(0x24)`) sized `heapSize`, then carves the per-type list array
+// out of it via `LinkedHeap::Allocate((numTypes + 1) * 8, 0x2841bd)` -- note the
+// binary reserves N+1 slots but only placement-constructs N std::lists (8 bytes
+// each on Sourcery 2010q1), i.e. one slot of slack is allocated and never used.
+// The body ENDS with a discarded `Entity::HeapExist()` call.
+// Port drops LinkedHeap and uses new[] (exactly N lists -- the binary's spare
+// slot is never indexed, so N vs N+1 is not observable); m_pHeap becomes a
+// non-null sentinel so the null-guard in Update/Draw behaves as in the binary.
+// ASM-verified: 2026-07-28T00:00Z v1.6.1 ActorManager::Initialise @ 0x001d3ca4 (re-analyst)
 void ActorManager::Initialise(int numTypes, int heapSize) {
-    if (m_pHeap != nullptr) return;  // already initialised
+    // DIFFERS: original = no re-entry guard (v1.6.1 ActorManager::Initialise
+    // @0x001d3ca4 unconditionally allocates a fresh LinkedHeap + list array on
+    // every call), using an early-out because the PORT has two Initialise call
+    // sites where the binary has one: GameInitialise.cpp:218 and GameInit.cpp:182
+    // (binary GameInit @0x001ce1c0) both call Initialise(7, 0x2000), the former
+    // first. Without the guard the second call would leak the first m_pTypeLists
+    // array and orphan anything already registered. Remove this guard only
+    // together with the duplicate GameInitialise.cpp call site.
+    if (m_pHeap != nullptr) return;
     m_HeapSize    = heapSize;
     m_NumTypes    = numTypes;
     m_pTypeLists  = new std::list<Entity*>[numTypes];
     m_pHeap       = this;  // non-null sentinel
+    Entity::HeapExist();   // binary tail call; return value discarded
 }
 
-// 0x0017037c.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0017037c (asm-inspector)
+// v1.6.1 ActorManager::Destroy @0x001d3b44.
+// ASM-verified: 2026-07-28T00:00Z v1.6.1 ActorManager::Destroy @ 0x001d3b44 (re-analyst)
 void ActorManager::Destroy() {
     m_DebugDraw = false;
     Clear();
@@ -78,10 +101,11 @@ void ActorManager::Destroy() {
     m_pHeap    = nullptr;
     m_HeapSize = 0;
     m_FreeCount = 0;
+    m_PendingDeactCount = 0;
 }
 
-// 0x00170064. Delete all entities in type lists + free pool.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x00170064 (asm-inspector)
+// v1.6.1 ActorManager::Clear @0x001d3690. Delete all entities in type lists + free pool.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Clear @ 0x001d3690 (asm-inspector)
 void ActorManager::Clear() {
     if (m_pTypeLists) {
         for (int t = 0; t < m_NumTypes; t++) {
@@ -109,8 +133,9 @@ void ActorManager::Clear() {
 
 // --- Entity API -----------------------------------------------------------
 
-// 0x0017068c. Binary-faithful recycle-first Add.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0017068c (asm-inspector)
+// v1.6.1 ActorManager::Add(long, bool) @0x001d3fac. Binary-faithful recycle-first Add.
+// This is the overload LoadEntity @0x001d408c calls (PLT thunk 0x001168e4).
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Add(long,bool) @ 0x001d3fac (asm-inspector)
 Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary*/) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return nullptr;
     if (entityType < 0 || entityType >= m_NumTypes) return nullptr;
@@ -120,7 +145,7 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
         Entity* candidate = m_FreePool[i];
         if (candidate && candidate->entityType == entityType) {
             // push_back BEFORE decrementing count (matches binary ordering
-            // at 0x001706be → 0x001706ca).
+            // inside ActorManager::Add(long,bool) @0x001d3fac).
             m_pTypeLists[entityType].push_back(candidate);
             m_FreeCount--;
             // Compact pool: shift [i+1..m_FreeCount] one slot left.
@@ -150,9 +175,13 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
     return entity;
 }
 
-// 0x00170654. Push an already-built entity into its type list.
-// Defunct: zero live in-binary callers (only LoadEntity, itself dead); v1.6.1 binary @ 0x00170654.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x00170654 (asm-inspector)
+// v1.6.1 ActorManager::Add(Entity*, long) @0x001d3f54. Push an already-built
+// entity into its type list.
+// Defunct: zero in-binary callers -- this symbol has NO .plt thunk at all, so
+//   nothing in the image can reach it (LoadEntity @0x001d408c calls the OTHER
+//   overload, Add(long,bool) @0x001d3fac via PLT 0x001168e4 -- not this one);
+//   no-op-equivalent stub; v1.6.1 ActorManager::Add(Entity*,long) @ 0x001d3f54.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Add(Entity*,long) @ 0x001d3f54 (asm-inspector)
 Entity* ActorManager::Add(Entity* entity, long typeIdx) {
     if (!entity) return nullptr;
     if (typeIdx < 0 || typeIdx >= (long)m_NumTypes || m_pTypeLists == nullptr) return nullptr;
@@ -162,8 +191,8 @@ Entity* ActorManager::Add(Entity* entity, long typeIdx) {
     return entity;
 }
 
-// 0x00170184. Binary walks type list, erases, pushes to free pool. No flag
-// manipulation. Binary @ 0x00170184.
+// v1.6.1 ActorManager::Deactivate @0x001d3854. Binary walks the type list,
+// erases, pushes to free pool. No flag manipulation.
 // DIFFERS: m_FreeCount < FREE_POOL_CAP guard kept defensively; binary lacks bound check.
 void ActorManager::Deactivate(Entity* entity) {
     if (!entity || m_pTypeLists == nullptr) return;
@@ -178,9 +207,10 @@ void ActorManager::Deactivate(Entity* entity) {
     }
 }
 
-// 0x001702d8. Binary calls vtable+0xc (Release) then operator delete.
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x001702d8.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x001702d8 (asm-inspector)
+// v1.6.1 ActorManager::Remove @0x001d3a44. Binary calls vtable+0xc (Release)
+// then operator delete.
+// Defunct: zero in-binary callers (no .plt thunk); v1.6.1 ActorManager::Remove @ 0x001d3a44.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Remove @ 0x001d3a44 (asm-inspector)
 void ActorManager::Remove(Entity* entity) {
     if (!entity || m_pTypeLists == nullptr) return;
     const int type = entity->entityType;
@@ -198,9 +228,9 @@ void ActorManager::Remove(Entity* entity) {
     }
 }
 
-// 0x0016fb44.
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fb44.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fb44 (asm-inspector)
+// v1.6.1 ActorManager::DeactivateAllEntities @0x001d2e94.
+// Defunct: zero in-binary callers (no .plt thunk); v1.6.1 ActorManager::DeactivateAllEntities @ 0x001d2e94.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::DeactivateAllEntities @ 0x001d2e94 (asm-inspector)
 void ActorManager::DeactivateAllEntities(int typeIdx) {
     if (m_pTypeLists == nullptr) return;
     if (typeIdx < 0 || typeIdx >= m_NumTypes) return;
@@ -212,10 +242,10 @@ void ActorManager::DeactivateAllEntities(int typeIdx) {
 
 // --- Per-frame update / draw ---------------------------------------------
 
-// 0x001701f4. Binary queues kills into m_PendingDeact[] during the type
-// sweep and drains after, so std::list iteration is never invalidated
-// by a mid-loop erase. Binary @ 0x001701f4.
-// Binary disasm @ 0x0017024e: `orr r2, r2, #0xc; strb r2, [r6, #0xc]`
+// v1.6.1 ActorManager::Update @0x001d38f0. Binary queues kills into
+// m_PendingDeact[] during the type sweep and drains after, so std::list
+// iteration is never invalidated by a mid-loop erase.
+// Binary disasm inside @0x001d38f0: `orr r2, r2, #0xc; strb r2, [r6, #0xc]`
 // sets ENT_TICK_DISPATCHED (bits 2+3, 0xc) BEFORE Update dispatch.
 // Binary leaves the bits set permanently after PostUpdate -- sticky advisory, never cleared.
 void ActorManager::Update(float dt) {
@@ -246,8 +276,8 @@ void ActorManager::Update(float dt) {
     m_PendingDeactCount = 0;
 }
 
-// 0x0016fe7c.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fe7c (asm-inspector)
+// v1.6.1 ActorManager::Draw @0x001d3380. Tail-calls DrawDebug (PLT 0x0010c884).
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Draw @ 0x001d3380 (asm-inspector)
 void ActorManager::Draw(Renderer& r) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
     for (int t = 0; t < m_NumTypes; t++) {
@@ -262,28 +292,49 @@ void ActorManager::Draw(Renderer& r) {
     if (m_DebugDraw) DrawDebug();
 }
 
-// 0x0016fe1c. ColSphere debug drawing.
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fe1c.
-void ActorManager::DrawDebug() {}
+// v1.6.1 ActorManager::DrawDebug @0x001d32e0. NOT defunct -- it has a .plt thunk
+// (0x0010c884) and its caller is ActorManager::Draw @0x001d3380. It is
+// debug-GATED (m_DebugDraw), not dead code; the earlier "zero in-binary callers"
+// note was wrong (it read the PIC .got self-slot as the only reference).
+//
+// Binary body: `if (m_DebugDraw) for each type list, for each entity:
+//               Col* c = e->m_Col (+0x38); if (c) c->vtable[+0x10]();`
+// Col vtable +0x10 is slot 4 == Col::DrawDebug, which the port implements on
+// ColAABB / ColLine / ColSphere -- so this is ported 1:1. Draw already applies
+// the m_DebugDraw gate at its call site, matching the binary's observable
+// behaviour either way; nothing in the port calls SetCollisionVisible, so this
+// loop never runs in a normal session.
+void ActorManager::DrawDebug() {
+    if (!m_DebugDraw || m_pTypeLists == nullptr) return;
+    for (int t = 0; t < m_NumTypes; t++) {
+        std::list<Entity*>& list = m_pTypeLists[t];
+        for (std::list<Entity*>::iterator it = list.begin(); it != list.end(); ++it) {
+            Entity* e = *it;
+            if (e && e->m_Col) e->m_Col->DrawDebug();
+        }
+    }
+}
 
-// Binary @ 0x0016fdc8 -- iterates m_pTypeLists and calls entity->vtable[+0x1c]
-// (slot 7, PostLoad). Defunct: zero in-binary callers; LoadEntity is itself dead.
-// Port keeps stub body as no-op for safety.
+// v1.6.1 ActorManager::PostLoad @0x001d3258 -- iterates m_pTypeLists and calls
+// entity->vtable[+0x1c] (slot 7, PostLoad).
+// Defunct: zero in-binary callers (no .plt thunk); LoadEntity @0x001d408c, which
+//   would be its caller, is itself unreachable; no-op stub;
+//   v1.6.1 ActorManager::PostLoad @ 0x001d3258.
 void ActorManager::PostLoad() {
-    // Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fdc8.
 }
 
 // --- Query API ------------------------------------------------------------
 
-// 0x0016ff98. Binary returns list size with NO active filtering.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff98 (asm-inspector)
+// v1.6.1 ActorManager::GetNumEntities(long) @0x001d3544. Binary returns list
+// size with NO active filtering.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities(long) @ 0x001d3544 (asm-inspector)
 int ActorManager::GetNumEntities(int typeIdx) {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return 0;
     return (int)m_pTypeLists[typeIdx].size();
 }
 
-// 0x0016ffac.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ffac (asm-inspector)
+// v1.6.1 ActorManager::GetNumEntities() @0x001d3554.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities() @ 0x001d3554 (asm-inspector)
 int ActorManager::GetNumEntities() {
     if (!m_pTypeLists) return 0;
     int total = 0;
@@ -291,9 +342,9 @@ int ActorManager::GetNumEntities() {
     return total;
 }
 
-// 0x0016ff30. Sentinel is -1L, not 0 (type 0 == Bomb would be skipped wrongly).
-// Binary @ 0x0016ff30.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff30 (asm-inspector)
+// v1.6.1 ActorManager::GetNumEntities(long*) @0x001d349c. Sentinel is -1L, not 0
+// (type 0 == Bomb would be skipped wrongly) -- confirmed against v1.6.1.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities(long*) @ 0x001d349c (asm-inspector)
 int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) {
     if (!m_pTypeLists || !typeIdxNullTerminated) return 0;
     int total = 0;
@@ -304,8 +355,8 @@ int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) {
     return total;
 }
 
-// 0x0016ff5c.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff5c (asm-inspector)
+// v1.6.1 ActorManager::GetNumEntities(long,long) @0x001d34e0.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities(long,long) @ 0x001d34e0 (asm-inspector)
 int ActorManager::GetNumEntities(long typeA, long typeB) {
     if (!m_pTypeLists) return 0;
     long lo = typeA < typeB ? typeA : typeB;
@@ -317,8 +368,8 @@ int ActorManager::GetNumEntities(long typeA, long typeB) {
     return total;
 }
 
-// 0x0016ff00.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016ff00 (asm-inspector)
+// v1.6.1 ActorManager::GetNumTypes @0x001d3454.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumTypes @ 0x001d3454 (asm-inspector)
 int ActorManager::GetNumTypes() {
     if (!m_pTypeLists) return 0;
     int n = 0;
@@ -326,11 +377,11 @@ int ActorManager::GetNumTypes() {
     return n;
 }
 
-// Matches ActorManager::GetEntityFirst (0x0016fbb8). Seeds `it` with the
+// Matches v1.6.1 ActorManager::GetEntityFirst @0x001d2f48. Seeds `it` with the
 // type list's begin() iterator and returns the Entity* it points at, or
 // nullptr if the list is empty. Binary also returns the ActorManager*
 // via an outer CONCAT that callers ignore.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fbb8 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntityFirst @ 0x001d2f48 (asm-inspector)
 Entity* ActorManager::GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& it) {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) {
         it = std::list<Entity*>::iterator();
@@ -342,9 +393,9 @@ Entity* ActorManager::GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& 
     return *it;
 }
 
-// Matches ActorManager::GetEntityNext (0x0016fb88). Advances `it` and
+// Matches v1.6.1 ActorManager::GetEntityNext @0x001d2f00. Advances `it` and
 // returns the next Entity*, or nullptr when past end.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fb88 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntityNext @ 0x001d2f00 (asm-inspector)
 Entity* ActorManager::GetEntityNext(int typeIdx, std::list<Entity*>::iterator& it) {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
@@ -353,8 +404,8 @@ Entity* ActorManager::GetEntityNext(int typeIdx, std::list<Entity*>::iterator& i
     return *it;
 }
 
-// 0x0016fcc4.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fcc4 (asm-inspector)
+// v1.6.1 ActorManager::GetEntity @0x001d30d4.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntity @ 0x001d30d4 (asm-inspector)
 Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
     if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
@@ -364,9 +415,9 @@ Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
     return *it;
 }
 
-// 0x0016fc64.
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fc64.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0016fc64 (asm-inspector)
+// v1.6.1 ActorManager::GetEntityIdx @0x001d3044.
+// Defunct: zero in-binary callers (no .plt thunk); v1.6.1 ActorManager::GetEntityIdx @ 0x001d3044.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntityIdx @ 0x001d3044 (asm-inspector)
 int ActorManager::GetEntityIdx(Entity* entity) {
     if (!entity || !m_pTypeLists) return -1;
     const int type = entity->entityType;
@@ -390,8 +441,8 @@ void ActorManager::RegisterHashConverter(Mortar::Delegate2<long, unsigned long, 
 
 // --- Find variants --------------------------------------------------------
 
-// 0x0016fd10. Linear scan of type list `type`; returns first entity whose
-// m_RuntimeID (Entity+0x04) equals `trackerKey`. Binary @ 0x0016fd10.
+// v1.6.1 ActorManager::Find(long, ulong) @0x001d3148. Linear scan of type list
+// `type`; returns first entity whose m_RuntimeID (Entity+0x04) equals `trackerKey`.
 Entity* ActorManager::Find(long type, unsigned long trackerKey) {
     if (!m_pTypeLists || type < 0 || type >= (long)m_NumTypes) return nullptr;
     std::list<Entity*>& lst = m_pTypeLists[type];
@@ -401,8 +452,9 @@ Entity* ActorManager::Find(long type, unsigned long trackerKey) {
     return nullptr;
 }
 
-// 0x0016fd58. Type-agnostic scan; returns first entity matching trackerKey
-// across all type lists. Binary @ 0x0016fd58.
+// v1.6.1 ActorManager::Find(ulong) @0x001d31b8. Type-agnostic scan; returns first
+// entity matching trackerKey across all type lists. This is the overload
+// SendMessage @0x001d3598 calls.
 Entity* ActorManager::Find(unsigned long trackerKey) {
     if (!m_pTypeLists) return nullptr;
     for (int t = 0; t < m_NumTypes; t++) {
@@ -414,9 +466,10 @@ Entity* ActorManager::Find(unsigned long trackerKey) {
     return nullptr;
 }
 
-// 0x0016fbec. Count entities whose vtable+0x20 (InRect(ColAABB*)) collision
-// test passes against aabb.
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016fbec.
+// v1.6.1 ActorManager::GetNumInAABB @0x001d2f98. Count entities whose vtable+0x20
+// (InRect(ColAABB*)) collision test passes against aabb.
+// Defunct: zero in-binary callers (no .plt thunk); no-op stub;
+//   v1.6.1 ActorManager::GetNumInAABB @ 0x001d2f98.
 int ActorManager::GetNumInAABB(ColAABB* aabb) {
     (void)aabb;
     return 0;
@@ -424,8 +477,11 @@ int ActorManager::GetNumInAABB(ColAABB* aabb) {
 
 // --- Level deserialiser ---------------------------------------------------
 
-// 0x00170728. EntityChunk deserialise; LOD scale + AABB->pos/size + Init.
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170728.
+// v1.6.1 ActorManager::LoadEntity @0x001d408c. EntityChunk deserialise; LOD scale
+// + AABB->pos/size + Init. Its own Add call goes to Add(long,bool) @0x001d3fac
+// (PLT 0x001168e4), NOT to Add(Entity*,long).
+// Defunct: zero in-binary callers (no .plt thunk); no-op stub;
+//   v1.6.1 ActorManager::LoadEntity @ 0x001d408c.
 bool ActorManager::LoadEntity(EntityChunk* /*chunk*/, void* /*hdr*/,
                               long /*hdrLen*/, long /*lod*/) {
     return false;
@@ -433,39 +489,45 @@ bool ActorManager::LoadEntity(EntityChunk* /*chunk*/, void* /*hdr*/,
 
 // --- Heap diagnostics (LinkedHeap stubs) ----------------------------------
 
-// 0x00170370. Binary forwards to LinkedHeap::GetTotalFreeMemory; port has
-// no heap pressure so report m_HeapSize as "all free".
+// v1.6.1 ActorManager::GetHeapFree @0x001d3b34. Binary forwards to
+// LinkedHeap::GetTotalFreeMemory; port has no heap pressure so report m_HeapSize
+// as "all free".
 int ActorManager::GetHeapFree() const {
     return m_HeapSize;
 }
 
-// 0x00170364.
 void ActorManager::HeapDisplay(bool /*verbose*/) {
-    // Defunct: LinkedHeap diagnostics -- no-op stub; v1.6.1 binary @ 0x00170364
+    // Defunct: LinkedHeap diagnostics -- no-op stub; v1.6.1 ActorManager::HeapDisplay @ 0x001d3b24
 }
 
-// 0x00170354.
 void ActorManager::DisplayUsage(bool /*dumpAll*/) {
-    // Defunct: LinkedHeap diagnostics -- no-op stub; v1.6.1 binary @ 0x00170354
+    // Defunct: LinkedHeap diagnostics -- no-op stub; v1.6.1 ActorManager::DisplayUsage @ 0x001d3b08
 }
 
 // --- Messaging ------------------------------------------------------------
 
-// 0x0017085c. m_Listeners.push_back(L).
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0017085c.
+// v1.6.1 ActorManager::AddMessageListener @0x001d4208. m_Listeners.push_back(L).
+// Defunct: zero in-binary callers -- this symbol genuinely has NO .plt thunk, so
+//   nothing ever registers a listener and m_Listeners is empty for the whole
+//   process lifetime; v1.6.1 ActorManager::AddMessageListener @ 0x001d4208.
 void ActorManager::AddMessageListener(Mortar::MessageListener* listener) {
     if (!listener) return;
     m_Listeners.push_back(listener);
 }
 
-// 0x00170124. m_Listeners.remove(L).
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x00170124.
+// v1.6.1 ActorManager::RemoveMessageListener @0x001d37c4. m_Listeners.remove(L).
+// Defunct: zero in-binary callers (no .plt thunk); v1.6.1
+//   ActorManager::RemoveMessageListener @ 0x001d37c4.
 void ActorManager::RemoveMessageListener(Mortar::MessageListener* listener) {
     m_Listeners.remove(listener);
 }
 
-// 0x0017013c. Delete each listener (operator delete), then clear list.
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0017013c.
+// v1.6.1 ActorManager::ClearAllListeners @0x001d37e4. Delete each listener
+// (operator delete), then clear list.
+// NOT dead code: it has a .plt thunk (0x00112dac) and GameExit calls it. It is a
+// no-op in practice only because AddMessageListener @0x001d4208 has no .plt thunk,
+// so m_Listeners is always empty by the time GameExit runs -- the CALL SITE exists.
+// The earlier "zero in-binary callers" note here was wrong.
 void ActorManager::ClearAllListeners() {
     for (std::list<Mortar::MessageListener*>::iterator it = m_Listeners.begin();
          it != m_Listeners.end(); ++it) {
@@ -474,11 +536,14 @@ void ActorManager::ClearAllListeners() {
     m_Listeners.clear();
 }
 
-// 0x0016ffd8. Filter listeners, fire callback->vtable[+0x30], one-shot clear,
-// then dispatch target->ReceiveMessage(sender, msg).
-// Defunct: zero in-binary callers; v1.6.1 binary @ 0x0016ffd8.
+// v1.6.1 ActorManager::SendMessage @0x001d3598. Filter listeners, fire
+// callback->vtable[+0x30], one-shot clear, then dispatch
+// target->ReceiveMessage(sender, msg). Resolves its target via Find(ulong)
+// @0x001d31b8.
+// Defunct: zero in-binary callers (no .plt thunk); v1.6.1
+//   ActorManager::SendMessage @ 0x001d3598.
 //
-// Filter semantics (binary @ 0x0016ffd8):
+// Filter semantics (v1.6.1 ActorManager::SendMessage @0x001d3598):
 //   L->type == msg->type         (exact match; no wildcard on type)
 //   L->msgKind == 0 || L->msgKind == typeHash   (0 = any)
 //   L->senderId == 0 || (sender && L->senderId == sender->id)  (0 = any)
@@ -498,14 +563,14 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
         if (!L) continue;
         if (L->type != (unsigned int)msg->type) continue;
         if (L->msgKind != 0 && L->msgKind != (unsigned int)typeHash) continue;
-        // Binary @ 0x0016ffd8: senderId filter is
+        // Binary @ 0x001d3598: senderId filter is
         //   piVar3[1] == 0 || (param_2 != 0 && piVar3[1] == param_2->m_RuntimeID)
         // i.e. 0 = wildcard, else the sender's RuntimeID (Entity+0x04) must match.
         if (L->senderId != 0 &&
             !(sender != nullptr && (unsigned int)L->senderId == sender->m_RuntimeID))
             continue;
         if (L->callback) {
-            // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016ffd8 (asm-inspector)
+            // ASM-verified: 2026-05-20 v1.6.1 ActorManager::SendMessage @ 0x001d3598 (asm-inspector)
             // Binary: cb->vtable[+0x30](cb, sender, target, msg) — Delegate3 invoke.
             Mortar::Delegate3<void, Entity*, Entity*, Message*>* cb =
                 static_cast<Mortar::Delegate3<void, Entity*, Entity*, Message*>*>(L->callback);
@@ -513,7 +578,7 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
         }
     }
 
-    // One-shot clear — binary @ 0x0016ffd8.
+    // One-shot clear -- v1.6.1 ActorManager::SendMessage @0x001d3598.
     m_Listeners.clear();
 
     if (target) target->ReceiveMessage(sender, msg);
@@ -522,10 +587,13 @@ bool ActorManager::SendMessage(unsigned long typeHash, Entity* sender,
 
 // --- Out-of-line formerly-inline methods (required for symbol emission) ----
 
-// 0x0016fb38.
+// v1.6.1 ActorManager::GetHeapSize @0x001d2e80.
 int ActorManager::GetHeapSize() const { return m_HeapSize; }
 
-// 0x0016fb3c.
+// TODO: v1.6.1 <addr unresolved> (ActorManager::SetCollisionVisible) -- the v1.6.1
+// address was not resolved in the batch-B remap; it sits between GetHeapSize
+// @0x001d2e80 and DeactivateAllEntities @0x001d2e94 by ordinal, but the exact
+// entry point is unconfirmed.
 void ActorManager::SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0); }
 
 // --- Integer-width convenience overloads -----------------------------------
@@ -536,17 +604,17 @@ void ActorManager::SetCollisionVisible(unsigned char v) { m_DebugDraw = (v != 0)
 // same code. The forwarders are a port-only convenience so call sites of either
 // integer width link; they have no separate binary counterpart.
 
-// Port specific: int-width forwarder; binary symbol @ 0x0017068c is Add(long,bool).
+// Port specific: int-width forwarder; binary symbol @ 0x001d3fac is Add(long,bool).
 Entity* ActorManager::Add(long entityType, bool unused) {
     return Add((int)entityType, unused);
 }
 
-// Port specific: int-width forwarder; binary symbol @ 0x0016fb44 is DeactivateAllEntities(long).
+// Port specific: int-width forwarder; binary symbol @ 0x001d2e94 is DeactivateAllEntities(long).
 void ActorManager::DeactivateAllEntities(long typeIdx) {
     DeactivateAllEntities((int)typeIdx);
 }
 
-// Port specific: no-arg Draw() IS the binary symbol @ 0x0016fe7c (thiscall, no
+// Port specific: no-arg Draw() IS the binary symbol @ 0x001d3380 (thiscall, no
 // Renderer arg). The binary draws via an implicit global renderer; the port
 // resolves it through Renderer::GetInstance() and forwards to the port-only
 // Draw(Renderer&) that carries the actual draw loop.
@@ -555,38 +623,38 @@ void ActorManager::Draw() {
     if (r) Draw(*r);
 }
 
-// Port specific: int-width forwarder; binary symbol @ 0x0016fcc4 is GetEntity(long,ulong).
+// Port specific: int-width forwarder; binary symbol @ 0x001d30d4 is GetEntity(long,ulong).
 Entity* ActorManager::GetEntity(long typeIdx, unsigned long slot) const {
     return GetEntity((int)typeIdx, (size_t)slot);
 }
 
-// Port specific: int-width forwarder; binary symbol @ 0x0016fbb8 is GetEntityFirst(long,&).
+// Port specific: int-width forwarder; binary symbol @ 0x001d2f48 is GetEntityFirst(long,&).
 Entity* ActorManager::GetEntityFirst(long typeIdx, std::list<Entity*>::iterator& it) {
     return GetEntityFirst((int)typeIdx, it);
 }
 
-// Port specific: int-width forwarder; binary symbol @ 0x0016fb88 is GetEntityNext(long,&).
+// Port specific: int-width forwarder; binary symbol @ 0x001d2f00 is GetEntityNext(long,&).
 Entity* ActorManager::GetEntityNext(long typeIdx, std::list<Entity*>::iterator& it) {
     return GetEntityNext((int)typeIdx, it);
 }
 
-// Port specific: int-width forwarder; binary symbol @ 0x0016ff98 is GetNumEntities(int/long).
+// Port specific: int-width forwarder; binary symbol @ 0x001d3544 is GetNumEntities(long).
 int ActorManager::GetNumEntities(long typeIdx) {
     return GetNumEntities((int)typeIdx);
 }
 
-// Port specific: non-const forwarder; binary symbol @ 0x0016ff30 is GetNumEntities(long*).
+// Port specific: non-const forwarder; binary symbol @ 0x001d349c is GetNumEntities(long*).
 int ActorManager::GetNumEntities(long* typeIdxNullTerminated) {
     return GetNumEntities((const long*)typeIdxNullTerminated);
 }
 
-// Port specific: int-width forwarder; binary symbol @ 0x0017046c is Initialise(int,int).
+// Port specific: int-width forwarder; binary symbol @ 0x001d3ca4 is Initialise(int,int).
 void ActorManager::Initialise(long numTypes, long heapSize) {
     Initialise((int)numTypes, (int)heapSize);
 }
 
 // Bounds-taking Update(float,ColAABB*,ColAABB*) IS the binary symbol @
-// 0x001701f4. Decompile confirms the two ColAABB* bounds are dead in the binary
+// 0x001d38f0. Decompile confirms the two ColAABB* bounds are dead in the binary
 // body, so forwarding to the dt-only port body is behaviourally faithful.
 void ActorManager::Update(float dt, ::ColAABB* /*boundsA*/, ::ColAABB* /*boundsB*/) {
     Update(dt);

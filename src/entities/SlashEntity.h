@@ -34,10 +34,10 @@
 //   TouchMoveY      0x17C490
 //   PlaySwipe       v1.6.1 0x001e8550
 //   GetHeadThicknessScale v1.6.1 0x1e684c
-//   CreateGhost     0x17B82C
+//   CreateGhost     v1.6.1 0x001e67f4
 //   MissControlDeleted    0x17B388
-//   Draw            0x17B3B8  (1-instruction BX lr stub)
-//   CollisionResponse     0x17B3BC  (stub, returns 0)
+//   Draw            v1.6.1 0x001e6168  (4 bytes, single BX lr)
+//   CollisionResponse     v1.6.1 0x001e616c  (8 bytes, `mov r0,#0; bx lr`)
 //   UpdateCollisionLine   0x17B3C0  (4-byte stub, returns 0)
 //   DrawUpdate      0x17B398
 //
@@ -91,7 +91,11 @@ public:
     // Matches SlashEntity::Update (v1.6.1 @ 0x1e867c). Per-frame update.
     void Update(float dt) override;
 
-    // Binary @ 0x17B3B8 frozen-branch stub -- no deferred post-step work.
+    // Frozen-branch stub -- no deferred post-step work.
+    // TODO: v1.6.1 <addr unresolved> (SlashEntity::PostUpdate) -- the address this
+    // slot previously cited belongs to SlashEntity::Draw (v1.6.1 @0x001e6168), so
+    // it was a mis-stamp rather than a stale remap. PostUpdate's own entry point is
+    // unresolved; re-RE before trusting any body here.
     void PostUpdate(float dt) override;
 
     // Matches SlashEntity::PreUpdate (0x17C584). Ticks ghost frame counters,
@@ -99,8 +103,9 @@ public:
     void PreUpdate(float dt);
 
     // Entity vtable slot 5 (+0x14): Draw(Renderer&) override.
-    // Binary @ 0x17B3B8 is a 1-instruction BX lr stub -- no-op.
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B3B8 (re-analyst)
+    // v1.6.1 SlashEntity::Draw @0x001e6168 is 4 bytes, a single `bx lr` -- no-op.
+    // (The blade is actually rendered by DrawSlice from GameDraw's 16-slot loop.)
+    // ASM-verified: 2026-05-18 v1.6.1 SlashEntity::Draw @ 0x001e6168 (re-analyst)
     void Draw(Renderer& r) override;
 
     // v1.6.1 SlashEntity::PlaySwipe @0x001e8550 -- mod-override swipe SFX, else "Sword-swipe-%d" via Rand32.
@@ -109,14 +114,22 @@ public:
     // v1.6.1 @ 0x1e684c -- derive head taper scale.
     float GetHeadThicknessScale() const;
 
-    // Binary @ 0x17B82C -- push next ghost slot, snapshot blade vertex strips.
-    // Port specific: SlashEntityGhost ring deferred; body is a no-op stub.
+    // v1.6.1 SlashEntity::CreateGhost @0x001e67f4 -- advance the global ghost ring
+    // and snapshot the current blade vertex strip into the new slot:
+    //     s_currentSlashIdx = (s_currentSlashIdx + 1) % 8;
+    //     s_ghosts[s_currentSlashIdx].StartEffect(&m_pLeftBuffer, m_PointCount);
+    // Ring size is 8; SlashEntityGhost stride is 0x10.
+    // TODO: v1.6.1 0x001e67f4 (SlashEntity::CreateGhost) -- SlashEntityGhost is not
+    // ported yet, so the body is a no-op stub. Its API for whoever ports the ring:
+    //   StartEffect @0x001eb048, Update @0x001eaf4c, Draw @0x001eb0f8,
+    //   Reset @0x001eaaec, Release @0x001eaf10.
     void CreateGhost();
 
     // Binary @ 0x17B388 -- clear back-pointer to combo MissControl when deleted.
     void MissControlDeleted(HUDControl* ctrl);
 
-    // Binary @ 0x17B3BC -- entity vtable slot; SlashEntity is pure aggressor.
+    // v1.6.1 SlashEntity::CollisionResponse @0x001e616c -- entity vtable slot;
+    // SlashEntity is pure aggressor, so the body is `mov r0,#0; bx lr`.
     int CollisionResponse();
 
     // Binary @ 0x17B3C0 -- 4-byte stub, returns 0.
@@ -461,8 +474,9 @@ public:
     // returns true iff the blade segment actually reaches the hit chord.
     bool CollideWithEntity(Mortar::Entity* entity);
 
-    // Binary @ 0x17B3BC -- 2-instruction stub `movs r0,#0; bx lr`.
-    // ASM-verified: 2026-06-07 v1.6.1 binary @ 0x0017B3BC (re-analyst)
+    // v1.6.1 SlashEntity::CollisionResponse @0x001e616c -- 8 bytes,
+    // `mov r0,#0; bx lr`.
+    // ASM-verified: 2026-06-07 v1.6.1 SlashEntity::CollisionResponse @ 0x001e616c (re-analyst)
     int CollisionResponse(Mortar::Entity* hitter, unsigned long mask1, unsigned long mask2, _Vector3<float>* bladeVel) override;
 
     // DrawSlice -- binary @ 0x1e83b0. Main blade render (two mirrored tri-strips).

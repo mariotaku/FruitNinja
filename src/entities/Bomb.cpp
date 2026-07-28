@@ -160,8 +160,10 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* scaleOrNull) {
 
     m_BombVariant = 0;
     m_bCollisionGuard = 0;
-    // ASM-verified: 2026-05-27 v1.6.1 binary @ 0x001725ce (re-analyst)
-    // orr r2,r2,#0x2 ; bfi r2,r3,#0x4,#0x1 (r3 = 0)
+    // ASM-verified: 2026-05-27 v1.6.1 Bomb::Init @ 0x001d69e0 (re-analyst)
+    // `orr r3,r3,#0x2` @0x001d6af4 ; `bfi r3,r7,#0x4,#0x1` (r7 = 0) @0x001d6afc ;
+    // `strb r3,[r4,#0xc]` -- confirms Entity::flags lives at +0xC, with
+    // ENT_HAS_COLLISION = bit 1 and ENT_KILLED = bit 4.
     flags = (flags & ~ENT_KILLED) | ENT_HAS_COLLISION;
     m_bHit = 0;
     m_bMovement = 1;

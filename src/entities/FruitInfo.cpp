@@ -1,8 +1,6 @@
 //
 // FRUIT_INFO loader — parses Data/xml/fruitlist.xml
-// Matches Fruit::LoadInfo (0x17987c, 509 lines)
-//
-// Analysed: 2026-04-10T13:00
+// Matches v1.6.1 Fruit::LoadInfo @0x001e1084 (509 lines)
 
 #include "FruitInfo.h"
 #include "util/StringHash.h"
@@ -63,13 +61,13 @@ static int ParseCSV(const char* str, int* out, int maxCount)
 static void LoadFruitModels() {
 }
 
-// --- Fruit::LoadInfo implementation (matches 0x17987c, 509 lines) ---
+// --- Fruit::LoadInfo implementation (v1.6.1 @0x001e1084, 509 lines) ---
 // Called from Fruit::LoadInfo() in Fruit.cpp
 
 // Global shadow texture (loaded on fast hardware only)
 static Mortar::SmartPtr<Mortar::Texture> g_FruitShadowTex;
 
-// --- Fruit::LoadInfo implementation (matches 0x17987c, 509 lines) ---
+// --- Fruit::LoadInfo implementation (v1.6.1 @0x001e1084, 509 lines) ---
 
 void FruitInfo_Load(const char* xmlPath)
 {
@@ -148,13 +146,13 @@ void FruitInfo_Load(const char* xmlPath)
         // Mortar::SmartPtr<Texture>, refcounted), so a raw memset() over a live element
         // would corrupt/skip refcount bookkeeping if this entry ever held a texture.
         // Value-initialising a temporary zeroes the POD fields exactly like the binary's
-        // FRUIT_INFO ctor memset (@0x0017ae20), and default-constructs the SmartPtrs to
-        // null; assigning it over fi runs SmartPtr::operator= (AddRef-null/Release-old),
+        // FRUIT_INFO ctor memset (v1.6.1 FRUIT_INFO::FRUIT_INFO @0x001e3d44), and
+        // default-constructs the SmartPtrs to null; assigning it over fi runs SmartPtr::operator= (AddRef-null/Release-old),
         // which is a safe no-op on the first (only) FruitInfo_Load call and would also
         // correctly release any previously-held texture were this ever called again.
         fi = FruitInfo();
-        // Re-apply FRUIT_INFO ctor defaults (binary @ 0x0017ae20). The XML
-        // parser uses TinyXML QueryIntAttribute / QueryFloatAttribute which
+        // Re-apply FRUIT_INFO ctor defaults (v1.6.1 FRUIT_INFO::FRUIT_INFO
+        // @0x001e3d44; dtor @0x001e3c54). The XML parser uses TinyXML QueryIntAttribute / QueryFloatAttribute which
         // leave the destination unchanged when the attr is missing -- so
         // any field with a non-zero default must be initialised here, NOT
         // in the per-attr block below. Apple, banana, etc. omit `score=`,
@@ -292,7 +290,10 @@ void FruitInfo_Load(const char* xmlPath)
             }
         }
 
-        // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x00179f44..0x00179fc0 (asm-inspector / re-analyst)
+        // ASM-verified: 2026-05-03 v1.6.1 Fruit::LoadInfo @ 0x001e1084 (asm-inspector / re-analyst)
+        // The three QueryFloatAttribute calls below are @0x001e19c8 (collision),
+        // 0x001e19dc (scale), 0x001e19f0 (hitInfluence); the int-attr run starts
+        // at 0x001e1a04.
         // --- Float attrs with defaults ---
         // Floats (defaults already applied at top of loop via ctor mirror).
         elem.QueryFloatAttribute("collision", &fi.m_CollisionScale);
@@ -316,7 +317,7 @@ void FruitInfo_Load(const char* xmlPath)
 
         // m_bScorable: 1 = fruit can receive a critical hit, 0 = cannot.
         // XML "noCritical"="true" means NO critical, so m_bScorable=0 when attr is "true".
-        // LoadInfo @ 0x0017987c: store sequence sets field to 1 unless "noCritical"=="true",
+        // v1.6.1 Fruit::LoadInfo @0x001e1084: store sequence sets field to 1 unless "noCritical"=="true",
         // then clears it if colour alpha == 0.
         const char* noCrit = elem.Attribute("noCritical");
         fi.m_bScorable = (noCrit && strcmp(noCrit, "true") == 0) ? 0 : 1;

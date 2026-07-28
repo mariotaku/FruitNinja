@@ -582,9 +582,16 @@ float SlashEntity::GetHeadThicknessScale() const {
     return scale;
 }
 
-// Binary @ 0x17B82C -- snapshot blade vertex strips into global ghost ring.
-// Port specific: SlashEntityGhost ring not yet ported. No-op stub.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B82C (re-analyst)
+// v1.6.1 SlashEntity::CreateGhost @0x001e67f4 -- snapshot blade vertex strips into
+// the global ghost ring. Binary body:
+//     s_currentSlashIdx = (s_currentSlashIdx + 1) % 8;
+//     s_ghosts[s_currentSlashIdx].StartEffect(&m_pLeftBuffer, m_PointCount);
+// Ring size 8, SlashEntityGhost stride 0x10.
+// TODO: v1.6.1 0x001e67f4 (SlashEntity::CreateGhost) -- SlashEntityGhost is not
+// ported, so this stays a no-op stub. Ghost API for the port:
+//   StartEffect @0x001eb048, Update @0x001eaf4c, Draw @0x001eb0f8,
+//   Reset @0x001eaaec, Release @0x001eaf10.
+// ASM-verified: 2026-05-18 v1.6.1 SlashEntity::CreateGhost @ 0x001e67f4 (re-analyst)
 void SlashEntity::CreateGhost() {
 }
 
@@ -2136,8 +2143,10 @@ void SlashEntity::Update(float dt) {
 }
 
 // ---------------------------------------------------------------------------
-// Draw -- Entity vtable slot 5. Binary @ 0x17B3B8 is a 1-instruction BX lr stub.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017B3B8 (re-analyst)
+// Draw -- Entity vtable slot 5. v1.6.1 SlashEntity::Draw @0x001e6168 is 4 bytes,
+// a single `bx lr`. The blade is rendered by DrawSlice from GameDraw's 16-slot
+// loop instead.
+// ASM-verified: 2026-05-18 v1.6.1 SlashEntity::Draw @ 0x001e6168 (re-analyst)
 // ---------------------------------------------------------------------------
 void SlashEntity::Draw(Renderer& /*r*/) {
 }
@@ -2537,7 +2546,7 @@ bool SlashEntity::CollideWithEntity(Mortar::Entity* entity) {
     return (anchor - hitB).MagnitudeSqr() < m_SegLenSq;
 }
 
-// Binary @ 0x17B3BC -- 1-instruction stub `mov r0,#0; bx lr`.
+// v1.6.1 SlashEntity::CollisionResponse @0x001e616c -- 8 bytes, `mov r0,#0; bx lr`.
 int SlashEntity::CollisionResponse(Mortar::Entity* /*hitter*/, unsigned long /*mask1*/,
                                     unsigned long /*mask2*/, _Vector3<float>* /*bladeVel*/) { return 0; }
 

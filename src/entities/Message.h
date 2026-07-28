@@ -2,21 +2,23 @@
 #define FN_ENTITIES_MESSAGE_H
 
 // Mortar::Message and Mortar::MessageListener — POD envelope + filter record.
-// Binary layout confirmed from Mortar::ActorManager::SendMessage @ 0x0016ffd8 and
-// v1.6.1 Mortar::Entity::ReceiveMessage @ 0x00256274.
+// Binary layout confirmed from v1.6.1 Mortar::ActorManager::SendMessage @0x001d3598
+// and Mortar::Entity::ReceiveMessage @0x00256274 (the ReceiveMessage address is
+// carried over from an earlier pass and was NOT re-verified in the batch-B sweep).
 //
-// Defunct: Mortar messaging — no-op stub; v1.6.1 binary @ 0x0016ffd8 (Send),
-//   0x0017085c (Add), 0x00170124 (Remove). Listener subsystem wired but
-//   never instantiated in shipped retail.
-//
-// Analysed: 2026-05-04T00:00
+// Defunct: Mortar messaging — no-op stub; v1.6.1 ActorManager::SendMessage
+//   @ 0x001d3598, AddMessageListener @ 0x001d4208, RemoveMessageListener
+//   @ 0x001d37c4. None of the three has a .plt thunk (the binary is PIC, so a
+//   thunk is the only way an intra-image call can reach them), so no listener is
+//   ever registered and the subsystem never runs in shipped retail. The struct
+//   shape is preserved for call-graph fidelity.
 
 #include <cstddef>
 
 namespace Mortar {
 
 // Mortar::Message — 8-byte POD message envelope; binary @ no class ctor (plain POD).
-// SendMessage @ 0x0016ffd8 reads msg->type at +4;
+// SendMessage @0x001d3598 reads msg->type at +4;
 // v1.6.1 Mortar::Entity::ReceiveMessage @ 0x00256274 does the same.
 struct Message {
     unsigned int  reserved0;  // +0x00 — unread by SendMessage/ReceiveMessage; opaque sender slot
@@ -29,7 +31,7 @@ static_assert(offsetof(Message, type) == 4, "Message::type offset mismatch");
 #endif
 
 // Mortar::MessageListener — 16-byte POD filter+callback record; binary @ no class ctor.
-// SendMessage filter (0x0016ffd8): type is exact-match; senderId/msgKind use 0=any wildcard.
+// SendMessage filter (v1.6.1 @0x001d3598): type is exact-match; senderId/msgKind use 0=any wildcard.
 struct MessageListener {
     unsigned int   type;      // +0x00 — exact-match against Message::type (0 is a real value, not wildcard)
     int            senderId;  // +0x04 — Mortar::Entity::id (Mortar::Entity+0x04) filter; 0 = any
