@@ -122,7 +122,9 @@ public:
     virtual bool SFXIsActive(uint32_t handle);
     virtual bool SFXIsPaused(uint32_t handle);
 
-    // Pause/unpause ALL SFX -- 0x0018c900 (nop in MAM) / 0x0018d430
+    // Pause/unpause ALL SFX -- v1.6.1 SoundManagerMAM::SFXPauseAll @0x002302d0 /
+    // SFXUnpauseAll @0x002302d4 are nops; the live pair is SFXPauseAll @0x00230ec8 /
+    // SFXUnpauseAll @0x00230ecc
     virtual void SFXPauseAll();
     virtual void SFXUnpauseAll();
 
@@ -137,13 +139,15 @@ public:
     virtual void SongStop();
     virtual void SongPause();
     virtual void SongResume();
-    virtual void SongSetMemorySize(int size);  // stub nop 0x0018c960
+    virtual void SongSetMemorySize(int size);  // stub nop; v1.6.1 @0x00230650
 
     // Volume (static globals + SyncMutes)
     float GetMusicVolume() const { return s_MusicVolume; }
-    void  SetMusicVolume(float vol);  // 0x0018ca78
-    void  SetSFXVolume(float vol);    // 0x0018ca98
-    void  SyncMutes();                // 0x0018c9d4
+    void  SetMusicVolume(float vol);  // v1.6.1 @0x00230534
+    void  SetSFXVolume(float vol);    // v1.6.1 @0x002304f4
+    // Mirrors the binary's internal-linkage Mortar::SyncMutes @0x002302e4:
+    // per channel, muted = (MasterMute || vol < 0.1) -> SetMusicMute / SetSfxMute.
+    void  SyncMutes();
 
     virtual ~SoundManager();
 

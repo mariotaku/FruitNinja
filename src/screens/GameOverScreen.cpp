@@ -694,7 +694,7 @@ void GameOverScreen::SetStateWait() {
         score > 50 && unrated > 5 &&
         GetCurrentModeHighscore() - 10 < score) {
         game_work.m_SaveData->m_bRated = 1;
-        // Defunct: NetworkManager::SetLeaderboardScore -- no-op stub; v1.6.1 @0x0018d698
+        // Defunct: NetworkManager::SetLeaderboardScore -- no-op stub; v1.6.1 Mortar::NetworkManager::SetLeaderboardScore @0x002312b4
         Mortar::NetworkManager::GetInstance()->SetLeaderboardScore(
             (const char*)(intptr_t)GetCurrentModeLeaderboardID(-1),
             (long long)score, 0, 0);

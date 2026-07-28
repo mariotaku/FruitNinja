@@ -19,7 +19,9 @@
 //   QuitShopCallback  0x001b2ef0
 //   EquipCallback     0x001b3008
 //   NewItem           0x001b1774
-//   Reset             0x001b179c  (no port counterpart yet)
+//   Reset             0x001b179c  (vtable slot +0x10)
+//   BuyButtonCallback 0x001b1874
+//   GetDescriptionTextXPos 0x001b1830
 //   DeletedMenuItem   0x001b53d4
 //
 // Struct size: 0xBC bytes
@@ -107,6 +109,12 @@ public:
 
     // Matches vtable Release slot
     void Release() override;
+
+    // Matches ShopScreen::Reset @ 0x001b179c (HUDControl vtable slot +0x10).
+    // Rewinds the state machine: m_State = 0, m_TransitionAlpha = 0.
+    // Reached only via the vtable (HUD::ResetControls walks every registered
+    // control); ShopScreen never calls it itself, matching the binary.
+    void Reset() override;
 
     // Matches v1.6.1 ShopScreen::Update(float) @ 0x001b321c (387 lines)
     void Update(float dt) override;
@@ -228,11 +236,11 @@ public:
     static Mortar::SmartPtr<Mortar::Texture> s_TexBGStore;         // +0x48: BG_store.tex / BG_store_sml.tex
     static bool s_bContentLoaded;                           // +0x4c: set =1 at end of LoadContent, =0 in UnLoadContent
 
-    // ShopScreen::GetDescriptionTextXPos @ 0x0015c520
+    // ShopScreen::GetDescriptionTextXPos @ 0x001b1830
     // Returns the X anchor for description text, sliding with m_TransitionAlpha.
-    // Binary: uses same slide formula as list + -80.0f local offset.
+    // Binary: (alpha < 1 ? 145 + (1 - alpha) * 190 * 1.5 : 145) - 80
+    //   (DAT_001b1870 = 145, DAT_001b186c = 190, DAT_001b1868 = 80).
     // At alpha=1: returns 145.0f - 80.0f = 65.0f. At alpha=0: returns 430.0f - 80.0f = 350.0f.
-    // DIFFERS: exact binary formula not fully confirmed; uses list slide formula with -80 offset.
     float GetDescriptionTextXPos();
 
     // --- Callbacks ---
@@ -300,17 +308,17 @@ public:
 #endif
 
 public:
-    // Binary @ 0x0015c568 -- buy/equip the selected item via ItemManager
-    //   (BuyItem if locked; unequip+clear slot if equipped; else swap into
-    //   per-slot cache m_pSlotItems and SetEquippedItem). Body in ShopScreen.cpp.
-    //   Status-text writes to ShopListItem+0x54 are documented-skipped there
-    //   (port's ShopListItem doesn't expose that char* slot).
+    // v1.6.1 ShopScreen::BuyButtonCallback @0x001b1874 -- buy/equip the selected
+    //   item via ItemManager (BuyItem if locked; unequip+clear slot if equipped;
+    //   else swap into per-slot cache m_pSlotItems and SetEquippedItem). Body in
+    //   ShopScreen.cpp. Status-text writes to ShopListItem+0x54 are
+    //   documented-skipped there (port's ShopListItem doesn't expose that char* slot).
     void BuyButtonCallback();
-    // Binary @ 0x0015c7f0 -- set m_State=6 and reset the TutorialControl tute
-    //   position. Body in ShopScreen.cpp.
+    // v1.6.1 ShopScreen::CancelCallback @0x001b244c -- set m_State=6 and reset the
+    //   TutorialControl tute position. Body in ShopScreen.cpp.
     void CancelCallback();
-    // Binary @ 0x0015c758 -- cache the selected item into its slot, set
-    //   m_State=5, and reset the TutorialControl tute position. Body in
+    // v1.6.1 ShopScreen::ConfirmCallback @0x001b2388 -- cache the selected item into
+    //   its slot, set m_State=5, and reset the TutorialControl tute position. Body in
     //   ShopScreen.cpp.
     void ConfirmCallback();
 };

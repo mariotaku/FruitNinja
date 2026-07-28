@@ -44,7 +44,7 @@ struct _Vector3 {
     // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00138b40 (asm-inspector) -- scalar by value
     _Vector3& operator/=(T s) { x /= s; y /= s; z /= s; return *this; }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0011e6b0 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 _Vector3<float>::operator*(_Vector3 const&) const @ 0x0013617c (asm-inspector)
     // Component-wise multiply (used in HUDControl3d::Draw).
     _Vector3 operator*(const _Vector3& o) const { return _Vector3(x * o.x, y * o.y, z * o.z); }
 

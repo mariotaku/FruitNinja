@@ -31,7 +31,8 @@ struct _Vector2 {
     _Vector2& operator+=(const _Vector2& o) { x += o.x; y += o.y; return *this; }
     _Vector2& operator-=(const _Vector2& o) { x -= o.x; y -= o.y; return *this; }
     _Vector2& operator*=(T s) { x *= s; y *= s; return *this; }
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00173064 (asm-inspector) -- scalar by value
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 _Vector2<float>::operator/=(float) @ 0x001d7854 (asm-inspector)
+    // Mangled suffix `dVEf` confirms the scalar is passed BY VALUE.
     _Vector2& operator/=(T s) { x /= s; y /= s; return *this; }
 
     // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001526a8 (asm-inspector)
@@ -40,11 +41,12 @@ struct _Vector2 {
     // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x001526c4 (asm-inspector)
     T MagnitudeSqr() const { return Dot(*this); }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00173080 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 _Vector2<float>::Magnitude() const @ 0x001d7870 (asm-inspector)
     T Magnitude() const { return T(std::sqrt((double)MagnitudeSqr())); }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00173098 (asm-inspector)
-    // Recursive 1M-scale retry mirrors binary's near-zero handling.
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 _Vector2<float>::Normalise() @ 0x001d7894 (asm-inspector)
+    // Recursive 1e6-scale retry AND returning the PRE-retry magnitude are both
+    // confirmed binary behaviour -- not a port simplification.
     T Normalise() {
         if (x == T(0) && y == T(0)) return T(0);
         T mag = Magnitude();

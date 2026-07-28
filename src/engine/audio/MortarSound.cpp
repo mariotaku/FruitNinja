@@ -6,7 +6,7 @@
 
 namespace Mortar {
 
-// 0x0018c6ac
+// v1.6.1 Mortar::MortarSound::MortarSound @0x00230030 (vtable @0x002cfcc0)
 MortarSound::MortarSound()
     : m_Name(nullptr)
     , m_Handle(0)
@@ -14,7 +14,8 @@ MortarSound::MortarSound()
 {
 }
 
-// 0x0018c704 -- calls InternalDestroy
+// v1.6.1 Mortar::MortarSound::~MortarSound @0x0022ffe0 -- calls InternalDestroy
+// (deleting dtor @0x00230014)
 MortarSound::~MortarSound() {
     InternalDestroy();
 }
@@ -25,7 +26,7 @@ inline void MortarSound_HandleGuard(MortarSound* s) {
     if (s->m_Handle == 0) s->m_State = 0;
 }
 
-// 0x0018c780
+// v1.6.1 Mortar::MortarSound::IsPlaying @0x0023027c
 // Guard: if m_Handle==0 -> m_State=0 (voice finished or never started).
 // Port addition: if m_Handle!=0 but backend says voice no longer active,
 // zero the handle so future guard checks detect completion correctly.
@@ -44,19 +45,20 @@ bool MortarSound::IsPlaying() {
     return m_State == 2;
 }
 
-// 0x0018c794
+// v1.6.1 Mortar::MortarSound::IsPaused @0x0023029c
 bool MortarSound::IsPaused() {
     MortarSound_HandleGuard(this);
     return m_State == 1;
 }
 
-// Binary @ 0x0018c850
-// Binary calls SFXPlay(m_Name, 0, NULL, 0x40, -1) — volume=64 (0x40), flags=-1.
-// Before the call, binary writes this+8 (=&m_Handle) into a MAMAudioController
-// listener-pair table slot, then passes NULL as the sound* arg.
-// Port specific: passes 'this' as listener instead of inline listener-table write.
-// DIFFERS: v1.6.1 binary @ 0x0018c850 calls SFXPlay(m_Name, 0, NULL, 0x40, -1);
-//   port simplifies to 2-arg form, losing default volume 64 and listener-table semantics.
+// v1.6.1 Mortar::MortarSound::Play @0x0023006c
+// Binary body: MAMAudioController::RemoveListener(&m_Handle); the global
+// AudioHandleHandle is set to &m_Handle; then SFXPlay(m_Name, 0, 0, '@', -1)
+// — volume='@' = 0x40 = 64, flags=-1. m_State = 2 only if the handle is nonzero.
+// Port specific: passes 'this' as listener instead of the global-handle write.
+// DIFFERS: original = SFXPlay(m_Name, 0, 0, 0x40, -1) (v1.6.1 Mortar::MortarSound::Play
+//   @0x0023006c), using the 2-arg port form because the port's SoundManager owns
+//   volume/flags defaults; loses default volume 64 and listener-table semantics.
 void MortarSound::Play() {
     MortarSound_HandleGuard(this);
     if (m_State == 0) {
@@ -68,7 +70,7 @@ void MortarSound::Play() {
     }
 }
 
-// 0x0018c830
+// v1.6.1 Mortar::MortarSound::Pause @0x002300f0
 void MortarSound::Pause() {
     MortarSound_HandleGuard(this);
     if (m_State == 2) {
@@ -78,7 +80,7 @@ void MortarSound::Pause() {
     }
 }
 
-// 0x0018c810
+// v1.6.1 Mortar::MortarSound::Resume @0x00230128
 void MortarSound::Resume() {
     MortarSound_HandleGuard(this);
     if (m_State == 1) {
@@ -88,7 +90,7 @@ void MortarSound::Resume() {
     }
 }
 
-// 0x0018c7f0
+// v1.6.1 Mortar::MortarSound::Stop @0x00230160
 // fadeTime is always 0.0f in all observed calls (DAT_0018c8cc = 0.0f).
 // Fade not implemented -- stop is immediate.
 void MortarSound::Stop(float /*fadeTime*/) {
@@ -124,12 +126,12 @@ void MortarSound::SetVolume(float vol) {
     }
 }
 
-// 0x0018c6fc -- non-virtual wrapper
+// v1.6.1 Mortar::MortarSound::Destroy @0x00230064 -- non-virtual wrapper
 void MortarSound::Destroy() {
     InternalDestroy();
 }
 
-// 0x0018c8a4
+// v1.6.1 Mortar::MortarSound::InternalDestroy @0x00230190
 // Free m_Name, Stop(0), RemoveListener (listener table not maintained in port)
 void MortarSound::InternalDestroy() {
     if (m_Name != nullptr) {
@@ -141,12 +143,12 @@ void MortarSound::InternalDestroy() {
     // listener cleanup is implicit in port (no listener list maintained)
 }
 
-// 0x0018c6f4
+// v1.6.1 Mortar::MortarSound::Load @0x00230068 (single b.w tail-call to InternalLoad)
 void MortarSound::Load(const char* name) {
     InternalLoad(name);
 }
 
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0018c8d0 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 Mortar::MortarSound::InternalLoad @ 0x002301d0 (re-analyst)
 // Calling InternalLoad on an actively-playing sound silently stops it
 // because InternalDestroy calls Stop(0) and zeros m_Handle before m_Name is replaced.
 void MortarSound::InternalLoad(const char* name) {
@@ -156,7 +158,7 @@ void MortarSound::InternalLoad(const char* name) {
     memcpy(m_Name, name, n);
 }
 
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0018c7a8 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 Mortar::MortarSound::IsReady @ 0x002302bc (re-analyst)
 // Note: binary is a no-op stub; loads complete synchronously.
 bool MortarSound::IsReady() {
     if (m_Handle == 0) m_State = 0;

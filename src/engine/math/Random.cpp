@@ -7,7 +7,8 @@ static const uint64_t kDefaultSeed  = 0x00000000DEADBEEFULL;
 static const uint64_t kMultiplier   = 0x5D588B656C078965ULL; // Knuth MMIX LCG
 static const uint64_t kIncrement    = 0x0000000000269EC3ULL;
 
-// ASM-verified: 2026-05-06T13:42 v1.6.1 binary @ 0x00195278 (asm-inspector)
+// ASM-verified: 2026-05-06T13:42 v1.6.1 Math::Random::Random() @ 0x00242074 (asm-inspector)
+// DEADBEEF seed / 0x5D588B656C078965 multiplier / 0x269EC3 increment all confirmed.
 Random::Random()
     : m_State(kDefaultSeed)
     , m_Mult(kMultiplier)

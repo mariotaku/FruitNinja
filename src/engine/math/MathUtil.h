@@ -33,7 +33,7 @@ inline float GetSmallestDelta(float a, float b) {
 // TODO: v1.6.1 0x001d8d74 (GetSmallestDeltaIdx) -- 16-bit angle-index analog of
 //   GetSmallestDelta; wraps in the 16-bit index domain. Not yet RE'd.
 
-// Matches Math::SinIdx / Math::CosIdx (0x00194d50 / 0x00194dcc).
+// Matches v1.6.1 Math::SinIdx @0x002420ac / Math::CosIdx @0x002420d4.
 // Binary reads from a 4096-entry float LUT keyed by (idx >> 4);
 // we use sinf/cosf directly — same output, no LUT needed on modern FPUs.
 // Returns float in [-1, 1]. Takes uint16_t so the angle wraps naturally
@@ -57,35 +57,37 @@ template<class T>
 inline T Max(T a, T b) { return a > b ? a : b; }
 
 
-// Binary @ 0x00194d50 — 4096-entry sin LUT @ 0x001be4a4; sinf() is equivalent
+// v1.6.1 Math::SinIdx @0x002420ac — 4096-entry sin LUT; sinf() is equivalent
 float SinIdx(unsigned short idx);
 
-// Binary @ 0x00194d70 — phase-shifts SinIdx by +1024 (90 deg); shares sin LUT
+// v1.6.1 Math::CosIdx @0x002420d4 — phase-shifts SinIdx by +1024 (90 deg); shares sin LUT
 float CosIdx(unsigned short idx);
 
-// Binary @ 0x00194d98 — SinIdx/CosIdx with 100000.0f fallback when cos==0
+// v1.6.1 Math::TanIdx @0x00242104 — SinIdx/CosIdx with 100000.0f fallback when cos==0
 float TanIdx(unsigned short idx);
 
-// Binary @ 0x00194dcc — binary body is a no-op stub (movs r0,#0; bx lr); no callers in game code. Ported faithfully.
+// v1.6.1 Math::AsinIdx @0x00242144 — binary body is a no-op stub (movs r0,#0; bx lr); no callers in game code. Ported faithfully.
 unsigned short AsinIdx(float x);
 
-// Binary @ 0x00194dd0 — binary body is a no-op stub (movs r0,#0; bx lr); no callers in game code. Ported faithfully.
+// v1.6.1 Math::AcosIdx @0x0024214c — binary body is a no-op stub (movs r0,#0; bx lr); no callers in game code. Ported faithfully.
 unsigned short AcosIdx(float x);
 
-// Binary @ 0x00194dd4 — atan LUT @ GOT+0xd18 (129 int16); atan2f equivalent
+// v1.6.1 Math::AtanIdx @0x00242154 — atan LUT @ GOT+0xd18 (129 int16); atan2f equivalent
 short AtanIdx(float x);
 
-// Binary @ 0x00194eb0 — quadrant-folded atan LUT lookup; equivalent to atan2f(y,x)*65536/(2pi)
+// v1.6.1 Math::Atan2Idx @0x00242258 — quadrant-folded atan LUT lookup; equivalent to atan2f(y,x)*65536/(2pi)
 short Atan2Idx(float y, float x);
 
-// Binary @ 0x00195254 — vsqrt.f64 with NaN fallback to libc sqrt; sqrtf() is equivalent
+// v1.6.1 Math::Sqrt @0x00241fa4 — vsqrt.f64 with NaN fallback to libc sqrt; sqrtf() is equivalent
 float Sqrt(float x);
 
-// Binary @ 0x0019521c — fake-async cache; Set computes sqrtf eagerly, Get returns cached
+// v1.6.1 Math::SqrtAsyncSet @0x00241fcc / Math::SqrtAsyncGet @0x00242010 — fake-async
+// cache; Set computes sqrtf eagerly, Get returns cached
 void SqrtAsyncSet(float x);
 float SqrtAsyncGet();
 
-// Binary @ 0x00194d14 — fake-async cache; Set computes a/b eagerly, Get returns cached
+// v1.6.1 Math::DivAsyncSet @0x00242030 / Math::DivAsyncGet @0x00242054 — fake-async
+// cache; Set computes a/b eagerly, Get returns cached
 void DivAsyncSet(float a, float b);
 float DivAsyncGet();
 

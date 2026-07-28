@@ -110,7 +110,7 @@ struct _Matrix44 {
         return r;
     }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00172f58 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 _Matrix44<float>::RotX44(float,float) @ 0x001d7748 (asm-inspector)
     // PRE-multiply by Rot_std_X(+alpha). Per col c, mix m[c*4+1] (row 1)
     // with m[c*4+2] (row 2):
     //   new_row1 = cos*row1 - sin*row2
@@ -124,7 +124,7 @@ struct _Matrix44 {
         }
     }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00172fdc (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 _Matrix44<float>::RotY44(float,float) @ 0x001d77cc (asm-inspector)
     //   new_row0 = cos*row0 + sin*row2
     //   new_row2 = -sin*row0 + cos*row2
     void RotY44(T sinA, T cosA) {
@@ -136,7 +136,9 @@ struct _Matrix44 {
         }
     }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x00144958 (asm-inspector)
+    // ASM-verified: 2026-05-06T00:00 v1.6.1 _Matrix44<float>::RotZ44(float,float) @ 0x0015f3fc (asm-inspector)
+    // A 3-arg overload _Matrix44<float>::RotZ44(float,float,_Matrix44&) @0x0016f53c also
+    // exists in the binary; not ported (no port-side call site).
     //   new_row0 = cos*row0 - sin*row1
     //   new_row1 = sin*row0 + cos*row1
     void RotZ44(T sinA, T cosA) {

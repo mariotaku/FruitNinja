@@ -1,7 +1,7 @@
 #ifndef MORTAR_TOUCH_H
 #define MORTAR_TOUCH_H
 
-// Mortar::Touch -- binary @ 0x0019591c area.
+// Mortar::Touch -- v1.6.1 Mortar::Touch::Touch @0x00242e24 (dtor @0x00243698).
 // sizeof 0x1d4 (468 bytes):
 //   +0x000: State states1[8]  (8 * 28 = 224B) -- live polled state
 //   +0x0e0: State states2[8]  (8 * 28 = 224B) -- event-applied scratch
@@ -23,8 +23,8 @@
 // Once per frame InputManager::Update broadcasts Update(dt) -> Touch::Update(dt).
 //
 // Clarified 2026-05-18: 0x002772d4+0xa0 is a SEPARATE 16-slot table in BSS
-// used ONLY by free helpers IsTouchDown @ 0x00169144 and TouchInRegion @
-// 0x001691cc. Entries are {float x@+0xa0, y@+0xa4, phase@+0xa8}, stride 12,
+// used ONLY by free helpers IsTouchDown @0x001ca69c and TouchInRegion
+// @0x001ca754. Entries are {float x@+0xa0, y@+0xa4, phase@+0xa8}, stride 12,
 // indexed 0..15. Phase: 1.0=held, 2.0=press-edge, <=0=up.
 // The BSS table is written by a legacy Mortar input layer that has zero
 // observable callers in this binary (Bada caps point ids at 8 per
@@ -66,22 +66,31 @@ struct TEvnt {
 };
 
 // Binary Mortar::RingBufferT<Mortar::Touch::TEvnt,false,false> (16 bytes).
-// Layout per InitRingBuffer_Touch @ 0x001958fc:
-//   +0x00: TEvnt* memory  (heap-allocated: operator new(200) = 10*20B backing)
-//   +0x04: int    capacity (= 10)
-//   +0x08: int    field_8  (binary = 1 after init; semantic TBD)
-//   +0x0c: int    field_c  (binary = 0 after init; semantic TBD)
-// DIFFERS: v1.6.1 binary @ 0x001958fc sets field_8=1, field_c=0 (internal ring state).
-//   Port reuses field_8/field_c as m_eventHead/m_eventTail (0-based head/tail
-//   indices) because the binary's RingBufferT ring-management code (Clear/push/pop)
-//   is not yet ported. Struct fields are layout-identical to binary; init values
-//   differ (port initializes both to 0 instead of 1/0).
-//   Binary ground truth: Binary @ 0x001958fc (InitRingBuffer_Touch).
+// Layout per v1.6.1 Mortar::RingBufferT<Touch::TEvnt,false,false>::Init(int) @0x002436b0:
+//   +0x00: TEvnt* memory  (heap-allocated: operator new[](n * 0x14))
+//   +0x04: int    capacity (= n, the Init CALLER's argument -- not a literal;
+//                  Touch's ctor passes 10, hence the 200-byte allocation)
+//   +0x08: int    write index (binary = 1 after Init)
+//   +0x0c: int    read  index (binary = 0 after Init)
+//
+// The rest of the ring IS present in the binary:
+//   Push @0x0024356c, Pop @0x00243610, Peek @0x002435d8, Clear @0x00243674.
+// Its full-condition is `write == read`, which is why Init seeds write=1/read=0.
+//
+// DIFFERS: original = write index 1 / read index 0 after Init
+//   (v1.6.1 Mortar::RingBufferT<Touch::TEvnt,false,false>::Init @0x002436b0), using
+//   head=tail=0 because the port implements its own drain in Touch::Update /
+//   Touch::__UpdateInternal rather than calling the binary's Push/Pop.
+//   CONSEQUENCE, do not "simplify" this away: under the binary's own Push,
+//   write==read means FULL, so a 0/0 seed makes the ring read as permanently
+//   full and Push would drop EVERY event. It is harmless only because the port
+//   never routes through that push path. Anyone porting Push/Pop/Peek/Clear
+//   MUST restore write=1/read=0 here first.
 struct RingBufferT_TEvnt {
     TEvnt*  memory;       // +0x00  heap pointer (capacity * sizeof(TEvnt) bytes)
-    int     capacity;     // +0x04  element capacity (= 10)
-    int     m_eventHead;  // +0x08  DIFFERS: binary=1 after init; port uses 0 (ring read index)
-    int     m_eventTail;  // +0x0c  DIFFERS: binary=0 after init; port uses 0 (ring write index)
+    int     capacity;     // +0x04  element capacity (Init arg; 10 for Touch)
+    int     m_eventHead;  // +0x08  binary = WRITE index (init 1); port uses it as read head
+    int     m_eventTail;  // +0x0c  binary = READ index (init 0); port uses it as write tail
 };
 
 class Touch {
@@ -94,40 +103,40 @@ public:
     Touch();
     ~Touch();
 
-    // Binary @ 0x00195630 -- Update(float dt).
+    // v1.6.1 Mortar::Touch::Update @0x00242d14 -- Update(float dt).
     // Drain events with timestamp <= dt (or all if dt == 0.0); then _Update().
     void Update(float dt);
 
-    // Binary @ 0x001953ec -- _Update().
+    // v1.6.1 Mortar::Touch::_Update @0x00242958 -- _Update().
     // 8x: states1[i] = states2[i]; State::Update on the copy.
     void _Update();
 
-    // Binary @ 0x001952f0 -- State::Update.
+    // v1.6.1 Mortar::Touch::State::Update @0x00242830.
     // phase==1: zero extId+touchId. Else: snapshot prev=curr, promote phase==-1 to 0.
     static void StateUpdate(TouchState& s);
 
-    // Binary @ 0x00195690 -- __UpdateInternal.
+    // v1.6.1 Mortar::Touch::__UpdateInternal @0x00242d98.
     // Push TEvnt to ring; on overflow: Update(0.0f) then retry.
     // SDL entry point: InputTranslatorSDL calls this for each touch event.
     // isActive: true=press OR move, false=release (matches binary param 'b').
     void __UpdateInternal(unsigned long extId, bool isActive, float x, float y, float t);
 
-    // Binary @ 0x00195314 -- ___UpdateInternal.
+    // v1.6.1 Mortar::Touch::___UpdateInternal @0x00242868.
     // Apply event to states2: match by extId or claim free slot (rotating cursor).
     // nextTouchId++ skipping 0 on wrap.
     // isActive: true=press OR move, false=release (matches binary param 'b').
-    // Binary @ 0x00195314 -- free slot is extId==0, NOT phase>=1.
+    // Free slot predicate is extId==0, NOT phase>=1.
     void ___UpdateInternal(unsigned long extId, bool isActive, float x, float y);
 
-    // Binary @ 0x00195424 -- FindTouch(uint touchId).
+    // v1.6.1 Mortar::Touch::FindTouch @0x002429a8 -- FindTouch(uint touchId).
     // Linear scan states1; return slot index or -1.
     int FindTouch(unsigned long touchId);
 
-    // Binary @ 0x001954fc -- GetAnyTouch().
+    // v1.6.1 Mortar::Touch::GetAnyTouch @0x00242b24.
     // First slot with phase < 1; returns touchId or 0.
     uint32_t GetAnyTouch();
 
-    // Binary @ 0x0019551c -- GetMostRecentTouch().
+    // v1.6.1 Mortar::Touch::GetMostRecentTouch @0x00242b60.
     // FindTouch(nextTouchId - 1); returns touchId or 0.
     uint32_t GetMostRecentTouch();
 
@@ -140,31 +149,31 @@ public:
     // Writes currX-prevX/dy if phase >= 0, else 0.0f. Returns 1 if active.
     int GetTouchDelta(unsigned long touchId, float& dx, float& dy);
 
-    // Binary @ 0x00242a98 (v1.6.1) -- GetTouchInReigion (note binary typo).
+    // v1.6.1 Mortar::Touch::GetTouchInReigion @0x00242a98 (note binary typo).
     // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.
     // Binary uses inclusive <= on all bounds.
     uint32_t GetTouchInReigion(float x, float y, float w, float h);
 
-    // Binary @ 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks(InputDevice* dev).
+    // v1.6.1 Mortar::Touch::SendIndividualTouchCallbacks @0x00242bc4 (InputDevice* dev).
     // Pointer-walks states1, emits AxisEvent/ButtonPressed per slot.
     // Action codes 0x89..0x90 (button), 0x99..0xa0 (X axis), 0xa9..0xb0 (Y axis).
     // Wired via InputDeviceBada::Update -> Touch::GetInstance().SendIndividualTouchCallbacks(this).
     void SendIndividualTouchCallbacks(InputDevice* dev);
 
     // Port-side Tier A region-scan helper. Implements binary's free function
-    // TouchInRegion @ 0x001691cc (the slot-returning ABI used by every UI
+    // TouchInRegion @0x001ca754 (the slot-returning ABI used by every UI
     // widget: MenuButton, CheckBox, ScrollingMenu, SliderControl,
     // VerticalScroller, ComboBox). Returns slot index 0..7 (binary: 0..15)
     // or -1. Caller pairs the result with IsTouchDown(slot) for phase.
     //
-    // NOT the binary's same-named member `GetTouchInReigion @ 0x001954b4`
+    // NOT the binary's same-named member `GetTouchInReigion @0x00242a98`
     // (Tier B, touchId-returning) -- that API is DEAD in the binary (zero
     // internal callers, only an unused public-symbol export). Don't conflate.
     int GetTouchInRegion(float left, float right, float bottom, float top,
                          int preferredSlot = -1) const;
 
-    // Binary @ 0x0019553c -- Mortar::Touch::Clear(). Real helper symbol, called by
-    // InputDeviceBada::Reset @ 0x00195c00 (NOT inlined). Zeroes ONLY states2 (8 slots,
+    // v1.6.1 Mortar::Touch::Clear @0x00242b88. Real helper symbol, called by
+    // InputDeviceBada::Reset (NOT inlined). Zeroes ONLY states2 (8 slots,
     // phase=1); leaves states1 and the ring buffer untouched.
     void Clear();
 
@@ -177,7 +186,7 @@ public:
     // Port-side Tier A slot read helper. Returns the TouchState* by slot
     // index for callers that already track a slot (latched via the Tier A
     // GetTouchInRegion above). Binary Tier B equivalent is
-    // GetTouchPos(touchId, &x, &y) @ 0x0019543c -- but Tier B is only used
+    // GetTouchPos(touchId, &x, &y) @0x002429d4 -- but Tier B is only used
     // by InputDeviceBada::Update; UI widgets use Tier A throughout.
     const TouchState* GetSlot(int slot) const;
     bool IsSlotDown(int slot) const;
@@ -206,7 +215,7 @@ public:
     TouchState states1[MAX_SLOTS];    // +0x000  live polled state  (8*28=224B)
     TouchState states2[MAX_SLOTS];    // +0x0e0  event-applied scratch (8*28=224B)
 
-    // Binary @ 0x001958fc — RingBufferT<TEvnt,false,false> (16B).
+    // v1.6.1 Mortar::RingBufferT<Touch::TEvnt,false,false>::Init @0x002436b0 (16B).
     // memory ptr is heap-allocated (200B = 10 * sizeof(TEvnt)).
     // eventBuffer.m_eventHead/m_eventTail serve as ring indices (see DIFFERS
     // on RingBufferT_TEvnt above); eventBuffer.memory is the heap block.
@@ -224,7 +233,7 @@ public:
 // ---------------------------------------------------------------------------
 // Free functions matching binary helpers.
 
-// TouchInRegion @ 0x001691cc -- Tier A slot-returning helper used by every
+// v1.6.1 ::TouchInRegion @0x001ca754 -- Tier A slot-returning helper used by every
 // UI widget (MenuButton, CheckBox, ScrollingMenu, SliderControl,
 // VerticalScroller, ComboBox). Scans all slots for a touch inside the rect.
 // Port uses (left, right, bottom, top) instead of binary's (x, y, w, h)
@@ -232,7 +241,7 @@ public:
 // numerically equivalent.
 int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot);
 
-// IsTouchDown @ 0x00169144 (asm-verified 2026-05-17)
+// v1.6.1 ::IsTouchDown @0x001ca69c (asm-verified 2026-05-17)
 // Returns 0=up, 1=held, 2=press-edge (just-pressed, one frame) for given slot.
 // Matches binary signature verbatim (int slot -> int 0/1/2).
 int IsTouchDown(int slot);

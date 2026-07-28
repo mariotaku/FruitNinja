@@ -2,18 +2,15 @@
 #define FN_ENGINE_NETWORK_NETWORK_MANAGER_H
 
 // Defunct: NetworkManager (GameSpy/GameCenter/OpenFeint/P2P/news) -- no-op stub.
-// Binary: ctor @ 0x231c40 (v1.6.1), GetInstance @ 0x231e7c.
 // All methods are no-ops returning safe defaults.
-// Size: 668 bytes. Ctor inits fields up to 0x29B: 9 Delegates, 1 std::map,
-//       3 BUTTON_INFO sub-structs, flag fields.
 //
-// Binary addresses (v1.0 build numbers retained for symbol-diff; v1.6.1 in comments):
-//   ctor (real)    0x0018e05c
-//   ctor (alias)   0x0018e25c
-//   ctor thunk     0x00100518
-//   dtor (regular) 0x0018da94
-//   dtor (deleting)0x0018dba4
-//   GetInstance    0x0018e210
+// v1.6.1 class metadata:
+//   vtable       @0x002cfe68  (0x4c bytes = 17 slots)
+//   ctor         @0x00231c40  (0x23c bytes; inits 9 Delegates, 1 std::map,
+//                              3 BUTTON_INFO sub-structs, flag fields)
+//   dtor         @0x002316a8
+//   GetInstance  @0x00231e7c  (over a 0x29c-byte manager static @0x0034fa5c)
+// Size: 0x29c = 668 bytes.
 
 #include <cstdint>
 
@@ -42,13 +39,13 @@ public:
         return &s_instance;
     }
 
-    // Polymorphic root: vptr @ +0x00; binary vtable @ 0x001eb210.
+    // Polymorphic root: vptr @ +0x00; v1.6.1 vtable @0x002cfe68 (17 slots).
     virtual ~NetworkManager() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x231c40 area
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::NetworkManager @0x00231c40 area
     void Initialise(int /*flags*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x2310c8 (nearly idle)
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::Update @0x002310c8 (nearly idle)
     void Update(float /*dt*/) {}
 
     // Defunct: NetworkManager -- no-op stub
@@ -63,7 +60,7 @@ public:
     // Defunct: NetworkManager -- no-op stub (returns false)
     bool HasCredentials() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6cc (returns 1)
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::UserHasEnabledNetwork @0x00231308 (returns 1)
     bool UserHasEnabledNetwork() { return true; }
 
     // Defunct: NetworkManager -- no-op stub (returns false)
@@ -81,22 +78,22 @@ public:
     // Defunct: NetworkManager -- no-op stub
     void SendPacket(NetworkPacket* /*packet*/, bool /*reliable*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d9d8
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::InitializeP2P @0x002315d0 (0xd8 bytes -- a REAL body, not a stub)
     void InitializeP2P(void* /*cb1*/, void* /*cb2*/, void* /*cb3*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6f4
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::DisconnectP2P @0x00231090
     bool DisconnectP2P(bool /*b*/) { return false; }
 
     // Defunct: NetworkManager -- no-op stub (returns 0)
     int GetLocalPlayerNumber() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d924
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::GetPlayerName @0x002313c4
     void GetPlayerName(int /*idx*/, char* out, int /*cap*/) { if (out) out[0] = 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e6b8
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::IsInP2PGame @0x002323b0
     int IsInP2PGame() const { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e6b0
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::OnP2PGameOver @0x002323a8
     void OnP2PGameOver() {}
 
     // Defunct: NetworkManager -- no-op stub
@@ -114,7 +111,7 @@ public:
     // Defunct: NetworkManager -- no-op stub (returns false)
     bool HasNetworkPeersConnected() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e698
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::IsAnyPeerReadyForMultiplayer @0x00232388
     int IsAnyPeerReadyForMultiplayer() { return 0; }
 
     // Defunct: NetworkManager -- no-op stub (returns false)
@@ -132,18 +129,25 @@ public:
     // Defunct: NetworkManager -- no-op stub (returns false)
     bool IsAchievementUnlocked(const char* /*name*/) { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d698 (returns 0)
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::SetLeaderboardScore @0x002312b4 (returns 0)
     int SetLeaderboardScore(const char* /*board*/, long long /*score*/, void* /*userdata*/, int /*flags*/) {
         return 0;
     }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d7e4
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::RetrieveLeaderboardScore(
+    //   char const*, bool, bool, Delegate4<bool,char const*,long long,int,void*>, int, bool,
+    //   bool, NetworkProvider) @0x00231868.
+    // Binary has TWO overloads differing only in the Delegate4 score type: @0x00231868 takes
+    // long long and drives the retrieve path (sets field_0xbc=1 + pM_RetrieveLeaderboardCb);
+    // @0x00231914 takes int and sets field_0xbc=0 + pM_SetLeaderboardScoreCb. The port's
+    // 3-arg stub signature matches NEITHER; @0x00231868 is cited because the port's
+    // leaderboard score type is long long throughout (see SetLeaderboardScore above).
     int RetrieveLeaderboardScore(const char* /*board*/, int /*flags*/, void* /*cb*/) { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d69c
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::RetrieveLeaderboardScoreNextPage @0x002312bc
     int RetrieveLeaderboardScoreNextPage() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6a0
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::RetrieveLeaderboardScorePreviousPage @0x002312c0
     int RetrieveLeaderboardScorePreviousPage() { return 0; }
 
     // Defunct: NetworkManager -- no-op stub (returns false)
@@ -152,34 +156,38 @@ public:
     // Defunct: NetworkManager -- no-op stub (returns false)
     bool CanPageDownHighscores() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6ac
+    // Defunct: NetworkManager -- no-op stub; v1.6.1
+    // Mortar::NetworkManager::DownloadUserDataFromLeaderboard(char const*, bool, bool,
+    //   Delegate3<void,char const*,void*,int>) @0x002312d4 (empty body).
+    // The other overload @0x002317c4 is the 2-arg convenience wrapper that forwards
+    // (board, false, false, cb) into this one; the port's 4-arg signature matches THIS one.
     int DownloadUserDataFromLeaderboard(const char* /*board*/, bool /*friends*/, bool /*local*/, void* /*cb*/) { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6fc
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::IsGameCenterOnline @0x002313f0
     bool IsGameCenterOnline() { return false; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d704
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::IsGameCenterSupported @0x00231400
     int IsGameCenterSupported() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d700
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::IsGameCenterAttemptingToConnect @0x002313f8
     int IsGameCenterAttemptingToConnect() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d708
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::IsGameCenterInterfaceDisplayed @0x00231408
     int IsGameCenterInterfaceDisplayed() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d70c (passthrough)
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::SetGameCenterShouldLoadOnStartup @0x00231410 (passthrough)
     bool SetGameCenterShouldLoadOnStartup(bool b) { return b; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6e4
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::ConnectGameCenter @0x002313b4
     NetworkManager* ConnectGameCenter() { return this; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6e8 (returns 1)
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::AreGameCenterConnectionAttemptsAllowed @0x002313b8 (returns 1)
     bool AreGameCenterConnectionAttemptsAllowed(bool /*b*/) { return true; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d668
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::LaunchDashboard @0x00231270
     void LaunchDashboard(int /*id*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d66c
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::LaunchDashboardWithLeaderboard @0x00231278
     void LaunchDashboardWithLeaderboard(const char* /*board*/) {}
 
     // Defunct: NetworkManager::OpenMatchmaker -- no-op stub; called from
@@ -252,30 +260,30 @@ public:
     // Defunct: NetworkManager -- no-op stub
     void DisallowNotifications() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6d8
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::StartNewsDownload @0x00231320
     void StartNewsDownload() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6dc (returns 1)
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::HasNewsBeenDownloaded @0x00231324 (returns 1)
     bool HasNewsBeenDownloaded() { return true; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6d4
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::HasUnreadNews @0x00231318
     int HasUnreadNews() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d9bc
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::UpdateNews @0x00231170
     // Returns int (0 = no news being displayed); MainScreen::Update case 0xb
     // (@0x001975c0) breaks out of the state while this returns nonzero.
     int UpdateNews(float /*dt*/) { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018dd2c
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::DrawNews @0x00231160
     void DrawNews() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d968
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::StartNewsDisplay @0x0023132c
     void StartNewsDisplay(void* /*tex*/, void* /*font*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018dcb4
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::CancelNewsDisplay @0x00231208
     void CancelNewsDisplay() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d948
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::GetCurrentNews @0x00231358
     int GetCurrentNews(char* out, int /*cap*/) { if (out) out[0] = 0; return 0; }
 
     // Defunct: NetworkManager -- no-op stub (returns nullptr)
@@ -290,40 +298,52 @@ public:
     // Defunct: NetworkManager -- no-op stub
     void ForceModalDialogsClosed() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d62c
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::SetPreferredNetworkProvider @0x00231228
     void SetPreferredNetworkProvider(int /*provider*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d634
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::GetPreferredNetworkProvider @0x00231230
     int GetPreferredNetworkProvider() const { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x00169354
+    // Defunct: NetworkManager -- no-op stub. NOT a NetworkManager member in the binary:
+    // v1.6.1 ::ChangePreferredNetworkProvider is the FREE function @0x001ca9f8 (also
+    // declared free at the bottom of this header). Kept as a member for the port's
+    // existing call sites; do not treat the member as a binary symbol.
     void ChangePreferredNetworkProvider(long /*v*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6b0 (returns 0)
+    // Defunct: online-services -- no-op stub. SHAPE DIVERGENCE: IsProviderOnline is NOT a
+    // NetworkManager member in v1.6.1 -- it is the FREE function ::IsProviderOnline()
+    // @0x0011f534 (declared at the bottom of this header). This member exists only for
+    // the port's call sites; it has no binary counterpart and must not be symbol-diffed.
     int IsProviderOnline() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6b4 (returns 0)
+    // Defunct: P2P multiplayer -- no-op stub. SHAPE DIVERGENCE: IsP2POnline is NOT a
+    // NetworkManager member in v1.6.1 -- it is the FREE function ::IsP2POnline()
+    // @0x0011f524, whose body is NetworkManager::GetInstance()->IsGameCenterOnline(),
+    // NOT a hardcoded false (see P2PMessageHandling.h). This member exists only for the
+    // port's call sites; it has no binary counterpart and must not be symbol-diffed.
     int IsP2POnline() { return 0; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d6f8 (returns 1)
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::HasFriendsLoaded @0x002313e8 (returns 1)
     bool HasFriendsLoaded() { return true; }
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x00169280
+    // Defunct: P2P multiplayer -- no-op stub. NOT a NetworkManager member in the binary:
+    // v1.6.1 ::GlobalP2PMessageHandler is the FREE function @0x0015761c (empty body;
+    // also declared free in P2PMessageHandling.h). Member kept for port call sites.
     void GlobalP2PMessageHandler(void* /*msg*/, void* /*packet*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0016b444
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::GlobalP2PErrorHandler
     void GlobalP2PErrorHandler(void* /*err*/) {}
 
     // Defunct: NetworkManager -- no-op stub (called from ctor body)
     void SetStatusMessageTextDefaults() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e800
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::SetP2PMessageHandlerCallback
     void SetP2PMessageHandlerCallback(void* /*cb*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e85c
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::SetP2PErrorHandlerCallback
     void SetP2PErrorHandlerCallback(void* /*cb*/) {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018e8b8
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::SetP2PVoiceChatOpponentSpeakingCallback
     void SetP2PVoiceChatOpponentSpeakingCallback(void* /*cb*/) {}
 
     // Defunct: NetworkManager -- no-op stub; v1.6.1 NetworkManager::SetGameCenterInitializationCallback @ 0x0011e288
@@ -342,14 +362,14 @@ public:
     // Defunct: NetworkManager -- no-op stub (vtable slot 4)
     void SyncClear() {}
 
-    // Defunct: NetworkManager -- no-op stub; v1.6.1 binary @ 0x0018d658
+    // Defunct: NetworkManager -- no-op stub; v1.6.1 Mortar::NetworkManager::SpawnThreadController @0x0023125c
     void SpawnThreadController() {}
 
     void Init() {}
     void UpdateNetworking(float dt) { (void)dt; }
 
 private:
-    // ctor @ 0x0018e05c
+    // v1.6.1 Mortar::NetworkManager::NetworkManager @0x00231c40
     NetworkManager() {}
 
     // Pad to binary size 668 bytes on ARM32/Bada.
@@ -395,7 +415,7 @@ void DefaultButtonCallback();
 
 } // namespace Mortar
 
-// Defunct: online leaderboard -- no-op stub; v1.6.1 binary @ 0x0011f534.
+// Defunct: online leaderboard -- no-op stub; v1.6.1 ::IsProviderOnline @0x0011f534.
 // Returns true when the preferred network provider is online.
 // Stub returns false so callers take the local/offline path.
 bool IsProviderOnline();
@@ -405,7 +425,8 @@ bool IsProviderOnline();
 // Stub returns false so callers take the local/offline path.
 bool AreFriendsLoaded();
 
-// Defunct: network provider selection -- no-op stubs; v1.6.1 @0x00169354 area
+// Defunct: network provider selection -- no-op stubs;
+// v1.6.1 ::ChangePreferredNetworkProvider @0x001ca9f8 area
 void AskUserToChoosePreferredNetwork();
 void ChangePreferredNetworkProvider(long v);
 long GetPrefNetwork();

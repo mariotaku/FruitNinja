@@ -834,9 +834,9 @@ void SoundManager::SongResume() {
     LOG_INFO("MUSIC", "SongResume");
 }
 
-// 0x0018c960 -- stub nop
+// v1.6.1 Mortar::SoundManager::SongSetMemorySize @0x00230650 -- stub nop
 void SoundManager::SongSetMemorySize(int /*size*/) {
-    // Defunct in original (base nop @ 0x0018c960) -- stub matches upstream shape.
+    // Defunct in original (base nop @0x00230650) -- stub matches upstream shape.
 }
 
 // 0x0018ca78
@@ -858,11 +858,12 @@ void SoundManager::SetSFXVolume(float vol) {
     SyncMutes();
 }
 
-// 0x0018c9d4 -- compares per-channel volume against 0.1 threshold. Mirrors
+// v1.6.1 Mortar::SyncMutes @0x002302e4 -- muted = (MasterMute || vol < 0.1) per
+// channel; MasterMute has no writer in the binary so only the threshold matters. Mirrors
 // SoundManagerSDL.cpp's SyncMutes exactly, plus (Wii-specific) pushes the
 // resulting mute state down to live ASND voices, since ASND has no separate
 // "muted" concept -- silence is expressed as volume 0.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0018c9d4 (asm-inspector)
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 Mortar::SyncMutes @ 0x002302e4 (asm-inspector)
 void SoundManager::SyncMutes() {
     bool wasSFXMuted   = s_SFXMuted;
     bool wasMusicMuted = s_MusicMuted;

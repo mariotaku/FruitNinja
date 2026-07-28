@@ -51,50 +51,54 @@
 static const float ALPHA_LERP_IN       = 0.125f;   // state 0: += (1-alpha)*0.125
 static const float ALPHA_IN_DONE       = 0.999f;   // literal @0x001b3698
 
-// States 2/7 decay (uses DAT_0015e90c, not literal 0.75):
-// DAT_0015e90c = 9a 99 59 3f = 0x3f59999a = 0.85f
-static const float ALPHA_DECAY_STATE27 = 0.85f;    // DAT_0015e90c
+// States 2/7 decay (uses DAT_001b36e0, not literal 0.75):
+// DAT_001b36e0 = 9a 99 59 3f = 0x3f59999a = 0.85f
+static const float ALPHA_DECAY_STATE27 = 0.85f;    // DAT_001b36e0
 
 // State 3 decay uses literal 0.75 in decompile (not a DAT constant)
 static const float ALPHA_DECAY_STATE3  = 0.75f;
 
 // States 2/7 trigger threshold:
-// DAT_0015e910 = 0a d7 23 3c = 0x3c23d70a ~ 0.01f
-static const float ALPHA_STATE27_DONE  = 0.01f;    // DAT_0015e910
+// DAT_001b36e4 = 0a d7 23 3c = 0x3c23d70a ~ 0.01f
+static const float ALPHA_STATE27_DONE  = 0.01f;    // DAT_001b36e4
 
 // State 3 fade completion threshold:
-// DAT_0015e914 = 6f 12 83 3a = 0x3a83126f ~ 0.001f
-static const float ALPHA_STATE3_DONE   = 0.001f;   // DAT_0015e914
+// DAT_001b36e8 = 6f 12 83 3a = 0x3a83126f ~ 0.001f
+static const float ALPHA_STATE3_DONE   = 0.001f;   // DAT_001b36e8
 
 // Buy delay initial value:
-// DAT_0015e558 = 00 00 00 00 = 0.0f  (also used for initial m_TransitionAlpha)
-static const float BUY_DELAY_INIT  = 0.0f;         // DAT_0015e558
+// DAT_001b36ec = 00 00 00 00 = 0.0f  (also used for initial m_TransitionAlpha)
+static const float BUY_DELAY_INIT  = 0.0f;         // DAT_001b36ec
 
 // Animation frame increment per dt:
-// DAT_0015e904 = ff 47 d5 47 = 0x47d547ff = ~109260.0f
-// DAT_0015e908 = 00 f0 7f 46 = 0x467ff000 = 16380.0f = (float)0x3ffc
-static const float ANIM_FRAME_RATE = 109260.0f;    // DAT_0015e904
-static const int   ANIM_FRAME_MAX  = 0x3ffc;       // from decompile literal
+// DAT_001b36d8 = ff 47 d5 47 = 0x47d547ff = 109199.9921875f  (65536 * 1.66625976...)
+// DAT_001b36dc = 00 f0 7f 46 = 0x467ff000 = 16380.0f = (float)0x3ffc
+static const float ANIM_FRAME_RATE = 109199.9921875f;  // DAT_001b36d8
+static const int   ANIM_FRAME_MAX  = 0x3ffc;           // from decompile literal
 
-// Quit/back button position (field_0x84, created in state 0):
-// DAT_0015e55c = 00 00 39 43 = 185.0f
-// DAT_0015e560 = 00 00 d2 c2 = -105.0f
-// DAT_0015e558 = 0.0f (z)
-static const _Vector3<float> POS_BACK_BUTTON(185.0f, -105.0f, 0.0f);  // DAT_0015e55c/560/558
+// State-3 replacement back button position (field_0x84 rebuild, v1.6.1 case 3):
+// DAT_001b3d30 = 00 00 39 43 = 185.0f
+// DAT_001b3d34 = 00 00 d2 c2 = -105.0f
+// DAT_001b3d64 = 00 00 00 00 = 0.0f (z)
+// NOTE: state 0 does NOT use these -- it builds the back button at Vec3::Zero
+// and anchors it via m_HudScale (see Update case 0). This constant is therefore
+// only meaningful for the state-3 rebuild path, which uses POS_BACK_BUTTON_NEW
+// below; POS_BACK_BUTTON itself has no remaining call site.
+static const _Vector3<float> POS_BACK_BUTTON(185.0f, -105.0f, 0.0f);  // DAT_001b3d30/3d34/3d64
 
 // Equip button position (field_0x8c, created in state 1) -- this is the
 // "SELECT"/"EQUIP" ring: the previewed-item ring in the RIGHT PANE, distinct
 // from the red BACK bomb (m_pBuyButton, "shop.btn.back") and the scrollable
 // list items.
-// DAT_0015e564 = 00 00 11 43 = 145.0f
-// DAT_0015e568 = 00 00 d0 42 = 104.0f
-// z = DAT_0015e558 = 0.0f
+// DAT_001b36cc = 00 00 11 43 = 145.0f
+// DAT_001b36d0 = 00 00 d0 42 = 104.0f
+// z = DAT_001b36ec = 0.0f
 // X is a compile-time literal here (not MapX'd directly -- MapX reads
 // Layout's g_WideLayout, which isn't set yet at static-init time for a
 // file-scope const). The widescreen remap is applied at the ctor call site
 // below (see ShopScreen::Update state 1) via POS_EQUIP_BUTTON_X.
-static const float POS_EQUIP_BUTTON_X = 145.0f;  // DAT_0015e564
-static const _Vector3<float> POS_EQUIP_BUTTON(POS_EQUIP_BUTTON_X, 104.0f, 0.0f);  // DAT_0015e564/568/558
+static const float POS_EQUIP_BUTTON_X = 145.0f;  // DAT_001b36cc
+static const _Vector3<float> POS_EQUIP_BUTTON(POS_EQUIP_BUTTON_X, 104.0f, 0.0f);  // DAT_001b36cc/36d0/36ec
 
 // State-3 replacement back button position:
 // literal @0x001b3d30 = 00 00 39 43 = 185.0f (same x)
@@ -122,15 +126,17 @@ static const float LIST_POS_Z     = 0.0f;           // literal @0x001b3d64
 static const float LIST_SLIDE_OFF  = 95.0f;         // literal @0x001b3d5c
 static const float LIST_SLIDE_MUL  = 290.0f;        // literal @0x001b3d6c
 
-// SHOP_SHRINK_VEC -- Vec3 stored at .got + 0x77cc, initialised to
-// (1,1,1) by _GLOBAL__I_ShopScreen.cpp @ 0x0015d7a0. Copied to the
-// equip-button fruit's m_HalfB_vel by ShrinkBuyButton @ 0x001b17b4.
+// SHOP_SHRINK_VEC -- ShrinkBuyButton @0x001b17b4 loads GOT+0x75d4 -> 0x002d8704,
+// which points at the engine global `_Vector3<float>::One` @0x002d9294 = (1,1,1),
+// and copies it to the equip-button fruit's m_SecondVel (+0xd4). It is NOT a
+// ShopScreen-local vector: `global constructors keyed to ShopScreen.cpp`
+// @0x001b61c8 defines no shop vec at all.
 static const _Vector3<float> SHOP_SHRINK_VEC(1.0f, 1.0f, 1.0f);
 
-// Note: the EquipCallback shrink branch uses Vec3::ZERO (not a "fling"
-// vector). The earlier (0,1,0) interpretation came from misreading the
-// initialiser in _GLOBAL__I_ShopScreen.cpp; the actual GOT-resolved
-// pointer at GOT+0x73ec is a zero Vec3, not the (0,1,0) global.
+// Note: the EquipCallback shrink branch (0x001b31a0..0x001b31d8) uses
+// _Vector3<float>::Zero @0x002d9288 (loaded via GOT+0x7118), not a "fling"
+// vector. The earlier (0,1,0) interpretation came from misreading the
+// static initialiser.
 
 // Fling velocity base (state 3 and QuitShopCallback)
 static const float FLING_VEL_BASE = 5.0f;           // from decompile literal
@@ -157,7 +163,9 @@ static const float FLING_VEL_BASE = 5.0f;           // from decompile literal
 struct SplatShiftCtx { float up; float down; };
 static void SplatShiftVisitor(SplatEntity* s, void* user) {
     if (!s || !s->m_bAlive) return;
-    if ((int8_t)s->m_SplatType < 0) return;
+    // v1.6.1 ShopScreen::Update @0x001b3ed8: `ldr [+0x70]; blt` -- the binary
+    // compares the full 32-bit m_SplatType, not a narrowed byte.
+    if (s->m_SplatType < 0) return;
     SplatShiftCtx* c = static_cast<SplatShiftCtx*>(user);
     if (s->m_Pos.x > 50.0f) s->m_Pos.x += c->up;
     else                    s->m_Pos.x -= c->down;
@@ -179,15 +187,17 @@ Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexNewItemSmlBadge;
 Mortar::SmartPtr<Mortar::Texture> ShopScreen::s_TexBGStore;
 bool ShopScreen::s_bContentLoaded = false;
 
-// Binary BSS global g_bShopButtonShrinking @.got+0x451b4: "the equip-button fruit piece is
-// currently flying off-screen". Set by ShrinkBuyButton, read by Move/EquipCallback/DeletedMenuItem,
-// cleared on completion. The binary uses a process-wide static (NOT a ShopScreen member), so model
+// Binary BSS global, 1 byte, named `hackedOpen` @0x00316564 (read @0x001b302c in
+// EquipCallback): "the equip-button fruit piece is currently flying off-screen".
+// Set by ShrinkBuyButton, read by Move/EquipCallback/DeletedMenuItem, cleared on
+// completion. The binary uses a process-wide static (NOT a ShopScreen member), so model
 // it as a TU-local static -- present in BOTH host and cross builds, no sizeof impact.
+// Port keeps the descriptive name; the binary's own spelling is `hackedOpen`.
 static bool g_bShopButtonShrinking = false;
 
-// Binary g_ShopStaticBlock->m_SelCounter @.got+0x451b4+0x88: SetSelected rate-limiter --
+// Binary function-static `ShopScreen::Update::c` @0x003165bc: SetSelected rate-limiter --
 // increments (mod 10) every frame; SetSelected fires only when ==0. Binary uses a
-// process-wide static block field (NOT a ShopScreen member); model as a TU-local static.
+// process-wide static (NOT a ShopScreen member); model as a TU-local static.
 static int g_ShopSelCounter = 0;
 
 // Port-only helpers (mirror DojoScreen pattern).
@@ -208,6 +218,10 @@ void ShopScreen::LoadContent() {
     // Binary @ 0x001b2a20 has NO singleton guard — loads unconditionally,
     // then sets s_bContentLoaded = 1 at the end.
     // Corrected slot order from LoadContent @ 0x001b2a20 disasm + string reads.
+    // NOTE: the per-slot DAT_0015ccXX citations below are version-less v1.5.x-era
+    // and have NOT been re-verified against v1.6.1 -- treat as unconfirmed.
+    // Binary file-static slots named in v1.6.1: descriptionBox @0x00316598,
+    // selectedTexture @0x003165a4, backGround @0x003165b4.
     // Slot +0x14: locked.tex          DAT_0015ccb8 -> 0x001bc15e
     s_TexLocked          = Mortar::TextureManager::LoadLocalisedTexture("locked.tex");
     // Slot +0x18: select_item.tex     DAT_0015ccbc -> 0x001bc169
@@ -330,6 +344,8 @@ ShopScreen::ShopScreen(DojoScreen* parent)
 
     // Binary: m_BuyDelay = DAT_0015cd98 (same constant used for m_TransitionAlpha
     // initial value — both set to 0 in port since alpha starts at 0).
+    // NOTE: DAT_0015cd98 is version-less v1.5.x-era and NOT re-verified against
+    // v1.6.1 -- treat as unconfirmed.
     m_BuyDelay = 0.0f;
     m_TransitionAlpha = 0.0f;
 }
@@ -459,7 +475,7 @@ void ShopScreen::CreateShopList() {
     // GetFirst/GetNext: operator_new(0x284) -> ShopListItem::ShopListItem() ->
     // ShopListItem::Create(item, screen) -> click-callback wiring -> equip-slot cache ->
     // ScrollingMenu::AddItem().
-    // ShopListItem::Create sets m_ParamWidth (+0x24) = 80.0f (DAT_0015cae8),
+    // ShopListItem::Create @0x001b27f0 sets m_ParamWidth (+0x24) = 80.0f (DAT_001b2a00),
     // which is what GetHeight() returns, giving each row a pitch of 80 units.
     // TODO: v1.6.1 0x001b42ac (ShopScreen::Init) -- zebra-stripe m_Colour.b toggle
     // (bVar11 starts = 1, toggles (^= 1) per row, written to ShopListItem::m_Colour.b).
@@ -580,13 +596,24 @@ void ShopScreen::NewItem() {
 }
 
 // ---------------------------------------------------------------------------
-// ShopScreen::GetDescriptionTextXPos @ 0x0015c520
+// ShopScreen::Reset @ 0x001b179c (HUDControl vtable slot +0x10)
+// Five instructions, two stores, no calls: rewind the state machine to the
+// transition-in state and zero the transition alpha. Reached only through the
+// vtable (HUD::ResetControls walks every control and calls Reset()); ShopScreen
+// itself never calls it, matching the binary.
+// ---------------------------------------------------------------------------
+void ShopScreen::Reset() {
+    m_State = 0;
+    m_TransitionAlpha = 0.0f;
+}
+
+// ---------------------------------------------------------------------------
+// ShopScreen::GetDescriptionTextXPos @ 0x001b1830
 // Returns the X anchor for the description text column.
-// Binary: applies same slide formula as the list, offset by -80.0f.
+// Binary: (alpha < 1 ? 145 + (1 - alpha) * 190 * 1.5 : 145) - 80
+//   DAT_001b1870 = 145.0f, DAT_001b186c = 190.0f, DAT_001b1868 = 80.0f
 // At alpha=1.0: 145.0f - 80.0f = 65.0f (text anchored left of dialog box).
 // At alpha=0.0: 430.0f - 80.0f = 350.0f (text off-screen to the right).
-// DIFFERS: exact formula not fully confirmed from binary; approximated from
-//          the list-slide formula (LIST_SLIDE_OFF=95.0 + -80 offset = 65 rest).
 // ---------------------------------------------------------------------------
 float ShopScreen::GetDescriptionTextXPos() {
     // Slide formula matches Block A/B: 145.0 + (1 - alpha) * 190.0 * 1.5
@@ -632,20 +659,20 @@ void ShopScreen::ShrinkBuyButton() {
 // from its control list (after m_bPendingRemoval propagates through
 // MenuButton::Update's FadeCounter-to-zero path).
 //
-// Binary pseudocode (re-RE'd 2026-05-09):
+// Binary pseudocode (v1.6.1 ShopScreen::DeletedMenuItem @0x001b53d4):
 //   if (param_1 == m_pEquipButton) {
 //       if (g_bShopButtonShrinking != 0) {
 //           fruit = param_1->m_pTrackedFruit
 //           if (fruit) {
-//               fruit->m_SecondPos.y = -480.0   // DAT_0015d1e8 = 0xC3F00000
-//               fruit->pos.y         = -480.0   // DAT_0015d1e8
-//               fruit->m_Gravity     = -g_ShopFlingVec = (0,-1,0)  // +0xa0, NOT m_SecondVel
-//               fruit->m_SecondVel.y = -10.0    // DAT = 0xC1200000 (overlapping +0xc8)
-//               fruit->vel.y         = -10.0
+//               fruit->pos.y         = -480.0   // +0x14, DAT_001b549c = 0xC3F00000
+//               fruit->m_SecondPos.y = -480.0   // +0xcc, DAT_001b549c
+//               fruit->m_Gravity     = -_Vector3<float>::UnitY = (0,-1,0)  // +0xa0
+//               fruit->vel.y         = -10.0    // +0x20, 0xC1200000
+//               fruit->m_SecondVel.y = -10.0    // +0xd8, 0xC1200000
 //           }
 //       }
 //       m_pEquipButton = null
-//       m_BuyDelay += 0.05f   // DAT_0015d1ec = 0x3D4CCCCD
+//       m_BuyDelay += 0.05f   // DAT_001b54a0 = 0x3D4CCCCD
 //   }
 //   if (param_1 == m_pBuyButton) {
 //       m_pBuyButton = null
@@ -655,12 +682,13 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
     if (removed == m_pEquipButton) {
         if (g_bShopButtonShrinking) {
             // Kick the fruit off-screen when the button was shrunk programmatically.
-            // Binary @ 0x001b53d4 writes (re-RE'd 2026-05-09 by re-analyst):
-            //   *(fruit+0xbc) = -480.0   -> m_SecondPos.y
-            //   *(fruit+0x14) = -480.0   -> entity pos.y
-            //   *(fruit+0xa0) = -g_ShopFlingVec = (0,-1,0) -> m_Gravity (NEGATE, not zero)
-            //   *(fruit+0xc8) = -10.0    -> m_SecondVel.y
+            // Binary @ 0x001b53d4 writes:
+            //   *(fruit+0x14) = -480.0   -> entity pos.y          (DAT_001b549c)
+            //   *(fruit+0xcc) = -480.0   -> m_SecondPos.y         (DAT_001b549c)
+            //   *(fruit+0xa0) = -_Vector3<float>::UnitY @0x002d9ed8 = (0,-1,0)
+            //                            -> m_Gravity (NEGATE, not zero)
             //   *(fruit+0x20) = -10.0    -> vel.y
+            //   *(fruit+0xd8) = -10.0    -> m_SecondVel.y
             // The earlier port skipped the m_Gravity write claiming it overlapped
             // m_SecondVel (it does NOT — m_Gravity is +0xa0, m_SecondVel is +0xd4).
             // Without restoring downward gravity here, EquipCallback's prior
@@ -668,7 +696,7 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
             // — every return-true branch in that function is gated on a non-zero
             // gravity component (verified @ binary 0x00175218). The orphan watermelon
             // then falls forever, accumulating in ActorManager and soft-locking
-            // MainScreen::STATE_DOJO_WAIT_B. Negating g_ShopFlingVec=(0,1,0) gives
+            // MainScreen::STATE_DOJO_WAIT_B. Negating _Vector3<float>::UnitY=(0,1,0) gives
             // m_Gravity=(0,-1,0) so the downward branch eventually returns true and
             // KillFruit reaps the fruit (Fruit::KillFruit sets flags|=0x10, which
             // ActorManager::Update polls per-tick).
@@ -676,7 +704,7 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
             if (fruit) {
                 fruit->m_SecondPos.y = -480.0f;
                 fruit->pos.y         = -480.0f;
-                // SHOP_FLING_VEC = (0, 1, 0); negated = (0, -1, 0)
+                // _Vector3<float>::UnitY @0x002d9ed8 = (0,1,0); negated = (0,-1,0)
                 fruit->m_Gravity     = _Vector3<float>(0.0f, -1.0f, 0.0f);
                 fruit->m_SecondVel.y = -10.0f;
                 fruit->vel.y         = -10.0f;
@@ -684,7 +712,7 @@ void ShopScreen::DeletedMenuItem(HUDControl* removed) {
         }
         // Always null the pointer and add delay (binary: unconditional)
         m_pEquipButton = nullptr;
-        m_BuyDelay += 0.05f;   // DAT_0015d1ec = 0x3D4CCCCD = 0.05f
+        m_BuyDelay += 0.05f;   // DAT_001b54a0 = 0x3D4CCCCD = 0.05f
     }
 
     if (removed == m_pBuyButton) {
@@ -818,10 +846,12 @@ void ShopScreen::QuitShopCallback() {
 // ---------------------------------------------------------------------------
 // ShopScreen::EquipCallback @ 0x001b3008
 //
-// Binary gate at 0x0015d63c: reads g_bShopButtonShrinking (GOT+0x451b4).
+// Binary gate read @0x001b302c: reads the 1-byte global the binary names
+// `hackedOpen` @0x00316564 -- the port keeps the descriptive port-side name
+// g_bShopButtonShrinking for it (same storage, same semantic).
 //   if != 0 (programmatic shrink path):
-//     copy equip-button fruit's current pos to m_HalfB_pos (fruit+0xb8)
-//     set vel, m_SecondVel, and m_HalfB_vel all from g_ShopFlingVec (0,1,0)
+//     copy equip-button fruit's current pos to m_SecondPos (fruit+0xc8)
+//     zero vel / m_SecondVel / m_Gravity from _Vector3<float>::Zero @0x002d9288
 //     return WITHOUT equipping
 //   if == 0 (user-sliced path):
 //     m_BuyDelay = 0.25f (0x3e800000)
@@ -835,17 +865,17 @@ void ShopScreen::EquipCallback() {
 
     // Binary: if (g_bShopButtonShrinking != 0): programmatic path
     if (g_bShopButtonShrinking) {
-        // Programmatic-shrink path (EquipCallback @ 0x0015d649):
-        // Copy current entity pos to m_HalfB_pos, then set all three
-        // velocity fields from g_ShopFlingVec (SHOP_FLING_VEC = (0,1,0)).
+        // Programmatic-shrink path (EquipCallback @0x001b3008, shrink arm):
+        // Copy current entity pos to m_SecondPos, then zero all three
+        // velocity/gravity fields.
         Fruit* fruit = m_pEquipButton->m_pTrackedFruit;
         if (fruit) {
-            // Binary EquipCallback shrink branch (0x0015d734..0x0015d76c).
-            // The Vec3 source at GOT+0x73ec is the global zero vector
-            // (BSS-initialised). The four writes are:
-            //   fruit->m_HalfB_pos (+0xb8) = fruit->pos    -- snapshot pos
+            // Binary EquipCallback shrink branch (0x001b31a0..0x001b31d8).
+            // The Vec3 source is loaded via GOT+0x7118 -> _Vector3<float>::Zero
+            // @0x002d9288. The four writes are:
+            //   fruit->m_SecondPos (+0xc8) = fruit->pos    -- snapshot pos
             //   fruit->vel         (+0x1c) = (0, 0, 0)
-            //   fruit->m_HalfB_vel (+0xc4) = (0, 0, 0)
+            //   fruit->m_SecondVel (+0xd4) = (0, 0, 0)
             //   fruit->m_Gravity   (+0xa0) = (0, 0, 0)
             // After this, the fruit is completely frozen (vel=0, gravity=0).
             // MenuButton::Update's "if (vel.x==0 && vel.y==0)" gate (in the
@@ -861,7 +891,7 @@ void ShopScreen::EquipCallback() {
         return;
     }
 
-    // User-sliced path (EquipCallback @ 0x0015d63c, else branch):
+    // User-sliced path (EquipCallback @0x001b3008, gate-not-taken branch):
     // m_BuyDelay = 0x3e800000 = 0.25f before equip action
     m_BuyDelay = 0.25f;   // DAT = 0x3e800000
 
@@ -878,9 +908,9 @@ void ShopScreen::EquipCallback() {
 
             // Binary @ 0x001b3008 EquipCallback does NOT touch m_DescText.
             // The "currently equipped" visual is the m_SelectedAlpha highlight
-            // ring driven per-frame by ShopListItem::Move @ 0x0015d1fc polling
+            // ring driven per-frame by ShopListItem::Move @ 0x001b54b0 polling
             // ItemManager::IsEquipped(m_pItemInfo); description text is set
-            // ONCE in ShopListItem::Create @ 0x0015c988 and never rewritten by
+            // ONCE in ShopListItem::Create @ 0x001b27f0 and never rewritten by
             // an equip action. The earlier port-side strncpy("EQUIPPED", ...)
             // here was a fabrication: it permanently overwrote the row's
             // description and was never restored, leaving the previously-
@@ -933,8 +963,8 @@ void ShopScreen::Update(float dt) {
         m_LayerFlagsAlt = Mortar::HUD_LAYER_MENU_BG;
     }
 
-    // Binary pre-amble (inside v1.6.1 ShopScreen::Update @0x001b321c; the old
-    // 0x0015e2xx sub-address was stale v1.5.x and has not been re-pinned):
+    // Binary pre-amble (v1.6.1 ShopScreen::Update @0x001b3238..0x001b32c8; the
+    // rate-limiter counter is the file-static `ShopScreen::Update::c` @0x003165bc):
     // 1. If m_pShopList && GetItemClosestToZero() != m_pSelectedItem (pointer compare)
     //    && g_ShopSelCounter == 0: call SetSelected (rate-limited every 10 frames).
     // 2. Increment g_ShopSelCounter unconditionally: (g_ShopSelCounter+1) % 10.
@@ -991,15 +1021,16 @@ void ShopScreen::Update(float dt) {
 
             // Set transition alpha to 1 and buy delay
             m_TransitionAlpha = 1.0f;
-            m_BuyDelay = BUY_DELAY_INIT;  // 0.0f from DAT_0015e558
+            m_BuyDelay = BUY_DELAY_INIT;  // 0.0f from DAT_001b36ec
             m_State = 1;
 
             // Create the back/quit button (field_0x84 = m_pBuyButton).
-            // Binary: MenuButton ctor at state 0 completion uses QuitShopCallback
-            // as the press delegate (confirmed via xref DATA; the old 0x0015e2fc
-            // sub-address was stale v1.5.x and has not been re-pinned).
+            // Binary: MenuButton ctor at state 0 completion (build block ending
+            // @0x001b3568) uses QuitShopCallback as the press delegate.
             // Texture comes from *(GameTask + 0x17c) — a per-task Mortar::SmartPtr<Texture>.
-            // Fruit type: *(GameTask + GOT_DAT_0015e578) — int pre-stored in task.
+            // Fruit type: Fruit::MAX_FRUIT_TYPES, reached via PTR @0x002d7dc4 ->
+            // 0x00332a1c (.bss, written by Fruit::LoadInfo) -- what FruitInfo_GetCount()
+            // returns; an out-of-range index forces a bomb.
             // Port uses bomb fruit type (FruitInfo_GetCount()) matching the
             // DojoScreen back-button pattern: out-of-range index forces a bomb.
             // Binary: after AddControl, scales m_RestScale and fruit piece by
@@ -1015,7 +1046,7 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->Init(_Vector3<float>(0.0f, 0.0f, 0.0f),
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
-                // Binary: m_bRespondsToBackKey = 1 (stale v1.5.x 0x0015e3c6 dropped).
+                // Binary: m_bRespondsToBackKey = 1.
                 m_pBuyButton->m_bRespondsToBackKey = 1;
                 m_pBuyButton->m_bBackdropActive = 1; // v1.6.1 ShopScreen::Update @0x001b3570
                 if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
@@ -1077,7 +1108,6 @@ void ShopScreen::Update(float dt) {
                 ShrinkBuyButton();  // binary: beq to shrink
             } else {
                 // One-frame tap-release event: check equipped/locked, maybe create equip button.
-                // Binary: (stale v1.5.x 0x0015e4xx sub-addresses dropped)
 
                 // Check if item is equipped/locked — hide tutorial arrow if so
                 if (m_pSelectedItem && m_pSelectedItem->m_pItemInfo) {
@@ -1097,9 +1127,9 @@ void ShopScreen::Update(float dt) {
                     // Create equip button if item is not equipped and button doesn't exist.
                     // Binary: guarded by (m_pEquipButton == null) — single-shot creation.
                     if (equipped == 0 && !m_pEquipButton) {
-                        // Binary: Fruit::FruitType(DAT_0015e58c, false) -> "watermelon"
+                        // Binary: Fruit::FruitType(DAT_001b36b8, false) -> "watermelon"
                         const int equipFruitType =
-                            Fruit::FruitType("watermelon", false);  // DAT_0015e58c -> 0x001bb539
+                            Fruit::FruitType("watermelon", false);  // string @0x00282709, loaded @0x001b3760
                         m_pEquipButton = new MenuButton();
                         // Creation default: locked_ring.tex (immediately overridden by SetSelected below).
                         // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: binary writes m_RingTex[10] at creation.
@@ -1119,8 +1149,6 @@ void ShopScreen::Update(float dt) {
                         m_pEquipButton->Init(equipButtonPos,
                             Mortar::Delegate0<void>::Make(this, &ShopScreen::EquipCallback),
                             equipFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
-                        // Binary (0x0015e5f6): disables touch on equip button at creation
-                        m_pEquipButton->m_bAcceptsTouch = 0;
                         // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: EQUIP ring SetText(GETSTRING 0x3c7)
                         // Binary order: SetText -> m_bClearsMenuItems=0 -> SetSelected -> AddControl.
                         m_pEquipButton->SetText(
@@ -1128,42 +1156,47 @@ void ShopScreen::Update(float dt) {
                             game_work.m_RingColours[12],
                             game_work.m_Colour69C,  // +0x69c
                             39.0f, 12.0f, true, true);
-                        // Binary @0x001b321c (ShopScreen::Update state-1 equip build): the equip
-                        // button is born with m_bClearsMenuItems=0 (MenuButton +0x13a) so slicing
+                        // Binary @0x001b38dc (`strb #0,[r3,#0x13a]`, ShopScreen::Update state-1
+                        // equip build): the equip button is born with m_bClearsMenuItems=0 so slicing
                         // it to EQUIP does NOT cascade ClearMenuItems() and destroy the bomb/back
                         // button. MenuButton::Init sets it to 1 for every button; the binary clears
                         // it here at creation, right after Init and before SetSelected. The port
                         // previously relied only on ShrinkBuyButton's later write, which is skipped
                         // if the user slices the equip button before the list settles.
                         m_pEquipButton->m_bClearsMenuItems = 0;
-                        // Binary (0x0015e5fa): SetSelected(m_pSelectedItem) — update fruit type
+                        // Binary (0x001b38e0): SetSelected(m_pSelectedItem) — update fruit type
                         SetSelected(m_pSelectedItem);
                         if (game_work.mHud) game_work.mHud->AddControl(m_pEquipButton, false);
-                        // Binary (0x0015e60e): register DeletedMenuItem as m_RemoveCallback
+                        // Binary (0x001b392c-0x001b3950): register DeletedMenuItem as m_RemoveCallback
                         m_pEquipButton->m_RemoveCallback =
                             Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
                         if (game_work.m_TutorialControl)
                             game_work.m_TutorialControl->ResetTutePos(m_pEquipButton);
-                        // Binary (0x0015e60a): g_bShopButtonShrinking = 0 (clear flag)
+                        // Binary (0x001b3924): hackedOpen = 0 (clear flag)
                         g_bShopButtonShrinking = false;
                         // Binary: m_TargetSize *= 0.75; fruit piece scale *= 0.75
                         m_pEquipButton->m_RestScale =
                             m_pEquipButton->m_RestScale * EQUIP_BUTTON_SCALE;
                         m_pEquipButton->m_pTrackedFruit->scale =
                             m_pEquipButton->m_pTrackedFruit->scale * EQUIP_BUTTON_SCALE;
-                        // Binary (0x0015e622): Fruit::RotateFacingUp(fruit, false, (0,1,0))
+                        // Binary (0x001b39a0-0x001b39c8): Fruit::RotateFacingUp(fruit, false, (0,1,0))
                         m_pEquipButton->m_pTrackedFruit->RotateFacingUp(false, _Vector3<float>(0.0f, 1.0f, 0.0f));
                     }
                 }
             }
-            // LAB_0015e68a: update animation frame counter (runs regardless of above)
+            // LAB_001b39e4: update animation frame counter (runs regardless of above)
         }
 
         // Update selection-ring animation counter.
-        // Binary: fVar = (float)m_AnimFrame + signedDt * DAT_0015e904
-        //         clamp to [0, 0x3ffc]
-        // signedDt defaults to -dt (decay); flips to +dt only on the
-        // "selected unlocked non-equipped item" branch above.
+        // Binary LAB_001b39e4-0x001b3a1c: vldr [r4,#0xb4] -> vcvt.f32.s32 ->
+        //   vmla s15,s17,s14  ==  (float)m_AnimFrame + signedDt * DAT_001b36d8
+        //   then clamp: <=0 -> 0; <DAT_001b36dc (16380.0) -> (int); else 0x3ffc;
+        //   str [r4,#0xb4].
+        // signedDt = -dt is precomputed at case-1 entry and reaches this block on
+        // EVERY path except the IsEquipped(m_pSelectedItem->m_pItemInfo)!=0 branch,
+        // which jumps here with dt still POSITIVE -- so the ring ramps up only for
+        // the currently-equipped item and decays otherwise.
+        // ASM-verified: 2026-07-28T00:00Z v1.6.1 ShopScreen::Update @ 0x001b39e4 (asm-inspector)
         float fFrame = (float)m_AnimFrame + ringSignedDt * ANIM_FRAME_RATE;
         if (fFrame < 0.0f) {
             m_AnimFrame = 0;
@@ -1178,14 +1211,14 @@ void ShopScreen::Update(float dt) {
     // ---- STATES 2 and 7: Transition out to dojo ----
     case 2:
     case 7: {
-        // Binary: uses DAT_0015e90c = 0.85f (not 0.75f — state 3 uses 0.75 literal)
+        // Binary: uses DAT_001b36e0 = 0.85f (not 0.75f — state 3 uses 0.75 literal)
 #ifdef __bada__
         SS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_STATE27);
 #endif
         // Port: easing already advanced by UpdateRealtime(); read current value.
         float newAlpha = m_TransitionAlpha;
 
-        // Binary condition: (newAlpha < DAT_0015e910) && (m_State == 2) && (m_pParent != null)
+        // Binary condition: (newAlpha < DAT_001b36e4) && (m_State == 2) && (m_pParent != null)
         // Only state 2 triggers the main-screen transition; state 7 fades but does nothing else.
         if (newAlpha < ALPHA_STATE27_DONE && m_State == 2 && m_pParent) {
             // Binary: *(parent + 0x33) = 1  =>  parent->m_bPendingRemoval = 1
@@ -1193,10 +1226,9 @@ void ShopScreen::Update(float dt) {
             m_pParent->m_bPendingRemoval = 1;
             // Binary: this->field_0x33 = 1  =>  self->m_bPendingRemoval = 1
             m_bPendingRemoval = 1;
-            // Binary: *(*(*(GameTask + 0x7990) + 0x160) + 0x10c) = 8
+            // Binary @0x001b3a68: *(game_work.pM_pMainScreen + 0x118) = 8
             //         => mainScreen->m_State = STATE_SLIDE_IN (8)
-            // DAT_0015e924 = 0x7990 (GOT offset to the GameTask/game pointer),
-            // +0x160 = mainScreen ptr in Game, +0x10c = m_State in MainScreen.
+            // +0x118 is MainScreen::m_State (matches MainScreen.h's offset assert).
             if (game_work.mMainScreen) {
                 game_work.mMainScreen->SetState(STATE_SLIDE_IN);
             }
@@ -1206,7 +1238,7 @@ void ShopScreen::Update(float dt) {
 
     // ---- STATE 3: Buy animation fade-out ----
     case 3: {
-        // Binary: uses literal 0.75f (not the 0.85f from DAT_0015e90c).
+        // Binary: uses literal 0.75f (not the 0.85f from DAT_001b36e0).
 #ifdef __bada__
         SS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_STATE3);
 #endif
@@ -1259,7 +1291,7 @@ void ShopScreen::Update(float dt) {
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
             if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
-            // Binary (0x0015e848..0x0015e84c): register DeletedMenuItem as m_RemoveCallback
+            // Binary (0x001b3c10..0x001b3c20): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =
                 Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
         }
@@ -1338,12 +1370,13 @@ void ShopScreen::Update(float dt) {
     }
 
     // --- Animate HUD controls that moved during alpha change ---
-    // Binary @ 0x0015ea50-0x0015eabe: alpha-decrease X-shift on the
+    // Binary @0x001b3ed8..0x001b3f6c: alpha-decrease X-shift on the
     // SplatEntity pool (NOT HUD controls). Splats above x=50 drift up,
-    // below drift down, by `delta * (190 or 290) * 1.5`. Constants:
-    //   DAT_0015eae4 = 290.0f   (down multiplier, lower half)
-    //   DAT_0015eae8 = 190.0f   (up multiplier, upper half)
-    //   DAT_0015eaec =  50.0f   (split threshold on x)
+    // below drift down: `x > 50 -> x += delta*190*1.5`, else `x -= delta*290*1.5`.
+    // Constants:
+    //   DAT_001b3d6c = 290.0f   (down multiplier, lower half)
+    //   DAT_001b3d68 = 190.0f   (up multiplier, upper half)
+    //   DAT_001b3d70 =  50.0f   (split threshold on x)
     // Note: the binary "x" axis is the screen-vertical per project coord
     // convention (X=+160 top, -160 bottom) — semantically a y-shift.
     if (m_TransitionAlpha < prevAlpha) {
@@ -1386,7 +1419,7 @@ void ShopScreen::UpdateRealtime(float dtSeconds) {
         break;
     case 2:
     case 7:
-        // Binary: alpha *= 0.85 (DAT_0015e90c)
+        // Binary: alpha *= 0.85 (DAT_001b36e0)
         SS_DECAY_F(m_TransitionAlpha, ALPHA_DECAY_STATE27);
         break;
     case 3:
@@ -1440,15 +1473,15 @@ void ShopScreen::DrawLoadingOverlay() {
 // ASM-spec v1.6.1 ShopScreen::DrawOrder @0x001b4e48: param == m_LayerFlagsAlt gates Block A.
 // ---------------------------------------------------------------------------
 void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
-    // Static dial_alpha lives at static_block+0x84 in the binary (BSS).
+    // Binary file-static `ShopScreen::DrawOrder::m_fadeTime` @0x003165ec (BSS).
     // Port uses a function-local static — same lifetime (process lifetime).
-    static float s_DialAlpha = 0.0f;  // static_block+0x84
+    static float s_DialAlpha = 0.0f;  // m_fadeTime @0x003165ec
 
     MatrixManager& mm = MatrixManager::GetInstance();
 
-    // All quads use white full-alpha colour (*(Colour**)(GOT+0x73a4) at runtime).
-    // The binary reads a runtime GOT entry assumed to be {0xFF,0xFF,0xFF,0xFF}.
-    const Colour colourWhite(255, 255, 255, 255);  // DAT_0015e08c = 0x000073a4 GOT entry
+    // All quads use white full-alpha colour: GOT+0x70cc (DAT_001b5204) ->
+    // Colour::White @0x0034e2f8 = {0xFF,0xFF,0xFF,0xFF}.
+    const Colour colourWhite(255, 255, 255, 255);  // Colour::White @0x0034e2f8
 
     // -----------------------------------------------------------------------
     // Block A gate: binary compares the passed layerMask to m_LayerFlagsAlt.
@@ -1457,7 +1490,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
     // -----------------------------------------------------------------------
     if (layerMask == (int)m_LayerFlagsAlt) {
         // ===================================================================
-        // Block A — BG + dialog box (0x001b4f58 .. 0x001b52cd)
+        // Block A — BG + dialog box (0x001b4ff0 .. 0x001b53d3)
         // Binary does NOT write m_LayerFlags here; the gate is purely
         // based on the passed layerMask each call.
         // ===================================================================
@@ -1480,7 +1513,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
 
         if (alpha < 1.0f) {
             // ---------------------------------------------------------------
-            // Sub-Block A1 — Sliding BG, two quads  (0x0015def6..0x0015dff9)
+            // Sub-Block A1 — Sliding BG, two quads  (~0x001b4ff0..0x001b513c)
             // ---------------------------------------------------------------
 
             // --- Left quad: anchored to scroll pos, U=[0.03125..0.597656] ---
@@ -1491,7 +1524,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 s_TexBGStore->Set();
             }
 
-            // Scale Vec3 = (291, 321, 0)  DAT_0015e064, DAT_0015e068, DAT_0015e05c
+            // Scale Vec3 = (291, 321, 0)  DAT_001b51e0, DAT_001b51e4, DAT_001b5214
             // Width scaled by k to stretch across the widened field (see k comment above).
             Matrix44 matA1L = Matrix44::MakeScale(291.0f * k, 321.0f, 0.0f);
 
@@ -1512,7 +1545,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 Colour c = colourWhite;
                 // DrawQuadSized_GameTask(u0=0.03125f, u1=0.597656f, colour)
                 // v0=0.1875f, v1=0.8125f hardcoded inside helper
-                // DAT_0015e06c = 0.03125f, DAT_0015e070 = 0.597656f
+                // DAT_001b51e8 = 0.03125f, DAT_001b51ec = 0.597656f
                 Mortar::Mesh::DrawQuadUnCached(c,
                     0.03125f, 0.597656f,  // uMin, uMax
                     0.1875f, 0.8125f,     // vMin, vMax
@@ -1521,10 +1554,10 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
 
             // --- Right quad: slides from right  ---
             // slide_X = 145.0 + (1 - alpha) * 190.0 * 1.5
-            // DAT_0015e054=145.0f, DAT_0015e058=190.0f, literal 1.5f
-            slide_X = 145.0f + (1.0f - alpha) * 190.0f * 1.5f;  // DAT_0015e054 / DAT_0015e058
+            // DAT_001b5210=145.0f, DAT_001b51d8=190.0f, literal 1.5f
+            slide_X = 145.0f + (1.0f - alpha) * 190.0f * 1.5f;  // DAT_001b5210 / DAT_001b51d8
 
-            // Scale Vec3 = (191, 321, 0)  DAT_0015e074, DAT_0015e068, DAT_0015e05c
+            // Scale Vec3 = (191, 321, 0)  DAT_001b51f0, DAT_001b51e4, DAT_001b5214
             // Width and translate-X scaled by k -- same reasoning as the left quad above.
             Matrix44 matA1R = Matrix44::MakeScale(191.0f * k, 321.0f, 0.0f);
             matA1R.GlobalTranslate44(slide_X * k, 0.0f, 0.0f);
@@ -1549,11 +1582,11 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
 
         } else {
             // ---------------------------------------------------------------
-            // Sub-Block A2 — Static full BG, one quad  (0x0015dffe..0x0015e08f)
+            // Sub-Block A2 — Static full BG, one quad  (~0x001b5140..0x001b522c)
             // Pure scale, no translate — quad renders centered at origin.
             // ---------------------------------------------------------------
 
-            // Scale Vec3 = (481, 321, 0)  DAT_0015e078, DAT_0015e068, DAT_0015e05c
+            // Scale Vec3 = (481, 321, 0)  DAT_001b51f4, DAT_001b51e4, DAT_001b5214
             // Width scaled by k to fill the widened field (see k comment above);
             // height untouched, no translate needed (quad stays centered at origin).
             Matrix44 matA2 = Matrix44::MakeScale(481.0f * k, 321.0f, 0.0f);
@@ -1569,7 +1602,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             {
                 Colour c = colourWhite;
                 // DrawQuadSized_GameTask(u0=0.03125f, u1=0.96875f, colour)
-                // DAT_0015e06c=0.03125f; u1=0.96875f literal (0x3f780000)
+                // DAT_001b51e8=0.03125f; u1=0.96875f literal (0x3f780000)
                 Mortar::Mesh::DrawQuadUnCached(c,
                     0.03125f, 0.96875f,  // uMin, uMax
                     0.1875f, 0.8125f,    // vMin, vMax
@@ -1580,14 +1613,15 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
                 s_TexBGStore->UnSet();
             }
 
-            // Binary stores DAT_0015e1dc = 145.0f as slide_X for use in A3.
-            // DAT_0015e1dc = 00 00 11 43 = 145.0f (separate read from DAT_0015e054)
+            // Binary stores 145.0f as slide_X for use in A3. v1.6.1 re-reads the
+            // SAME slot as A1 here (DAT_001b5210); there is no separate 145.0
+            // constant for this path.
             // NOT scaled by k -- A3 (the dialog/description plate) stays native.
-            slide_X = 145.0f;  // DAT_0015e1dc
+            slide_X = 145.0f;  // DAT_001b5210
         }
 
         // -------------------------------------------------------------------
-        // Sub-Block A3 — Dialog box  (0x0015e09e..0x0015e1cd)
+        // Sub-Block A3 — Dialog box  (~0x001b5230..0x001b53d3)
         // Runs after BOTH A1 and A2. slide_X holds left-half resting X.
         // -------------------------------------------------------------------
         if (s_TexDialogBox.IsValid()) {
@@ -1598,7 +1632,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
 
             // Scale Vec3 = (texW+1, texH+1, 0) * 1.0f (identity multiply)
             // The decompile multiplies by local_44=1.0f via _Vector3::operator* — no-op.
-            // DAT_0015e1e0 = 0.0f for z
+            // DAT_001b5214 = 0.0f for z
             Matrix44 matA3 = Matrix44::MakeScale(texW + 1.0f, texH + 1.0f, 0.0f);
 
             // Translate by (slide_X - 4.0, -3.0, 0.0)
@@ -1610,7 +1644,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             mm.UploadModelViewOnly();
 
             // --- Compute dial_alpha ---
-            // dt = game_work.dt  (Game+0x38, DAT_0015e1f0=0x7990 GOT offset to Game*)
+            // dt: DAT_001b5208 = GOT offset 0x77f4 -> game_work.flM_Dt @0x002d9354
             const float dt = game_work.dt;
 
             bool is_locked = false;
@@ -1625,13 +1659,13 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
             } else {
                 // Fade OUT: dial_alpha += dt * (-5.0f), clamp to 0.0
                 s_DialAlpha += dt * (-5.0f);
-                if (s_DialAlpha < 0.0f) s_DialAlpha = 0.0f;  // DAT_0015e1e0 = 0.0f
+                if (s_DialAlpha < 0.0f) s_DialAlpha = 0.0f;  // DAT_001b5214 = 0.0f
             }
 
             // --- Compute grayscale ---
             // r_float = 255.0f + (-120.0f) * dial_alpha
-            // DAT_0015e1e8 = 255.0f, DAT_0015e1e4 = -120.0f
-            float r_float = 255.0f + (-120.0f) * s_DialAlpha;  // DAT_0015e1e8, DAT_0015e1e4
+            // DAT_001b521c = 255.0f, DAT_001b5218 = -120.0f
+            float r_float = 255.0f + (-120.0f) * s_DialAlpha;  // DAT_001b521c, DAT_001b5218
             uint8_t rByte = (r_float > 0.0f) ? (uint8_t)(int)r_float : (uint8_t)0;
             Colour colDialog(rByte, rByte, rByte, 0xFF);
 
@@ -1667,16 +1701,18 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
     {
         const float alpha = m_TransitionAlpha;
         if (alpha < 1.0f) {
-            // DAT_0015e054=145.0f, DAT_0015e058=190.0f
+            // DAT_001b5210=145.0f, DAT_001b51d8=190.0f
             slide_X = 145.0f + (1.0f - alpha) * 190.0f * 1.5f;
         } else {
-            slide_X = 145.0f;  // DAT_0015e054
+            slide_X = 145.0f;  // DAT_001b5210
         }
     }
 
     // v1.6.1 DrawOrder Block B @0x001b4f9c: big stamp = IngamePopup pM_Popups[0x11]
     // (localized SELECTED/已选择 via GETSTRING 0x3C5 + selected_outline.tex), NOT selected.tex.
-    // The selected.tex-dims Vec3 the binary computes is dead; dropped.
+    // The selected.tex-dims Vec3 the binary computes (file-static
+    // `ShopScreen::DrawOrder::scale` @0x003165dc) is dead; dropped.
+    // Related unported file-static: `newItemBobTime` @0x003165f0.
     float sinDenom = SinIdx((uint16_t)0x3ffc);
     float ratio = (sinDenom != 0.0f) ? (SinIdx((uint16_t)m_AnimFrame) / sinDenom)
                                       : SinIdx((uint16_t)m_AnimFrame);
@@ -1690,7 +1726,7 @@ void ShopScreen::DrawOrder(float* /*hudScale*/, int layerMask) {
     if (popup) popup->Draw(_Vector3<float>(mappedSlideX, 104.0f, 0.0f), ratio);
 }
 
-// Binary @ 0x0015c568 (re-analyst 2026-05-18). 3-way branch on selected
+// v1.6.1 ShopScreen::BuyButtonCallback @0x001b1874. 3-way branch on selected
 // item state: locked -> buy; equipped -> unequip; unlocked-not-equipped
 // -> swap into slot. Status-text writes (binary writes "BUY"/"EQUIP"/
 // "UNEQUIP"/"SELECTED" into selected->m_StatusText@+0x54) are skipped:
@@ -1722,8 +1758,8 @@ void ShopScreen::BuyButtonCallback() {
     mgr->SetEquippedItem((ItemType)type, info);
 }
 
-// v1.6.1 ShopScreen::ConfirmCallback @0x001b2388 (stale comment previously
-// cited 0x0015c758). Commits the in-flight selection to the per-type slot
+// v1.6.1 ShopScreen::ConfirmCallback @0x001b2388.
+// Commits the in-flight selection to the per-type slot
 // cache and transitions to state 5 (exit confirm sub-screen). Binary gates
 // the fling/tutorial-reposition block on m_pBuyButton->m_pTrackedFruit
 // (+0x14C), not unconditionally on m_TutorialControl: it flings the buy
@@ -1753,8 +1789,8 @@ void ShopScreen::ConfirmCallback() {
     }
 }
 
-// v1.6.1 ShopScreen::CancelCallback @0x001b244c (stale comment previously
-// cited 0x0015c7f0). Skip the slot-commit; transition to state 6.
+// v1.6.1 ShopScreen::CancelCallback @0x001b244c.
+// Skip the slot-commit; transition to state 6.
 // Byte-identical in shape to ConfirmCallback: same gate on
 // m_pBuyButton->m_pTrackedFruit, same fling formula, same MenuButton*
 // overload of ResetTutePos(nullptr) to hide the tutorial arrow.

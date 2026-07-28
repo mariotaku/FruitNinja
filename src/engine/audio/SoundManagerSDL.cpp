@@ -870,10 +870,10 @@ void SoundManager::SongResume() {
     LOG_INFO("MUSIC", "SongResume");
 }
 
-// 0x0018c960 -- stub nop
+// v1.6.1 Mortar::SoundManager::SongSetMemorySize @0x00230650 -- stub nop
 void SoundManager::SongSetMemorySize(int size) { (void)size; }
 
-// 0x0018ca78
+// v1.6.1 Mortar::SoundManager::SetMusicVolume @0x00230534
 void SoundManager::SetMusicVolume(float vol) {
     s_MusicVolume = vol;   // AudioCallback reads this directly for the music mix
     SyncMutes();
@@ -888,17 +888,17 @@ void SoundManager::Initialise(const char* /*basePath*/) {
     // TODO: implement SoundManager::Initialise.
 }
 
-// 0x0018ca98
+// v1.6.1 Mortar::SoundManager::SetSFXVolume @0x002304f4
 void SoundManager::SetSFXVolume(float vol) {
     s_SFXVolume = vol;
     SyncMutes();
 }
 
-// 0x0018c9d4 -- compares per-channel volume against 0.1 threshold
-// (DAT_0018ca48). Binary also OR's a master-mute byte at MortarSoundState+0x4
-// (DAT_0018ca54) but that byte has NO writer in FruitNinja (MuteSound has
-// no callers); omitted. If MuteSound() is ever ported, OR its result here.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0018c9d4 (asm-inspector)
+// Binary per channel: muted = (MasterMute || vol < 0.1) -> SetMusicMute / SetSfxMute.
+// The MasterMute byte has NO writer in FruitNinja -- its only setter,
+// SoundManager::MuteSound @0x00230578, has zero in-binary callers -- so the port
+// omits the OR. If MuteSound() is ever ported, OR its result in here.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 Mortar::SyncMutes @ 0x002302e4 (asm-inspector)
 void SoundManager::SyncMutes() {
     s_SFXMuted   = ((double)s_SFXVolume   < 0.1);
     s_MusicMuted = ((double)s_MusicVolume < 0.1);

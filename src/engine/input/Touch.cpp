@@ -20,9 +20,9 @@ Touch& Touch::GetInstance() {
     return instance;
 }
 
-// Binary @ 0x0019591c -- ctor.
+// v1.6.1 Mortar::Touch::Touch @0x00242e24 -- ctor.
 // Sequence: State[8] ctor (states1), State[8] ctor (states2),
-// RingBufferT ctor (zeroes memory ptr), InitRingBuffer_Touch (alloc + init),
+// RingBufferT ctor (zeroes memory ptr), RingBufferT::Init (alloc + init),
 // nextTouchId = 1.
 Touch::Touch()
     : nextTouchId(1)
@@ -37,11 +37,12 @@ Touch::Touch()
         states2[i].extId   = 0;
         states2[i].touchId = 0;
     }
-    // Binary @ 0x001958fc -- InitRingBuffer_Touch:
-    //   eventBuffer.memory = operator new(200);
-    //   eventBuffer.capacity = 10;
-    //   eventBuffer.field_8 = 1;  (DIFFERS: port uses 0; see RingBufferT_TEvnt DIFFERS)
-    //   eventBuffer.field_c = 0;
+    // v1.6.1 Mortar::RingBufferT<Touch::TEvnt,false,false>::Init @0x002436b0, called
+    // with n = 10 from here:
+    //   eventBuffer.memory   = operator new[](n * 0x14);
+    //   eventBuffer.capacity = n;          // from the CALLER arg, not a literal
+    //   +0x08 (write index)  = 1;          // DIFFERS: port uses 0; see the
+    //   +0x0c (read index)   = 0;          //   RingBufferT_TEvnt DIFFERS in Touch.h
     eventBuffer.memory      = static_cast<TEvnt*>(::operator new(MAX_EVENTS * sizeof(TEvnt)));
     eventBuffer.capacity    = MAX_EVENTS;
     eventBuffer.m_eventHead = 0;
@@ -54,7 +55,7 @@ Touch::~Touch() {
     eventBuffer.memory = 0;
 }
 
-// Binary @ 0x001952f0 -- State::Update.
+// v1.6.1 Mortar::Touch::State::Update @0x00242830.
 // Called per-frame on states2 (the LIVE mailbox) by _Update.
 // phase==1 (released): zero extId+touchId -> slot becomes free for next press.
 // Else: prev <- curr; if phase==-1 (just-pressed) promote to 0 (held).
@@ -71,13 +72,14 @@ void Touch::StateUpdate(TouchState& s) {
     }
 }
 
-// Binary @ 0x001953ec -- _Update.
+// v1.6.1 Mortar::Touch::_Update @0x00242958.
 // Per-frame: snapshot states2 -> states1 for readers, then advance states2's
 // per-slot state machine via StateUpdate (frees released slots by zeroing
 // extId/touchId on phase==1; promotes phase -1 -> 0; rolls prev <- curr).
 // IMPORTANT: StateUpdate runs on states2 (the LIVE mailbox), not states1.
-// ASM-verified: 2026-05-06T17:00 v1.6.1 binary @ 0x001953ec (re-analyst) -- the
-// disassembly at 0x00195414 computes r0 = (this + i*0x1c) + 0xe0 = &states2[i],
+// ASM-verified: 2026-05-06T17:00 v1.6.1 Mortar::Touch::_Update @ 0x00242958 (re-analyst)
+// -- re-confirmed on v1.6.1: `add r0,r0,#0xe0` at 0x00242990 then bl Touch::State::Update,
+// loop bound `cmp r5,#0x8`. So r0 = (this + i*0x1c) + 0xe0 = &states2[i],
 // not the copy in states1. Running StateUpdate on states1 (the dead snapshot)
 // leaves states2's extId stuck after release, so the next press from the
 // same finger ID matches the stale slot and never registers as a new press
@@ -98,7 +100,7 @@ void Touch::_Update() {
 #endif
 }
 
-// Binary @ 0x00195630 -- Update(float dt).
+// v1.6.1 Mortar::Touch::Update @0x00242d14 -- Update(float dt).
 // Drain events with timestamp <= dt (or all if dt == 0.0); then _Update().
 void Touch::Update(float dt) {
     bool drainAll = (dt == 0.0f);
@@ -111,7 +113,7 @@ void Touch::Update(float dt) {
     _Update();
 }
 
-// Binary @ 0x00195690 -- __UpdateInternal.
+// v1.6.1 Mortar::Touch::__UpdateInternal @0x00242d98.
 // Push TEvnt to ring; on overflow: Update(0.0f) then retry.
 // isActive: true=press OR move, false=release (matches binary param 'b').
 void Touch::__UpdateInternal(unsigned long extId, bool isActive, float x, float y, float t) {
@@ -132,10 +134,10 @@ void Touch::__UpdateInternal(unsigned long extId, bool isActive, float x, float 
 #endif
 }
 
-// Binary @ 0x00195314 -- ___UpdateInternal.
+// v1.6.1 Mortar::Touch::___UpdateInternal @0x00242868.
 // Apply event to states2: scan for matching extId, then claim free slot if new press.
 // isActive: true=press OR move, false=release.
-// Binary @ 0x00195314 -- free slot predicate is extId==0, NOT phase>=1.
+// Free slot predicate is extId==0, NOT phase>=1.
 void Touch::___UpdateInternal(unsigned long extId, bool isActive, float x, float y) {
 #ifdef FN_DEBUG_TOUCH
     LOG_DEBUG("TOUCH", "drain extId=%u active=%d x=%g y=%g\n",
@@ -158,7 +160,7 @@ void Touch::___UpdateInternal(unsigned long extId, bool isActive, float x, float
 #endif
             return;
         }
-        // Binary @ 0x00195314 -- free slot is extId==0, NOT phase>=1.
+        // Free slot is extId==0, NOT phase>=1.
         if (slotExtId == 0 && firstFree == -1) firstFree = idx;
     }
     // No matching slot. Claim a free slot only for new press (isActive==true).
@@ -180,7 +182,7 @@ void Touch::___UpdateInternal(unsigned long extId, bool isActive, float x, float
     }
 }
 
-// Binary @ 0x00195424 -- FindTouch(uint touchId).
+// v1.6.1 Mortar::Touch::FindTouch @0x002429a8 -- FindTouch(uint touchId).
 // Linear scan states1; return slot index or -1.
 int Touch::FindTouch(unsigned long touchId) {
     for (int i = 0; i < MAX_SLOTS; i++) {
@@ -189,7 +191,7 @@ int Touch::FindTouch(unsigned long touchId) {
     return -1;
 }
 
-// Binary @ 0x001954fc -- GetAnyTouch.
+// v1.6.1 Mortar::Touch::GetAnyTouch @0x00242b24.
 // First slot with phase < 1; returns touchId or 0.
 uint32_t Touch::GetAnyTouch() {
     for (int i = 0; i < MAX_SLOTS; i++) {
@@ -198,7 +200,7 @@ uint32_t Touch::GetAnyTouch() {
     return 0;
 }
 
-// Binary @ 0x0019551c -- GetMostRecentTouch.
+// v1.6.1 Mortar::Touch::GetMostRecentTouch @0x00242b60.
 // FindTouch(nextTouchId - 1); returns touchId or 0.
 uint32_t Touch::GetMostRecentTouch() {
     int slot = FindTouch(nextTouchId - 1);
@@ -231,7 +233,7 @@ int Touch::GetTouchDelta(unsigned long touchId, float& dx, float& dy) {
     return 1;
 }
 
-// Binary @ 0x00242a98 (v1.6.1) -- GetTouchInReigion (note binary typo).
+// v1.6.1 Mortar::Touch::GetTouchInReigion @0x00242a98 (note binary typo).
 // Find first active touch inside (x, y, x+w, y+h). Returns touchId or 0.
 // Binary uses inclusive <= on all bounds.
 uint32_t Touch::GetTouchInReigion(float x, float y, float w, float h) {
@@ -248,7 +250,7 @@ uint32_t Touch::GetTouchInReigion(float x, float y, float w, float h) {
     return 0;
 }
 
-// Binary @ 0x00242bc4 (v1.6.1) -- SendIndividualTouchCallbacks.
+// v1.6.1 Mortar::Touch::SendIndividualTouchCallbacks @0x00242bc4.
 // Pointer-walks states1, codes 0x89..0x90 via running counter.
 // Active (phase<1):
 //   AxisEvent(code+0x10, 0x20, currX,  deltaX,   0, 0)
@@ -286,8 +288,8 @@ void Touch::SendIndividualTouchCallbacks(InputDevice* dev) {
 }
 
 // Tier A slot-returning region scan. Mirrors binary's free function
-// TouchInRegion @ 0x001691cc (the API actually used by UI widgets).
-// NOT to be confused with binary's same-class GetTouchInReigion @ 0x001954b4
+// TouchInRegion @0x001ca754 (the API actually used by UI widgets).
+// NOT to be confused with binary's same-class GetTouchInReigion @0x00242a98
 // which returns touchId -- that Tier B method is dead in the binary (no
 // internal callers; only used externally by InputDeviceBada::Update which
 // reaches into Touch via GetMostRecentTouch / GetTouchPos directly).
@@ -309,8 +311,8 @@ int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
     return -1;
 }
 
-// Binary @ 0x0019553c -- Mortar::Touch::Clear().
-// Called by InputDeviceBada::Reset @ 0x00195c00 (NOT inlined). Real helper symbol.
+// v1.6.1 Mortar::Touch::Clear @0x00242b88.
+// Called by InputDeviceBada::Reset (NOT inlined). Real helper symbol.
 // Zeroes ONLY states2 (8 slots, phase=1); leaves states1 and the ring buffer untouched.
 // Disassembly confirmed: loops 8 times over states2 (base this+0xe0, stride 0x1c),
 // writing prevX=prevY=currX=currY=extId=touchId=0, phase=1 per slot.
@@ -416,7 +418,7 @@ bool Touch::GetLivePos(int slot, float& x, float& y) const {
 
 } // namespace Mortar
 
-// TouchInRegion @ 0x001691cc -- Tier A slot-returning helper. Used by every
+// TouchInRegion @0x001ca754 -- Tier A slot-returning helper. Used by every
 // UI widget Update() in the binary (MenuButton, CheckBox, ScrollingMenu,
 // SliderControl, VerticalScroller, ComboBox). Port uses (left, right,
 // bottom, top) instead of binary's (x, y, w, h) -- numerically equivalent
@@ -439,7 +441,7 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
     return -1;
 }
 
-// IsTouchDown @ 0x00169144 (asm-verified 2026-05-17 re-analyst)
+// IsTouchDown @0x001ca69c (asm-verified 2026-05-17 re-analyst)
 // Binary reads phase float at states[slot]+0xa8 and returns:
 //   phase float == 2.0f -> 2  (press-edge, just-pressed, one frame only)
 //   phase float == 1.0f -> 1  (held)

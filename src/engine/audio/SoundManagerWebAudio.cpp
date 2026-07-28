@@ -934,25 +934,26 @@ void SoundManager::SongStop()   { fnaudio_song_stop(); LOG_INFO("MUSIC", "SongSt
 void SoundManager::SongPause()  { fnaudio_song_pause(); LOG_INFO("MUSIC", "SongPause"); }
 void SoundManager::SongResume() { fnaudio_song_resume(); LOG_INFO("MUSIC", "SongResume"); }
 
-// 0x0018c960 -- stub nop
+// v1.6.1 Mortar::SoundManager::SongSetMemorySize @0x00230650 -- stub nop
 void SoundManager::SongSetMemorySize(int size) { (void)size; }
 
-// 0x0018ca78
+// v1.6.1 Mortar::SoundManager::SetMusicVolume @0x00230534
 void SoundManager::SetMusicVolume(float vol) {
     s_MusicVolume = vol;
     SyncMutes();
     fnaudio_set_music_vol(s_MusicVolume);
 }
 
-// 0x0018ca98
+// v1.6.1 Mortar::SoundManager::SetSFXVolume @0x002304f4
 void SoundManager::SetSFXVolume(float vol) {
     s_SFXVolume = vol;
     SyncMutes();
 }
 
-// 0x0018c9d4 -- per-channel volume vs 0.1 threshold (DAT_0018ca48), then push
-// the resulting mute state to the JS gain gates.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0018c9d4 (asm-inspector)
+// Binary per channel: muted = (MasterMute || vol < 0.1) -> SetMusicMute / SetSfxMute.
+// MasterMute has no writer (SoundManager::MuteSound @0x00230578 has zero in-binary
+// callers), so the port drops the OR and pushes the result to the JS gain gates.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 Mortar::SyncMutes @ 0x002302e4 (asm-inspector)
 void SoundManager::SyncMutes() {
     s_SFXMuted   = ((double)s_SFXVolume   < 0.1);
     s_MusicMuted = ((double)s_MusicVolume < 0.1);

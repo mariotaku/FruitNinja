@@ -8,7 +8,8 @@ namespace Mortar {
 
 // Matches original MortarSound (0x10 = 16 bytes)
 // +0x00 vtable, +0x04 m_Name, +0x08 m_Handle, +0x0c m_State
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 binary @ 0x0018c6ac (asm-inspector)
+// vtable @0x002cfcc0. The ctor body confirms the layout above.
+// ASM-verified: 2026-04-29T00:00Z v1.6.1 Mortar::MortarSound::MortarSound @ 0x00230030 (asm-inspector)
 class MortarSound {
 public:
     char*    m_Name;    // +0x04: heap-allocated sound name; NULL when idle
@@ -19,9 +20,9 @@ public:
     virtual ~MortarSound();
 
     // Handle-validity guard (binary pattern: if m_Handle==0 -> m_State=0)
-    // Returns m_State==2 (0x0018c780)
+    // Returns m_State==2 (v1.6.1 Mortar::MortarSound::IsPlaying @0x0023027c)
     bool IsPlaying();
-    // Returns m_State==1 (0x0018c794)
+    // Returns m_State==1 (v1.6.1 Mortar::MortarSound::IsPaused @0x0023029c)
     bool IsPaused();
     bool IsIdle() { return m_State == 0; }
 
@@ -41,32 +42,41 @@ public:
     // completion fires) -- that part IS faithful.
     void SetVolume(float vol);
 
-    // If m_State==0: calls SoundManager::SFXPlay, m_State=2 (0x0018c850)
+    // If m_State==0: calls SoundManager::SFXPlay, m_State=2
+    // (v1.6.1 Mortar::MortarSound::Play @0x0023006c)
     void Play();
 
-    // If m_State==2: calls backend PauseSound, m_State=1 (0x0018c830)
+    // If m_State==2: calls backend PauseSound, m_State=1
+    // (v1.6.1 Mortar::MortarSound::Pause @0x002300f0)
     void Pause();
 
-    // If m_State==1: calls backend ResumeSound, m_State=2 (0x0018c810)
+    // If m_State==1: calls backend ResumeSound, m_State=2
+    // (v1.6.1 Mortar::MortarSound::Resume @0x00230128)
     void Resume();
 
-    // If m_Handle!=0: calls backend StopSound, m_State=0, m_Handle=0 (0x0018c7f0)
+    // If m_Handle!=0: calls backend StopSound, m_State=0, m_Handle=0
+    // (v1.6.1 Mortar::MortarSound::Stop @0x00230160)
     // fadeTime is always 0.0f in all observed calls (DAT_0018c8cc=0.0f)
     void Stop(float fadeTime = 0.0f);
 
-    // Non-virtual wrapper -- calls InternalDestroy (0x0018c6fc)
+    // Non-virtual wrapper -- calls InternalDestroy
+    // (v1.6.1 Mortar::MortarSound::Destroy @0x00230064)
     void Destroy();
 
-    // Free m_Name, Stop, RemoveListener (0x0018c8a4)
+    // Free m_Name, Stop, RemoveListener
+    // (v1.6.1 Mortar::MortarSound::InternalDestroy @0x00230190)
     void InternalDestroy();
 
-    // 0x0018c6f4 -- one-line wrapper, calls InternalLoad
+    // v1.6.1 Mortar::MortarSound::Load @0x00230068 -- one-line tail-call wrapper
+    // (4 bytes: a single b.w to InternalLoad), calls InternalLoad
     void Load(const char* name);
 
-    // Heap-copies name into m_Name; calls InternalDestroy first if m_Name != null (0x0018c8d0)
+    // Heap-copies name into m_Name; calls InternalDestroy first if m_Name != null
+    // (v1.6.1 Mortar::MortarSound::InternalLoad @0x002301d0)
     void InternalLoad(const char* name);
 
-    // Handle-validity guard + always returns true (0x0018c7a8)
+    // Handle-validity guard + always returns true
+    // (v1.6.1 Mortar::MortarSound::IsReady @0x002302bc)
     // Note: binary is a no-op stub; loads complete synchronously.
     bool IsReady();
 
