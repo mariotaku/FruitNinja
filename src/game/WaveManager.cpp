@@ -1884,10 +1884,13 @@ void WaveManager::SetCurrentWave(int waveNo, float aDelay, int playerIdx) {
 }
 
 void WaveManager::SetupWaveQue() {
-    // Deferred: WaveManager::SetupWaveQue (binary @ 0x00124564) is only called
-    // in survival/combo modes. m_pWaveQue stays null in Classic/Arcade/Zen
-    // (the modes shipped); GetNextWave's early-out handles this. Re-open if
-    // Combo mode is ported.
+    // Deferred: WaveManager::SetupWaveQue (v1.6.1 @0x00123458) is only used in
+    // survival/combo modes. In v1.6.1 it has ZERO xrefs — exported symbol only, no
+    // bl and no data reference — so nothing in the shipped image builds a wave que;
+    // m_pWaveQue stays null in Classic/Arcade/Zen and GetNextWave's early-out
+    // handles that. It is the sole caller of WaveQue::AddWave @0x0012d014 (6 call
+    // sites), which is therefore also dead in v1.6.1. Re-open if Combo mode is
+    // ported (combowavelist.xml / survivalwavelist.xml do ship).
 }
 
 // ----------------------------------------------------------------------------

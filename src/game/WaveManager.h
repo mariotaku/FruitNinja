@@ -50,11 +50,11 @@ public:
     uint8_t _pad_0x20[4];     // +0x20
 
     // +0x24: wave queue item pointer. Binary: WaveQueItem* @ +0x24.
-    // v1.6.1 WaveManager::Destroy @0x00123b54 / SetupWaveQue @0x00124564
+    // v1.6.1 WaveManager::Destroy @0x00123b54 / SetupWaveQue @0x00123458
     WaveQueItem* m_pWaveQueItem;  // +0x24
 
     // +0x28: wave queue pointer. Binary: WaveQue* @ +0x28.
-    // v1.6.1 WaveManager::Destroy @0x00123b54 / SetupWaveQue @0x00124564
+    // v1.6.1 WaveManager::Destroy @0x00123b54 / SetupWaveQue @0x00123458
     WaveQue* m_pWaveQue;          // +0x28
 
     // +0x2c..+0x34: unnamed binary padding (9 bytes) to reach m_SyncLocalReady at +0x35.
@@ -308,7 +308,9 @@ public:
     // 0x00125340: seek to a specific wave number.
     void SetCurrentWave(int waveNo, float delay, int playerIdx);
 
-    // 0x00124564 (142 lines): build the wave queue for survival/combo.
+    // v1.6.1 WaveManager::SetupWaveQue @0x00123458: build the wave queue for
+    // survival/combo. Has ZERO xrefs in v1.6.1 (exported symbol only) — the port
+    // body is an empty stub to match.
     void SetupWaveQue();
 
     // --- Spawning -----------------------------------------------------

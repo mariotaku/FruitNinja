@@ -468,12 +468,26 @@ struct WaveQue {
     WaveQue() : m_Budget(0.0f) {}
 
     // WaveQue::AddWave @0x0012d014.
-    // Builds a WaveQueItem for wi and appends it to m_Items.
-    // isLast controls the alternating-spawn policy code.
-    // RNG = WaveManager::GetInstance()->m_Random (when the body is implemented).
+    // Builds a WaveQueItem for wi and appends it to m_Items: rolls one policy code
+    // (always one Rand32(100) draw), then assigns one spawner op per unit of
+    // wi->m_TotalWeight into item.m_SlotList, tallying into m_Count0/1/2 and finally
+    // setting m_Fraction. isLast selects the alternating 1,2,1,2,... policy (which
+    // makes zero further draws and leaves m_Fraction at its 0.5f init).
+    // RNG = WaveManager::GetInstance()->m_Random.
+    //
+    // Draw-count contract (matters: Rand32 shares one global sequence, so a wrong
+    // count shifts every later draw in the game). N = wi->m_TotalWeight,
+    // W = wi->m_WaveIndex, which seeds item.m_Count2:
+    //   isLast              -> 1 draw
+    //   policy 5/95/35/65   -> 1 + N draws
+    //   policy 50 (balance) -> 1 + max(0, N - max(0, W-1)) draws; the balance arm
+    //                          picks the trailing side outright, with no draw.
+    //
+    // DEAD IN v1.6.1: the sole caller, WaveManager::SetupWaveQue @0x00123458, has no
+    // xrefs, so this never runs today. See the reachability note in WaveModifier.cpp.
     void AddWave(WaveInfo* wi, bool isLast);
 
-    // WaveQue::PopWave — binary @ 0x00123258.
+    // WaveQue::PopWave — v1.6.1 @0x0012cfbc.
     // Pops front of m_Items into *out. Returns true if an item was available.
     bool PopWave(WaveQueItem* out);
 

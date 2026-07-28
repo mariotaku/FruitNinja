@@ -116,15 +116,34 @@ int PROBABILITY_OVERIDE::GetType() {
 }
 
 // ----------------------------------------------------------------------------
-// WaveQue methods — binary @ 0x00124334 / 0x00123258 / 0x00124464 / 0x00121b20
+// WaveQue methods — v1.6.1 @0x0012d014 / 0x0012cfbc / 0x0012d1d0 / 0x0012ce8c
 // Only used in gameMode==2 (Survival/Combo). Classic/Arcade never call these.
+//
+// REACHABILITY (v1.6.1): WaveManager::SetupWaveQue @0x00123458 is the sole caller
+// of AddWave (6 call sites) and itself has ZERO xrefs in the image — only an
+// exported-symbol entry, no bl and no data reference. So AddWave cannot execute in
+// v1.6.1 and burns no Math::g_random draws today. Do NOT "revive" it as a live bug;
+// it only matters if a caller is restored (the Combo/Survival wave-que mode —
+// combowavelist.xml / survivalwavelist.xml do ship). Kept binary-faithful anyway
+// because Rand32 draws off a shared global sequence: a wrong DRAW COUNT here would
+// shift every later draw in the game the moment a caller returns.
 // ----------------------------------------------------------------------------
 
-// WaveQue::AddWave — binary @ 0x00124334
+// ASM-spec v1.6.1 WaveQue::AddWave @0x0012d014.
+// The policy roll (Rand32(100) @0x0012d030..) is UNCONDITIONAL — one draw always.
+// Per-slot draw counts, N = wi->m_TotalWeight, W = wi->m_WaveIndex:
+//   isLast (policy -3/-4, alternating)  -> exactly 1 draw
+//   policy in {5,95,35,65}              -> 1 + N
+//   policy == 50 (the balance path)     -> 1 + max(0, N - max(0, W-1))
+// Rand32's state advance is independent of its range argument, so the range only
+// changes the value, never the count.
 void WaveQue::AddWave(WaveInfo* wi, bool isLast) {
     Math::Random& rng = WaveManager::GetInstance()->m_Random;
     WaveQueItem item;
-    item.m_Count2 = wi->m_WaveIndex;
+    item.m_Count0 = 0;
+    item.m_Count1 = 0;
+    item.m_Count2 = wi->m_WaveIndex;  // +0x68 seed; non-zero for every wave but #0
+    item.m_Fraction = 0.5f;
 
     // Roll a policy code that controls alternating normal/random spawner-op assignment.
     int policy;
@@ -139,9 +158,6 @@ void WaveQue::AddWave(WaveInfo* wi, bool isLast) {
         else                   policy = 0x32;
     }
 
-    int counter1 = 0;  // count of op=1 assignments
-    int counter2 = 0;  // count of op=2 assignments
-
     for (int i = 0; i < wi->m_TotalWeight; ++i) {
         int op;
         if (policy == -4) {
@@ -150,23 +166,38 @@ void WaveQue::AddWave(WaveInfo* wi, bool isLast) {
         } else if (policy == -3) {
             policy = -4;
             op = 1;
-        } else if (policy == 0x32) {
-            int diff = counter1 - counter2;
-            if (diff > 1)       op = 2;
-            else if (diff < -1) op = 1;
-            else                op = (rng.Rand32(2) == 0) ? 1 : 2;
         } else {
-            uint32_t r2 = rng.Rand32(100);
-            op = ((uint32_t)policy < r2) ? 1 : 2;
+            // Balance path: while the two counters are more than one apart the side
+            // that is behind is chosen outright — NO RNG draw. m_Count2 carries the
+            // wave-index seed, so early waves skip up to W-1 draws.
+            int diff = item.m_Count1 - item.m_Count2;
+            if (diff < 0) diff = -diff;
+            if (policy == 0x32 && diff > 1) {
+                op = (item.m_Count1 < item.m_Count2) ? 1 : 2;
+            } else {
+                // Shared tail @0x0012d124 — also the tie case; there is no
+                // separate tie handler and no Rand32(2) in the binary.
+                uint32_t r2 = rng.Rand32(100);
+                op = (r2 > (uint32_t)policy) ? 1 : 2;
+            }
+        }
+        // Binary increments (&item.m_Count0)[op] BEFORE the push_back (0x0012d154-64).
+        switch (op) {
+            case 0: ++item.m_Count0; break;
+            case 1: ++item.m_Count1; break;
+            case 2: ++item.m_Count2; break;
         }
         item.m_SlotList.push_back(op);
-        if (op == 1) ++counter1; else ++counter2;
     }
+
+    // Only the non-alternating policies overwrite the 0.5f init.
+    if (policy >= -1)
+        item.m_Fraction = (float)item.m_Count1 / (float)wi->m_TotalWeight;
 
     m_Items.push_back(item);
 }
 
-// WaveQue::PopWave — binary @ 0x00123258
+// WaveQue::PopWave — v1.6.1 @0x0012cfbc
 bool WaveQue::PopWave(WaveQueItem* out) {
     if (m_Items.begin() == m_Items.end())
         return false;
