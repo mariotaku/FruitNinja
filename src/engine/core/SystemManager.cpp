@@ -50,6 +50,18 @@ void SystemManager::Init() {
     uint32_t seed = (uint32_t)(std::time(0) ^
         (uint32_t)std::chrono::high_resolution_clock::now().time_since_epoch().count());
 #endif
+    // Consequence of the above (both arms): the global stream Math::g_Random is
+    // seeded from a per-launch-varying value, so NO test can assert on a
+    // g_Random-derived value and stay green -- not on a spawn sequence, a draw
+    // count, a coin flip, or any subsystem RNG reseeded from it (e.g.
+    // WaveManager::Reset does m_Random.Seed(Math::g_Random.Rand32(0)), which
+    // overrides any seed a test set beforehand). That is deliberate: the binary
+    // varies per launch too, and making the port reproducible would itself be a
+    // divergence. So RNG fidelity in this port is established by STATIC RE
+    // against the binary -- matching draw counts, argument ranges, and call
+    // order at each Rand call site -- and NOT by tests. Any test that appears to
+    // pin RNG behaviour is either pinning a value it forced by hand, or is not
+    // actually asserting on the random result.
     Math::SeedGlobalRng(seed);
     // Defunct/no-op: _RetrieveDeviceID (v1.6.1 @0x0022e3be) confirmed `return 0;` in binary -- correctly omitted.
 }

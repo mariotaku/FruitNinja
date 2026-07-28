@@ -1,4 +1,10 @@
-// test_screenshot -- per-screen golden-screenshot driver.
+// test_screenshot -- per-screen screenshot CAPTURE driver.
+//
+// Capture-only: it writes a PNG and exits. No reference image is loaded and
+// nothing is compared, so a green run means "the screen booted and drew",
+// not "the output matches a reference". The PNGs are for human eyeballing.
+// (The suite's only real golden comparison is tests/test_renderer.cpp
+// against tests/golden/renderer/.)
 //
 // Usage: test_screenshot <screen> [--interactive|--screenshot|--headless]
 //                                  [--content=<key>] [--lang=<code>]
@@ -130,7 +136,7 @@ int main(int argc, char* argv[]) {
     const char* langArg = h.Opt("lang", "default");
 
     // When --debug-textbounds is set, redirect the output label so the overlay
-    // screenshot goes to a separate path and doesn't overwrite the normal golden.
+    // screenshot goes to a separate path and doesn't overwrite the normal capture.
     // Otherwise, an explicit --content= for the bonus screen builds a
     // "bonus/<content>_<lang>" label; no --content keeps "bonus/default" verbatim.
     char contentLabelBuf[128];

@@ -1,8 +1,14 @@
 // test_wave_timeline -- fruit-spawn timeline diagnostic.
 //
-// Boots the game headless in the chosen mode, seeds WaveManager::m_Random with a
-// fixed seed for determinism, fires PrepareForLevelStart, then drives N sim-frames
-// (default 3600 = 60s at 1/60) and logs what spawns each simulated second.
+// Boots the game headless in the chosen mode, fires PrepareForLevelStart, then
+// drives N sim-frames (default 3600 = 60s at 1/60) and logs what spawns each
+// simulated second.
+//
+// NOT deterministic. The --seed value is applied to WaveManager::m_Random below,
+// but PrepareForLevelStart -> WaveManager::Reset immediately reseeds m_Random
+// from the wall-clock-seeded global stream, so every run draws a different
+// timeline. Nothing here asserts on spawn content, so that is not a problem --
+// but do not treat the log as a reproducible baseline.
 //
 // Output format:
 //   MM:SS: <comma-separated spawn names this second>
@@ -11,8 +17,12 @@
 // SUMMARY block at end shows total fruit, total bombs, total super-fruit, and an
 // explicit "SUPER-FRUIT SPAWNED: <N>" line for grepping.
 //
+// The entire log + summary is printed to stdout and compared against nothing:
+// this is a human-readable diagnostic, NOT a regression check.
+//
 // Returns 0 if the pipeline ran and at least 1 fruit spawned.
 // Returns 1 if setup failed or zero fruit ever spawned (broken pipeline).
+// That liveness check is the only assertion in the test.
 //
 // Usage:
 //   test_wave_timeline                         -- classic, 3600 frames, seed 12345
@@ -20,7 +30,7 @@
 //   test_wave_timeline --mode=zen              -- zen mode
 //   test_wave_timeline --mode=combo            -- combo mode
 //   test_wave_timeline --frames=7200           -- 120 seconds
-//   test_wave_timeline --seed=99               -- different deterministic seed
+//   test_wave_timeline --seed=99               -- (see note above: overwritten by Reset)
 //   test_wave_timeline --interactive           -- visible window (watch it play)
 
 #include "test_harness.h"
@@ -152,7 +162,11 @@ int main(int argc, char* argv[]) {
     std::printf("=== WAVE TIMELINE: mode=%s seed=%d frames=%d (%ds) waveInfos=%d ===\n",
                 ModeName(gameMode), seed, frameCount, frameCount / 60, modeWaveCount);
 
-    // Seed the WaveManager RNG before the game-start call.
+    // Seed the WaveManager RNG before the game-start call. NOTE: this does NOT
+    // make the run reproducible -- PrepareForLevelStart below calls
+    // WaveManager::Reset, which reseeds m_Random from Math::g_Random.Rand32(0)
+    // (wall-clock-seeded), discarding this value. Kept because it is harmless
+    // and mirrors the intent, but nothing downstream depends on it.
     wm->m_Random.Seed((unsigned int)seed);
 
     // Replicate test_spawn_lifecycle's setup: clear menu items, advance
@@ -210,6 +224,8 @@ int main(int argc, char* argv[]) {
     int totalBombs = 0;
     int totalSuper = 0;
 
+    // Everything printed by this loop is a stdout diagnostic for human reading;
+    // it is not captured, not diffed against a baseline, and cannot fail the test.
     for (int frame = 1; frame <= frameCount; ++frame) {
         h.RunHeadless(1);
 

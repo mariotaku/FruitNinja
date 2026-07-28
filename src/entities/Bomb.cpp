@@ -172,8 +172,10 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* scaleOrNull) {
     m_SpawnTimer = SPAWN_TIMER_INIT;
 
     // Binary: loop x2 assigns both X and Y axes (rand 1..7 vel, rand 0..0x166 rot),
-    // drawn from the shared seeded WaveManager::m_Random (not libc rand()) so bomb
-    // spawns stay in sync with SeedGlobalRng-driven determinism.
+    // drawn from the shared WaveManager::m_Random (not libc rand()) so bomb spawns
+    // advance the same stream, in the same order, as every other wave-system draw.
+    // That stream is reseeded per level from the wall-clock-seeded global, so the
+    // values are not reproducible -- only the draw count and order are fixed.
     // ASM-spec v1.6.1 Bomb::Init @ 0x1d69e0: loop at 0x1d6b28-0x1d6b60 draws
     // Rand32(7), Rand32(0x167), Rand32(7), Rand32(0x167) in order via WaveManager's
     // shared Math::Random (not libc rand()).

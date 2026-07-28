@@ -767,8 +767,14 @@ set_tests_properties(arcade_spawn_real PROPERTIES TIMEOUT 120)
 
 # Wave-timeline diagnostic. Drives the full spawn pipeline for N frames and
 # logs per-second spawn events (fruit type, bombs, super-fruit) with wave
-# transitions. Returns 0 if >0 fruit spawned; 1 if the pipeline is broken.
-# Seed is fixed (12345) for determinism. Modes: classic/arcade/zen/combo.
+# transitions. Modes: classic/arcade/zen/combo.
+# NOT deterministic, and asserts nothing about the spawn content: the test's
+# wm->m_Random.Seed(12345) call is immediately overwritten by the following
+# PrepareForLevelStart -> WaveManager::Reset, which reseeds from the
+# wall-clock-seeded global (WaveManager.cpp: m_Random.Seed(Math::g_Random.Rand32(0))).
+# The per-second spawn log goes to stdout and is compared against nothing.
+# The ONLY assertion is pipeline liveness: returns 1 if setup failed or if
+# zero fruit spawned across the whole run, 0 otherwise.
 # Timeouts: classic/arcade 90s, zen 120s (mode game-length + 30s slack).
 fn_add_game_test(test_wave_timeline test_wave_timeline.cpp)
 add_test(NAME wave_timeline_classic COMMAND test_wave_timeline --mode=classic --frames=3600)
@@ -794,9 +800,23 @@ fn_add_game_test(test_global_probability test_global_probability.cpp)
 add_test(NAME global_probability COMMAND test_global_probability)
 set_tests_properties(global_probability PROPERTIES TIMEOUT 60)
 
-# Golden-screenshot driver. Boots a named screen to its stable fully-drawn
-# state and captures the framebuffer to tmp/test/screenshots/<screen>_screen.png.
-# Each ctest entry runs with --screenshot so the PNG is written automatically.
+# Screenshot CAPTURE driver -- capture-only, NOT a golden comparison. Boots a
+# named screen to its stable fully-drawn state and writes the framebuffer to
+# tmp/test/screenshots/<screen>_screen.png. Each ctest entry runs with
+# --screenshot so the PNG is written automatically.
+# TestHarness::ScreenshotPng does glReadPixels -> IMG_SavePNG -> return true:
+# no golden is loaded, nothing is diffed, no tolerance is applied. So every
+# screenshot_* case here passes whenever boot succeeds and its fixture's
+# pointer checks hold -- "screenshot_* green" means "the game booted and drew
+# something", NOT "the image matches a reference". The PNGs exist to be
+# eyeballed by a human, which is deliberate and useful; just don't read them
+# as visual regression coverage.
+# The ONLY real golden comparison in this suite is tests/golden/renderer/
+# (8 committed PNGs, tests/test_renderer.cpp, per-pixel tolerance compare) --
+# a 64x64 FBO of 2D primitives with no game init and no RNG involved.
+# (The scene_* tests are a separate thing again: they DO assert on real
+# outcomes -- e.g. scene_coin asserts a 6-particle coin_collect burst,
+# scene_fruit_splat asserts drawn pixels -- so they are not capture-only.)
 fn_add_game_test(test_screenshot test_screenshot.cpp)
 add_test(NAME screenshot_bonus    COMMAND test_screenshot bonus    --screenshot)
 add_test(NAME screenshot_gameover COMMAND test_screenshot gameover --screenshot)

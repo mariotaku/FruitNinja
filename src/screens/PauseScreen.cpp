@@ -614,8 +614,9 @@ void PauseScreen::RetryGameCallback() {
                                     1, true, true);
     }
     // v1.6.1 PauseScreen::RetryGameCallback @0x001a5800: re-seed Mortar::Random
-    // g_Random with the frame counter so retried runs are deterministic-from-
-    // frame-state rather than boot-clock-seeded. g_Random @ 0x0026C8B0.
+    // g_Random from the frame counter, so a retried run draws a fresh stream
+    // instead of continuing the previous attempt's. NOT reproducible -- the seed
+    // is whatever frame the player happened to hit Retry on. g_Random @ 0x0026C8B0.
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
     game_work.m_bResumeSnapshotPresent = 0;
     if (game_work.m_SaveData) game_work.m_SaveData->ClearTotals();

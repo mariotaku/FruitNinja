@@ -592,6 +592,9 @@ struct TestHarness {
     // by capturing the live framebuffer. PNG is the ONE framebuffer-capture format.
     // The name (nameOverride or label) may contain a '/' for suite/case nesting.
     // Uses SDL2_image IMG_SavePNG. Returns true on success.
+    // CAPTURE ONLY: no reference image is loaded, nothing is diffed, no tolerance
+    // is applied. A `true` return means "the PNG was written", never "the frame
+    // matches a golden". Tests built on this assert only that boot/draw ran.
     bool ScreenshotPng(const char* nameOverride = NULL) {
         unsigned char* pixels = _ReadPixelsFlipped(NULL, NULL);
         if (!pixels) return false;
