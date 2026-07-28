@@ -470,13 +470,17 @@ void GameOverScreen::Initialise(const char* modeName, int param2, float param3,
         int score = GetCurrentScore(0);
         int hi    = GetCurrentModeHighscore();
         if (score > hi / 2) {
-            m_ExpressionIdx = (rand() % 2) + 2;
+            // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90 (outlined
+            // helper T.1285 @0x00185024): Math::g_random.Rand32(2) x1, + 2
+            m_ExpressionIdx = (int)Math::g_Random.Rand32(2) + 2;
         }
     }
 
     // 13. BgPattern randomise
     if (bgPatternIdx < 1) {
-        m_BgPatternIdx = (rand() % 3) + 1;
+        // ASM-spec v1.6.1 GameOverScreen::Initialise @0x00187c90 (outlined
+        // helper T.1285 @0x00185024): Math::g_random.Rand32(3) x1, + 1
+        m_BgPatternIdx = (int)Math::g_Random.Rand32(3) + 1;
     }
 
     // 14.

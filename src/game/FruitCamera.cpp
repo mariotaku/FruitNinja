@@ -8,6 +8,7 @@
 #include "render/DisplayManager.h"
 #include "render/Layout.h"
 #include "math/MathUtil.h"
+#include "math/Random.h"
 #include <cmath>
 #include <cstdlib>
 
@@ -312,7 +313,9 @@ void FruitCamera::UpdateShake(float dt) {
         float dx = m_Target.x - m_ShakeDir.x;
         float dy = m_Target.y - m_ShakeDir.y;
         if (dx * dx + dy * dy < 16.0f) {
-            m_ShakeAngle += 0x6388 + (uint16_t)(rand() % 0x38E0);
+            // ASM-spec v1.6.1 FruitCamera::UpdateShake @0x001edc04 (inlined draw
+            // @0x001edd64): Math::g_random.Rand32(0x38E0) x1, only when distSq < 16.
+            m_ShakeAngle += 0x6388 + (uint16_t)Math::g_Random.Rand32(0x38E0);
 
             float ratio = (m_ShakeIntensityInit > 0.0f) ?
                 (m_ShakeIntensity / m_ShakeIntensityInit) : 0.0f;

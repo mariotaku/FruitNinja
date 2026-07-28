@@ -174,8 +174,8 @@ void Coin::InitCoin(_Vector3<float> pos_in, _Vector3<float> target, uint16_t ang
     m_State      = 0;
     m_CoinValue  = coinValue;
     // Speed formula: (500 + rand(524287)/524287 * 550) * 0.66
-    // Binary uses Rand32(0x7FFFF) — same as rand() % 524288.
-    float randFrac = (float)(rand() % 524288) / 524287.0f;
+    // ASM-spec v1.6.1 Coin::InitCoin @0x001d7d84: Math::g_random.Rand32(0x7FFFF) x1
+    float randFrac = (float)Math::g_Random.Rand32(0x7FFFF) / 524287.0f;
     m_Speed      = (COIN_SPEED_BASE + randFrac * COIN_SPEED_RAND) * COIN_SPEED_SCALE;
     pos          = pos_in;
     m_Timer      = -delay;

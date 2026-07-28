@@ -13,6 +13,7 @@
 #include "network/P2PMessageHandling.h"
 #include "math/Matrix44.h"
 #include "math/MathUtil.h"
+#include "math/Random.h"
 #include "render/MatrixManager.h"
 #include "render/Renderer.h"
 #include "asset/Mesh.h"
@@ -634,8 +635,10 @@ void MissControl::Update(float dt) {
             if (distSq >= sepRadiusSq) continue;
             float dist = 1.0f;
             if (distSq <= 0.0f) {
-                // random direction when coincident (binary uses RandUint(0xff3a) -> SinIdx/CosIdx)
-                uint16_t a = (uint16_t)(rand() % 0xff3a);
+                // random direction when coincident.
+                // ASM-spec v1.6.1 MissControl::Update @0x0019e15c (outlined helper
+                // T.892 @0x0019df0c): Math::g_random.Rand32(0xff3a) x1, only when distSq <= 0.
+                uint16_t a = (uint16_t)Math::g_Random.Rand32(0xff3a);
                 dx = SinIdx(a);
                 dy = CosIdx(a);
             } else {
@@ -758,8 +761,10 @@ void MissControl::Draw(float* hudScaleRaw) {
     // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
     // binary @ 0x00151f94..0x00151fe0: drawPos = Vec3(rx-4, ry-4, 0); --m_FlashTimer
     if (m_FlashTimer > 0) {
-        int rx = (int)(uint8_t)(rand() % 8);
-        int ry = (int)(uint8_t)(rand() % 8);
+        // ASM-spec v1.6.1 MissControl::Draw @0x0019f54c (outlined helper
+        // T.892 @0x0019df0c): Math::g_random.Rand32(8) x2 -> (rx-4, ry-4, 0)
+        int rx = (int)(uint8_t)Math::g_Random.Rand32(8);
+        int ry = (int)(uint8_t)Math::g_Random.Rand32(8);
         drawPos.x = (float)(rx - 4);
         drawPos.y = (float)(ry - 4);
         drawPos.z = 0.0f;  // DAT_00152294 = 0.0

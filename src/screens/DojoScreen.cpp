@@ -36,6 +36,7 @@
 #include "math/Matrix44.h"
 #include "math/_Vector2.h"
 #include "math/Colour.h"
+#include "math/Random.h"
 #include "engine/util/StringTable.h"
 #include "render/Layout.h"
 #include <cstdio>
@@ -756,10 +757,13 @@ void DojoScreen::PlayCallback() {
     m_State = 6;
 
     // 3. Fling the back-bomb with random rightward velocity.
+    // ASM-spec v1.6.1 DojoScreen::QuitCallback @0x0016b980 (outlined helper
+    // T.1153 @0x00169fb4): Math::g_random.RandF(5.0) x2, GATED -- unlike its
+    // Shop/About siblings this one keeps the binary's own null checks.
     if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
         Fruit* piece = m_pBackButton->m_pTrackedFruit;
-        const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        const float r1 = Math::g_Random.RandF(5.0f);
+        const float r2 = Math::g_Random.RandF(5.0f);
         // ASM-spec v1.6.1 *Callback (AboutScreen::QuitGameCallback @0x0015c914 strb [+0x80];
         //   Dojo Shop/About/Play via T.1166 @0x0016a3ec): enable bomb physics so gravity +
         //   AccelGrowth fling the back-bomb off-screen deterministically -> KillBomb ->
@@ -784,10 +788,13 @@ void DojoScreen::ShopCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 2, "ShopCallback @ 0x00137864");
     m_State = 2;
 
+    // ASM-spec v1.6.1 DojoScreen::ShopCallback @0x0016a3f8 (outlined helper
+    // T.1153 @0x00169fb4): Math::g_random.RandF(5.0) x2, UNGATED -- the binary
+    // has no null checks here, so the draws stay outside the port's guard.
+    const float r1 = Math::g_Random.RandF(5.0f);
+    const float r2 = Math::g_Random.RandF(5.0f);
     if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
         Fruit* piece = m_pBackButton->m_pTrackedFruit;
-        const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         // ASM-spec v1.6.1 *Callback (AboutScreen::QuitGameCallback @0x0015c914 strb [+0x80];
         //   Dojo Shop/About/Play via T.1166 @0x0016a3ec): enable bomb physics so gravity +
         //   AccelGrowth fling the back-bomb off-screen deterministically -> KillBomb ->
@@ -812,10 +819,13 @@ void DojoScreen::AboutCallback() {
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 3, "AboutCallback @ 0x001378e0");
     m_State = 3;
 
+    // ASM-spec v1.6.1 DojoScreen::AboutCallback @0x0016a48c (outlined helper
+    // T.1153 @0x00169fb4): Math::g_random.RandF(5.0) x2, UNGATED -- the binary
+    // has no null checks here, so the draws stay outside the port's guard.
+    const float r1 = Math::g_Random.RandF(5.0f);
+    const float r2 = Math::g_Random.RandF(5.0f);
     if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
         Fruit* piece = m_pBackButton->m_pTrackedFruit;
-        const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         // ASM-spec v1.6.1 *Callback (AboutScreen::QuitGameCallback @0x0015c914 strb [+0x80];
         //   Dojo Shop/About/Play via T.1166 @0x0016a3ec): enable bomb physics so gravity +
         //   AccelGrowth fling the back-bomb off-screen deterministically -> KillBomb ->

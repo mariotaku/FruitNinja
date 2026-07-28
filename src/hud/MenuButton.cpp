@@ -63,9 +63,15 @@ static Mortar::SmartPtr<Mortar::Texture> s_TexScratchs;
 static Mortar::SmartPtr<Mortar::Texture> s_TexBlurryBacking;
 static Mortar::SmartPtr<Mortar::Texture> s_TexNewItem;
 
-// Matches ClearMenuItems v1.6.1 @0x001cc6d0 -- binary-exact.
+// Port-side stand-in for the compiler-OUTLINED per-TU RandF helpers the binary
+// emits around Math::g_random (reached via GOT, which is why a `bl Rand32` scan
+// misses these call sites):
+//   T.1661 @0x001cc5ec -- ClearMenuItems @0x001cc6d0
+//   T.1164 @0x0019b414 -- MenuButton::Draw @0x0019c2e4 / MenuButton::Remove
+// ASM-spec v1.6.1 ClearMenuItems @0x001cc6d0: Math::g_random.RandF(10.0),
+// RandF(5.0) x2 per unsliced fruit and x2 per enabled bomb.
 static float RandScaled(float s) {
-    return ((float)rand() / (float)RAND_MAX) * s;
+    return Math::g_Random.RandF(s);
 }
 
 void ClearMenuItems() {
@@ -978,8 +984,11 @@ void MenuButton::Draw(float* hudScaleRaw) {
 
         _Vector3<float> jitter = _Vector3<float>::Zero();
         if (m_ShakeTimer > 0.0f) {
-            jitter += _Vector3<float>(((float)(rand() % 600) / 100.0f) - 3.0f,
-                                      ((float)(rand() % 600) / 100.0f) - 3.0f, 0.0f);
+            // ASM-spec v1.6.1 MenuButton::Draw @0x0019c2e4 (outlined helper
+            // T.1164 @0x0019b414): Math::g_random.RandF(6.0) x2 -> (r1-3, r2-3, 0)
+            const float jx = Math::g_Random.RandF(6.0f) - 3.0f;
+            const float jy = Math::g_Random.RandF(6.0f) - 3.0f;
+            jitter += _Vector3<float>(jx, jy, 0.0f);
         }
         mat.GlobalTranslate44(GetAdjustedPos() + jitter);
         mm.GetWorldStack().SetCurrentMatrix(mat);

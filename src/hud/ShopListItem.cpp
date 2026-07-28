@@ -24,6 +24,7 @@
 #include "engine/math/Colour.h"
 #include "engine/math/_Vector3.h"
 #include "engine/math/MathUtil.h"
+#include "engine/math/Random.h"
 #include "asset/TextureManager.h"
 #include "engine/util/StringTable.h"
 #include "engine/util/Localisation.h"
@@ -38,9 +39,13 @@
 #include "debug/Logger.h"
 #include "hud/IngamePopup.h"
 
-// Binary: RandFloat5_GameTask @ 0x0015c658. Returns [0, 5).
+// Port-side stand-in for the compiler-OUTLINED per-TU helper the binary emits
+// around Math::g_random (T.1421 @0x001b19cc; also RandFloat5_GameTask
+// @0x0015c658 in the GameTask TU). Returns [0, 5).
+// ASM-spec v1.6.1 ShopListItem::Move @0x001b54b0 (T.1421 @0x001b19cc):
+//   Math::g_random.RandF(5.0) x2 -> icon offset -2.5f, only when m_LockFlashAlpha > 0.
 static float RandFloat5() {
-    return ((float)rand() / (float)RAND_MAX) * 5.0f;
+    return Math::g_Random.RandF(5.0f);
 }
 
 // File-static colour cache. Mirrors static_block+0x8C in the binary.

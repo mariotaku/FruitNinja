@@ -28,6 +28,7 @@
 #include "render/FontTTFRegistry.h"
 #include "math/Colour.h"
 #include "math/_Vector2.h"
+#include "math/Random.h"
 #include "audio/GameSound.h"
 #include "util/StringTable.h"
 #include "render/Layout.h"
@@ -892,10 +893,14 @@ void AboutScreen::QuitGameCallback() {
         game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     }
     m_State = 2;
+    // ASM-spec v1.6.1 AboutScreen::QuitGameCallback @0x0015c914 (outlined helper
+    // T.1155 @0x00159fc4): Math::g_random.RandF(5.0) x2, UNGATED -- the binary
+    // draws before it ever touches m_pBackButton, so the two draws must stay
+    // outside the port's null guard or the shared stream desyncs.
+    const float r1 = Math::g_Random.RandF(5.0f);
+    const float r2 = Math::g_Random.RandF(5.0f);
     if (m_pBackButton && m_pBackButton->m_pTrackedFruit) {
         Fruit* piece = m_pBackButton->m_pTrackedFruit;
-        const float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        const float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
         // ASM-spec v1.6.1 *Callback (AboutScreen::QuitGameCallback @0x0015c914 strb [+0x80];
         //   Dojo Shop/About/Play via T.1166 @0x0016a3ec): enable bomb physics so gravity +
         //   AccelGrowth fling the back-bomb off-screen deterministically -> KillBomb ->

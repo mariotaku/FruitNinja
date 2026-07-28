@@ -31,6 +31,7 @@
 #include "asset/Texture.h"
 #include "util/SmartPtr.h"
 #include "math/Matrix44.h"
+#include "math/Random.h"
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
@@ -94,9 +95,9 @@ void BombBlast::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {
     // but harmless and matches the binary's explicit Init sequence.
     flags &= ~ENT_SKIP_MASK;
 
-    // Random 16-bit angle. Binary uses Rand32(0x7FFFF) / 524288.0f * 360 * 182,
-    // which compresses the 19-bit random into the 0..65535 angle range.
-    m_Angle = (uint16_t)(rand() & 0xFFFF);
+    // Random 16-bit angle: the 19-bit draw is scaled into the 0..65535 index range.
+    // ASM-spec v1.6.1 BombBlast::Init @0x001d58f8: Math::g_random.Rand32(0x7FFFF) x1
+    m_Angle = (uint16_t)((float)Math::g_Random.Rand32(0x7FFFF) / 524287.0f * 360.0f * 182.0f);
 
     const float rad = (float)m_Angle * 6.2831853f / 65536.0f;
     const float c = cosf(rad);

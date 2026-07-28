@@ -31,6 +31,7 @@
 #include "render/Layout.h"
 #include "math/Colour.h"
 #include "math/MathUtil.h"
+#include "math/Random.h"
 #include "debug/Logger.h"
 #include "engine/util/StringTable.h"
 #include <cstdlib>
@@ -832,8 +833,12 @@ void ShopScreen::QuitShopCallback() {
     // (Fruit+0x80 unconfirmed, no reader). Port omits the write.
     if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
         Fruit* piece = m_pBuyButton->m_pTrackedFruit;
-        float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        // ASM-spec v1.6.1 ShopScreen::QuitShopCallback @~0x001b2ef0 (ADDRESS
+        // UNCONFIRMED -- helper and shape confirmed from sibling call sites,
+        // this caller was not individually decompiled) via the outlined helper
+        // T.1421 @0x001b19cc: Math::g_random.RandF(5.0) x2
+        float r1 = Math::g_Random.RandF(5.0f);
+        float r2 = Math::g_Random.RandF(5.0f);
         piece->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
     }
 
@@ -1253,8 +1258,12 @@ void ShopScreen::Update(float dt) {
             // (Fruit+0x80 unconfirmed, no reader). Port omits the write.
             if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
                 Fruit* piece = m_pBuyButton->m_pTrackedFruit;
-                float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-                float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+                // ASM-spec v1.6.1 ShopScreen::Update state 3 @~0x001b321c (ADDRESS
+                // UNCONFIRMED -- helper and shape confirmed from sibling call sites,
+                // this arm was not individually decompiled) via the outlined helper
+                // T.1421 @0x001b19cc: Math::g_random.RandF(5.0) x2
+                float r1 = Math::g_Random.RandF(5.0f);
+                float r2 = Math::g_Random.RandF(5.0f);
                 piece->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
                 // Binary: TutorialControl::ResetTutePos(tute, 0)
                 if (game_work.m_TutorialControl)
@@ -1317,8 +1326,12 @@ void ShopScreen::Update(float dt) {
         // port omits the write.
         if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
             Fruit* piece = m_pBuyButton->m_pTrackedFruit;
-            float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-            float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+            // ASM-spec v1.6.1 ShopScreen::Update states 5-6 @~0x001b321c (ADDRESS
+            // UNCONFIRMED -- helper and shape confirmed from sibling call sites,
+            // this arm was not individually decompiled) via the outlined helper
+            // T.1421 @0x001b19cc: Math::g_random.RandF(5.0) x2
+            float r1 = Math::g_Random.RandF(5.0f);
+            float r2 = Math::g_Random.RandF(5.0f);
             piece->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
             // Binary: TutorialControl::ResetTutePos(tute, 0)
             if (game_work.m_TutorialControl)
@@ -1780,8 +1793,10 @@ void ShopScreen::ConfirmCallback() {
     // flag QuitShopCallback also writes and skips).
     if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
         Fruit* fruit = m_pBuyButton->m_pTrackedFruit;
-        float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        // ASM-spec v1.6.1 ShopScreen::ConfirmCallback @0x001b2388 (outlined helper
+        // T.1421 @0x001b19cc): Math::g_random.RandF(5.0) x2
+        float r1 = Math::g_Random.RandF(5.0f);
+        float r2 = Math::g_Random.RandF(5.0f);
         fruit->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
@@ -1802,8 +1817,10 @@ void ShopScreen::CancelCallback() {
     // flag ConfirmCallback also writes and skips).
     if (m_pBuyButton && m_pBuyButton->m_pTrackedFruit) {
         Fruit* fruit = m_pBuyButton->m_pTrackedFruit;
-        float r1 = ((float)rand() / (float)RAND_MAX) * 5.0f;
-        float r2 = ((float)rand() / (float)RAND_MAX) * 5.0f;
+        // ASM-spec v1.6.1 ShopScreen::CancelCallback @0x001b244c (outlined helper
+        // T.1421 @0x001b19cc): Math::g_random.RandF(5.0) x2
+        float r1 = Math::g_Random.RandF(5.0f);
+        float r2 = Math::g_Random.RandF(5.0f);
         fruit->vel = _Vector3<float>(r1 + FLING_VEL_BASE, -r2, 0.0f);
         if (game_work.m_TutorialControl) {
             game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
