@@ -142,17 +142,22 @@ static const float SLICE_CLAMP_MAX     = 8.0f;
 //                         m_CollisionScale = 1.0 @ 0x3f800000.
 static const float COL_RADIUS_FACTOR = 0.52f;   // DAT_00176340
 
-// Slice juice-burst tuning, resolved from the binary via read_memory.
-// Critical / special slices set splatCount to a configured global rather than
-// the base Rand32(2)+2. The global *(GOT+DAT_00177060) reads 10 at runtime.
-static const int   kSliceJuiceSplatCount = 10;   // *0x001F3E20
-// Per-splat taper applied after MakeSplat (TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0;
-// was: 0x00177070..0x001770f0 -- stale v1.5.x):
+// Slice juice-burst tuning. The three critical-splat knobs are game globals
+// written by Fruit::LoadInfo (v1.6.1 @0x001e1084) from the <critical> element
+// of fruitlist.xml, NOT compile-time constants -- their .data initialisers
+// (CRITICAL_SPLATS @0x002d8d38 = 10, CRITICAL_SPLAT_SCALE @0x002d8d3c = 1.5,
+// CRITICAL_SPLAT_SPREAD @0x002d8d40 = 1.2) only exist at link time and are
+// overwritten before any slice runs. Read them through the FruitInfo_Get*
+// accessors: shipped XML gives 15 / 1.25 / 1.25.
+//   splatCount override: both sites (v1.6.1 @0x001dce14 crit, @0x001dce80
+//   special/super) read the SAME global CRITICAL_SPLATS.
+// Per-splat taper applied after MakeSplat:
 //   factor = clamp(1 - (i-2)/splatCount, kSplatTaperMin, 1.0)
-//   m_Vel.z *= factor; and for i > 2 the X/Y velocity and scale get boosted.
-static const float kSplatTaperMin    = 0.3f;     // DAT_0017706c -- TODO: re-RE inner offset vs v1.6.1 Fruit::Slice 0x001dcba0
-static const float kSplatVelXYBoost  = 1.2f;     // *(GOT+DAT_001774b0) @ 0x001F3E28 -- TODO: re-RE inner offset vs v1.6.1 Fruit::Slice 0x001dcba0
-static const float kSplatScaleBoost  = 1.5f;     // *(GOT+DAT_001774b4) @ 0x001F3E24 -- TODO: re-RE inner offset vs v1.6.1 Fruit::Slice 0x001dcba0
+//   m_Vel.z *= factor; past index 2 (gate @0x001dd028) the X/Y velocity
+//   (spread, @0x001dd044) and scale (@0x001dd064) get boosted.
+// kSplatTaperMin IS a genuine instruction-level literal (DAT_001dcf04), so it
+// stays hardcoded.
+static const float kSplatTaperMin    = 0.3f;     // DAT_001dcf04
 
 // ASM-spec v1.6.1 RandomStartAngle @0x001db39c
 void RandomStartAngle(Quaternion& out, bool use2D) {
@@ -1604,7 +1609,11 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
 
 // v1.6.1 Fruit::Slice @0x001dcba0 (body 0x001dcba0-0x001dd4ff): flipSide
 // logic, special-fruit x1.5 impulse, and spin-boost loop on both halves.
-// ASM-verified: 2026-07-25T17:45:50Z v1.6.1 Fruit::Slice @ 0x001dcba0..0x001dd4f8 (asm-inspector)
+// ASM-spec v1.6.1 Fruit::Slice @ 0x001dcba0..0x001dd4f8: the 2026-07-25T17:45:50Z
+// asm-inspector pass over this range PASSED while the splat-count/spread/scale
+// globals were still hardcoded to their pre-XML .data initialisers (10/1.2/1.5),
+// so it did not cover the .data-vs-XML distinction. Verification claim withdrawn;
+// re-earn it with a fresh asm-inspector pass now that the globals are read.
 void Fruit::Slice() {
     m_SliceTimer = 0.0f;
     // ASM-spec v1.6.1 Fruit::Slice @0x001dcba0: top-of-function stores
@@ -1707,12 +1716,11 @@ void Fruit::Slice() {
                  0, (Fruit*)1, pos.z);
         AddSlice(_Vector3<float>(critBase - 60.0f, critLen, 1.0f), pos.x, pos.y,
                  0, (Fruit*)1, pos.z);
-        // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
-        // (was: 0x00176f1e -- stale v1.5.x) -- splatCount = *(int*)(*(GOT+DAT_00177060)),
-        // the configured juice-burst count global (read_memory @ 0x001F3E20 = 10),
-        // NOT splatCount += 2. impulse *= 1.5.
+        // v1.6.1 Fruit::Slice @0x001dce14: splatCount = CRITICAL_SPLATS
+        // (@0x002d8d38), the XML-configured juice-burst count -- NOT
+        // splatCount += 2. impulse *= 1.5.
         impulse *= 1.5f;
-        splatCount = kSliceJuiceSplatCount;  // = 10 (binary DAT @ 0x001F3E20)
+        splatCount = FruitInfo_GetCriticalSplats();
         // v1.6.1 Fruit::Slice @0x001dcba0: single-player crit popup (MissControl::MakeCritical),
         // gated m_bCritical && m_PlayerIdx<2. (No-op until the MissControl pool lands -- GetFree
         // returns nullptr -- but the call-shape is binary-faithful. #132 wrongly stripped this via
@@ -1725,9 +1733,10 @@ void Fruit::Slice() {
     // Special-fruit (baseScore == 0x32 = 50) or super-fruit also gets 1.5x
     // impulse and the configured juice-burst count (v1.6.1 Fruit::Slice
     // @0x001dce54..0x001dce70: ldr +0x314 == 0x32 || ldrb +0x330).
+    // @0x001dce80 reads the SAME CRITICAL_SPLATS global as the crit block.
     if (info->m_Score == 0x32 || info->m_bIsSuperFruit) {
         impulse *= 1.5f;
-        splatCount = kSliceJuiceSplatCount;  // = 10 (binary DAT @ 0x001F3E20)
+        splatCount = FruitInfo_GetCriticalSplats();
     }
 
     // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
@@ -1770,22 +1779,26 @@ void Fruit::Slice() {
         s->MakeSplat(pos, sv, /*m_bParam3=*/false,
                      /*mute=*/info->m_bIsSuperFruit != 0, splatFruitType);
 
-        // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
-        // (was: 0x00177070..0x001770f0 -- stale v1.5.x) -- per-splat post-MakeSplat taper.
-        // The later splats (high i) lose Z velocity and, past index 2, gain
-        // X/Y velocity and scale so the burst spreads outward as it grows.
-        //   factor = clamp(1 - (i-2)/splatCount, 0.3, 1.0)   // 0.3 = DAT_0017706c
+        // Per-splat post-MakeSplat taper. The later splats (high i) lose Z
+        // velocity and, past index 2, gain X/Y velocity and scale so the burst
+        // spreads outward as it grows.
+        //   factor = clamp(1 - (i-2)/splatCount, 0.3, 1.0)   // 0.3 = DAT_001dcf04
         //   m_Vel.z *= factor
-        //   if (i > 2) { m_Vel.x *= 1.2; m_Vel.y *= 1.2; m_Scale *= 1.5 }
+        //   if (i > 2) { m_Vel.x/y *= CRITICAL_SPLAT_SPREAD;
+        //                m_Scale   *= CRITICAL_SPLAT_SCALE }
+        // v1.6.1 Fruit::Slice: `i > 2` gate @0x001dd028, spread mul @0x001dd044,
+        // scale mul @0x001dd064. Both muls read XML-loaded globals
+        // (CRITICAL_SPLAT_SPREAD @0x002d8d40, CRITICAL_SPLAT_SCALE @0x002d8d3c).
         if (s) {
             float factor = 1.0f - (float)(i - 2) / (float)splatCount;
             if (factor <= kSplatTaperMin)      factor = kSplatTaperMin;
             else if (factor >= 1.0f)           factor = 1.0f;
             s->m_Vel.z *= factor;
             if (i > 2) {
-                s->m_Vel.y *= kSplatVelXYBoost;  // *(GOT+DAT_001774b0) = 1.2
-                s->m_Vel.x *= kSplatVelXYBoost;
-                s->m_Scale *= kSplatScaleBoost;  // *(GOT+DAT_001774b4) = 1.5
+                const float spread = FruitInfo_GetCriticalSplatSpread();
+                s->m_Vel.y *= spread;
+                s->m_Vel.x *= spread;
+                s->m_Scale *= FruitInfo_GetCriticalSplatScale();
             }
         }
     }
@@ -2797,12 +2810,15 @@ void MoveFruitZPositionToBack(float& z) {
 // Chunk B: small helpers
 // ============================================================
 
-// ASM-spec v1.6.1 Fruit::CheckFruitDropped @0x001dbf70: trivial body confirmed by decompile.
-// Binary: GameOver(-1,-1.0,0); return 1;
-// Ghidra warned "Removing unreachable block" for 0x001dbfa4/b4/bc/c4 -- the stale v1.5.x
-// per-player live-count gates at 0x00176184 are dead code in v1.6.1. Third arg is 0, not -1.
-void Fruit::CheckFruitDropped() {
+// ASM-spec v1.6.1 Fruit::CheckFruitDropped @0x001dbf70: reads .LANCHOR1+4/+8
+// (@0x002842C0 `_ZL14outOfFruitTime`, .rodata const C.589 = {255,255,255,255}); both > 0
+// so the body folds to GameOver(-1, -1.0f, 0); return true. Third arg is 0, not -1.
+// Unreachable in v1.6.1: the only call site (GameUpdate @0x001cfa90) is gated on
+// IsMultiplayer(), a hard 0. NOT related to miss counting -- that runs through
+// Fruit::Update -> CheckHasGoneOffscreen() -> KillFruit(true).
+bool Fruit::CheckFruitDropped() {
     GameOver(-1, -1.0f, 0);
+    return true;
 }
 
 // ASM-spec v1.6.1 Fruit::NumberOfPowerupFruits @0x001db0ac

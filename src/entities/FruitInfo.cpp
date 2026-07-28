@@ -27,7 +27,7 @@ static float s_BombCollision = 25.0f;  // default from original fruitlist.xml
 // per-FruitInfo). ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084.
 // Defaults match the shipped fruitlist.xml <critical> block so behaviour is
 // sane even before the XML loads.
-static int   s_CriticalNewLifeAt      = 0;
+static int   s_CriticalNewLifeAt      = 100;  // NEW_LIFE_AT @0x002d8d60 .data init; XML omits the attr
 static int   s_CriticalScore          = 10;
 static int   s_CriticalChance         = 50;
 static int   s_CriticalChanceStartInc = 30;
@@ -106,6 +106,9 @@ void FruitInfo_Load(const char* xmlPath)
         critElem.QueryIntAttribute("splats",            &s_CriticalSplats);
         critElem.QueryFloatAttribute("scale",           &s_CriticalSplatScale);
         critElem.QueryFloatAttribute("spread",          &s_CriticalSplatSpread);
+        // CRITICAL_DISAPPEAR_SPEED @0x002d8d44 is parsed here and then never
+        // read: zero READ xrefs anywhere in v1.6.1 .text. Kept for load-path
+        // fidelity -- do not invent a consumer.
         critElem.QueryFloatAttribute("disappear_speed", &s_CriticalDisappearSpeed);
 
         const char* colourStr = critElem.Attribute("colour");
