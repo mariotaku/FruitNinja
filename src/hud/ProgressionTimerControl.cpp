@@ -1,13 +1,13 @@
-// Analysed: 2026-05-04T00:00
-//
 // ProgressionTimerControl : HUDControl3d
-// Binary CU range: 0x001579f4..0x00157dbc (vtable @ 0x001e9d00)
 //
 // Defunct: ProgressionTimerControl -- fully compiled in the binary but no
-// construction site exists in the shipping build. All methods are preserved
-// with their binary semantics so future revival requires no re-RE. Method
-// bodies that were empty in the binary are no-ops here; bodies with real
-// field-write semantics are implemented faithfully per the RE doc.
+// construction site exists in the shipping build (v1.6.1 has no PLT thunk for
+// either ctor, @0x001aa8d8 / @0x001aa9b8). All methods are preserved with their
+// binary semantics so future revival requires no re-RE.
+//
+// "Defunct" == UNREACHABLE, not "empty". Only Init/Release/PreDraw are literally
+// `bx lr` in the binary; Reset, Draw, Update and SetToMultiplayerState have real
+// bodies. Draw is the one genuine port gap (see its TODO).
 
 #include "ProgressionTimerControl.h"
 #include <cmath>
@@ -15,7 +15,7 @@
 
 // ---------------------------------------------------------------------------
 // Constructor
-// Binary @ 0x00157d08 (C2) / 0x00157dbc (C1)
+// v1.6.1 ctors @0x001aa8d8 / @0x001aa9b8 (neither reachable -- no PLT thunk)
 // Pos = Vec3(-230, 140, 0). Derivation: Vec3(10,-20,0) + Vec3(480,320,0)*Vec3(-0.5,0.5,0)
 //   = Vec3(10-240, -20+160, 0) = Vec3(-230, 140, 0).
 // Size = Vec3(0, 18, 0).
@@ -42,25 +42,20 @@ ProgressionTimerControl::~ProgressionTimerControl() {
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 2 -- Binary @ 0x0015793c (empty bx lr)
-// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x0015793c
+// vtable slot 2 -- v1.6.1 ProgressionTimerControl::Init @0x001aa424 (empty bx lr)
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 ProgressionTimerControl::Init @ 0x001aa424
 void ProgressionTimerControl::Init() {
-    // Binary @ 0x0015793c
-    // Defunct: ProgressionTimerControl -- never instantiated in shipping
-    //          binary; class fully compiled but no construction site exists.
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 3 -- Binary @ 0x00157940 (empty bx lr)
-// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157940
+// vtable slot 3 -- v1.6.1 ProgressionTimerControl::Release @0x001aa428 (empty bx lr)
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 ProgressionTimerControl::Release @ 0x001aa428
 void ProgressionTimerControl::Release() {
-    // Binary @ 0x00157940
-    // Defunct: ProgressionTimerControl -- never instantiated in shipping
-    //          binary; class fully compiled but no construction site exists.
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 4 -- Binary @ 0x00157944
+// vtable slot 4 -- v1.6.1 ProgressionTimerControl::Reset @0x001aa42c
+// NOT a no-op: the binary body writes 5 fields.
 // Zeros m_TotalTime, m_RemainingTime, m_bIsActive, m_bPaused, m_bAutoStopOnExpire.
 // Does NOT touch m_bCountUp or m_ShowAnim (binary does not write those).
 void ProgressionTimerControl::Reset() {
@@ -72,28 +67,29 @@ void ProgressionTimerControl::Reset() {
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 6 -- Binary @ 0x00157964 (returns param_1 unchanged, no writes)
-// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157964
+// vtable slot 6 -- v1.6.1 ProgressionTimerControl::PreDraw @0x001aa450 (returns param_1 unchanged, no writes)
+// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 ProgressionTimerControl::PreDraw @ 0x001aa450
 void ProgressionTimerControl::PreDraw(float* hudScaleRaw) {
-    // Binary @ 0x00157964
-    // Defunct: ProgressionTimerControl -- never instantiated in shipping
-    //          binary; class fully compiled but no construction site exists.
     (void)hudScaleRaw;
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 7 -- Binary @ 0x001579f4
-// Binary draws m_TextBuf via Mortar::Font when m_ShowAnim > 0.
-// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x001579f4
+// vtable slot 7 -- v1.6.1 ProgressionTimerControl::Draw @0x001aa50c
+// TODO: v1.6.1 0x001aa50c (ProgressionTimerControl::Draw) — NOT a no-op in the binary and
+// NOT correctly described as a Defunct stub: it really renders m_TextBuf through
+// game_work.pM_Fonts[2], via
+//     DrawString(pos.x + size.x * -0.6f,
+//                pos.y + (1.0f - m_ShowAnim) * (1.0f - m_ShowAnim) * 50.0f,
+//                /*size*/ 32, /*flags*/ 0xd)
+// The port body below is an unimplemented gap. It is harmless only because the class has no
+// construction site in v1.6.1 (no ctor PLT thunk), so Draw is unreachable. Implement this if
+// the class is ever revived.
 void ProgressionTimerControl::Draw(float* hudScaleRaw) {
-    // Binary @ 0x001579f4
-    // Defunct: ProgressionTimerControl -- never instantiated in shipping
-    //          binary; class fully compiled but no construction site exists.
     (void)hudScaleRaw;
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 10 -- Binary @ 0x00157bb0
+// vtable slot 10 -- v1.6.1 ProgressionTimerControl::Update @0x001aa7b8
 // Drives m_ShowAnim toward target at +/-3.0/s based on m_bCountUp (false=fade
 // out toward 0, true=fade in toward 1). If active && !paused, decrements
 // m_RemainingTime by dt; at zero calls OnTimeExpired(); sprintf's
@@ -125,13 +121,10 @@ void ProgressionTimerControl::Update(float dt) {
 }
 
 // ---------------------------------------------------------------------------
-// vtable slot 11 -- Binary @ 0x00157968
-// Identical to StopCountdown: Reset() then m_bCountUp = false.
-// Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157968
+// vtable slot 11 -- v1.6.1 ProgressionTimerControl::SetToMultiplayerState @0x001aa454
+// NOT a no-op: the binary calls vtable slot 4 (Reset) then sets m_bCountUp = false,
+// i.e. exactly StopCountdown().
 bool ProgressionTimerControl::SetToMultiplayerState() {
-    // Binary @ 0x00157968
-    // Defunct: ProgressionTimerControl -- never instantiated in shipping
-    //          binary; class fully compiled but no construction site exists.
     StopCountdown();
     return true;
 }

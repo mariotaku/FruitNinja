@@ -18,16 +18,22 @@ public:
     LeaderboardScreen() {}
     ~LeaderboardScreen() override {}
 
-    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 binary @ 0x00148030
+    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 LeaderboardScreen::LoadContent @ 0x00191aac
+    // (unreachable in v1.6.1: no live caller, so the 6 textures are never loaded)
     static void LoadContent() {}
 
-    // Defunct: LeaderboardScreen -- no-op stub
+    // TODO: v1.6.1 0x00192320 (LeaderboardScreen::UnLoadContent) — this is NOT a defunct no-op.
+    // The symbol is LIVE: its PLT thunk @0x00106cd4 is called from GameDestroy @0x0011ceec, and
+    // the body clears s_isContentLoaded and releases the 6 leaderboard textures. The port body
+    // below is an unimplemented gap that is harmless ONLY because the matching LoadContent is
+    // unreachable in v1.6.1, so there is nothing to release. Implement both together.
+    // The GameInitialise.cpp teardown call site is present and must stay.
     static void UnLoadContent() {}
 
-    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 binary @ 0x00147cd0
+    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 LeaderboardScreen::OnLeaderboardListPopulated @ 0x0019167c
     void OnLeaderboardListPopulated(void* /*list*/) {}
 
-    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 binary @ 0x00147d1c
+    // Defunct: LeaderboardScreen -- no-op stub; v1.6.1 LeaderboardScreen::LoadLeaderboards @ 0x001916d8
     void LoadLeaderboards(int /*gameMode*/, int /*boardId*/) {}
 
     // Defunct: LeaderboardScreen -- no-op stub

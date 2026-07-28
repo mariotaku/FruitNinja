@@ -209,8 +209,9 @@ public:
     // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00117bf4 (re-analyst)
     PowerUp* GetNextPurchasable(std::list<PowerUp*>::iterator& it);
 
-    // @ 0x00118c14 — bind active ScoreModifier's OnScore delegate or reset to default
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118c14 (re-analyst)
+    // v1.6.1 PowerUpManager::SetAppropriateScoreCallback @0x001417c0 — bind active
+    // ScoreModifier's OnScore delegate or reset to default
+    // ASM-verified: 2026-05-18 v1.6.1 PowerUpManager::SetAppropriateScoreCallback @ 0x001417c0 (re-analyst)
     void SetAppropriateScoreCallback();
 
     // @ 0x0011836c — walk m_AllPowerUps and m_ScreenEffectPool, call UnloadTextures on each

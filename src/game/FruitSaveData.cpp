@@ -287,10 +287,10 @@ void FruitSaveData::DownloadTweaks() {
 // Per-frame tick
 // ----------------------------------------------------------------------
 
-// Binary @ 0x0012b3dc. Achievement timer tick: find the pending entry with the
+// v1.6.1 FruitSaveData::Update @0x0015498c. Achievement timer tick: find the pending entry with the
 // smallest timer, decrement it, fire when it reaches zero, then move to unlocked map.
 // Name prefix '0'..'9' -> UnlockAchievementInNetwork (defunct online ID); else -> ItemManager::UnlockItem.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b3dc (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 FruitSaveData::Update @ 0x0015498c (re-analyst)
 void FruitSaveData::Update(float dt, HUD* hud) {
     if (m_PendingUnlocks.empty()) return;
 

@@ -1102,7 +1102,7 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::GameOver() {
-    // ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00121f74 -- ResetGlobalDt first, then PowerUpManager::Reset.
+    // ASM-verified: 2026-05-02 v1.6.1 WaveManager::GameOver @ 0x0012b838 -- ResetGlobalDt first, then PowerUpManager::Reset.
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
     if (PowersEnabled()) {
@@ -1111,7 +1111,7 @@ void WaveManager::GameOver() {
 }
 
 void WaveManager::NewGame() {
-    // ASM-verified: 2026-05-02 v1.6.1 binary @ 0x00121f90 -- ResetGlobalDt first, then PowerUpManager::Reset.
+    // ASM-verified: 2026-05-02 v1.6.1 WaveManager::NewGame @ 0x0012b860 -- ResetGlobalDt first, then PowerUpManager::Reset.
     WaveManager* self = GetInstance();
     if (self) self->ResetGlobalDt(1.0f);
     if (PowersEnabled()) {
@@ -1906,7 +1906,7 @@ void WaveManager::ClearUnspawned() {
 // IsWaveProcessing — per wave-system-impl.md §4
 // ----------------------------------------------------------------------------
 
-// ASM-verified: 2026-05-22 v1.6.1 binary @ 0x00122a40..0x00122ad6 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 WaveManager::IsWaveProcessing @ 0x00123294 (re-analyst).
 // Updated 2026-05-22: restored the entry-flag gate (was incorrectly removed
 // as "invented" -- the binary genuinely has `ldrb r3,[r4,#0x244+p]; cbz r3, ...`
 // at 0x00122a48). Flag is set by Reset (m_WaveActive = 1 for player 0) and
@@ -2484,8 +2484,8 @@ void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }  
 // ----------------------------------------------------------------------------
 
 int  WaveManager::UpdateNetworking(float /*dt*/, int /*playerIdx*/) { return 0; }
-// Defunct: P2P MP wave-sync packet -- empty in v1.6.1 binary @ 0x0012197c too
-// (literal `return;`); only the GOT trampoline at 0x00102390 had a body,
+// Defunct: P2P MP wave-sync packet -- no-op stub; v1.6.1 WaveManager::SendWaveSyncPacket @ 0x00123110
+// (the binary body is empty too -- a literal `return;`); only the GOT trampoline at 0x00102390 had a body,
 // and that calls a NetworkManager fn pointer that's null on Bada.
 void WaveManager::SendWaveSyncPacket()                               {}
 bool WaveManager::ShouldDisplayNetworkWaitIndicator()               { return false; }
@@ -2504,7 +2504,7 @@ int COIN_CHANCEINATOR::GetCoins() {
     return 0;
 }
 
-// Binary @ 0x00121a1c.
+// v1.6.1 WaveManager::RequestCoins @0x001233b0.
 // First: try the global chanceinator via m_pCurrentWave[0]->m_pCoinChance.
 // If that yields > 0, done. Else: advance RNG via fallback m_CoinChanceinator[idx].
 // The fallback byte index comes from the current game-mode coin-table slot.
@@ -2517,7 +2517,7 @@ void WaveManager::RequestCoins() {
             return;
     }
     // Fallback: RNG-advance only — return value discarded (binary behaviour).
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00121a1c — coinChance index = game_work.gameMode
+    // ASM-verified: 2026-05-20 v1.6.1 WaveManager::RequestCoins @ 0x001233b0 — coinChance index = game_work.gameMode
     // (uint8 @ +0x04). Per-mode table at WaveManager+0x1dc, stride 8.
     int idx = game_work.gameMode;
     if (idx >= 0 && idx < 4)

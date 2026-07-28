@@ -405,7 +405,7 @@ void LoopingSound::SetLoopDesiredVol(float vol) {
     }
 }
 
-// External fn defined in SlashModifier.cpp; v1.6.1 @ 0x0017b4a8.
+// External fn defined in SlashModifier.cpp; v1.6.1 ParseSlashModColourType @ 0x001e62e4.
 extern int ParseSlashModColourType(const char* str);
 
 // -----------------------------------------------------------------------

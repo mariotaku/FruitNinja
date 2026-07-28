@@ -34,16 +34,17 @@ void ComboControl::Update(float dt) {
     }
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136bd0 (re-analyst) -- tail-calls Reset
+// ASM-verified: 2026-05-20 v1.6.1 ComboControl::Init @ 0x00169370 (re-analyst) -- tail-calls Reset
 void ComboControl::Init() { Reset(); }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136be0 (re-analyst) -- no-op
+// ASM-verified: 2026-05-20 v1.6.1 ComboControl::Release @ 0x00169388 (re-analyst) -- no-op
 void ComboControl::Release() {}
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136c08 (re-analyst) -- no-op
+// ASM-verified: 2026-05-20 v1.6.1 ComboControl::Skip @ 0x001693b0 (re-analyst) -- no-op
 void ComboControl::Skip() {}
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136c04 (re-analyst) -- extra vtable slot, no-op
+// ASM-verified: 2026-05-20 v1.6.1 ComboControl::PreDraw2 @ 0x001693ac (re-analyst) -- extra vtable slot, no-op
+// (binary spells this slot PreDraw2; the port keeps the shorter PreDraw name)
 void ComboControl::PreDraw() {}
 
 // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136d74 (re-analyst) -- font=pFontNumbers, white,

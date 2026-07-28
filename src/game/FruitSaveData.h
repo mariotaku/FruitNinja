@@ -259,7 +259,7 @@ public:
     std::map<uint32_t, AchievementItem> m_PendingUnlocks;
 
     // +0x174: fully unlocked achievements; persisted in <achievements> XML block.
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0012b3dc (re-analyst)
+    // ASM-verified: 2026-05-18 v1.6.1 FruitSaveData::Update @ 0x0015498c (re-analyst)
     std::map<uint32_t, AchievementItem> m_UnlockedAchievements;
 
     // +0x18c..+0x194: blitz mode state.
@@ -394,7 +394,7 @@ public:
     // Per-frame tick
     // ------------------------------------------------------------------
 
-    // 0x0012b3dc. Achievement in-progress timer ticks.
+    // v1.6.1 FruitSaveData::Update @0x0015498c. Achievement in-progress timer ticks.
     void Update(float dt, HUD* hud);
 
     // Defunct: online tweaks -- no-op stub; v1.6.1 binary @ 0x0012a080

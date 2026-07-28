@@ -2,9 +2,15 @@
 #define FN_HUD_PROGRESSION_TIMER_CONTROL_H
 
 // Defunct: ProgressionTimerControl -- fully compiled in binary but never
-// instantiated in the shipping build. Class shape, vtable layout, and field
+// instantiated in the shipping build (confirmed: v1.6.1 has NO PLT thunk for
+// either ctor, @0x001aa8d8 / @0x001aa9b8). Class shape, vtable layout, and field
 // offsets are preserved per stub-don't-skip policy.
-// Binary vtable @ 0x001e9d00. Ctor @ 0x00157d08 / 0x00157dbc.
+//
+// "Defunct" here means UNREACHABLE, not "empty in the binary". Only Init
+// (@0x001aa424), Release (@0x001aa428) and PreDraw (@0x001aa450) are literally
+// `bx lr`. Reset (@0x001aa42c), Draw (@0x001aa50c), Update (@0x001aa7b8) and
+// SetToMultiplayerState (@0x001aa454) all have real bodies -- do not describe
+// them as no-op stubs.
 
 #include "HUDControl3d.h"
 #include "util/Delegate.h"
@@ -40,44 +46,44 @@ public:
     // +0xCC: delegate fired when timer expires (36 bytes)
     Mortar::Delegate0<void> m_OnExpiredDelegate;
 
-    // Binary @ 0x00157d08 (C2) / 0x00157dbc (C1)
+    // v1.6.1 ctors @0x001aa8d8 / @0x001aa9b8 (neither has a PLT thunk -> never called)
     // Pos = Vec3(-230, 140, 0), size = Vec3(0, 18, 0)
     ProgressionTimerControl();
 
     // Binary @ 0x00157b14 (D0 deleting) / 0x00157ad0 (D1 non-deleting)
     virtual ~ProgressionTimerControl();
 
-    // vtable slot 2 -- Binary @ 0x0015793c (empty bx lr)
-    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x0015793c
+    // vtable slot 2 -- v1.6.1 ProgressionTimerControl::Init @0x001aa424 (empty bx lr)
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 ProgressionTimerControl::Init @ 0x001aa424
     void Init() override;
 
-    // vtable slot 3 -- Binary @ 0x00157940 (empty bx lr)
-    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157940
+    // vtable slot 3 -- v1.6.1 ProgressionTimerControl::Release @0x001aa428 (empty bx lr)
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 ProgressionTimerControl::Release @ 0x001aa428
     void Release() override;
 
-    // vtable slot 4 -- Binary @ 0x00157944
-    // Zeros m_TotalTime/m_RemainingTime/m_bIsActive/m_bPaused/m_bAutoStopOnExpire.
-    // Does NOT touch m_bCountUp or m_ShowAnim.
+    // vtable slot 4 -- v1.6.1 ProgressionTimerControl::Reset @0x001aa42c
+    // NOT empty: writes 5 fields. Zeros m_TotalTime/m_RemainingTime/m_bIsActive/
+    // m_bPaused/m_bAutoStopOnExpire. Does NOT touch m_bCountUp or m_ShowAnim.
     void Reset() override;
 
-    // vtable slot 6 -- Binary @ 0x00157964 (returns param_1 unchanged)
-    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157964
+    // vtable slot 6 -- v1.6.1 ProgressionTimerControl::PreDraw @0x001aa450 (returns param_1 unchanged)
+    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 ProgressionTimerControl::PreDraw @ 0x001aa450
     void PreDraw(float* hudScaleRaw) override;
 
-    // vtable slot 7 -- Binary @ 0x001579f4
-    // Binary draws m_TextBuf via Mortar::Font when m_ShowAnim > 0.
-    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x001579f4
+    // vtable slot 7 -- v1.6.1 ProgressionTimerControl::Draw @0x001aa50c
+    // NOT empty in the binary: it really draws m_TextBuf. The port body is an
+    // unimplemented gap, not a faithful no-op -- see the TODO in the .cpp.
     void Draw(float* hudScaleRaw) override;
 
-    // vtable slot 10 -- Binary @ 0x00157bb0
+    // vtable slot 10 -- v1.6.1 ProgressionTimerControl::Update @0x001aa7b8
     // Drives m_ShowAnim toward 0/1 at +/-3/s based on m_bCountUp; if active
     // && !paused, decrements m_RemainingTime, calls OnTimeExpired at zero,
     // sprintf's ceil(remaining) into m_TextBuf each frame.
     void Update(float dt) override;
 
-    // vtable slot 11 -- Binary @ 0x00157968
-    // Defunct: ProgressionTimerControl -- no-op stub; v1.6.1 binary @ 0x00157968
-    // Identical to StopCountdown: Reset() then m_bCountUp = false.
+    // vtable slot 11 -- v1.6.1 ProgressionTimerControl::SetToMultiplayerState @0x001aa454
+    // NOT empty: calls vtable slot 4 (Reset) then sets m_bCountUp = false --
+    // i.e. identical to StopCountdown. Implemented faithfully below.
     bool SetToMultiplayerState() override;
 
     // vtable slot 12 -- Binary @ 0x0015818c

@@ -114,7 +114,7 @@ public:
     // vtable[14] @ 0x00152660 -- returns 2 (class-type tag)
     int GetType() override { return 2; }
 
-    // vtable[15] @ 0x00150e3c -- fast-forward spawn animation
+    // vtable[15] -- v1.6.1 MissControl::Skip @0x0019de28 -- fast-forward spawn animation
     void Skip() override;
 
     // Called by HUD::Update at the start of every frame tick.
@@ -159,7 +159,7 @@ public:
     // (combo_N.tex for N=clamp(combo,2,10)). Calls virtual Init() first.
     void MakeCombo(_Vector3<float> pos, int comboCount, int entityType);
 
-    // vtable[12] @ 0x00151a60 -- fade state machine
+    // vtable[12] -- v1.6.1 MissControl::Update @0x0019e15c -- fade state machine
     void Update(float dt) override;
 
     // v1.6.1 MissControl::Draw @0x0019f54c -- render textured quad with UV
@@ -174,8 +174,10 @@ public:
     // Binary @ 0x00150e00 — vtable[8]. No-op shadow of HUDControl::PreDraw base.
     void PreDraw(float* hudScale) override;
 
-    // Binary @ 0x00150dfc — vtable[16]. New virtual not in HUDControl base; extends vtable to 17 slots.
-    // Defunct: same-screen MP player-index hook — no-op stub; v1.6.1 binary @ 0x00150dfc
+    // v1.6.1 MissControl::SetPlayer @0x0019dd6c — vtable[16]. New virtual not in HUDControl
+    // base; extends the vtable to 17 slots. Body is empty in the binary, but the symbol is
+    // LIVE (called from MakeCritical/MakeCombo/MakeDisappear) — NOT a defunct stub. Callers
+    // must keep invoking it. Returns its argument; the binary returns void (no caller reads it).
     virtual int SetPlayer(int player);
 
     // Port specific: F1 overlay support. MissControl::Draw renders at

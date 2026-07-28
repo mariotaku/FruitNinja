@@ -184,8 +184,7 @@ void PowerUp::Parse(TiXmlElement* elem) {
     // m_Duration < m_TotalTime-0.1 (semantics unresolved).
 }
 
-// Step 4: Activate (binary @ 0x00119134)
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00119134 (re-analyst)
+// Step 4: Activate
 // v1.6.1 PowerUp::Activate @0x00141e60 -- Vec3 by value (not const-ref) to match binary ABI
 // ASM-verified: 2026-07-15T00:00Z v1.6.1 PowerUp::Activate @ 0x00141e60..0x00141f9b (asm-inspector)
 //   -- logic/field-offset/call-graph faithful. NOTE two structural (non-logic) DIFFERS:

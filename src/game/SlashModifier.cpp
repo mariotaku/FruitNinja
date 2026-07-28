@@ -8,7 +8,7 @@
 #include <cstring>
 #include "util/StringHash.h"
 
-// ASM-verified: 2026-05-22 v1.6.1 binary @ 0x0017b4a8 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 ParseSlashModColourType @ 0x001e62e4 (re-analyst).
 // Maps XML "type" string to colour-type enum (NONE/LERP/PER_SLASH/CONTINUOUS).
 // Binary uses StringHash + cached table hashes (__cxa_guard); port computes
 // StringHash on every call -- semantically identical since StringHash is pure.
@@ -21,7 +21,7 @@ int ParseSlashModColourType(const char* s) {
     return 0;  // NONE / unknown
 }
 
-// ASM-verified: 2026-05-22 v1.6.1 binary @ 0x0017b3c8 (re-analyst).
+// ASM-verified: 2026-05-22 v1.6.1 ParseSlashPowerMask @ 0x001e6180 (re-analyst).
 // Maps XML "type" string to power-mask bit (1<<index). Six entries; results
 // OR into SlashEntity::s_ModPowerMask which gates attract/repel/bomb-suppress/
 // fruit-bounce blade behaviours. Prior port stub returned 0 -- those bits
@@ -63,8 +63,8 @@ int SlashModifier::UpdateSpecific(float /*dt*/) {
     return 0;
 }
 
-// Binary @ 0x0011f31c. Two gates: m_pColours != nullptr AND !m_Applied.
-// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x0011f31c (asm-inspector)
+// v1.6.1 SlashModifier::ApplyModifier @0x0014b0d8. Two gates: m_pColours != nullptr AND !m_Applied.
+// ASM-verified: 2026-05-03 v1.6.1 SlashModifier::ApplyModifier @ 0x0014b0d8 (asm-inspector)
 void SlashModifier::ApplyModifier(bool isPurchased, float* extra) {
     GameModifier::ApplyModifier(isPurchased, extra);
     if (m_pColours != nullptr && !m_Applied) {
@@ -77,9 +77,9 @@ void SlashModifier::ApplyModifier(bool isPurchased, float* extra) {
     }
 }
 
-// Binary @ 0x0011f2e0. NOTE: binary does NOT call GameModifier::RemoveModifier
+// v1.6.1 SlashModifier::RemoveModifier @0x0014b07c. NOTE: binary does NOT call GameModifier::RemoveModifier
 // and does NOT clear m_Applied — those are port-introduced bugs to remove.
-// ASM-verified: 2026-05-03 v1.6.1 binary @ 0x0011f2e0 (asm-inspector)
+// ASM-verified: 2026-05-03 v1.6.1 SlashModifier::RemoveModifier @ 0x0014b07c (asm-inspector)
 void SlashModifier::RemoveModifier() {
     if (m_Applied) {
         if (--ItemManager::EquippedSlashModCount <= 0) {

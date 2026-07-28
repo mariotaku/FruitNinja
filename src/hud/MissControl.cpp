@@ -66,7 +66,7 @@ static inline float MissClampHalfX() {
 // Combo separation base radius (scaled by zoom^2 in Update). Binary DAT = 70.0f.
 static constexpr float SEP_BASE = 70.0f;
 
-// Sound threshold crossing. DAT_00151d64 = 1.66f
+// Sound threshold crossing. v1.6.1 MissControl::Draw @0x0019f54c literal pool @0x0019f908 = 1.66f
 static constexpr float SOUND_THRESH = 1.66f;
 
 // Screen-clamp half-extents (centred ortho). DAT_00151f50, DAT_00151f54
@@ -77,11 +77,13 @@ static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 // Multiplied into the global Vec3::One (GOT+0x77CC) -> size (62,62,62).
 static constexpr float MISS_DISAPPEAR_SIZE = 62.0f;
 
-// Pulse banding thresholds. DAT_001522a4..DAT_001522b4.
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001522a4 (re-analyst) — byte-exact IEEE-754.
-static constexpr float MISS_PULSE_FLOOR       = 0.65f;     // DAT_001522b4 = 0x3f266666
-static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f;  // DAT_001522a4 = 0x467ff000
-static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // DAT_001522a8 = 0x48b7f480
+// Pulse banding thresholds, from the literal pool of v1.6.1 MissControl::Draw @0x0019f54c.
+// ASM-verified: 2026-07-28T00:00Z v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst) — byte-exact IEEE-754.
+static constexpr float MISS_PULSE_FLOOR       = 0.65f;     // pool @0x0019f924
+static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f;  // pool @0x0019f914
+static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // pool @0x0019f918
+// TODO: v1.6.1 0x0019f54c (MissControl::Draw) — the two NARROW constants below still carry
+// their stale v1.5.x DAT addresses; locate them in the v1.6.1 Draw literal pool and restamp.
 static constexpr float MISS_PULSE_NARROW_LO   = 32760.0f;  // DAT_001522ac = 0x46fff000
 static constexpr float MISS_PULSE_NARROW_HI   = 360360.0f; // DAT_001522b0 = 0x48aff500
 
@@ -202,14 +204,20 @@ void MissControl::Reset() {
 // per-frame; the Draw call uses the stored value directly.
 void MissControl::PreDraw(float* /*hudScale*/) {}
 
-// Binary @ 0x00150dfc -- vtable[16]. Defunct: same-screen MP player-index hook.
-// Defunct: same-screen MP player-index hook -- no-op stub; v1.6.1 binary @ 0x00150dfc
+// v1.6.1 MissControl::SetPlayer @0x0019dd6c -- vtable[16].
+// The BODY is empty in the binary (single `bx lr`), but the symbol is LIVE, not defunct:
+// its PLT thunk @0x00105cf0 is called from MakeCritical @0x0019e96c, MakeCombo @0x0019e7e0
+// and MakeDisappear @0x0019f40c + @0x0019f478. Keep every call site. m_PlayerIdx is the
+// P2P/EntityTracker partition, not a same-screen split (#158), so the earlier
+// "Defunct: same-screen MP player-index hook" label was wrong on both counts.
+// DIFFERS: original returns void, port returns the argument -- no caller reads it; the
+// Itanium mangled name (_ZN11MissControl9SetPlayerEi) and the vtable slot are unaffected.
 int MissControl::SetPlayer(int player) {
     return player;
 }
 
 // Port specific: mirrors the quad-origin formula from MissControl::Draw
-// (binary @ 0x00151f60..0x00152186) so the F1 boundary tracks the rendered quad.
+// (v1.6.1 MissControl::Draw @0x0019f54c) so the F1 boundary tracks the rendered quad.
 // Jitter term is omitted (non-deterministic RandUint; short-lived and cosmetic).
 _Vector3<float> MissControl::GetDrawPos() const
 {
@@ -230,11 +238,11 @@ _Vector3<float> MissControl::GetDrawPos() const
                            p.z);
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00150e3c (re-analyst)
-// vtable[15] @ 0x00150e3c
+// ASM-verified: 2026-05-24 v1.6.1 MissControl::Skip @ 0x0019de28 (re-analyst)
+// vtable[15]
 void MissControl::Skip() {
     // Binary reads GameWork.missCount (+0x14) as the cap, not hardcoded 1.
-    // binary @ 0x00150e3c: ldrb r3,[r2,#0x14]; cmp r3,r4 (r4 = m_AnimState)
+    // v1.6.1 MissControl::Skip @0x0019de28: ldrb r3,[r2,#0x14]; cmp r3,r4 (r4 = m_AnimState)
     uint8_t cap = game_work.missCount;
     if (m_AnimState < cap) {
         m_FlashTimer  = 0;
@@ -580,14 +588,14 @@ void MissControl::MakeDisappear(_Vector3<float> inPos, int sizeMult,
 
 // --- Update ----------------------------------------------------------------
 
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151a60 (re-analyst)
-// binary @ 0x00151a60
+// ASM-verified: 2026-05-24 v1.6.1 MissControl::Update @ 0x0019e15c (re-analyst)
+// v1.6.1 MissControl::Update @0x0019e15c
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
     // Their m_AnimState is 0/1/2 (slot index); m_Active stays 0.
     // Toggle m_bFlashing based on game_work.missCount vs m_AnimState -- when the
     // player has missed at least (m_AnimState + 1) fruits, the X marker
-    // turns red. binary @ 0x00151a60 lines 1-10.
+    // turns red. v1.6.1 MissControl::Update @0x0019e15c lines 1-10.
     Game* game = Game::GetInstance();
     uint8_t missCount = (game ? game_work.missCount : 0);
     if (!m_bFlashing && m_AnimState < missCount) {
@@ -597,7 +605,7 @@ void MissControl::Update(float dt) {
     }
 
     // Combo separation force: if m_bComboActive, repel busy neighbours within 70px.
-    // binary @ 0x00151a60 combo block (~50 instructions)
+    // v1.6.1 MissControl::Update @0x0019e15c combo block (~50 instructions)
     if (m_bComboActive) {
         // s_NumCriticals++ happens AT THE TOP of the combo block (before iteration).
         // binary @ 0x00151ac6 -- incremented before the pool loop.
@@ -674,8 +682,8 @@ void MissControl::Update(float dt) {
     bool wasAboveThresh = (m_LifeTimer >= SOUND_THRESH);
     m_LifeTimer -= dt;
 
-    // Sound trigger on 1.66 crossing. binary @ 0x00151a60 sound block
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00151a60 (re-analyst)
+    // Sound trigger on 1.66 crossing. v1.6.1 MissControl::Update @0x0019e15c sound block
+    // ASM-verified: 2026-05-18 v1.6.1 v1.6.1 MissControl::Update @0x0019e15c (re-analyst)
     if (wasAboveThresh && m_LifeTimer < SOUND_THRESH && m_bComboActive && m_bPlaySound) {
         char buf[0x40];
         bool altPlayed = false;
@@ -715,14 +723,16 @@ void MissControl::Update(float dt) {
 
 // --- Draw ------------------------------------------------------------------
 
-// ASM-verified: 2026-05-20T00:00Z v1.6.1 binary @ 0x00151f60 (re-analyst)
-// ASM-verified: 2026-05-24 v1.6.1 binary @ 0x00151f60 (re-analyst)
-// Quad-origin formula (binary @ 0x00151f60..0x00152186):
+// ASM-verified: 2026-05-24 v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst)
+// TODO: v1.6.1 0x0019f54c (MissControl::Draw) — the interior offsets quoted below
+// (0x00151f94/0x00151fe0/0x00151fe4/0x00152186/0x00152294/0x001522a0) are stale v1.5.x; the
+// function itself is @0x0019f54c. Re-map the sub-block addresses on the next pass.
+// Quad-origin formula:
 //
 //   origin = drawPos + this->pos + Vec3(480, 320, 0) * m_HudScale  (Vec3*Vec3)
 //
 //   drawPos derivation:
-//     init from _Vector3<float>::Zero (DAT_001522c4, binary @ 0x001f4328) = Vec3(0,0,0)
+//     init from _Vector3<float>::Zero @0x002d9288 (.bss, static-ctor filled) = Vec3(0,0,0)
 //     if (m_FlashTimer > 0): drawPos REPLACED with Vec3(RandUint(8)-4, RandUint(8)-4, 0); m_FlashTimer--
 //
 //     if (m_LifeTimer <= 0.0f):               // passive miss-marker path only
@@ -731,7 +741,7 @@ void MissControl::Update(float dt) {
 //         drawPos.y -= 3.0f * pos.y * fabs(m_PauseAmount)   // no else-branch
 void MissControl::Draw(float* hudScaleRaw) {
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
-    // ASM-verified: 2026-05-11 v1.6.1 binary @ 0x00151f60 first ~20 instructions
+    // ASM-verified: 2026-05-11 v1.6.1 MissControl::Draw @ 0x0019f54c first ~20 instructions
     // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
     // m_bFlashing -- those are UV-pickers later in the function, not gates.
     // The disappear mechanism for finished combo popups is the m_Active=0
@@ -739,9 +749,10 @@ void MissControl::Draw(float* hudScaleRaw) {
     // HUD::Draw filters on m_Active (src/hud/HUD.cpp:88) so this Draw
     // doesn't even get called for released slots.
 
-    // _Vector3<float>::Zero global (binary @ 0x001f4328, GOT slot 0x73ec).
-    // Binary loads Zero.{x,y,z} into stack-local drawPos -- semantically Vec3(0,0,0).
-    // ASM-verified: 2026-05-24 v1.6.1 binary @ 0x001522c4 (re-analyst)
+    // _Vector3<float>::Zero global @0x002d9288 -- lives in .bss and is FILLED BY A STATIC
+    // CTOR pre-OspMain, so it is not a zero-in-the-image constant; the value happens to be
+    // (0,0,0). Binary loads Zero.{x,y,z} into stack-local drawPos.
+    // ASM-verified: 2026-07-28T00:00Z v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst)
     _Vector3<float> drawPos(0.0f, 0.0f, 0.0f);
 
     // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
@@ -755,7 +766,7 @@ void MissControl::Draw(float* hudScaleRaw) {
         m_FlashTimer--;
     }
 
-    // m_LifeTimer branch ladder (binary @ 0x00151f60):
+    // m_LifeTimer branch ladder (v1.6.1 MissControl::Draw @0x0019f54c):
     //   > 1.66f (SOUND_THRESH)  -> early return (popup invisible during the
     //                              0.15s spawn-grace from MakeCritical's 1.81 init)
     //   > 0                      -> pulse-scale animation: scale = |SinIdx(phase)|
@@ -840,7 +851,7 @@ void MissControl::Draw(float* hudScaleRaw) {
         }
     }
     // UV crop based on m_bComboActive / m_bFlashing.
-    // ASM-verified: 2026-05-10 v1.6.1 binary @ 0x00151f60..0x00152258 (re-analyst)
+    // ASM-verified: 2026-05-10 v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst)
     //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
     //   inactive: u0=0.0  u1=0.5  v0=0.25  v1=0.75  (left half, vertical centre)
     //   active:   u0=0.5  u1=1.0  v0=0.25  v1=0.75  (right half, vertical centre)
@@ -853,7 +864,7 @@ void MissControl::Draw(float* hudScaleRaw) {
         u0 = 0.5f; v0 = 0.25f; du = 0.5f; dv = 0.5f;
     }
 
-    // Binary @ 0x00151f60 (v1.6.1 MissControl::Draw @0x0019f54c): DrawQuadUnCached(colour,uMin,uMax,vMin,vMax,fx).
+    // v1.6.1 MissControl::Draw @0x0019f54c: DrawQuadUnCached(colour,uMin,uMax,vMin,vMax,fx).
     const float u1 = u0 + du;
     const float v1 = v0 + dv;
     Mortar::Mesh::DrawQuadUnCached(tint, u0, u1, v0, v1, 0);

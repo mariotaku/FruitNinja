@@ -278,7 +278,7 @@ public:
     // 0x001247f0: serialise current wave state into FruitSaveData.
     int  SaveWaveInfo(FruitSaveData* save);
 
-    // 0x00121f74 / 0x00121f90: static entry points.
+    // v1.6.1 GameOver @0x0012b838 / NewGame @0x0012b860: static entry points.
     static void GameOver();
     static void NewGame();
 
@@ -356,7 +356,7 @@ public:
     // 0x0012180c: override list slice for current wave + player.
     PROBABILITY_OVERIDE* GetCurrentOverideList(int playerIdx);
 
-    // 0x00122a40: true while fruit/bombs still active for player.
+    // v1.6.1 WaveManager::IsWaveProcessing @0x00123294: true while fruit/bombs still active for player.
     bool  IsWaveProcessing(int playerIdx);
 
     // --- Mutators -----------------------------------------------------
@@ -399,13 +399,13 @@ public:
     // 0x001217e0: always returns 0.
     static int  UpdateNetworking(float dt, int playerIdx);
 
-    // 0x0012197c: empty.
+    // v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110: empty.
     static void SendWaveSyncPacket();
 
     // 0x00121980: always false.
     static bool ShouldDisplayNetworkWaitIndicator();
 
-    // 0x00121a1c: calls COIN_CHANCEINATOR::GetCoins().
+    // v1.6.1 WaveManager::RequestCoins @0x001233b0: calls COIN_CHANCEINATOR::GetCoins().
     static void RequestCoins();
 
     // Split whitespace-separated string into tokens. Returns the count written.

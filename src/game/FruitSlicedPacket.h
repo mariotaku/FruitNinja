@@ -4,7 +4,7 @@
 // FruitSlicedPacket -- P2P multiplayer fruit-slice broadcast packet.
 // Defunct: P2P MP -- stub per stub-don't-skip policy.
 //
-// Binary ctors @ 0x0012cda8 (parameterised), 0x0012ce48 (default).
+// v1.6.1 ctors: 5-arg C1 @0x001570b0 / C2 @0x0015711c; default C1 @0x00157188 / C2 @0x001571e4.
 // Polymorphic: vptr @ +0x00 (via base Mortar::NetworkPacket).
 // Packet type ID = 0x65, total packet payload size = 0x24 (36 bytes).
 // Mortar::NetworkPacket base occupies +0x00..+0x13 (20 bytes).
@@ -23,10 +23,10 @@ public:
     float    m_SliceAngle;  // +0x1c -- slice direction/angle (WriteDec32 float; ctor param 4)
     long     m_PlayerIdx;   // +0x20 -- player/blade slot (WriteInt32; ctor param 5)
 
-    // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 binary @ 0x0012ce48
+    // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 FruitSlicedPacket::FruitSlicedPacket() @ 0x00157188
     FruitSlicedPacket();
 
-    // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 binary @ 0x0012cda8
+    // Defunct: P2P MP slice-broadcast packet -- no-op stub; v1.6.1 FruitSlicedPacket::FruitSlicedPacket(long,uint16_t,uint16_t,float,long) @ 0x001570b0
     FruitSlicedPacket(long fruitId, uint16_t sliceX, uint16_t sliceY, float sliceAngle, long playerIdx);
 
     virtual ~FruitSlicedPacket() {}

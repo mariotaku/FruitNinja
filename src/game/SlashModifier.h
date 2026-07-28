@@ -13,8 +13,8 @@
 //   dtor (D0/D1)    0x0011f36c / 0x0011f3c4
 //   ResetSpecific   0x0011f274
 //   UpdateSpecific  0x0011f288  <- OR's m_PowerMask into g_mask
-//   RemoveModifier  0x0011f2e0
-//   ApplyModifier   0x0011f31c
+//   RemoveModifier  0x0014b07c   (v1.6.1)
+//   ApplyModifier   0x0014b0d8   (v1.6.1)
 //   ParseSpecific   0x0011f464
 //
 // Bits in SlashEntity::s_ModPowerMask (set by m_PowerMask via OR):
@@ -82,7 +82,7 @@ public:
     // what keeps the bits set while the modifier is active.
     int UpdateSpecific(float dt) override;
 
-    // 0x0011f31c — one-shot on activation. Binary chains
+    // v1.6.1 SlashModifier::ApplyModifier @0x0014b0d8 — one-shot on activation. Binary chains
     // GameModifier::ApplyModifier(isPurchased, extra), then (if m_pColours
     // != null && !m_Applied) sets m_Applied=true, increments
     // ItemManager::EquippedSlashModCount, and calls
@@ -92,7 +92,7 @@ public:
     // ItemManager::EquippedSlashModCount) exist in the port.
     void ApplyModifier(bool isPurchased, float* extra) override;
 
-    // 0x0011f2e0 — decrement equipped-mod counter; if it reaches 0,
+    // v1.6.1 SlashModifier::RemoveModifier @0x0014b07c — decrement equipped-mod counter; if it reaches 0,
     // restore the default blade palette via SetEquippedItem.
     void RemoveModifier() override;
 

@@ -12,7 +12,7 @@
 //   ctor            0x00118d3c
 //   dtor            0x001186bc / 0x00118ba0
 //   Parse           0x001194f0
-//   Activate        0x00119134
+//   Activate        0x00141e60   (v1.6.1)
 //   Deactivate      0x00117f18
 //   Update          0x00117f90
 //   Clone           (vtable; various)
@@ -122,8 +122,7 @@ public:
     // @ 0x001194f0 — parse <powerup> XML element
     void Parse(TiXmlElement* elem);
 
-    // @ 0x00119134 — activate this power-up clone
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00119134 (re-analyst)
+    // v1.6.1 PowerUp::Activate @0x00141e60 — activate this power-up clone
     // param1: showPopup — display miss control + deduct coins
     // param2: isPurchased — forwarded to ApplyModifier
     // param3: position — by-value (not const&) to match binary ABI/mangling
@@ -195,8 +194,8 @@ public:
     // @ 0x001193d0 callee — push a modifier onto this power-up's list
     void AddModifier(GameModifier* mod);
 
-    // @ 0x00118ed4 — copy constructor (C1/C2 ctor variants)
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118ed4 (re-analyst)
+    // v1.6.1 PowerUp::PowerUp(PowerUp*) C1 @0x00141b58 / C2 @0x00141cdc — copy constructor
+    // ASM-verified: 2026-05-18 v1.6.1 PowerUp::PowerUp(PowerUp*) @ 0x00141b58 (re-analyst)
     PowerUp(PowerUp* src);
 
     // @ 0x00117a44 — returns coin cost if purchaseable, else 0

@@ -603,7 +603,7 @@ PowerUp* PowerUpManager::GetNextPurchasable(std::list<PowerUp*>::iterator& it) {
     return byHash->second;
 }
 
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00118c14 (re-analyst)
+// ASM-verified: 2026-05-18 v1.6.1 PowerUpManager::SetAppropriateScoreCallback @ 0x001417c0 (re-analyst)
 void PowerUpManager::SetAppropriateScoreCallback() {
     for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
          it != m_ActivePowerUps.end(); ++it) {

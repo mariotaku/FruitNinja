@@ -23,12 +23,12 @@ UpsellScreen::UpsellScreen(Mortar::Delegate0<void> onDone, int mode)
 {
 }
 
-// Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00166d20
+// Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreen::MakeMainUpsellScreen @ 0x001c7870
 UpsellScreen* UpsellScreen::MakeMainUpsellScreen(Mortar::Delegate0<void> onDone) {
     return new UpsellScreen(onDone, 0);
 }
 
-// Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00166708
+// Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreen::MakeModeUpsellScreen @ 0x001c7168
 UpsellScreen* UpsellScreen::MakeModeUpsellScreen(Mortar::Delegate0<void> onDone, int mode) {
     return new UpsellScreen(onDone, mode);
 }

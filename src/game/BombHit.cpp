@@ -414,7 +414,7 @@ void RetryLevel() {
     }
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00169cd4 (re-analyst)
+// ASM-verified: 2026-05-20 v1.6.1 RetryUpdate @ 0x001cb4fc (re-analyst)
 void RetryUpdate(float dt) {
     static const float TARGET_TIME = 0.1f;  // matches retryTimer initial value
     const float t_raw = (TARGET_TIME - game_work.retryTimer) / TARGET_TIME;

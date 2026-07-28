@@ -44,7 +44,7 @@ void EndRetryLevel();
 // retryTimer reaches 0, then hands off to EndRetryLevel.
 void RetryLevel();
 
-// Matches RetryUpdate @ 0x00169cd4. Called each frame from GameUpdate
+// Matches v1.6.1 RetryUpdate @ 0x001cb4fc. Called each frame from GameUpdate
 // while retryFlag != 0 and retryTimer > 0. Scales fruits/bombs toward
 // negative (visually shrinks them to zero) over the retryTimer window.
 void RetryUpdate(float dt);

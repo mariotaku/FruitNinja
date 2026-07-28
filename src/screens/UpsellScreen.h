@@ -83,10 +83,10 @@ public:
     UpsellScreen(Mortar::Delegate0<void> onDone, int mode);
     ~UpsellScreen() override {}
 
-    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00166d20
+    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreen::MakeMainUpsellScreen @ 0x001c7870
     static UpsellScreen* MakeMainUpsellScreen(Mortar::Delegate0<void> onDone);
 
-    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00166708
+    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreen::MakeModeUpsellScreen @ 0x001c7168
     static UpsellScreen* MakeModeUpsellScreen(Mortar::Delegate0<void> onDone, int mode);
 };
 
@@ -99,7 +99,8 @@ static_assert(sizeof(UpsellScreen) == 0x1EC,
 // UpsellScreenElement -- value-type sub-element stored in std::list inside
 // UpsellScreen. Defunct: UpsellScreen monetization.
 //
-// Binary ctors @ 0x00104c58 (parameterised), 0x00165c74 (default), 0x001679b8 (copy).
+// v1.6.1 UpsellScreenElement ctors: default C1 @0x001c57e8 / C2 @0x001c599c; copy @0x001c87e8.
+// (The parameterised form's v1.6.1 address is still unmapped; the old 0x00104c58 was v1.5.x.)
 // Non-polymorphic. Binary sizeof = 0x39C (924 bytes).
 //
 // Known fields (from ctor disasm; offsets ARM32):
@@ -176,10 +177,10 @@ public:
         }
     };
 
-    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 binary @ 0x00165c74
+    // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreenElement::UpsellScreenElement() @ 0x001c57e8 (C2 @0x001c599c)
     UpsellScreenElement() {}
 
-    // Binary @ 0x001679b8 -- copies every field including the m_Sounds list
+    // v1.6.1 UpsellScreenElement copy ctor @0x001c87e8 -- copies every field including the m_Sounds list
     // (std::list copy ctor). MakeMainUpsellScreen relies on this: it builds a
     // temp element, queues SFX via AddSound, then push_back's it (a copy) into
     // the screen list, so the queued sounds must survive the copy. The opaque
@@ -190,7 +191,7 @@ public:
         memcpy(m_pad_after,  o.m_pad_after,  sizeof(m_pad_after));
     }
 
-    // Defunct: UpsellScreen monetization -- dtor; v1.6.1 binary @ 0x00166324
+    // Defunct: UpsellScreen monetization -- dtor; v1.6.1 UpsellScreenElement::~UpsellScreenElement @ 0x001c6c34
     ~UpsellScreenElement() {}
 
     // Defunct: UpsellScreen monetization -- no-op stub; v1.6.1 UpsellScreenElement::SetTexture @ 0x001c386c
