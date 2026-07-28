@@ -184,8 +184,11 @@ unsigned int Texture2D_Bada::GetUVMeshID() const {
 }
 
 // ReleaseCache: delete GL texture and reset m_TexId.
+// Unguarded on purpose: gl_compat.h declares glDeleteTextures for the __bada__
+// cross-build (declarations only, no link step), and the binary's own body frees
+// the texture name and zeroes the field. Guarding it compiled an empty function
+// AND left m_TexId permanently 0, which fed Set()'s early-out.
 void Texture2D_Bada::ReleaseCache() {
-#if !defined(__bada__)
     if (m_TexId != 0) {
         glDeleteTextures(1, &m_TexId);
         // Port specific: keep the Renderer's texture shadow off the dead name.
@@ -194,7 +197,6 @@ void Texture2D_Bada::ReleaseCache() {
         }
         m_TexId = 0;
     }
-#endif
 }
 
 // Cache @0x0022a4f4: fill DataInfo dims, glGenTextures, upload pixels.
@@ -225,7 +227,12 @@ void Texture2D_Bada::Cache() {
         m_DataInfo.rawWidth       = tex1->info.rawWidth;
         m_DataInfo.rawHeight      = tex1->info.rawHeight;
 
-#if !defined(__bada__)
+        // Unguarded on purpose: this is the ONLY writer of m_TexId on the
+        // Cache() path, and gl_compat.h declares the GL entry points for the
+        // __bada__ cross-build. Guarding it left m_TexId at 0 forever there, so
+        // Texture2D_Bada::Set() always took its m_TexId==0 early-out and the
+        // s_CurrentlySetTexture store (read unguarded by Renderer::DrawQuad)
+        // was never reached.
         DisplayManager& dm = DisplayManager::GetInstance();
 
         if (m_TexId == 0) {
@@ -314,7 +321,6 @@ void Texture2D_Bada::Cache() {
                 LOG_ERROR("TEXTURE/Cache", "unsupported format 0x%02x", (unsigned)tex1->texFmt);
                 break;
         }
-#endif
     }
 
     m_Source->UnlockLayers(raw);
@@ -351,7 +357,8 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
     tex->m_DataInfo.rawWidth       = d->info.rawWidth;
     tex->m_DataInfo.rawHeight      = d->info.rawHeight;
 
-#if !defined(__bada__)
+    // Unguarded on purpose: the other writer of m_TexId (Texture::Load goes
+    // through here, not through Cache()). See the note in Cache().
     DisplayManager& dm = DisplayManager::GetInstance();
 
     if (tex->m_TexId == 0) {
@@ -449,9 +456,6 @@ static Mortar::SmartPtr<Texture> UploadTex1ToGL(
                       pathForLog ? pathForLog : "<memory>");
             return Mortar::SmartPtr<Texture>();
     }
-#else
-    (void)raw; (void)pathForLog;
-#endif
 
     return Mortar::SmartPtr<Texture>(tex);
 }

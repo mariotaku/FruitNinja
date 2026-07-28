@@ -6128,9 +6128,9 @@
   "_ZN4Math6CosIdxEt": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 1200,
-    "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 2160/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2160/1500 -> 1860/1200]",
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary indexes a 4096-entry sin LUT @0x001be4a4; the port calls cosf. Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table index+load -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 2160/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2160/1500 -> 1860/1200] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
     "score": 1860,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Math6RandomC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6149,9 +6149,9 @@
   "_ZN4Math6SinIdxEt": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 1000,
-    "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 1860/1200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1860/1200 -> 1660/1000]",
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary indexes a 4096-entry sin LUT @0x001be4a4; the port calls sinf. Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table index+load -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 1860/1200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1860/1200 -> 1660/1000] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
     "score": 1660,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Math6TanIdxEt": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6177,16 +6177,16 @@
   "_ZN4Math7AtanIdxEf": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 6500,
-    "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 7035/6800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7035/6800 -> 6995/6500]",
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary walks a quadrant-folded 129-entry int16 atan LUT (GOT+0xd18); the port calls atan2f(x,1). Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table walk -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 7035/6800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7035/6800 -> 6995/6500] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
     "score": 6995,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Math8Atan2IdxEff": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 11400,
-    "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 11660/11600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 11660/11600 -> 11935/11400]",
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary walks a quadrant-folded 129-entry int16 atan LUT (GOT+0xd18) with sign/swap folding; the port calls atan2f(y,x). Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table walk -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 11660/11600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 11660/11600 -> 11935/11400] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
     "score": 11935,
-    "verdict": "ACCEPT-deferred"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN5Bonus10IsAchievedEiRSt3mapImiSt4lessImESaISt4pairIKmiEEE": {
     "decided_at": "2026-07-01T00:00Z",
