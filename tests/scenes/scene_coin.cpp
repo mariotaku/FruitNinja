@@ -1,4 +1,4 @@
-// scene_coin.cpp -- Coin currency-sprite spawn/home render test.
+// scene_coin.cpp -- Coin currency-drop spawn/state/particle test.
 //
 // Renders the Coin entity (entity type 2) the crit-slice / fruit-kill coin
 // drop spawns (Fruit::CollisionResponse @0x001de778 calls Coin::MakeCoins
@@ -8,37 +8,77 @@
 // "coin_fly"/"coin_collect"), onArrived=Coin::DefaultArrivedDelegate(),
 // silent=true, delayStep=0.02f, delayCap=0.15f.
 //
-// silent=true is REQUIRED for anything to render: Coin::Draw's binary gate
-// is `if (m_Silent == 0) return;` -- an inverted-looking but ASM-confirmed
-// check (see Coin.cpp Draw() comment) where only SILENT coins draw their
-// model. silent=true also drives the richer state arc (WAITING -> FLYING ->
-// DECEL -> HOMING -> ARRIVED) vs. non-silent's WAITING -> HOMING shortcut,
-// so it is both the faithful real-call-site value AND the one that exercises
-// every Coin::_Update state.
+// silent=true drives the full state arc (WAITING -> FLYING -> DECEL -> HOMING
+// -> ARRIVED) vs. non-silent's WAITING -> HOMING shortcut, so it is both the
+// faithful real-call-site value AND the one that exercises every
+// Coin::_Update state.
 //
-// Coin::Draw also requires `s_coinModel.IsValid()` (Coin::LoadContent loads
-// "models/Fruit/coin.mmd" via MeshManager -- fixed 2026-07-08; a stale
-// 2026-05-23 RE comment had wrongly claimed no such asset exists) and
-// `m_State > 1` (WAITING/state 0 and ARRIVED/state 1 do not draw -- by
-// design, not a bug).
+// --------------------------------------------------------------------------
+// WHAT ACTUALLY PUTS COIN PIXELS ON SCREEN (v1.6.1): PARTICLES, NOT A MODEL.
+// --------------------------------------------------------------------------
+// v1.6.1 Coin::Draw @0x001d8810 is MODEL-ONLY: the whole body is the m_Silent /
+// s_coinModel / m_State gates followed by one `bl` to Mortar::Model::Draw. No
+// quad, no texture bind, no 2D path. And s_coinModel @0x003328c0 is never
+// assigned in v1.6.1 -- v1.6.1 Coin::LoadContent @0x001d7920 is six
+// instructions that set s_isContentLoaded and load nothing. So Coin::Draw can
+// never emit a pixel, and ActorManager::Draw is NOT this entity's render path.
 //
+// Provenance note, because this file previously said the opposite: an earlier
+// header here claimed Coin::LoadContent loads "models/Fruit/coin.mmd" via
+// MeshManager and that a 2026-05-23 RE comment denying the asset was stale.
+// That is inverted -- the 2026-05-23 reading was CORRECT and the 2026-07-08
+// "fix" was the error. The port's coin.mmd load has been removed;
+// src/entities/Coin.cpp:62-71 carries the accurate RE note for s_coinModel.
+//
+// The coin's real on-screen presence is PSPParticleManager emitters spawned in
+// v1.6.1 Coin::_Update @0x001d81bc: a trail emitter at +0x68 repositioned every
+// frame via m_DirSin/m_DirCos, plus one-shot sparkle bursts at +0x6c on launch
+// (state 3) and arrival (state 4). Those live in the PARTICLE draw pass, so
+// this harness must tick and draw PSPParticleManager -- ActorManager::Draw
+// alone renders nothing at all for a coin.
+//
+// FX names come from the call site. BonusScreen::AwardScores passes
+// "bonus_star_trail" / "bonus_star_impact" (silent=false); the IN-GAME path
+// this test replicates (Fruit::CollisionResponse, SlashEntity::Update) passes
+// NULL, which MakeCoins substitutes with "coin_fly" / "coin_collect".
+// "coin_fly" DOES NOT EXIST in particles_fast.xml or particles_slow.xml, so
+// the in-game coin has NO TRAIL -- it is completely invisible during its
+// ballistic FLYING arc. Its only visual is the "coin_collect" burst
+// (5x sparkles_coins_burst on sparkle_32 + 1x coins_shine on coin_shine.tex),
+// re-emitted once per tick from DECEL onward.
+//
+// Confidence: binary disassembly + the shipped particle XML. NOT
+// runtime-confirmed -- an HLE session was attempted but peek/screenshot both
+// hung, so s_coinModel was never read live. The "coin_fly" conclusion is
+// positive evidence, not absence: it is missing from both particle XMLs while
+// "coin_collect", "bonus_star_trail" and "bonus_star_impact" are all present
+// and fully defined.
+//
+// --------------------------------------------------------------------------
 // Captures 3 frames along the trajectory:
 //   just_spawned -- immediately after MakeCoins, before any tick (state 0,
-//                   WAITING). Draw is a no-op here by design (m_State<=1) --
-//                   pixel count is logged only, NOT asserted non-zero.
-//   mid_flight   -- first tick where any coin reaches state 2 (FLYING,
-//                   ballistic launch arc). Hard-asserts non-background pixels.
-//   homing       -- first tick where any coin reaches state 4 (HOMING,
-//                   steering toward the coin-counter target). Hard-asserts
-//                   non-background pixels.
+//                   WAITING). Nothing has been emitted yet -- pixel count is
+//                   logged only, NOT asserted.
+//   mid_flight   -- first tick where any coin reaches state 2 (FLYING).
+//                   EXPECTED TO BE EMPTY: no model, and "coin_fly" has no
+//                   emitter template, so the coin is genuinely invisible here.
+//                   Logged only, NOT asserted -- asserting pixels here is what
+//                   the old MIN_DRAWN_PIXELS=50 check did, and it only ever
+//                   passed because the port wrongly loaded coin.mmd.
+//   homing       -- first tick where any coin reaches state 4 (HOMING). This
+//                   is the first frame the "coin_collect" burst exists.
+//                   Hard-asserted (see PARTICLE / DRAW below).
 //
 // Assertions:
-//   SPAWN: GetNumEntities(2) == coinCount immediately after MakeCoins.
-//   STATE: both FLYING and HOMING are reached within the tick guard.
-//   DRAW:  mid_flight and homing captures each have >= MIN_DRAWN_PIXELS
-//          non-background pixels.
+//   SPAWN:    GetNumEntities(2) == coinCount immediately after MakeCoins.
+//   STATE:    both FLYING and HOMING are reached within the tick guard.
+//   PARTICLE: the homing capture draws >= MIN_HOMING_PARTICLES particles,
+//             summed over the three GameDraw depth layers.
+//   DRAW:     the homing capture has >= MIN_HOMING_PIXELS non-background
+//             pixels (proves the particles reached the framebuffer, not just
+//             the live-list).
 //
-// Port specific: standalone coin spawn/state/draw regression test.
+// Port specific: standalone coin spawn/state/particle regression test.
 //
 // Run:
 //   ctest -R scene_coin --output-on-failure
@@ -53,6 +93,7 @@
 #include "game/GameWork.h"
 #include "game/GameTaskState.h"
 #include "game/FruitCamera.h"
+#include "particle/PSPParticleManager.h"
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
 #include "render/gl_funcs.h"
@@ -63,15 +104,39 @@
 #include <cstring>
 #include <list>
 
-// Background clear colour: dark wood grey (matches scene_special_fruit's
-// BG so coin.mmd's gold/yellow material reads clearly against it).
+// Background clear colour: dark wood grey (matches scene_special_fruit's BG
+// so the gold sparkle/shine particles read clearly against it).
 static const unsigned char BG_R         = 33;
 static const unsigned char BG_G         = 26;
 static const unsigned char BG_B         = 20;
 static const int           BG_THRESHOLD = 30;
 
-// Minimum non-background pixels to consider a capture "drawn".
-static const int MIN_DRAWN_PIXELS = 50;
+// Minimum particles the homing capture must draw, summed over the three
+// GameDraw depth layers.
+//
+// Floor = ONE complete "coin_collect" emission. particles_fast.xml defines
+// coin_collect as two particleSets with init counts 5 (sparkles_coins_burst)
+// and 1 (coins_shine) and perSec=0, so a single emitter instantiation yields
+// exactly 6 particles. Coin::_Update re-adds that emitter every tick from
+// DECEL onward for each of the 5 coins, so the real count at the homing
+// capture is many times this -- but 6 is the smallest value that still means
+// "a whole burst fired", and it is unreachable if the burst stops: nothing
+// else in this scene emits particles, so a regression drops it to 0, never to
+// 1..5.
+static const int MIN_HOMING_PARTICLES = 6;
+
+// Minimum non-background pixels in the homing capture. Secondary check: it
+// proves the particles reached the framebuffer rather than only the live-list
+// (missing texture, wrong layer, culled projection).
+//
+// Sized well under one sparkle quad so it never becomes the limiting factor:
+// sparkles_coins_burst starts at size 20-25 game units, and the default
+// 960x640 drawable maps the 480x320-unit view at ~2 px/unit, so one particle
+// covers roughly a 40x40 px quad -- of which the sparkle_32 star art is only
+// partly opaque. 100 px is a fraction of a single particle's opaque area, and
+// zero emission gives exactly 0 here because the coin has no other visual
+// (Coin::Draw @0x001d8810 can never fire -- see the header note).
+static const int MIN_HOMING_PIXELS = 100;
 
 // Fixed dt (1/60 s = one simulation frame). Coin::Update reads game_work.dt
 // directly (ignores its own dt param), so this is written there each tick.
@@ -107,20 +172,46 @@ static int CountCoinsInState(Mortar::ActorManager* am, int state) {
     return n;
 }
 
-// Advance every pooled entity (only coins are populated in this scene) by
-// one fixed simulation tick. Coin::Update's fixed-step wrapper reads
-// game_work.dt directly, so it is set here before dispatch (mirrors
-// scene_fruit_splat's SplatEntity::UpdateActiveSplats(TICK_DT) pattern).
+// Advance the simulation by one fixed tick, in GameUpdate's order:
+// ActorManager::Update (drives Coin::Update -> Coin::_Update, which adds and
+// re-adds the "coin_collect" emitter) and THEN PSPParticleManager::Update.
+//
+// The order is load-bearing, not cosmetic. Coin::_Update tears its collect
+// emitter down at the TOP of every call and re-adds it inside states 3/4, so
+// the emitter only ever exists across the gap between two coin updates. If
+// PSPParticleManager::Update does not run inside that gap, the emitter is
+// recycled before its spawn pass and NO particle is ever created -- the scene
+// renders empty even though the port is correct. GameUpdate has the same
+// ordering (src/game/GameInit.cpp: actorManager->Update, then the
+// PSPParticleManager block in the common tail).
+//
+// Coin::Update's fixed-step wrapper reads game_work.dt directly rather than
+// its dt param, so that is set here before dispatch.
 static void TickCoins(Mortar::ActorManager* am, float dt) {
     game_work.dt = dt;
     am->Update(dt);
+    PSPParticleManager::GetInstance().Update(dt, false);
 }
 
-// Render one frame: clear to BG_*, set up the standard perspective, draw
-// all pooled entities via ActorManager::Draw (same depth state as
-// scene_special_fruit's DrawScene -- coin.mmd is a normal depth-written 3D
-// mesh like the Fruit/Bomb models, unlike SplatEntity's decal pass).
-static void RenderCoinFrame(fn::TestHarness& h) {
+// Render one frame: clear to BG_*, set up the standard perspective, run
+// ActorManager::Draw, then the particle pass. Returns the number of particles
+// drawn this frame (summed over the three depth layers).
+//
+// ActorManager::Draw is kept because it is the faithful call sequence, but for
+// a coin it produces nothing -- Coin::Draw @0x001d8810 is model-only and
+// s_coinModel is permanently null. Every coin pixel comes from the
+// PSPParticleManager pass below.
+//
+// Layer order and depth state mirror GameDraw @0x001cd720: depth write off
+// after the actor pass, pm.Draw(-1) behind, then depth test off and
+// pm.Draw(0) / pm.Draw(1). All three layers are issued rather than just the
+// coin templates' drawOrder=0 so the test does not silently miss a template
+// whose depth layer changes.
+//
+// `dt` is the amount the particle pass advances by. PSPParticleManager::Draw
+// is a FUSED integrate+render (see PSPParticleManager.h), so a re-render of
+// the same frame must pass dt=0 or it double-advances every particle.
+static int RenderCoinFrame(fn::TestHarness& h, float dt) {
     SDL_Window* window = static_cast<SDL_Window*>(h.window);
     int ww = 0, wh = 0;
     SDL_GL_GetDrawableSize(window, &ww, &wh);
@@ -140,15 +231,28 @@ static void RenderCoinFrame(fn::TestHarness& h) {
     if (h.game.actorManager) {
         h.game.actorManager->Draw(h.game.renderer);
     }
+
+    PSPParticleManager& pm = PSPParticleManager::GetInstance();
+    dm.SetDepthBufferWrite(false);
+    pm.Draw(dt, false, -1);
+    int drawnParticles = pm.GetDrawnParticleCount();
     dm.SetDepthBuffer(false);
+    pm.Draw(dt, false, 0);
+    drawnParticles += pm.GetDrawnParticleCount();
+    pm.Draw(dt, false, 1);
+    drawnParticles += pm.GetDrawnParticleCount();
+
+    return drawnParticles;
 }
 
-// Warm-up + measurement frame, screenshot, and non-background pixel count
-// for one capture point. Mirrors scene_fruit_splat's capture-loop pattern.
-static int CaptureFrame(fn::TestHarness& h, const char* name) {
-    RenderCoinFrame(h);
+// Warm-up + measurement frame, screenshot, non-background pixel count and
+// drawn-particle count for one capture point. Mirrors scene_fruit_splat's
+// capture-loop pattern; the measurement frame passes dt=0 so re-rendering the
+// same simulation state does not advance the particles a second time.
+static int CaptureFrame(fn::TestHarness& h, const char* name, int* outParticles) {
+    RenderCoinFrame(h, TICK_DT);
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
-    RenderCoinFrame(h); // measurement frame, no swap -- glReadPixels sees this
+    int particles = RenderCoinFrame(h, 0.0f); // measurement frame, no swap
 
     int fw = 0, fh = 0;
     unsigned char* pixels = h.ReadPixels(&fw, &fh);
@@ -156,11 +260,12 @@ static int CaptureFrame(fn::TestHarness& h, const char* name) {
     free(pixels);
 
     h.ScreenshotPng(name);
+    if (outParticles) *outParticles = particles;
     return drawn;
 }
 
 int main(int argc, char* argv[]) {
-    // Port specific: standalone coin spawn/state/draw regression test.
+    // Port specific: standalone coin spawn/state/particle regression test.
 
     fn::TestHarness h(argc, argv, "scene_coin");
     h.SetInteractiveDefault(false);
@@ -211,7 +316,7 @@ int main(int argc, char* argv[]) {
                 if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) running = false;
             }
             TickCoins(am, TICK_DT);
-            RenderCoinFrame(h);
+            RenderCoinFrame(h, TICK_DT);
             SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
         }
         Coin::ClearCoins(false);
@@ -220,12 +325,13 @@ int main(int argc, char* argv[]) {
 
     // --- Headless: capture 3 frames along the trajectory ---
 
-    // just_spawned: state 0 (WAITING) for all coins, before any tick.
-    // Draw() no-ops here by design (m_State<=1) -- logged only, not asserted.
-    int justSpawnedPixels = CaptureFrame(h, "coin/just_spawned");
-    printf("[scene_coin] just_spawned: state0Count=%d drawnPixels=%d (informational; "
-           "WAITING coins never draw)\n",
-           CountCoinsInState(am, 0), justSpawnedPixels);
+    // just_spawned: state 0 (WAITING) for all coins, before any tick. Nothing
+    // has been emitted yet -- logged only, not asserted.
+    int justSpawnedParticles = 0;
+    int justSpawnedPixels = CaptureFrame(h, "coin/just_spawned", &justSpawnedParticles);
+    printf("[scene_coin] just_spawned: state0Count=%d particles=%d drawnPixels=%d "
+           "(informational; nothing emitted yet)\n",
+           CountCoinsInState(am, 0), justSpawnedParticles, justSpawnedPixels);
 
     // mid_flight: tick until any coin reaches state 2 (FLYING).
     bool reachedFlying = false;
@@ -242,11 +348,18 @@ int main(int argc, char* argv[]) {
         }
     }
     int midFlightPixels = -1;
+    int midFlightParticles = 0;
     if (reachedFlying) {
-        midFlightPixels = CaptureFrame(h, "coin/mid_flight");
-        printf("[scene_coin] mid_flight: ticks=%d flying=%d decel=%d homing=%d drawnPixels=%d\n",
+        // Informational only. The in-game coin is INVISIBLE while FLYING: no
+        // model (s_coinModel is permanently null) and no trail (the default
+        // "coin_fly" FX name has no emitter template in either particle XML).
+        // Zero here is the correct, binary-faithful result.
+        midFlightPixels = CaptureFrame(h, "coin/mid_flight", &midFlightParticles);
+        printf("[scene_coin] mid_flight: ticks=%d flying=%d decel=%d homing=%d "
+               "particles=%d drawnPixels=%d (informational; no model + no "
+               "\"coin_fly\" emitter -> expected empty)\n",
                ticksToFlying, CountCoinsInState(am, 2), CountCoinsInState(am, 3),
-               CountCoinsInState(am, 4), midFlightPixels);
+               CountCoinsInState(am, 4), midFlightParticles, midFlightPixels);
     } else {
         fprintf(stderr, "[scene_coin] FAIL: no coin reached FLYING/DECEL/HOMING within %d ticks\n",
                 MAX_TICKS);
@@ -261,10 +374,15 @@ int main(int argc, char* argv[]) {
         if (CountCoinsInState(am, 4) > 0) { reachedHoming = true; }
     }
     int homingPixels = -1;
+    int homingParticles = 0;
     if (reachedHoming) {
-        homingPixels = CaptureFrame(h, "coin/homing");
-        printf("[scene_coin] homing: extra_ticks=%d homingCount=%d drawnPixels=%d\n",
-               ticksToHoming, CountCoinsInState(am, 4), homingPixels);
+        // First frame the "coin_collect" burst exists: Coin::_Update's DECEL
+        // branch added the emitter on the tick that promoted the coin to
+        // HOMING, and TickCoins' PSPParticleManager::Update ran its spawn pass
+        // in the same tick.
+        homingPixels = CaptureFrame(h, "coin/homing", &homingParticles);
+        printf("[scene_coin] homing: extra_ticks=%d homingCount=%d particles=%d drawnPixels=%d\n",
+               ticksToHoming, CountCoinsInState(am, 4), homingParticles, homingPixels);
     } else {
         fprintf(stderr, "[scene_coin] FAIL: no coin reached HOMING within %d additional ticks\n",
                 MAX_TICKS);
@@ -272,16 +390,24 @@ int main(int argc, char* argv[]) {
 
     Coin::ClearCoins(false);
 
-    bool drawPass = (midFlightPixels >= MIN_DRAWN_PIXELS) && (homingPixels >= MIN_DRAWN_PIXELS);
-    if (!drawPass) {
-        fprintf(stderr, "[scene_coin] FAIL (DRAW): mid_flight=%d homing=%d (min required = %d each)\n",
-                midFlightPixels, homingPixels, MIN_DRAWN_PIXELS);
+    bool particlePass = (homingParticles >= MIN_HOMING_PARTICLES);
+    if (!particlePass) {
+        fprintf(stderr, "[scene_coin] FAIL (PARTICLE): homing drew %d particles, need >= %d "
+                "(one complete \"coin_collect\" burst = 5 sparkles_coins_burst + 1 coins_shine)\n",
+                homingParticles, MIN_HOMING_PARTICLES);
     }
 
-    bool overallPass = spawnPass && reachedFlying && reachedHoming && drawPass;
-    printf("[scene_coin] SPAWN=%s STATE=%s DRAW=%s\n",
+    bool drawPass = (homingPixels >= MIN_HOMING_PIXELS);
+    if (!drawPass) {
+        fprintf(stderr, "[scene_coin] FAIL (DRAW): homing=%d non-background pixels, need >= %d\n",
+                homingPixels, MIN_HOMING_PIXELS);
+    }
+
+    bool overallPass = spawnPass && reachedFlying && reachedHoming && particlePass && drawPass;
+    printf("[scene_coin] SPAWN=%s STATE=%s PARTICLE=%s DRAW=%s\n",
            spawnPass ? "PASS" : "FAIL",
            (reachedFlying && reachedHoming) ? "PASS" : "FAIL",
+           particlePass ? "PASS" : "FAIL",
            drawPass ? "PASS" : "FAIL");
 
     h.Shutdown();

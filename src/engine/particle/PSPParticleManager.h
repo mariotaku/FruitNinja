@@ -424,6 +424,15 @@ public:
         return n;
     }
 
+    // Port specific: test-only introspection -- number of particles the LAST
+    // Draw(dt, paused, layer) call emitted vertices for. Reset at the top of
+    // every Draw, so it is per-LAYER: a caller mirroring GameDraw's
+    // Draw(-1)/Draw(0)/Draw(1) triple must read and sum it after each call.
+    // Lets a scene test assert "the burst actually emitted" directly instead of
+    // inferring it from a framebuffer pixel count. Inline on purpose: no emitted
+    // symbol, so symbol-diff never pairs it against the binary.
+    int GetDrawnParticleCount() const { return m_DrawnParticleCount; }
+
     // Accessor: get particle template blob record i (stride 0xB8).
     PSPParticleTemplate* GetParticleTemplate(int i) {
         if (!m_pTemplates || i < 0 || i >= m_NumParticleTemplates) return 0;

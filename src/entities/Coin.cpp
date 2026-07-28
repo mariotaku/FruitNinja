@@ -7,7 +7,6 @@
 #include "math/Random.h"
 #include "asset/Mesh.h"
 #include "asset/Model.h"
-#include "asset/MeshManager.h"
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"
 #include "render/MatrixManager.h"
@@ -60,11 +59,15 @@ static bool s_loaded = false;
 // counts 3, 6, and >8 (0).
 static int g_oneInThree = 0;
 
-// The ASSET FruitNinjaBada/Data/models/Fruit/coin.mmd (+ coin.mad) does exist,
-// following the same "models/Fruit/<name>.mmd" convention as Bomb::LoadContent's
-// "models/Fruit/bomb.mmd". The BINARY, however, never loads it: s_coinModel's
-// only writers in v1.6.1 are the static-init zero and UnLoadContent's NULL, and
-// the string "coin.mmd" is absent from the image. See LoadContent's TODO.
+// v1.6.1 s_coinModel @0x003328c0. Permanently NULL in the shipped binary: its
+// only two writers are the static-init zero @0x001d8a7c and UnLoadContent's
+// NULL, so Coin::Draw's `s_coinModel != NULL` gate can never be true and the
+// coin renders as particles/FX only. The ASSET
+// FruitNinjaBada/Data/models/Fruit/coin.mmd (+ coin.mad) does ship, following
+// the same "models/Fruit/<name>.mmd" convention as Bomb::LoadContent's
+// "models/Fruit/bomb.mmd", but the string "coin.mmd" is absent from the image
+// and Coin::LoadContent @0x001d7920 makes no MeshManager call. The declaration
+// and the null gate are kept so the class shape matches the binary.
 static Mortar::SmartPtr<Mortar::Model> s_coinModel;
 
 // ---------------------------------------------------------------------------
@@ -502,29 +505,26 @@ void Coin::Draw(Renderer& /*r*/) {
 // MeshManager load and no `if (s_loaded) return` guard -- the guard lives in
 // the caller, Coin::Coin @0x001d7b94 (`if (s_isContentLoaded == 0) LoadContent();`).
 //
-// TODO: v1.6.1 Coin::LoadContent @0x001d7920 — port loads models/Fruit/coin.mmd
-//   with no binary basis; s_coinModel is never assigned in v1.6.1 (its only two
-//   writers are the static-init zero and UnLoadContent's NULL, and the string
-//   "coin.mmd" does not exist in the binary), which implies Coin::Draw's
-//   `s_coinModel != NULL` gate is never true. Pending HLE confirmation before
-//   the load is removed -- leaving the port drawing the coin for now.
+// The port used to load models/Fruit/coin.mmd here with no binary basis. That
+// was a VISIBLE divergence, not dead code: coins are spawned at runtime on every
+// game-over by BonusScreen::AwardScores @0x0016393c (MakeCoins(m_TotalScore, 6,
+// ...) with the AddToScoreOnArrival @0x00162ab8 delegate), so the port was
+// drawing a 3D coin mesh on the BonusScreen finale that the original never
+// showed. LoadContent @0x001d7920 is six instructions -- s_isContentLoaded = 1;
+// bx lr -- with no MeshManager call, which is conclusive on its own.
 // ---------------------------------------------------------------------------
 void Coin::LoadContent() {
     if (s_loaded) return;
     s_loaded = true;
-    Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
-    if (mm) s_coinModel = mm->Load("models/Fruit/coin.mmd");
 }
 
 // ---------------------------------------------------------------------------
 // UnLoadContent — v1.6.1 Coin::UnLoadContent @0x001d87f0
 // The binary body is ONLY SmartPtr<Model>::SetPtr(&s_coinModel, NULL); it does
-// NOT reset the loaded flag. The `s_loaded = false` below has no binary basis
-// and is paired with the port-only model load in LoadContent (see its TODO).
+// NOT reset the loaded flag.
 // ---------------------------------------------------------------------------
 void Coin::UnLoadContent() {
     s_coinModel.SetNull();
-    s_loaded = false;
 }
 
 // ---------------------------------------------------------------------------

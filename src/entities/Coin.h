@@ -165,14 +165,20 @@ public:
     static Mortar::Delegate1<void, Coin*> DefaultArrivedDelegate();
 
     // v1.6.1 Coin::LoadContent @0x001d7920 — the binary body is ONLY
-    // `s_isContentLoaded = 1; return;` (11 bytes): no MeshManager load and no
-    // guard. The `if (s_isContentLoaded == 0)` test lives in the caller
-    // (Coin::Coin @0x001d7b94). See the .cpp TODO on the port's extra model load.
+    // `s_isContentLoaded = 1; return;` (six instructions): no MeshManager load
+    // and no guard. The `if (s_isContentLoaded == 0)` test lives in the caller
+    // (Coin::Coin @0x001d7b94). Coins therefore have NO 3D model at all: the
+    // s_coinModel SmartPtr stays NULL for the process lifetime and Coin::Draw
+    // @0x001d8810 short-circuits on its null gate, so a coin is only its
+    // fly/collect particle FX. Do not re-add a coin.mmd load -- the asset ships
+    // but the binary never references it, and coins ARE spawned on-screen every
+    // game-over (BonusScreen::AwardScores @0x0016393c), so loading it puts a
+    // mesh in front of the player that the original never drew.
     static void LoadContent();
 
     // v1.6.1 Coin::UnLoadContent @0x001d87f0 — the binary body is ONLY
     // SmartPtr<Model>::SetPtr(&s_coinModel, NULL). It does NOT reset the
-    // loaded flag; the port's `s_loaded = false` has no binary basis.
+    // loaded flag, so LoadContent is effectively once-per-process.
     static void UnLoadContent();
 
 private:
