@@ -2393,8 +2393,11 @@ void SlashEntity::SetModColours(
     // ModColourTime = 0.0f; if (ModColourType==2) ModColourTime = (float)Rand32(count).
     g_ModColourOut    = g_Palette[0];
     g_PaletteProgress = 0.0f;
-    if (g_ColourType == 2 && g_ColourCount > 0) {
-        g_PaletteProgress = (float)((unsigned)rand() % (unsigned)g_ColourCount);
+    // The binary gates on ModColourType == 2 alone. Rand32 advances the shared
+    // LCG whatever its argument, so an extra `g_ColourCount > 0` guard would
+    // drop a draw and desync every later consumer.
+    if (g_ColourType == 2) {
+        g_PaletteProgress = (float)Math::g_Random.Rand32((uint32_t)g_ColourCount);
     }
 
     if (textureName2 && textureName2[0] != '\0') {

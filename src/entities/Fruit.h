@@ -217,7 +217,9 @@ public:
     // v1.6.1 Fruit::FruitType @0x001db6c8. Resolves a fruit name
     // string to the index in the FRUIT_INFO array by hashing and
     // comparing against m_NameHash / m_NameHashUpper. If not found:
-    //   fallbackRandom=true -> returns Random::Rand32(count-1)
+    //   fallbackRandom=true -> WaveManager::GetInstance()->GetRandom().Rand32(count-1)
+    //     (WaveManager's OWN stream, not Math::g_random -- this call does not
+    //      perturb the shared gameplay RNG)
     //   fallbackRandom=false -> returns -1 (0xFFFFFFFF)
     static int FruitType(const char* name, bool fallbackRandom);
 

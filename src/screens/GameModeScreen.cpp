@@ -24,6 +24,7 @@
 #include "render/Font.h"
 #include "math/Matrix44.h"
 #include "math/Colour.h"
+#include "math/Random.h"
 #include "math/_Vector2.h"
 #include "render/Layout.h"
 #include "debug/DebugFlags.h"
@@ -932,7 +933,7 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
 
 // --- Button callbacks ---
 
-// Matches GameModeScreen::QuitCallback @ 0x0013F5E0.
+// Matches v1.6.1 GameModeScreen::QuitCallback @0x00181884.
 // Plays "menu-bomb" SFX, sets m_State = 0xF (back-out), detaches back
 // button's fruit piece and flings it up-right, then resets tutorial arrow.
 void GameModeScreen::QuitCallback() {
@@ -954,11 +955,13 @@ void GameModeScreen::QuitCallback() {
     // Port omits the Fruit byte write since Fruit+0x80 has no reader; Bomb write kept.
     if (m_pBackButton && m_pBackButton->m_pEntity) {
         Mortar::Entity* e = m_pBackButton->m_pEntity;
-        float rx = (float)rand() / (float)RAND_MAX;
-        float ry = (float)rand() / (float)RAND_MAX;
         if (e->entityType == 1) {
             static_cast<Bomb*>(e)->m_bMovement = 1;
         }
+        // T.1291 @0x00181440 = Math::g_random.RandF(5.0f) -- both components are
+        // scaled draws, not the [0,1) fraction the port used before.
+        float rx = Math::g_Random.RandF(5.0f);
+        float ry = Math::g_Random.RandF(5.0f);
         e->vel = _Vector3<float>(rx + 5.0f, -ry, 0.0f);
     }
 

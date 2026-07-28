@@ -2072,7 +2072,7 @@ void Fruit::RotateFacingUp(bool alignToFacing, _Vector3<float> spinVelAxis) {
 // Matches v1.6.1 Fruit::FruitType @0x001db6c8.
 // Searches FRUIT_INFO array by hash of name, matching m_NameHash or
 // m_NameHashUpper. Returns index on match. If not found and
-// fallbackRandom=true returns a random valid index, else -1.
+// fallbackRandom=true returns a random index in [0, MAX_FRUIT_TYPES-1), else -1.
 int Fruit::FruitType(const char* name, bool fallbackRandom) {
     const int count = FruitInfo_GetCount();
     if (name && *name) {
@@ -2085,9 +2085,11 @@ int Fruit::FruitType(const char* name, bool fallbackRandom) {
         }
     }
     if (fallbackRandom && count > 0) {
-        // Binary uses WaveManager's RNG; port uses rand() — behaviorally
-        // equivalent since the result is just a fallback fruit index.
-        return rand() % count;
+        // v1.6.1 Fruit::FruitType @0x001db6c8: the fallback draw comes from
+        // WaveManager's own Random (WaveManager+0x20), NOT Math::g_random, and
+        // the bound is MAX_FRUIT_TYPES - 1 -- the last registered type is never
+        // picked by the fallback.
+        return (int)WaveManager::GetInstance()->GetRandom().Rand32((uint32_t)(count - 1));
     }
     return -1;
 }

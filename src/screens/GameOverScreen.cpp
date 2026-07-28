@@ -42,6 +42,7 @@
 #include <cstring>
 #include <algorithm>
 #include <cstdlib>
+#include <vector>
 #include "game/GameWork.h"
 #include "game/GameOver.h"
 #include "engine/network/NetworkManager.h"
@@ -805,37 +806,40 @@ void GameOverScreen::DeletedControl(HUDControl* ctrl) {
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::FindMostOfFruit() {
-    Game* game = Game::GetInstance();
-    FruitSaveData* save = game ? game_work.m_SaveData : 0;
-    if (!save) return;
+    const int count = FruitInfo_GetCount();
+    const uint8_t gameMode = game_work.gameMode;
 
-    int count = FruitInfo_GetCount();
-    if (count <= 0) return;
-
-    uint8_t gameMode = game_work.gameMode;
-
-    int candidates[FRUIT_INFO_MAX];
-    int numCandidates = 0;
-    for (int i = 0; i < count && i < FRUIT_INFO_MAX; ++i) {
+    // Candidate filter: i runs to MAX_FRUIT_TYPES - 1 (the last registered type
+    // is never a candidate); arcade additionally requires a powers block, and
+    // super-fruit entries (+0x330) are always skipped.
+    std::vector<int> src;
+    for (int i = 0; i < count - 1; ++i) {
         const FruitInfo* fi = FruitInfo_Get(i);
         if (!fi) continue;
         if (gameMode == GAME_MODE_ARCADE && fi->m_pPowers == 0) continue;
-        candidates[numCandidates++] = i;
+        if (fi->m_bIsSuperFruit != 0) continue;
+        src.push_back(i);
     }
 
-    if (numCandidates == 0) return;
-
-    for (int i = numCandidates - 1; i > 0; --i) {
-        int j = rand() % (i + 1);
-        int tmp = candidates[i];
-        candidates[i] = candidates[j];
-        candidates[j] = tmp;
+    // The binary does NOT shuffle in place: it repeatedly pops a random element
+    // out of the shrinking candidate vector into a second vector. That is
+    // exactly src.size() draws (a Fisher-Yates shuffle would be one fewer) and
+    // yields a different permutation, so both the RNG stream and the tie-break
+    // order depend on reproducing this form.
+    std::vector<int> order;
+    while (!src.empty()) {
+        uint32_t k = Math::g_Random.Rand32((uint32_t)src.size());
+        std::vector<int>::iterator it = src.begin() + (int)k;
+        order.push_back(*it);
+        src.erase(it);
     }
 
     int bestCount = 0;
     int bestIdx   = -1;
-    for (int k = 0; k < numCandidates; ++k) {
-        int i = candidates[k];
+    for (size_t k = 0; k < order.size(); ++k) {
+        FruitSaveData* save = game_work.m_SaveData;
+        if (!save) break;
+        int i = order[k];
         const FruitInfo* fi = FruitInfo_Get(i);
         if (!fi) continue;
         int c = save->GetTotal(fi->m_TotalStatHash);
@@ -846,8 +850,9 @@ void GameOverScreen::FindMostOfFruit() {
     }
 
     if (bestCount > 0) {
-        // v1.6.1 FindMostOfFruit @0x00186ac8. (Binary also stores bestIdx at this[1]+0x144,
-        // but that offset collides with m_bScoreSubmitted and the read site is unconfirmed -- deferred.)
+        // v1.6.1 FindMostOfFruit @0x00186ac8 stores bestIdx at this[1]+0x00 and
+        // bestCount at this[1]+0x04. Only the count is wired here -- the bestIdx
+        // slot collides with m_bScoreSubmitted and has no confirmed reader.
         m_MostFruitCount = bestCount;
     }
 }

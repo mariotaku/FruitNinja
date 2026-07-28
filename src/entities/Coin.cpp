@@ -35,11 +35,15 @@ static const float COIN_SPIN_RATE       = 32760.0f * 500.0f; // spin = rate * dt
 static const _Vector3<float> COIN_DEFAULT_TARGET(220.0f, -140.0f, 0.0f);  // default homing target (was misnamed "gravity")
 static const _Vector3<float> COIN_SCALE(0.5f, 0.5f, 0.5f);   // entity visual scale
 
-// Screen bounds for spawn clamping (v1.6.1 Coin::MakeCoins @0x001d7ec8)
-static const float COIN_BOUND_Y_MIN = -240.0f;
-static const float COIN_BOUND_Y_MAX =  240.0f;
-static const float COIN_BOUND_X_MIN = -160.0f;
-static const float COIN_BOUND_X_MAX =  160.0f;
+// Scatter-acceptance bounds for the spawn angle retry (v1.6.1 Coin::MakeCoins
+// @0x001d7ec8). The binary tests the SCATTERED x against +/-240 and the
+// scattered y against +/-160 -- i.e. the long axis is x here, opposite to the
+// port's usual centered-ortho convention. Values read straight off the
+// vcmp chain at 0x001d8018..0x001d8070.
+static const float COIN_BOUND_X_MIN = -240.0f;
+static const float COIN_BOUND_X_MAX =  240.0f;
+static const float COIN_BOUND_Y_MIN = -160.0f;
+static const float COIN_BOUND_Y_MAX =  160.0f;
 
 // Fixed timestep that Update wrapper subdivides by (matches binary DAT_0018ae84)
 static const float COIN_FIXED_DT = 1.0f / 60.0f;
@@ -589,35 +593,30 @@ void Coin::MakeCoins(int totalCoins, int coinsPerCoin, _Vector3<float> spawnPos,
         Coin* coin = static_cast<Coin*>(am->Add(2, true));
         if (!coin) break;
 
-        // Random launch angle: baseAngle +/- angleSpread/2
-        uint16_t randAngle;
-        if (angleSpread > 0) {
-            int spread = (int)(rand() % (unsigned)angleSpread) - (int)(angleSpread / 2);
-            randAngle = (uint16_t)(baseAngle + (uint16_t)(int16_t)spread);
-        } else {
-            randAngle = baseAngle;
-        }
+        // Random launch angle: baseAngle + Rand32(angleSpread) - angleSpread/2.
+        // The draw is UNCONDITIONAL -- Math::Random::Rand32 advances the shared
+        // LCG for every argument, so a `angleSpread > 0` guard would silently
+        // remove a draw from the global stream and desync everything after it.
+        uint16_t randAngle = (uint16_t)((uint32_t)baseAngle +
+            (Math::g_Random.Rand32((uint32_t)angleSpread) - ((uint32_t)angleSpread >> 1)));
 
-        // Compute spawn position with scatter — retry up to 10x if out of bounds
-        float spawnX = spawnPos.x;
-        float spawnY = spawnPos.y;
-        for (int attempt = 0; attempt < 10; attempt++) {
-            float tryX = spawnPos.x + SinIdx(randAngle) * 100.0f;
-            float tryY = spawnPos.y + CosIdx(randAngle) * 100.0f;
+        // Scatter is used ONLY to decide whether to re-roll the angle: the
+        // coin itself is always spawned at the unscattered spawnPos. Counter
+        // runs 1 -> 10, so at most 9 re-rolls == 10 draws per coin.
+        float tryX = spawnPos.x + SinIdx(randAngle) * 100.0f;
+        float tryY = spawnPos.y + CosIdx(randAngle) * 100.0f;
+        for (int attempt = 1; attempt != 10; ++attempt) {
             if (tryX >= COIN_BOUND_X_MIN && tryX <= COIN_BOUND_X_MAX &&
                 tryY >= COIN_BOUND_Y_MIN && tryY <= COIN_BOUND_Y_MAX) {
-                spawnX = tryX;
-                spawnY = tryY;
                 break;
             }
-            // Re-randomise angle on retry
-            if (angleSpread > 0) {
-                int spread = (int)(rand() % (unsigned)angleSpread) - (int)(angleSpread / 2);
-                randAngle = (uint16_t)(baseAngle + (uint16_t)(int16_t)spread);
-            }
+            randAngle = (uint16_t)((uint32_t)baseAngle +
+                (Math::g_Random.Rand32((uint32_t)angleSpread) - ((uint32_t)angleSpread >> 1)));
+            tryX = spawnPos.x + SinIdx(randAngle) * 100.0f;
+            tryY = spawnPos.y + CosIdx(randAngle) * 100.0f;
         }
 
-        _Vector3<float> coinPos(spawnX, spawnY, spawnPos.z);
+        _Vector3<float> coinPos(spawnPos);
         // TODO: v1.6.1 Coin::MakeCoins @0x001d7ec8 -- per-coin delay stagger differs from
         // binary; needs RE.
         // Stagger delay: perStep * (idx+1), but never more negative than maxDelay.

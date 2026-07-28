@@ -494,12 +494,15 @@ void MenuButton::SetInnerGlow(const char* text, Colour colour, float radius,
         m_pLabelShadow->ApplyFormatting_Circle(radius);
 }
 
-// v1.6.1 MenuButton::Remove @0x0019d148
+// v1.6.1 MenuButton::Remove @0x0019b448
 void MenuButton::Remove() {
     if (!m_pTrackedFruit) return;
     if (m_pTrackedFruit->m_bSliced) return;
     m_pTrackedFruit->m_bDrawWhole = true;
-    float vx = RandScaled(10.0f) - 5.0f;
+    // vel = (T.1164(10.0), -T.1164(5.0), 0). Unlike ClearMenuItems @0x001cc6d0,
+    // Remove does NOT re-centre x by subtracting 5 -- the fling is always to the
+    // right here.
+    float vx = RandScaled(10.0f);
     float vy = -(RandScaled(5.0f));
     m_pTrackedFruit->vel = _Vector3<float>(vx, vy, 0.0f);
     m_pTrackedFruit->m_SecondVel = m_pTrackedFruit->vel;
