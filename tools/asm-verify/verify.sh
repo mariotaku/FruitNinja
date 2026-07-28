@@ -66,9 +66,12 @@ python3 "$SRC/tools/asm-verify/export-binary-symbols.py"
 mkdir -p "$ASM_VERIFY_REPORT_DIR"
 echo "=== [4/4] asm-verify ==="
 # Optional filter from host: ASM_VERIFY_FILTER (glob on mangled name).
+# ASM_VERIFY_RESOLVE_OPERANDS is read straight out of the environment by
+# asm-verify.py (run.sh exports it via `docker run -e`), so there is nothing to
+# forward on the command line.
+VERIFY_ARGS=(--report-only)
 if [[ -n "${ASM_VERIFY_FILTER:-}" ]]; then
     echo "  filter: $ASM_VERIFY_FILTER"
-    python3 "$SRC/tools/asm-verify/asm-verify.py" --report-only --filter "$ASM_VERIFY_FILTER"
-else
-    python3 "$SRC/tools/asm-verify/asm-verify.py" --report-only
+    VERIFY_ARGS+=(--filter "$ASM_VERIFY_FILTER")
 fi
+python3 "$SRC/tools/asm-verify/asm-verify.py" "${VERIFY_ARGS[@]}"

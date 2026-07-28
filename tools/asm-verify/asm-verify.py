@@ -70,6 +70,14 @@ TRIAGE_PATH = pathlib.Path(os.environ.get(
     "ASM_VERIFY_TRIAGE_PATH",
     ASM_VERIFY_DIR / "triage.json"))
 
+# --- operand resolution (opt-in, --resolve-operands) ------------------------
+# OFF by default: turning it on changes the normalized instruction stream, which
+# changes every asm_hash, which invalidates every sticky triage verdict. See
+# operand_resolve.py for the resolution rule. Read from the environment so the
+# ProcessPoolExecutor workers inherit it on every platform (not just fork).
+def _resolve_enabled():
+    return os.environ.get("ASM_VERIFY_RESOLVE_OPERANDS", "") not in ("", "0")
+
 # Lines removed entirely before diffing.
 DROP_RE = re.compile(
     r"^\s*("
@@ -224,12 +232,17 @@ def _parse_instr(line):
     return parts[1].strip()
 
 
-def _norm_instr(instr):
+def _norm_instr(instr, annot=None):
     """Normalize ONE instruction to canonical operand-level form.
 
     Strips codegen noise (reg-alloc, reloc model, encoding-size choices) but
     KEEPS real signal (immediates, struct offsets, predication). See the block
-    comment above _parse_instr for the full NORMALIZE/KEEP policy (task #55)."""
+    comment above _parse_instr for the full NORMALIZE/KEEP policy (task #55).
+
+    `annot` is the optional --resolve-operands annotation for this line
+    (operand_resolve.py): "=<mangled>" / "=LOCAL" for a resolved call target,
+    "{=<mangled>}" / "{#0x...}" for a resolved literal-pool slot. None keeps the
+    historical masking, so an unresolvable operand never invents divergence."""
     if not instr:
         return None
     parts = instr.split(None, 1)
@@ -246,6 +259,8 @@ def _norm_instr(instr):
 
     # --- bl/blx -> CALL (logical call; keep direction-less) ---
     if mnem in ('bl', 'blx'):
+        if annot and annot.startswith('='):
+            return 'CALL ' + annot
         return 'CALL <SYM>'
 
     # --- VFP / size type suffixes are an encoding choice: strip (rule 3) ---
@@ -312,10 +327,21 @@ def _norm_instr(instr):
         ops = re.sub(r'\b0x[0-9a-f]+\b', 'ADDR', ops)
 
     ops = re.sub(r'\s+', ' ', ops).strip()
-    return f"{mnem} {ops}".strip()
+    out = f"{mnem} {ops}".strip()
+    # Literal-pool slot identity (--resolve-operands). The annotation rides on
+    # the LOADING instruction, not on the `.word` line: pool SLOT ORDER differs
+    # freely between builds, so annotating the word itself would inject
+    # ordering noise, while the load site is fixed in the instruction stream.
+    if annot and annot.startswith('{') and '[pc, #POOL]' in out:
+        out = out + ' ' + annot
+    return out
 
-def normalize(text):
-    """Semantic normalization: strip encoding noise, keep structural signal."""
+def normalize(text, annotator=None):
+    """Semantic normalization: strip encoding noise, keep structural signal.
+
+    `annotator` (operand_resolve.PortAnnotator / BinaryAnnotator) is consulted
+    per RAW line, before comments are stripped -- objdump's "; <addr> <sym>"
+    trailer is what names the literal-pool slot."""
     result = []
     for line in text.strip().split('\n'):
         stripped = line.strip()
@@ -324,10 +350,15 @@ def normalize(text):
         # Skip directives, labels, function headers
         if re.match(r'^\s*(\.(ident|size|thumb_func|align|section|global|type|file|cpu|fpu|eabi_attribute|thumb|syntax|text|bss|data)\s|Disassembly|file format|^\s*[0-9a-f]+\s*<.*>:\s*$)', stripped):
             continue
+        # `objdump -dr` (--resolve-operands only) interleaves relocation lines
+        # ("324: R_ARM_GOT32  _ZN4Math8g_RandomE"). They are resolver INPUT, not
+        # instructions -- never let them into the compared stream.
+        if re.match(r'^[0-9a-f]+:\s+R_ARM_\S+', stripped):
+            continue
         instr = _parse_instr(line)
         if instr is None:
             continue
-        norm = _norm_instr(instr)
+        norm = _norm_instr(instr, annotator.annotate(line) if annotator else None)
         if norm:
             result.append(norm)
 
@@ -356,8 +387,13 @@ def disasm_port_symbol(obj_path: pathlib.Path, mangled: str) -> str:
     if not obj_path.exists():
         raise FileNotFoundError(obj_path)
     section = f".text.{mangled}"
+    # -r only under --resolve-operands: it interleaves the relocation records
+    # the port-side resolver needs (R_ARM_PLT32 call targets, R_ARM_GOT32 /
+    # R_ARM_GOTPC literal-pool slots). Off by default so the baseline text --
+    # and therefore every asm_hash -- is untouched.
+    flags = ["-dr"] if _resolve_enabled() else ["-d"]
     res = subprocess.run(
-        [str(OBJDUMP), "-d", f"--section={section}", str(obj_path)],
+        [str(OBJDUMP)] + flags + [f"--section={section}", str(obj_path)],
         capture_output=True, text=True, check=True,
     )
     return res.stdout
@@ -463,8 +499,24 @@ def verify_one(s: dict) -> dict:
         return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": "UNPAIRED",
                 "reason": f"port symbol {port_name} not found in .o", "diff": []}
 
-    bin_lines = normalize(bin_asm_path.read_text())
-    port_lines = normalize(port_text)
+    bin_text = bin_asm_path.read_text()
+    bin_annot = port_annot = None
+    if _resolve_enabled():
+        # Resolution is best-effort by construction: if the index or either
+        # annotator cannot be built, both sides fall back to the historical
+        # masking rather than producing a one-sided (noise-generating) stream.
+        try:
+            import operand_resolve
+            index = operand_resolve.get_binary_index()
+            bin_annot = operand_resolve.BinaryAnnotator(bin_text, index)
+            port_annot = operand_resolve.PortAnnotator(port_text)
+        except Exception as e:
+            print(f"  WARN: operand resolution disabled for {name}: {e}",
+                  file=sys.stderr)
+            bin_annot = port_annot = None
+
+    bin_lines = normalize(bin_text, bin_annot)
+    port_lines = normalize(port_text, port_annot)
 
     verdict, reason, score, max_score, diff = classify_lcs(port_lines, bin_lines)
     # Content hash of the NORMALIZED asm -- the triage staleness key. Keying on
@@ -574,7 +626,10 @@ def write_report(results: list[dict]) -> pathlib.Path:
             "diff":    r.get("diff", []),
             "triage_stale": r.get("triage_stale", False),
         })
-    json_out.write_text(json.dumps({"symbols": json_payload}, indent=2))
+    json_out.write_text(json.dumps({
+        "resolve_operands": _resolve_enabled(),
+        "symbols": json_payload,
+    }, indent=2))
     return out
 
 
@@ -624,7 +679,29 @@ def main():
         "--report-only", action="store_true",
         help="Always exit 0; report unconditionally. Useful in CI fail-soft mode.",
     )
+    ap.add_argument(
+        "--resolve-operands", action="store_true",
+        help="Recover CALL-target and literal-pool DATA-symbol identity instead "
+             "of masking them to CALL / <SYM>. Relocated slots and writable "
+             ".data/.bss compare by NAME; non-relocated read-only bytes compare "
+             "by VALUE. Unresolvable operands keep the historical masking. "
+             "OFF by default: it changes every asm_hash, invalidating sticky "
+             "triage verdicts, so it must be adopted deliberately.",
+    )
     args = ap.parse_args()
+    if args.resolve_operands:
+        os.environ["ASM_VERIFY_RESOLVE_OPERANDS"] = "1"
+    if _resolve_enabled():
+        # Build the binary index ONCE in the parent so the workers inherit it
+        # from the JSON cache instead of each re-running objdump/nm.
+        try:
+            import operand_resolve
+            idx = operand_resolve.get_binary_index()
+            print(f"  operand resolution ON: {len(idx.symbols)} symbols, "
+                  f"{len(idx.relocs)} relocs, {len(idx.plt)} PLT entries, "
+                  f"GOT @0x{idx.got_base:08x}")
+        except Exception as e:
+            sys.exit(f"--resolve-operands: cannot build binary index: {e}")
 
     if args.manifest:
         manifests = [pathlib.Path(args.manifest)]

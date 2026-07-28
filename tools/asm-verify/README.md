@@ -92,6 +92,8 @@ compile-one.sh / check-tu.sh -- single-TU helpers (asm-inspector / preflight)
 discover-symbols.py       -- nm intersection -> manifest.generated.toml
 export-binary-symbols.py  -- objdump per symbol -> bada-binary/symbols/<sym>.s
 asm-verify.py             -- operand-level diff + classify + report writer
+operand_resolve.py        -- --resolve-operands: CALL-target / data-symbol identity (see below)
+resolve-eval.py           -- quantify what --resolve-operands adds and costs (JSON -> tmp/asm-verify/resolve-eval/)
 classify-divergences.py   -- rank divergences (HIGH/MED/LOW); enrich report.json cause/likelihood + suggested-triage.json (ranked shortlist -> stdout)
 detect-gutted-bada.py     -- find bodies the -D__bada__ cross-build silently guts (see below); JSON -> tmp/gutted-bada/
 triage.sh / triage.json   -- sticky per-asm_hash verdicts
@@ -138,6 +140,68 @@ merely its largest part. A systemic rationale on a large-body,
 high-unmatched-ratio symbol is exactly the shape that hides real bugs
 (calibration case: `ScrollingMenu::Update`, accepted at 65% unmatched, concealed
 a missing `m_SnapDist` store).
+
+## Operand resolution (`--resolve-operands`, default OFF)
+
+The baseline normalizer keeps immediates, `movw`/`movt` constants, struct
+displacements, condition codes, literal-pool `.word` values and branch direction
+strict, but discards **call targets** (`bl` -> `CALL`) and **symbol identity**
+(`<...>` / `.LANCHOR<n>` / `.L<n>` -> `<SYM>`). So a port that calls libc
+`rand()` where the binary draws from `Math::g_random`, or that stores the wrong
+vtable in a destructor, normalizes to a byte-identical stream.
+`operand_resolve.py` recovers that identity.
+
+```sh
+bash tools/asm-verify/run.sh --resolve-operands      # -> report.resolved.json/.md
+python3 tools/asm-verify/resolve-eval.py tmp/asm-verify/report.json \
+                                         tmp/asm-verify/report.resolved.json
+```
+
+**The rule.** An operand that resolves to a RELOCATED slot, or to writable
+`.data`/`.bss`, compares by **symbol name**; an operand that resolves to
+NON-relocated read-only bytes compares by **value**. Relocation presence rather
+than section alone, because a `.rodata` word can hold an address (vtable, jump
+table) that legitimately moves, and a logically-const object with a dynamic
+initialiser (`_Vector3<float>::UnitZ`) lives in `.bss` where its at-rest zeros
+mean nothing. The tool therefore never reads a writable value, so neither the
+dead-`.data`-initialiser trap nor its runtime-filled-`.bss` inverse is reachable.
+Both sides expose the same distinction: the port `.o` via `objdump -dr`
+relocations, the binary via `.got` slots + `.rel.dyn`/`.rel.plt` (PLT thunks and
+`b` veneers are followed through to the real target). Names are compared
+**demangled** -- the two sides pick different Itanium substitution encodings for
+the same entity, and mangled comparison reports that as a divergence.
+
+**Resolve-then-compare, else fall back.** A name is emitted only when the
+resolver lands on a real named symbol. `.LANCHOR<n>`, section relocations
+(`.rodata.str1.1`) and the `_GLOBAL_OFFSET_TABLE_`-PC delta are NOT annotated --
+they differ between builds by construction and annotating them is pure one-sided
+noise. A compiler-local outline (`T.<n>`) is annotated as `LOCAL[a,b]`, labelled
+by the named symbols its own body touches, since "the binary calls an outline
+that touches `Math::g_random` here" is a real checkable fact even though the
+outline's name is not comparable.
+
+**Cost of switching it on.** It rewrites the compared stream, so ~83% of
+`asm_hash` values change and the sticky triage verdicts keyed on them go stale.
+That is why it is opt-in and writes its own `report.resolved.*`; with the flag
+off the report is bit-identical to the baseline normalizer (verified: 0 of 2055
+rows differ).
+
+**What it still cannot see** -- add to the blind-spot list, do not assume otherwise:
+
+- **Anything inside an unpaired function.** Resolution names the CALLEE at the
+  call site; it does not descend. A bug in a port-only `static` helper
+  (`RandInt` calling libc `rand`) shows up only as "the caller calls a different
+  function", never as the offending instruction.
+- **Argument values.** `SFXPlay("a")` vs `SFXPlay("b")` resolves to the same
+  name on both sides; string CONTENT is still invisible (string-literal
+  relocations are section-relative and deliberately unannotated).
+- **Draw ORDER / count of identical calls.** N identical `CALL =f` lines compare
+  as a multiset under LCS; a reordering inside a matched run is not surfaced.
+- **Everything the baseline is already blind to** -- excluded platform TUs,
+  `!__bada__` code, gutted `__bada__` bodies, unpaired symbols (~50% of the
+  binary's `FUNC`s never pair at all).
+- **Indirect calls.** `blx rN` through a vtable or function pointer has no
+  static target; unchanged.
 
 ## Gutted `__bada__` bodies
 

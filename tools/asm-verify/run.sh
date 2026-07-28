@@ -37,9 +37,11 @@ export MSYS2_ARG_CONV_EXCL='*'
 # to limit verification to a subset (lets you iterate on one class without
 # re-running ~886 symbols).
 FILTER=""
+RESOLVE=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --filter)  FILTER="$2"; shift 2 ;;
+        --resolve-operands) RESOLVE=1; shift ;;
         --class)   FILTER="*${2}*"; shift 2 ;;          # loose substring on class
         --symbol)  FILTER="*${2}*"; shift 2 ;;          # loose substring on function
         --help|-h)
@@ -53,6 +55,11 @@ Options:
                      Example: --class WaveManager
   --symbol <name>    Same as --class but for one specific function name.
                      Example: --symbol GetNextWave
+  --resolve-operands Recover CALL-target and literal-pool DATA-symbol identity
+                     instead of masking them to CALL / <SYM>. Writes
+                     report.resolved.* so the baseline report.json -- and the
+                     sticky triage verdicts keyed on the un-annotated asm_hash
+                     -- stay valid. See operand_resolve.py for the rule.
 
 Without a filter, runs all symbols in tmp/asm-verify/manifest.generated.toml
 (currently ~886 symbols across 110 portable TUs).
@@ -69,35 +76,49 @@ done
 # /cache are tmpfs, guaranteeing no stale .o files between runs.
 docker run --rm \
     -e "ASM_VERIFY_FILTER=$FILTER" \
+    -e "ASM_VERIFY_RESOLVE_OPERANDS=$RESOLVE" \
     -v "$PROJECT_ROOT_DOCKER:/work:ro" \
     -v fnverify-src:/staging \
     --tmpfs /build:exec,size=2G \
     --tmpfs /cache:exec,size=256M \
     "$IMAGE" bash /work/tools/asm-verify/verify.sh
 
+# A FILTERED run covers only a handful of symbols, so it must never overwrite
+# the last full sweep: report.json/report.md always mean "whole-program sweep,
+# baseline normalizer". Without this, a stray `--class Foo` run leaves a
+# 16-symbol residue sitting at report.json that reads as the current state of
+# the entire port -- which is exactly how the pipeline looked healthy for three
+# weeks while it was in fact failing to compile.
+#
+# --resolve-operands is segregated the same way and for the same reason: it
+# changes the normalized instruction stream, hence every asm_hash, hence the
+# validity of every sticky triage verdict.
+#
+# The destination name is decided BEFORE the extraction and the copy targets it
+# directly -- a cp-to-report.json-then-mv would destroy the baseline sweep on
+# its way past.
+REPORT_BASE="report"
+if [ -n "$RESOLVE" ]; then
+    REPORT_BASE="report.resolved"
+fi
+if [ -n "$FILTER" ]; then
+    REPORT_BASE="report.scoped"
+fi
+
 # verify.sh writes the report into /staging/tmp; lift it back out via a
 # scratch container that mounts the named volume read-only.
 docker run --rm \
+    -e "REPORT_BASE=$REPORT_BASE" \
     -v "$PROJECT_ROOT_DOCKER:/work" \
     -v fnverify-src:/staging:ro \
     "$IMAGE" bash -c '
         mkdir -p /work/tmp/asm-verify
-        cp /staging/tmp/asm-verify/report.md   /work/tmp/asm-verify/report.md
-        cp /staging/tmp/asm-verify/report.json /work/tmp/asm-verify/report.json
+        cp /staging/tmp/asm-verify/report.md   "/work/tmp/asm-verify/${REPORT_BASE}.md"
+        cp /staging/tmp/asm-verify/report.json "/work/tmp/asm-verify/${REPORT_BASE}.json"
     '
 
-# A FILTERED run covers only a handful of symbols, so it must never overwrite
-# the last full sweep: report.json/report.md always mean "whole-program sweep".
-# Without this, a stray `--class Foo` run leaves a 16-symbol residue sitting at
-# report.json that reads as the current state of the entire port -- which is
-# exactly how the pipeline looked healthy for three weeks while it was in fact
-# failing to compile.
-REPORT_BASE="report"
-if [ -n "$FILTER" ]; then
-    REPORT_BASE="report.scoped"
-    mv "$PROJECT_ROOT/tmp/asm-verify/report.json" "$PROJECT_ROOT/tmp/asm-verify/${REPORT_BASE}.json"
-    mv "$PROJECT_ROOT/tmp/asm-verify/report.md"   "$PROJECT_ROOT/tmp/asm-verify/${REPORT_BASE}.md"
-    echo "Filtered run ('$FILTER') -> tmp/asm-verify/${REPORT_BASE}.json (full-sweep report.json left untouched)."
+if [ "$REPORT_BASE" != "report" ]; then
+    echo "-> tmp/asm-verify/${REPORT_BASE}.json (baseline full-sweep report.json left untouched)."
 fi
 
 # Host-side: classify divergences and ENRICH report.json in place with a
