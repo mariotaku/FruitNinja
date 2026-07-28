@@ -93,6 +93,7 @@ discover-symbols.py       -- nm intersection -> manifest.generated.toml
 export-binary-symbols.py  -- objdump per symbol -> bada-binary/symbols/<sym>.s
 asm-verify.py             -- operand-level diff + classify + report writer
 classify-divergences.py   -- rank divergences (HIGH/MED/LOW); enrich report.json cause/likelihood + suggested-triage.json (ranked shortlist -> stdout)
+detect-gutted-bada.py     -- find bodies the -D__bada__ cross-build silently guts (see below); JSON -> tmp/gutted-bada/
 triage.sh / triage.json   -- sticky per-asm_hash verdicts
 asm-verify-hook.sh        -- pre-commit hook entry
 manifest.toml             -- hand-written overrides (per-key precedence; incl. `port_mangled` forwarder-vs-body aliases -- see its header)
@@ -137,3 +138,61 @@ merely its largest part. A systemic rationale on a large-body,
 high-unmatched-ratio symbol is exactly the shape that hides real bugs
 (calibration case: `ScrollingMenu::Update`, accepted at 65% unmatched, concealed
 a missing `m_SnapDist` store).
+
+## Gutted `__bada__` bodies
+
+`toolchain.cmake:72` defines `-D__bada__`, which flips ~455 `#if(n)def __bada__`
+regions inside `src/`. The lethal shape is WRITE-REMOVED / READ-KEPT: a guard
+strips a STORE while the LOAD stays unguarded, so the cross-build diffs a
+function against a value frozen at its constructor. Nothing errors, and the
+resulting score is meaningless in EITHER direction -- a gutted body scores
+falsely CLEAN as easily as falsely divergent -- so it cannot be found by reading
+the ranking. `detect-gutted-bada.py` is the detector; `run.sh` calls it at the
+end of every sweep.
+
+```
+tools/asm-verify/detect-gutted-bada.py                    # both detectors
+tools/asm-verify/detect-gutted-bada.py --mode source      # guard scan only
+tools/asm-verify/detect-gutted-bada.py --git-rev HEAD~1   # scan a past tree
+tools/asm-verify/detect-gutted-bada.py --min-rank LOW --top 60
+```
+
+Two complementary detectors, both on by default:
+
+**Source scan** -- preprocessor-aware pass over `src/`, five rules:
+
+| rule | shape |
+|------|-------|
+| R1 write-removed-read-kept | symbol stored only inside excluded blocks, loaded outside |
+| R2 gutted-body | whole body vanishes under `__bada__` while the port arm has code |
+| R3 noop-else-arm | the `#else` (`__bada__`) arm is only `(void)x;` / a trivial return |
+| R4 definition-removed | the DEFINITION is excluded, so the symbol never pairs -- green by silence |
+| R5 binary-object-not-constructed | a guard drops `new <binary class>` from a live binary function |
+
+Plus a **parse-anomaly** channel: `#elif` chains touching `__bada__`, orphan or
+unterminated directives, and brace-spanning guards (a `#ifndef __bada__` that
+opens a statement and closes it in a second guard -- `MainScreen.cpp`'s
+`STATE_CAMERA_ZOOM` if/else is the live example). Anything the line-based scan
+cannot model is reported, never dropped silently.
+
+Ranking uses the binary's own symbol table
+(`tmp/asm-verify/binary-func-symbols.json`, `--binary-symbols`): a removed body
+is HIGH only when the binary actually exports that symbol AND the removed code
+touches state the binary also has. Port-only helpers (`UpdateRealtime`, the
+`s_ActiveControls` debug registry, `m_RawTouchPos`) drop to LOW, as do
+`LOG_*`/GL/SDL blocks, layout `static_assert`/`offsetof` blocks, port-only data
+members, and files under `platform/`, `debug/`, `*SDL/Posix/Win32/WebOS/Wii.cpp`.
+A field with an `offsetof` assert is treated as a real binary field and promotes
+R1 to HIGH.
+
+**Report scan** -- mines `report.json` for symbols whose ported body is a tiny
+fraction of the binary's (`max_score` is the binary instruction count, `+` lines
+are port-only, so `port = common + plus`; threshold `bin >= 20 && port <= 10%`).
+Raw that is ~98 candidates; ranking cross-references
+`classify-divergences.py`'s `cause` (`port-stub` / `port-stub-defunct` -> NOISE)
+and the source scan's flagged files, leaving a handful of HIGH. Keep both
+cross-references -- without the `cause` filter the real signal drowns in stub
+rows.
+
+Findings land in `tmp/gutted-bada/findings.json` (the source of truth); stdout
+is a short ranked summary.

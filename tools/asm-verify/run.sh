@@ -133,6 +133,25 @@ fi
     fi
 ) || true
 
+# Host-side: gutted-__bada__-body detector (#107 regression guard). The
+# cross-build's -D__bada__ can strip a STORE while the LOAD stays, so a function
+# gets diffed against a value frozen at its constructor -- and the resulting
+# score is meaningless in EITHER direction, so it cannot be spotted from the
+# ranking. Non-fatal; full findings land in tmp/gutted-bada/findings.json.
+(
+    cd "$PROJECT_ROOT" || exit 0
+    PY=""
+    command -v python > /dev/null 2>&1 && PY=python
+    [ -z "$PY" ] && command -v py > /dev/null 2>&1 && PY=py
+    if [ -n "$PY" ]; then
+        echo
+        echo "=== gutted __bada__ bodies (#107 guard) ==="
+        "$PY" tools/asm-verify/detect-gutted-bada.py \
+            --report-json "tmp/asm-verify/${REPORT_BASE}.json" --min-rank HIGH --top 8 2>&1 \
+            | grep -vE '^\s*$' | head -32
+    fi
+) || true
+
 echo
 echo "Report:    tmp/asm-verify/${REPORT_BASE}.md"
 echo "${REPORT_BASE}.json enriched with per-symbol cause + likelihood (ranked shortlist printed above)."
