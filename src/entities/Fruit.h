@@ -296,9 +296,14 @@ public:
     // method name shadows the struct.
     static const ::FruitInfo* FruitInfo(long type);
 
-    // Binary @ 0x001dbf70 (v1.6.1) — unconditional GameOver(-1,-1.0f,0) stub.
-    // v1.5.x @ 0x00176184 had per-player live-count gating (maps to FruitFactLeaderboard region); removed in v1.6.1.
-    static void CheckFruitDropped();
+    // ASM-spec v1.6.1 Fruit::CheckFruitDropped @0x001dbf70: reads .LANCHOR1+4/+8
+    // (@0x002842C0 `outOfFruitTime`, .rodata const C.589 = {255,255,255,255}); both > 0
+    // so the body folds to GameOver(-1, -1.0f, 0); return true.
+    // ONLY call site is GameUpdate @0x001cfa90, gated on IsMultiplayer() (a hard 0), so
+    // this never runs in v1.6.1. Call it ONLY behind that gate -- unguarded it would end
+    // the game every frame. Nothing to do with miss counting (that is
+    // Fruit::Update -> CheckHasGoneOffscreen -> KillFruit(true)).
+    static bool CheckFruitDropped();
 
     // ASM-spec v1.6.1 Fruit::NumberOfPowerupFruits @0x001db0ac
     // Counts active type-0 fruit entities whose FruitInfo::m_pPowers != nullptr.

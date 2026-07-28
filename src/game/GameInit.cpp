@@ -57,6 +57,7 @@
 #include "game/GameWork.h"
 #include "game/PowerUpManager.h"
 #include "game/ItemManager.h"
+#include "engine/network/P2PMessageHandling.h"
 
 #if defined(FN_BLOCK_PRELOAD)
 #include "resource/ResBlock.h"
@@ -450,6 +451,13 @@ void GameUpdate(float dt, bool active) {
     // ASM-spec v1.6.1 GameUpdate @0x001cf7c8: ItemManager::Update runs here, after
     // UpdateMusic and before UpdateUpsideDown, with the RAW frame dt (pre quickener/slow-mo).
     ItemManager::GetInstance()->Update(dt);
+    // ASM-spec v1.6.1 GameUpdate @0x001cf7d0: UpdateUpsideDown(dt) runs last in the
+    // LoadingJob::IsLoaded block, after ItemManager::Update, with raw frame dt.
+    // ASM-spec v1.6.1 UpdateUpsideDown @0x0011a184: DeviceUpsideDown() ? timer(+0x1b0)=0.75f
+    // : (timer > 0 ? timer -= dt : 0); tail-returns IsDeviceUpsideDown().
+    // Call-graph fidelity only -- DeviceUpsideDown() @0x0011a14c is a hard 0, so the
+    // timer only ever decays and every m_UpsideDownTimer consumer stays false.
+    UpdateUpsideDown(dt);
 
     // --- Per-frame slot-array re-snap + touch-released dispatch (0x001cf63c..0x001cf6a8) ---
     game_work.m_bTouchDownThisFrame = 0;
@@ -624,6 +632,14 @@ void GameUpdate(float dt, bool active) {
         BombFlash::UpdateActiveFlashes(fVar11);
         if (game->actorManager)
             game->actorManager->Update(fVar11);
+        // ASM-spec v1.6.1 GameUpdate @0x001cfa84-0x001cfa90: after ActorManager::Update,
+        // `if (IsMultiplayer()) Fruit::CheckFruitDropped();`
+        // Defunct: P2P multiplayer -- gate is a hard 0; v1.6.1 ::IsMultiplayer @0x0011a094.
+        // The gate is load-bearing: CheckFruitDropped folds to GameOver(-1,-1.0f,0), so an
+        // ungated call would fire GameOver every frame.
+        if (IsMultiplayer()) {
+            Fruit::CheckFruitDropped();
+        }
     }
 
     // ================================================================
