@@ -227,9 +227,6 @@ private:
     // Excluded on __bada__ so sizeof stays at 0x12c.
     // -----------------------------------------------------------------------
 #ifndef __bada__
-    // Port specific: binary accesses Game via GOT; port stores a reference here.
-    Game& game;
-
     // DIFFERS: binary overloads m_TexMoreGames's 4-byte slot (+0x11c) as the intro f0 countdown
     // (ARM32 4-byte ptr, MoreGames texture defunct -- v1.6.1 MainScreen::Update @0x00197430).
     // The x64 port's SmartPtr is 8 bytes and m_TexMoreGames is a live pointer, so aliasing a
@@ -249,9 +246,6 @@ private:
     // One-shot latch so STATE_GAME_START fires WaveManager::Reset once per entry.
     bool m_bGameStartReset;
 
-    // Weak pointer to current DojoScreen child; cleared by RemoveCallback.
-    DojoScreen* m_pDojoScreen;
-
     // Port specific: no binary counterpart. Bottom-left SETTINGS button that
     // opens the SettingsScreen modal (mirrors the sound/music toggle
     // lifecycle -- created inline in Update(), never torn down while
@@ -270,10 +264,23 @@ private:
     MenuButton* m_pSettingsButton;
 #endif // !defined(__bada__)
 
-#ifndef __bada__
-    float& TexMoreGamesF0() { return m_MoreGamesF0; }
-    float  TexMoreGamesF0() const { return m_MoreGamesF0; }
-#endif // !defined(__bada__)
+    // Intro-slide hold countdown, defined on BOTH builds so MainScreen::Update's
+    // case-0 two-way branch and the case-8 exit compile unconditionally (see
+    // SetMoreGamesTimer above for why the storage differs per build).
+    float& TexMoreGamesF0() {
+#ifdef __bada__
+        return *reinterpret_cast<float*>(&m_TexMoreGames);
+#else
+        return m_MoreGamesF0;
+#endif
+    }
+    float TexMoreGamesF0() const {
+#ifdef __bada__
+        return *reinterpret_cast<const float*>(&m_TexMoreGames);
+#else
+        return m_MoreGamesF0;
+#endif
+    }
 
 
     // --- Internal helpers ---
@@ -292,10 +299,6 @@ private:
 
     // Matches MainScreen::ButtonDeleted @ 0x0014acc0.
     void ButtonDeleted(HUDControl* ctrl);
-
-#ifndef __bada__
-    void DojoScreenRemoved(HUDControl*)    { m_pDojoScreen = nullptr; }
-#endif // !defined(__bada__)
 
     // --- Callbacks ---
     void GameModeCallback();

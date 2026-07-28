@@ -282,37 +282,20 @@ PauseScreen::PauseScreen()
       m_RevealTimer(0.0f),
       m_PausedText(nullptr),
       m_State(PAUSE_STATE_HIDDEN)
-#if !defined(__bada__)
-    , m_TitleTexW(0.0f), m_TitleTexH(0.0f)
-    , m_PauseButtonTexW(0.0f), m_PauseButtonTexH(0.0f)
-    , m_QuitTitleTexW(0.0f), m_QuitTitleTexH(0.0f)
-    , m_RetryButtonTexW(0.0f), m_RetryButtonTexH(0.0f)
-#endif
 {
     m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
 
     // Load textures -- strings resolved from GOT in ctor (doc section 6 asset table)
-    // pause_title.tex goes into inherited m_Texture (+0x78 in binary / +0x74 in port)
-    // Port: m_Texture is the inherited GLuint; m_Texture (the primary display tex)
-    // is set to the title texture so HUDControl3d::Draw renders it.
+    // pause_title.tex goes into the inherited HUDControl3d::m_Texture (+0x74),
+    // the primary display texture HUDControl3d::Draw renders.
     {
-        int w = 0, h = 0;
-        Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex", &w, &h);
+        Mortar::SmartPtr<Mortar::Texture> tex = LoadTex("pause_title.tex");
         m_Texture = tex;   // +0x74: binary @0x001a7204 field_0x74 (read +0x24/+0x28 for title W/H)
-#if !defined(__bada__)
-        m_TitleTexW = (float)w;
-        m_TitleTexH = (float)h;
-#endif
     }
 
     // +0xb8 m_PauseButtonTex: pause_button.tex (in-game pause icon)
     {
-        int w = 0, h = 0;
-        m_PauseButtonTex = LoadTex("pause_button.tex", &w, &h);
-#if !defined(__bada__)
-        m_PauseButtonTexW = (float)w;
-        m_PauseButtonTexH = (float)h;
-#endif
+        m_PauseButtonTex = LoadTex("pause_button.tex");
     }
 
     // +0xbc m_PlayButtonTex: play_button.tex (resume icon)
@@ -322,36 +305,33 @@ PauseScreen::PauseScreen()
 
     // +0xc0 m_QuitTitleTex: quit_title.tex
     {
-        int w = 0, h = 0;
-        m_QuitTitleTex = LoadTex("quit_title.tex", &w, &h);
-#if !defined(__bada__)
-        m_QuitTitleTexW = (float)w;
-        m_QuitTitleTexH = (float)h;
-#endif
+        m_QuitTitleTex = LoadTex("quit_title.tex");
     }
 
     // +0xc4 m_RetryButtonTex: retry_button.tex
     // Reset() assigns this to m_RetryButton->m_Texture on every level reset.
     {
-        int w = 0, h = 0;
-        m_RetryButtonTex = LoadTex("retry_button.tex", &w, &h);
-#if !defined(__bada__)
-        m_RetryButtonTexW = (float)w;
-        m_RetryButtonTexH = (float)h;
-#endif
+        m_RetryButtonTex = LoadTex("retry_button.tex");
     }
 
-#if !defined(__bada__)
-    // Title size stored in m_TitleSize for slide-in math (doc section 4 #6)
-    m_TitleSize = _Vector3<float>(m_TitleTexW, m_TitleTexH, 0.0f);
+    // ASM-spec v1.6.1 PauseScreen::PauseScreen @0x001a7204: the title quad's
+    // dimensions are read straight off the pause_title Texture (+0x24 width,
+    // +0x28 height) at ctor time and stored, in this order, into size
+    // (+0x20/+0x24/+0x28), m_TitleSize (+0x80) and pos (+0x08/+0x0c/+0x10).
+    // Note the Z component: size/m_TitleSize get 1.0f, pos gets 0.0f.
+    {
+        const float texW = m_Texture.IsValid() ? (float)m_Texture->GetWidth()  : 0.0f;
+        const float texH = m_Texture.IsValid() ? (float)m_Texture->GetHeight() : 0.0f;
 
-    // Initial pos: centered along Y by texture height (doc section 2 notes)
-    // pos = (0, (320 - sizeY) * 0.5, 0)
-    pos = _Vector3<float>(0.0f, (320.0f - m_TitleTexH) * 0.5f, 0.0f);
+        // size for HUDControl3d::Draw quad
+        size = _Vector3<float>(texW, texH, 1.0f);
 
-    // size for HUDControl3d::Draw quad
-    size = _Vector3<float>(m_TitleTexW, m_TitleTexH, 0.0f);
-#endif
+        // Title size retained for the slide-in math in Update.
+        m_TitleSize = size;
+
+        // Initial pos: centered along Y by texture height.
+        pos = _Vector3<float>(0.0f, (320.0f - size.y) * 0.5f, 0.0f);
+    }
 
     // ASM-spec v1.6.1 PauseScreen::PauseScreen @0x001a7204: build m_PausedText.
     // Binary: operator new(200=0xc8); BakedStringBox(box, *(g_GameData+0x614), 100, 0x1e);

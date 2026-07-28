@@ -295,7 +295,7 @@ int main(int argc, char* argv[]) {
     printf("[ring_texture_lifecycle] pre-DojoScreen: red_ring valid=1 count=%d\n",
            game_work.m_RingTex[kRingRed].DebugRefCount());
 
-    DojoScreen* dojo = new DojoScreen(h.game);
+    DojoScreen* dojo = new DojoScreen();
     dojo->Init(); // Init() -> Reset() -> CreateButtons() -- the crash site.
     game_work.mHud->AddControl(dojo);
 

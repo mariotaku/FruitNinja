@@ -104,7 +104,7 @@ Mortar::SmartPtr<Mortar::Texture> DojoScreen::s_TexAbout;
 // ===================================================================
 // Matches DojoScreen::DojoScreen @ 0x0016bad8
 // ===================================================================
-DojoScreen::DojoScreen(Game& g)
+DojoScreen::DojoScreen()
     : m_pBackButton(nullptr)    // +0x94
     , m_pShopButton(nullptr)    // +0x98
     , m_pAboutButton(nullptr)   // +0x9c
@@ -119,7 +119,6 @@ DojoScreen::DojoScreen(Game& g)
     , m_bShopLoading(false)
     , m_pPendingShop(nullptr)
 #endif
-    , game(g)
 {
     LOG_INFO("SCREEN/DojoScreen", "%s (%s)", "create", "DojoScreen::DojoScreen @ 0x0016bad8");
     LoadContent();

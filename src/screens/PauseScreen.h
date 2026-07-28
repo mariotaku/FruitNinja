@@ -114,18 +114,9 @@ public:
     int m_State;
 
     // sizeof == 0xdc (220 bytes) here — matches binary.
-
-    // Port-specific trailing fields (not in the 220-byte binary struct).
-    // Excluded on the __bada__ production build so sizeof stays at 0xdc.
-    // Binary reads texture dimensions from SmartPtr<Texture>->GetWidth()/GetHeight()
-    // each time they are needed. Port caches them after load to avoid holding
-    // SmartPtrs in Update.
-#if !defined(__bada__)
-    float m_TitleTexW, m_TitleTexH;
-    float m_PauseButtonTexW, m_PauseButtonTexH;
-    float m_QuitTitleTexW, m_QuitTitleTexH;
-    float m_RetryButtonTexW, m_RetryButtonTexH;
-#endif // !defined(__bada__)
+    // No port-only trailing fields: the ctor reads the title texture's
+    // dimensions off the Texture itself (as the binary does) rather than
+    // caching them in extra members.
 
     PauseScreen();
     ~PauseScreen();
@@ -242,8 +233,7 @@ void SkipToPause(bool force);
 //   m_State          +0xd8
 //
 // Field ordering is verified by the compiler (struct member order).
-// Binary size = 0xdc (220 bytes). Port-specific trailing floats (m_TitleTexW etc.)
-// are after the binary-faithful region; only the binary fields are asserted here.
+// Binary size = 0xdc (220 bytes); the port class has no trailing port-only fields.
 
 #if defined(__bada__)
 #include <cstddef>

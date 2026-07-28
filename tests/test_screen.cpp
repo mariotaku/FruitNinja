@@ -123,11 +123,11 @@ int main(int argc, char* argv[]) {
         // already there — leave MainScreen active
     } else if (strcmp(screenName, "dojo") == 0) {
         hideAllExisting();
-        DojoScreen* s = new DojoScreen(h.game);
+        DojoScreen* s = new DojoScreen();
         game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "about") == 0) {
         hideAllExisting();
-        DojoScreen* dojo = new DojoScreen(h.game);
+        DojoScreen* dojo = new DojoScreen();
         dojo->m_Active = 0;  // dojo is just AboutScreen's parent for back-nav
         game_work.mHud->AddControl(dojo);
         AboutScreen* s = new AboutScreen(dojo);
@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
         game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "shop") == 0) {
         hideAllExisting();
-        DojoScreen* dojo = new DojoScreen(h.game);
+        DojoScreen* dojo = new DojoScreen();
         dojo->m_Active = 0;
         game_work.mHud->AddControl(dojo);
         ShopScreen* s = new ShopScreen(dojo);
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
         s->Init();
     } else if (strcmp(screenName, "gamemode") == 0) {
         hideAllExisting();
-        GameModeScreen* s = new GameModeScreen(h.game, false);
+        GameModeScreen* s = new GameModeScreen(false);
         game_work.mHud->AddControl(s);
     } else if (strcmp(screenName, "classic") == 0) {
         // Active Classic-mode gameplay HUD: ScoreControl + 3x MissControl

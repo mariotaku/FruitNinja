@@ -123,7 +123,7 @@ static int RunPreReapTest(fn::TestHarness& h) {
 
     DeactivateExisting();
 
-    GameModeScreen* gms = new GameModeScreen(h.game, false);
+    GameModeScreen* gms = new GameModeScreen(false);
     game_work.mHud->AddControl(gms);
     printf("[gamemode_dtor] A: GMS=%p\n", (void*)gms);
 
@@ -203,7 +203,7 @@ static int RunBackOutTest(fn::TestHarness& h) {
 
     DeactivateExisting();
 
-    GameModeScreen* gms = new GameModeScreen(h.game, false);
+    GameModeScreen* gms = new GameModeScreen(false);
     game_work.mHud->AddControl(gms);
     printf("[gamemode_dtor] B: GMS=%p\n", (void*)gms);
 

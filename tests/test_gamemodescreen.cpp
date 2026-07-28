@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
 
     // Create GameModeScreen. isFromPause=false matches the normal Play -> mode-select path.
     // Binary: GameModeScreen ctor @ 0x0013e524 (bool isFromPause).
-    GameModeScreen* screen = new GameModeScreen(h.game, false);
+    GameModeScreen* screen = new GameModeScreen(false);
     game_work.mHud->AddControl(screen);
 
     if (h.IsInteractive()) {

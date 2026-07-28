@@ -128,14 +128,6 @@ static const float kSettingsSlideOut = 55.0f;
 void MainScreen::SetState(MainScreenState s) {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(s), "SetState");
     m_State = s;
-#ifndef __bada__
-    if (s == STATE_CAMERA_ZOOM) {
-        // Port specific: m_pDojoScreen is a weak pointer to a child screen managed
-        // by HUD. Its removal callback can race the state transition. Forcibly clear
-        // it here so STATE_CAMERA_ZOOM doesn't keep a stale pointer.
-        m_pDojoScreen = nullptr;
-    }
-#endif // !defined(__bada__)
 }
 
 // ASM-spec v1.6.1 MainScreen ctor @0x0019811c
@@ -159,14 +151,12 @@ MainScreen::MainScreen(Game& g)
       , m_TimeRemainingDisplay(-1.0f)
       , m_Time(0.0f)
       , m_bGameStartReset(false)
-      , m_pDojoScreen(nullptr)
       , m_pSettingsButton(nullptr)
-      , game(g)
 #endif
 {
-#ifdef __bada__
+    // Port specific: the binary ctor (v1.6.1 MainScreen::MainScreen @0x0019811c)
+    // takes no arguments; Game is reached through Game::GetInstance() where needed.
     (void)g;
-#endif
 
     // Load global textures (assigned to file-scope globals mirroring binary GOT globals).
     s_blurTex  = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
@@ -396,9 +386,10 @@ void MainScreen::Update(float dt) {
         // settled (m_PauseAmount < threshold) AND m_Timer2 > 0.15f.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
         // logo bounce on menu return). NOT a flash countdown in v1.6.1.
-        // Cross: binary case-0 reads m_TexMoreGames.f0 (exists on bada); port aliases a
-        // port-only float (DIFFERS, x64 8-byte SmartPtr) so the hold branch is bada-excluded
-        // -- the settle branch is binary-faithful.
+        // Cross: binary case-0 reads m_TexMoreGames.f0 (exists on bada); the port routes
+        // both builds through TexMoreGamesF0() -- bada aliases the +0x11c slot exactly as
+        // the binary does, host uses the dedicated m_MoreGamesF0 (DIFFERS, x64 SmartPtr is
+        // 8 bytes). Both arms of the branch are therefore compiled on both builds.
 
         // v1.6.1 @0x00197430: CreateButtons called FIRST, unconditionally every frame;
         // internal gate on flM_BombHitTimer<1.45 + per-button null guards.
@@ -409,7 +400,6 @@ void MainScreen::Update(float dt) {
             game_work.gameMode = 0;
         }
 
-#ifndef __bada__
         float f0 = TexMoreGamesF0();
         if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
             // Hold/flash branch: tick countdown, ramp camera but clamp to >=0 (off-screen).
@@ -421,9 +411,12 @@ void MainScreen::Update(float dt) {
                 game_work.m_PauseAmount = 0.0f;
             }
         } else {
-#endif // !defined(__bada__)
             // Settle branch: advance timer, ramp camera toward -1
             // (else-arm snaps to -1.0 once past the -0.999 threshold).
+            // The binary re-zeroes gameMode here UNCONDITIONALLY (strb r2,[r3,#4]
+            // @0x001972f8), i.e. without the IsMultiplayer() gate the pre-branch
+            // write above carries.
+            game_work.gameMode = 0;
             m_Timer2 += dt;
             if (game_work.m_PauseAmount >= CAMERA_THRESHOLD) {
                 // Port specific: dt-normalize the per-frame ease (dtN = dt*60) so the menu camera
@@ -432,9 +425,7 @@ void MainScreen::Update(float dt) {
             } else {
                 game_work.m_PauseAmount = -1.0f;
             }
-#ifndef __bada__
         }
-#endif // !defined(__bada__)
 
         // v1.6.1 MainScreen::Update @0x00196e1c case 0 (binary @0x00197334..0x00197360):
         //   advance iff (m_Timer2 > 0.15) AND (flM_PauseAmount < 0.0). Binary uses bmi
@@ -528,18 +519,15 @@ void MainScreen::Update(float dt) {
         pos.y = (sizeY_d + 320.0f - 2.0f * tt_d) * 0.5f;
 
         // Binary gates ONLY on entity-count==0 AND (m_Timer2 != 0 && m_Timer2 < 0.001).
-        // The port-only !m_pDojoScreen guard was a stale-latch bug that suppressed re-creation.
+        // A port-only "already spawned" pointer guard here was a stale-latch bug that
+        // suppressed re-creation; the binary has no such guard.
         if (fruitCount == 0 && m_Timer2 != 0.0f && m_Timer2 < 0.001f) {
             m_Timer2 = 0.0f;
-#ifndef __bada__
-            DojoScreen* dojoScreen = new DojoScreen(game);
-            dojoScreen->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(this, &MainScreen::DojoScreenRemoved);
+            DojoScreen* dojoScreen = new DojoScreen();
             // Binary @ 0x197494: vtable->Init(scr) is called BEFORE HUD::AddControl.
             // HUD::AddControl only appends to list; it does NOT call Init internally.
             dojoScreen->Init();
             game_work.mHud->AddControl(dojoScreen);
-            m_pDojoScreen = dojoScreen;
-#endif // !defined(__bada__)
         }
         break;
     }
@@ -562,9 +550,7 @@ void MainScreen::Update(float dt) {
                 // f0=0.0f means case-0's hold branch is skipped immediately on the next tick,
                 // so the slide-in animation starts right away on return.
                 m_Timer2 = STATE_8_RESET_TIMER;
-#ifndef __bada__
                 TexMoreGamesF0() = 0.0f;
-#endif // !defined(__bada__)
                 LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/SLIDE_IN hold expired");
                 m_State = STATE_CAMERA_ZOOM;
             }
@@ -646,10 +632,11 @@ void MainScreen::Update(float dt) {
 
         if (oldTimer2 > STATE_0E_THRESHOLD && m_Timer2 <= STATE_0E_THRESHOLD) {
             CancelNews();  // Defunct: NetworkManager news -- called in the mode-select spawn block; v1.6.1 MainScreen::Update @0x00197560
-#ifndef __bada__
-            GameModeScreen* gms = new GameModeScreen(game, false);
+            GameModeScreen* gms = new GameModeScreen(false);
+            // Binary @0x00197594: vtable slot 2 (Init) is dispatched BEFORE HUD::AddControl,
+            // same as the cases-3/4 DojoScreen spawn above.
+            gms->Init();
             game_work.mHud->AddControl(gms);
-#endif // !defined(__bada__)
         }
         break;
     }
@@ -715,9 +702,11 @@ void MainScreen::Update(float dt) {
         }
         if (BombFlashFull()) {
             SystemManager::GetInstance().QuitGame();
-#ifndef __bada__
-            game.running = false;
-#endif // !defined(__bada__)
+            // Port specific: no binary counterpart -- Bada's QuitGame tears the app
+            // down itself; the SDL/host main loop needs its run flag cleared.
+            if (Game* g = Game::GetInstance()) {
+                g->running = false;
+            }
         }
         break;
     }

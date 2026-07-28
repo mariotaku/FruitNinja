@@ -76,7 +76,9 @@ static const float ALPHA_DECAY_MODE = 0.85f;    // DAT_0013f480 (states 3-7)
 static const float ALPHA_DECAY_BACK = 0.75f;    // state 0xE
 static const float ALPHA_OUT_DONE   = 0.001f;   // DAT_0013f484
 static const float CAMERA_DECAY     = 0.75f;
-static const float CAMERA_THRESH    = -0.9f;    // DAT_0013f460
+// SetupLevel gate: fire while m_PauseAmount is still below this (camera deep in
+// the menu zoom). v1.6.1 GameModeScreen::Update @0x001827d0, const @0x00182bcc.
+static const float CAMERA_SETUP_GATE = -0.9f;
 static const float SECONDARY_CLAMP  = 0.1f;     // DAT_0013f474
 static const float SECONDARY_RATE   = 0.25f;
 static const float FRAMETIMER_RATE  = 0.15f;    // DAT_0013f48c
@@ -218,7 +220,7 @@ void GameModeScreen::UnLoadContent() {
 // Binary @ 0x00182da0 — initialise BaseScreen, default m_State=0,
 // m_SecondaryAlpha=-2.5, online-MP slot=null, m_FrameTimer=0.
 // ===================================================================
-GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
+GameModeScreen::GameModeScreen(bool isFromPause)
     : m_pBackButton(nullptr)        // +0xa0
     , m_ButtonDelay(-1.0f)          // +0xa4 (binary init)
     , m_TransitionTimer(-1.0f)      // +0xa8 (binary: set to -1 in state-0 transition)
@@ -236,17 +238,12 @@ GameModeScreen::GameModeScreen(Game& g, bool isFromPause)
     , m_pDescBox(nullptr)           // +0xd4
     , m_pInfoBox(nullptr)           // +0xd8
 #if !defined(__bada__)
-    , m_pGame(&g)
-    , m_bSetupLevelFired(false)
 #if defined(FN_BLOCK_PRELOAD)
     , m_bLoading(false)
 #endif
     , m_pArcadeButton(nullptr)
 #endif
 {
-#if defined(__bada__)
-    (void)g;
-#endif
     LoadContent();
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;  // binary sets to 1 in ctor; raised to HUD_LAYER_POST_ACTOR by subclass Draw
     m_State           = 0;
@@ -643,20 +640,18 @@ void GameModeScreen::Update(float dt) {
         m_SecondaryAlpha = m_TransitionAlpha;
 
         if (game_work.mMainScreen) {
+            // ASM-spec v1.6.1 GameModeScreen::Update @ 0x001827d0 (cases 3-6 @0x001829e4;
+            // SetupLevel vtable +0x4c -> @0x00181428): the -0.9 test (const @0x00182bcc =
+            // 0xbf666666) reads m_PauseAmount BEFORE the *0.75 decay, fires while the
+            // camera is still DEEP in zoom (< -0.9), and carries no latch.
+#if !defined(FN_BLOCK_PRELOAD)
+            if (game_work.mMainScreen->GetCameraTransition() < CAMERA_SETUP_GATE) {
+                SetupLevel();
+            }
+#endif
             float camT = game_work.mMainScreen->GetCameraTransition();
             camT *= CAMERA_DECAY;
             game_work.mMainScreen->SetCameraTransition(camT);
-            // Binary @ 0x0013f2e2: vtable[18] (SetupLevel) dispatched once
-            // camera transition crosses -0.9 (DAT_0013f460). camT decays
-            // toward 0 from -1 (main menu zoom-in), so the actual gate is
-            // "passed -0.9 toward zero" i.e. camT > -0.9 (less negative).
-            // Latch keeps it one-shot per mode-pick.
-#if !defined(__bada__) && !defined(FN_BLOCK_PRELOAD)
-            if (!m_bSetupLevelFired && camT > -0.9f) {
-                SetupLevel();
-                m_bSetupLevelFired = true;
-            }
-#endif
 
             if (fabsf(camT) < ALPHA_OUT_DONE) {
                 if (game_work.mGameSound) {
@@ -1014,7 +1009,8 @@ void GameModeScreen::SetupLevel() {
 #if defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 1 -- block-enter hook (log-only labelling, see
     // tmp/wii/loader-blueprint.md section 2/7). Camera-fade-triggered latch
-    // (see m_bSetupLevelFired above) -- the predictive IN-GAME preload point.
+    // Camera-fade-triggered (see the SetupLevel decl in the header) -- the
+    // predictive IN-GAME preload point.
     fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_INGAME);
     // Task #36 Stage 2 -- force-load the INGAME+GAMEOVER mid-block deltas
     // synchronously HERE, behind the camera fade that already covers this
@@ -1028,9 +1024,6 @@ void GameModeScreen::SetupLevel() {
 
 // Matches ClassicModeCallback @ 0x0013dfb4
 void GameModeScreen::ClassicModeCallback() {
-#if !defined(__bada__)
-    m_bSetupLevelFired = false;
-#endif
     m_State = 3;
     game_work.gameMode = 0;
 #if defined(FN_BLOCK_PRELOAD)
@@ -1042,9 +1035,6 @@ void GameModeScreen::ClassicModeCallback() {
 
 // Matches ZenModeCallback @ 0x0013dffc
 void GameModeScreen::ZenModeCallback() {
-#if !defined(__bada__)
-    m_bSetupLevelFired = false;
-#endif
     m_State = 6;
     game_work.gameMode = 3;
 #if defined(FN_BLOCK_PRELOAD)
@@ -1055,9 +1045,6 @@ void GameModeScreen::ZenModeCallback() {
 // Matches ArcadeModeCallback @ 0x0013e19c
 // Binary: FruitSaveData::AddToTotal("coming_soon", ..., 10) — skipped
 void GameModeScreen::ArcadeModeCallback() {
-#if !defined(__bada__)
-    m_bSetupLevelFired = false;
-#endif
     m_State = 5;
     game_work.gameMode = 2;
 #if defined(FN_BLOCK_PRELOAD)

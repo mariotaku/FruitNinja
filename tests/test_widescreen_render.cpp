@@ -499,7 +499,7 @@ int main(int argc, char* argv[]) {
         h.game.actorManager->DeactivateAllEntities(0);
         h.game.actorManager->DeactivateAllEntities(1);
     }
-    GameModeScreen* gms = new GameModeScreen(h.game, false);
+    GameModeScreen* gms = new GameModeScreen(false);
     game_work.mHud->AddControl(gms);
     // 90 (not 60) frames: GameModeScreen::UpdateRealtime's case-2 sensei slide
     // steps m_SecondaryAlpha from -2.5 toward 1.0 via
@@ -542,7 +542,7 @@ int main(int argc, char* argv[]) {
     // accumulated in mHud so far -- gms + its 4 ring MenuButtons (left active since
     // the gamemode capture only did `gms->m_Active = 0`) and dojo + its 2 BSButtons
     // -- in one generic pass, so no per-control private-member access is needed.
-    DojoScreen* dojo = new DojoScreen(h.game);
+    DojoScreen* dojo = new DojoScreen();
     game_work.mHud->AddControl(dojo);
     HideAllExisting();
     ShopScreen* shop = new ShopScreen(dojo);
@@ -582,7 +582,7 @@ int main(int argc, char* argv[]) {
         h.game.actorManager->DeactivateAllEntities(1);
     }
     HideAllExisting();
-    DojoScreen* dojo2 = new DojoScreen(h.game);
+    DojoScreen* dojo2 = new DojoScreen();
     game_work.mHud->AddControl(dojo2);
     // DojoScreen's ctor only builds the version text + the two BSButtons
     // (Facebook/Twitter); the nav rings (m_pBackButton/m_pShopButton/
@@ -616,7 +616,7 @@ int main(int argc, char* argv[]) {
         h.game.actorManager->DeactivateAllEntities(1);
     }
     HideAllExisting();
-    DojoScreen* dojo3 = new DojoScreen(h.game);
+    DojoScreen* dojo3 = new DojoScreen();
     dojo3->m_Active = 0;  // dojo3 is just AboutScreen's parent for back-nav
     game_work.mHud->AddControl(dojo3);
     // DojoScreen's ctor (@0x0016bad8) unconditionally builds TWO independent

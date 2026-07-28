@@ -55,7 +55,6 @@
 #include <cstdint>
 
 class MenuButton;
-struct Game;
 
 namespace Mortar {
     class BakedStringBox;
@@ -63,12 +62,17 @@ namespace Mortar {
 
 class GameModeScreen : public BaseScreen {
 public:
-    GameModeScreen(Game& g, bool isFromPause);
+    // Binary ctor takes only the isFromPause flag (v1.6.1
+    // GameModeScreen::GameModeScreen(bool) @0x00182da0; spawned by
+    // MainScreen::Update cases 0xe/0xf as operator new(0xdc) + ctor(false)).
+    GameModeScreen(bool isFromPause);
     ~GameModeScreen();
 
     // HUDControl overrides
     // Binary Init @ 0x00181060 (v1.6.1) -> forwards to Reset @ 0x00181074 (bare BX LR). No-op.
-    // Activation is in the ctor; Init() must NOT be called to enable the screen.
+    // Activation happens in the ctor, so Init() does nothing -- but MainScreen::Update
+    // cases 0xe/0xf DO dispatch it (vtable slot 2) before HUD::AddControl, so the port
+    // calls it there too. Keep the body a no-op; never move activation into it.
     void Init() override;
     void Reset() override;                           // Binary @ 0x0013df80 — no-op override stub
     void Release() override;
@@ -166,10 +170,6 @@ public:
     // Port-specific trailing fields (not in the 220-byte binary struct).
     // Excluded on the __bada__ production build so sizeof stays at 0xdc.
 #if !defined(__bada__)
-    // Binary accesses Game via GOT; port stores a pointer here.
-    Game* m_pGame;
-    // One-shot latch for SetupLevel call (port-only idempotency guard).
-    bool m_bSetupLevelFired;
 #if defined(FN_BLOCK_PRELOAD)
     // Task #66 Phase 1 -- true while BlockLoader::PreloadBlockStep() is still
     // draining the INGAME work-queue. Holds the mode-select panel at full
@@ -193,8 +193,13 @@ public:
 
     void DrawConnectTexture(_Vector3<float> pos);  // 0x0013f754
 
-    // vtable[18] @ 0x0013e21c — prime the first wave once the camera fade
-    // crosses -0.9. Calls PrepareForLevelStart().
+    // vtable slot 19 (+0x4c) -> v1.6.1 GameModeScreen::SetupLevel @0x00181428.
+    // Primes the first wave (calls PrepareForLevelStart). Dispatched from
+    // Update cases 3-6 while game_work.m_PauseAmount is still BELOW -0.9, i.e.
+    // while the menu camera is still deep in its zoom -- there is no latch, so
+    // it re-enters every frame the test passes. In practice the *0.75 decay
+    // that follows lifts m_PauseAmount past -0.9 on the first tick, making it
+    // one-shot. Do NOT re-add a fired-latch: it hides the ordering.
     void SetupLevel();
 
 #if defined(FN_BLOCK_PRELOAD)

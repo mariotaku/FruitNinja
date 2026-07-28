@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
 
     // Step 3: create DojoScreen via the faithful binary flow:
     //   ctor (adds BSButtons to HUD) -> Init() -> Reset() -> CreateButtons() -> AddControl.
-    DojoScreen* dojo = new DojoScreen(h.game);
+    DojoScreen* dojo = new DojoScreen();
     dojo->Init();
     game_work.mHud->AddControl(dojo);
 

@@ -22,7 +22,7 @@
 //   decays m_Timer2 by STATE_0E_DECAY=0.85 per frame; when it crosses
 //   STATE_0E_THRESHOLD=0.25 (~9 frames after the callback fires), it
 //   constructs GameModeScreen and adds it to the HUD:
-//     GameModeScreen* gms = new GameModeScreen(game, false);
+//     GameModeScreen* gms = new GameModeScreen(false);
 //     game_work.mHud->AddControl(gms);
 //   This construction + HUD insertion is the crash window under test.
 //

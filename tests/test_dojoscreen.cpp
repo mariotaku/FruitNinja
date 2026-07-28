@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
     //   new DojoScreen (ctor adds BSButtons to HUD immediately)
     //   Init() -> Reset() -> CreateButtons()  (v1.6.1 @0x00169e80)
     //   AddControl (adds DojoScreen itself to HUD)
-    DojoScreen* dojo = new DojoScreen(h.game);
+    DojoScreen* dojo = new DojoScreen();
     dojo->Init();
     game_work.mHud->AddControl(dojo);
 

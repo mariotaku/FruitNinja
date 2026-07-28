@@ -67,11 +67,11 @@ class ShopScreen;
 // entity-count transition gate clears. Forward-declared for the FN_TEST inline
 // TestFire*Slice helpers below (avoids pulling MenuButton.h into this header).
 void ClearMenuItems();
-struct Game;
-
 class DojoScreen : public BaseScreen {
 public:
-    DojoScreen(Game& g);
+    // Binary ctor takes no arguments (v1.6.1 DojoScreen::DojoScreen @0x0016bad8;
+    // spawned by MainScreen::Update cases 3/4 as operator new(0xb8) + 0-arg ctor).
+    DojoScreen();
     ~DojoScreen();
 
     // HUDControl overrides
@@ -148,9 +148,6 @@ private:
     // nullptr when not mid-hold.
     ShopScreen* m_pPendingShop;
 #endif
-
-    // Port specific: binary accesses Game via GOT; port stores a reference here.
-    Game& game;
 
     // Binary stores textures at GOT-relative globals, not per-instance.
     // Port mirrors this with static members so LoadContent/UnLoadContent
@@ -229,7 +226,7 @@ private:
 #ifdef __bada__
 #include <cstddef>
 // Binary sizeof(DojoScreen) == 0xb8 (v1.6.1 DojoScreen ctor @0x0016bad8).
-// Port-only tail (m_pAboutScreen, game) pushes sizeof past 0xb8, so we assert
+// Port-only tail (m_pAboutScreen) pushes sizeof past 0xb8, so we assert
 // offsetof on the binary-faithful prefix only (same pattern as MainScreen).
 // Friend struct: GCC 4.4 rejects offsetof on private members from namespace scope.
 struct DojoScreenLayoutAssert {

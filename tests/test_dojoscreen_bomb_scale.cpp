@@ -162,7 +162,7 @@ int main(int argc, char* argv[]) {
     printf("[SETUP] pre-DojoScreen HUD control count: %d\n",
            (int)existingControls.size());
 
-    DojoScreen* dojo = new DojoScreen(h.game);
+    DojoScreen* dojo = new DojoScreen();
     // Match the real game's activation flow (MainScreen @ 0x197494):
     //   Init() is called BEFORE AddControl; Init() -> Reset() -> CreateButtons().
     dojo->Init();
