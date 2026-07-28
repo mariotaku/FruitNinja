@@ -13,14 +13,29 @@ i.e. only the ALREADY-PAIRED symbols), this reads the FULL port symbol set from
 a cross-build nm dump (tools/asm-verify/dump-port-nm.sh) so it can see the
 unpaired overloads -- which is exactly where the silent divergence lives.
 
-Inputs (all under tmp/asm-verify/, produced by the orchestrator):
-  --binary-json  binary-func-symbols.json  [{mangled,addr,size}]  (LIEF, STT_FUNC)
+Input (preferred, and what run.sh uses):
+  --symbol-index tmp/asm-verify/symbol-index.json
+      Written by discover-symbols.py during the in-container sweep. Carries the
+      binary symbol set, the FULL cross-build port symbol set (not just the
+      paired ones), and the c++filt demangle map -- so this script needs no
+      cross toolchain and runs host-side next to the other run.sh checks.
+
+Legacy inputs (kept for ad-hoc runs against hand-made dumps):
+  --binary-json  binary-func-symbols.json  [{mangled,addr,size}]
   --port-nm      port-nm.txt               (nm --print-size --defined-only dump)
   --demangled    demangle-map.tsv          (mangled<TAB>demangled, c++filt)
 
 Output:
   tmp/asm-verify/signature-mismatch.json   (machine-readable array)
   ranked markdown summary -> stdout
+
+Write-back (--write-back): append a `port_mangled =` alias to
+tools/asm-verify/manifest.toml for the unambiguous 1:1 findings, which is what
+actually turns a finding into a diffed symbol on the next sweep. Aliasing is
+preferred over renaming port code: it is a few TOML lines, causes no ABI churn,
+and states the honest assertion "this port symbol IS the port of that binary
+symbol". Rename port code only where the PORT name is wrong (e.g. the port
+"corrected" the binary's typo CheckHasGoneOffsceen).
 
 Step 0 (--emit-mangled-list FILE): write the unique mangled names that need
 demangling, so the caller can run c++filt once and feed back --demangled.
@@ -259,40 +274,197 @@ def params_of(dem):
 
 RANK_ORDER = {"HIGH": 0, "MED": 1, "LOW": 2}
 
+# ---- liveness ---------------------------------------------------------------
+# Same vocabulary as the pairing-gap bucketing: a finding on dead code hides no
+# live divergence, however large it is.
+DEFUNCT_MARKERS = (
+    "OpenFeint", "GameCenter", "GameSpy", "Leaderboard", "FNHighscore",
+    "Highscore", "NetworkManager", "NetworkPacket", "PacketFactory", "P2P",
+    "ProfanityFilter", "DRMManager", "Licensing", "NewsControl",
+    "NewsRenderer", "SocialNetwork", "Facebook", "Twitter",
+)
+PLATFORM_MARKERS = (
+    "Osp::", "Bada", "MAMAudio", "GlesForm", "MortarAudioMixer", "OspMain",
+    "Tizen", "AppUiApp", "MortarApp",
+)
+THIRD_PARTY_MARKERS = ("TiXml", "tinyxml", "zlib", "png_", "jpeg_")
+NOISE_MARKERS = ("std::", "__gnu_cxx::", "__cxxabiv1::", "operator new",
+                 "operator delete", "__gnu_debug")
+
+
+def liveness_of(base, dems):
+    """LIVE / DEFUNCT / PLATFORM / THIRD-PARTY / NOISE for a base identity."""
+    if any(is_thunk(d) for d in dems):
+        return "NOISE"
+    for marker_set, label in ((NOISE_MARKERS, "NOISE"),
+                              (DEFUNCT_MARKERS, "DEFUNCT"),
+                              (PLATFORM_MARKERS, "PLATFORM"),
+                              (THIRD_PARTY_MARKERS, "THIRD-PARTY")):
+        if any(m in base for m in marker_set):
+            return label
+    return "LIVE"
+
+
+# Byte thresholds for the size axis. A 4-byte stub that never pairs hides
+# nothing; a 968-byte per-frame Draw hides a lot.
+SIZE_HIGH = 256
+SIZE_MED = 64
+
+
+def rank_by_impact(base, dems, live, nbytes, actionable):
+    """Final rank = how much LIVE, UNDIFFED code this finding hides.
+
+    Deliberately NOT the signature SHAPE. Shape answers "why is it unpaired",
+    which the old ranking conflated with "does it matter" -- and that is how
+    Fruit::Draw (live, per-frame, 968 bytes, unpaired only because of the
+    known Draw(Renderer&) port refactor) sat at LOW. A well-understood cause is
+    a reason the finding is CHEAP TO FIX, not a reason to ignore it.
+    """
+    if live != "LIVE":
+        return "LOW", "not live (%s)" % live.lower()
+    if not actionable:
+        return "MED", "ambiguous (multiple unpaired overloads on a side)"
+    if "<" in base:
+        # Template instantiation: real, but weak/inline bodies dominate and
+        # they pair in bulk once a TU is added. Cap at MED.
+        return ("MED" if nbytes >= SIZE_HIGH else "LOW"), \
+               "template instantiation, %d B" % nbytes
+    if nbytes >= SIZE_HIGH:
+        return "HIGH", "live, %d B undiffed" % nbytes
+    if nbytes >= SIZE_MED:
+        return "MED", "live, %d B undiffed" % nbytes
+    return "LOW", "live but only %d B" % nbytes
+
+
+# ---- write-back -------------------------------------------------------------
+
+WRITE_BACK_HEADER = """
+# ---------------------------------------------------------------------------
+# signature-mismatch write-back (tools/asm-verify/signature-mismatch.py
+# --write-back). Each entry below is a base identity that exists on BOTH sides
+# with the SAME fully-qualified name but a different mangled signature, so the
+# exact-mangled-name intersection in discover-symbols.py never paired it and
+# asm-verify never diffed it. The alias states that the port symbol IS the port
+# of the binary symbol. Re-check any entry you doubt and delete it -- an alias
+# onto an UNPORTED body would hide a real gap behind a fake pairing.
+# ---------------------------------------------------------------------------
+"""
+
+
+def existing_manifest_mangled(path):
+    if not path.exists():
+        return set()
+    return set(re.findall(r'^\s*mangled\s*=\s*"(.*)"\s*$',
+                          path.read_text(encoding="utf-8"), re.M))
+
+
+def manifest_aliases(path):
+    """{binary_mangled: port_mangled} already declared in manifest.toml.
+
+    Symbols with an alias ARE paired and diffed by the sweep, so they must
+    drop out of this report -- otherwise every fix stays on the list forever
+    and the guard stops distinguishing "still blind" from "already handled".
+    """
+    if not path.exists():
+        return {}
+    txt = path.read_text(encoding="utf-8")
+    out = {}
+    cur = None
+    for line in txt.splitlines():
+        m = re.match(r'^\s*mangled\s*=\s*"(.*)"\s*$', line)
+        if m:
+            cur = m.group(1)
+            continue
+        m = re.match(r'^\s*port_mangled\s*=\s*"(.*)"\s*$', line)
+        if m and cur:
+            out[cur] = m.group(1)
+    return out
+
+
+def write_back(findings, manifest_path):
+    """Append `port_mangled` aliases for the unambiguous LIVE 1:1 findings."""
+    have = existing_manifest_mangled(manifest_path)
+    out = []
+    for f in findings:
+        if not f["alias_candidate"]:
+            continue
+        b = f["binary_mangled"][0]
+        if b in have:
+            continue
+        have.add(b)
+        out.append(f)
+    if not out:
+        return []
+    lines = [WRITE_BACK_HEADER]
+    for f in out:
+        lines.append("# %s @%s (%d B)  [%s]" % (
+            f["base_identity"], f["binary_addr"], f["binary_bytes"], f["rank"]))
+        lines.append("#   binary: %s" % f["binary_demangled"][0])
+        lines.append("#   port:   %s   [%s]" % (
+            f["port_demangled"][0], ", ".join(f["port_objs"]) or "?"))
+        lines.append("[[symbol]]")
+        lines.append('mangled      = "%s"' % f["binary_mangled"][0])
+        lines.append('port_mangled = "%s"' % f["port_mangled"][0])
+        lines.append('notes        = "signature-mismatch write-back: same '
+                     'qualified name, port signature %s"'
+                     % f["port_params"][0].replace('"', "'"))
+        lines.append("")
+    with manifest_path.open("a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    return out
+
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--symbol-index", default=str(TMP / "symbol-index.json"),
+                    help="Preferred input: written by discover-symbols.py.")
     ap.add_argument("--binary-json", default=str(TMP / "binary-func-symbols.json"))
     ap.add_argument("--port-nm", default=str(TMP / "port-nm.txt"))
     ap.add_argument("--demangled", default=str(TMP / "demangle-map.tsv"))
     ap.add_argument("--out", default=str(TMP / "signature-mismatch.json"))
+    ap.add_argument("--top", type=int, default=30,
+                    help="Rows in the stdout summary (default 30).")
+    ap.add_argument("--write-back", action="store_true",
+                    help="Append port_mangled aliases for the unambiguous LIVE "
+                         "1:1 findings to tools/asm-verify/manifest.toml.")
+    ap.add_argument("--manifest", default=str(PROJECT / "tools" / "asm-verify" /
+                                              "manifest.toml"))
     ap.add_argument("--emit-mangled-list", default=None,
                     help="Write unique mangled names needing demangle, then exit.")
     args = ap.parse_args()
 
-    bin_syms = json.loads(pathlib.Path(args.binary_json).read_text())
-    bin_by_mangled = {}
-    for s in bin_syms:
-        bin_by_mangled.setdefault(s["mangled"], s)  # first wins
-    port_objs = parse_port_nm(pathlib.Path(args.port_nm))
+    dem = {}
+    index_path = pathlib.Path(args.symbol_index)
+    if index_path.exists():
+        idx = json.loads(index_path.read_text())
+        bin_by_mangled = {}
+        for s in idx["binary"]:
+            bin_by_mangled.setdefault(s["mangled"], s)
+        port_objs = {m: {o} for m, o in idx["port"].items()}
+        dem = idx.get("demangled", {})
+    else:
+        print(f"NOTE: {index_path} missing -- falling back to the legacy "
+              f"binary-json/port-nm/demangled trio.", file=sys.stderr)
+        bin_syms = json.loads(pathlib.Path(args.binary_json).read_text())
+        bin_by_mangled = {}
+        for s in bin_syms:
+            bin_by_mangled.setdefault(s["mangled"], s)  # first wins
+        port_objs = parse_port_nm(pathlib.Path(args.port_nm))
+        # Read RAW bytes (not read_text): universal-newline mode would translate
+        # a bare \r mid-line into \n. The map can contain MANGLED\r\tDEMANGLED\r
+        # \n (host CRLF leaked through `paste`), so split on \n and strip \r.
+        raw = pathlib.Path(args.demangled).read_bytes().decode("utf-8", "replace")
+        for line in raw.split("\n"):
+            if "\t" not in line:
+                continue
+            m, d = line.split("\t", 1)
+            dem[m.strip()] = d.strip()
 
     if args.emit_mangled_list:
         names = sorted(set(bin_by_mangled) | set(port_objs))
         pathlib.Path(args.emit_mangled_list).write_text("\n".join(names) + "\n")
         print(f"wrote {len(names)} mangled names -> {args.emit_mangled_list}")
         return 0
-
-    # demangle map
-    dem = {}
-    # Read RAW bytes (not read_text): universal-newline mode would translate a
-    # bare \r mid-line into \n. The map can contain MANGLED\r\tDEMANGLED\r\n
-    # (host CRLF leaked through `paste`), so we split on \n and strip stray \r.
-    raw = pathlib.Path(args.demangled).read_bytes().decode("utf-8", "replace")
-    for line in raw.split("\n"):
-        if "\t" not in line:
-            continue
-        m, d = line.split("\t", 1)
-        dem[m.strip()] = d.strip()
 
     def demof(m):
         return dem.get(m, m)
@@ -307,16 +479,27 @@ def main():
 
     common_bases = set(bin_base) & set(port_base)
 
+    # A binary symbol with a manifest `port_mangled` alias is already paired
+    # and diffed -- treat the alias exactly like an exact-name match so fixed
+    # findings leave the report.
+    aliases = manifest_aliases(pathlib.Path(args.manifest))
+    aliased = {b for b, p in aliases.items() if p in port_objs}
+
     findings = []
     n_paired_exact = 0
     n_partial = 0
+    n_aliased = 0
     for base in common_bases:
         if not base:
             continue
         Mb = bin_base[base]
         Mp = port_base[base]
-        inter = Mb & Mp
-        if inter and Mb == Mp:
+        inter = (Mb & Mp) | (Mb & aliased)
+        if Mb & aliased:
+            n_aliased += len(Mb & aliased)
+            # The port side of an alias is spoken for too.
+            Mp = Mp - {aliases[b] for b in (Mb & aliased)}
+        if inter and Mb <= inter and not Mp - inter:
             n_paired_exact += 1
             continue  # fully paired, asm-verify sees it
         # base has at least one unpaired overload on some side
@@ -334,8 +517,13 @@ def main():
             continue
         bin_dems = [demof(m) for m in bin_unpaired]
         port_dems = [demof(m) for m in port_unpaired]
-        rank, why = rank_finding(base, bin_dems, port_dems)
+        shape, shape_note = rank_finding(base, bin_dems, port_dems)
         objs = sorted({o for m in port_unpaired for o in port_objs[m]})
+        nbytes = max(bin_by_mangled[m].get("size", 0) or 0 for m in bin_unpaired)
+        live = liveness_of(base, bin_dems + port_dems)
+        actionable = len(bin_unpaired) == 1 and len(port_unpaired) == 1
+        rank, why = rank_by_impact(base, bin_dems + port_dems, live, nbytes,
+                                   actionable)
         findings.append({
             "base_identity": base,
             "binary_mangled": bin_unpaired,
@@ -345,14 +533,32 @@ def main():
             "port_demangled": port_dems,
             "port_params": [params_of(d) for d in port_dems],
             "binary_addr": "0x%08x" % bin_by_mangled[bin_unpaired[0]]["addr"],
+            "binary_bytes": nbytes,
             "port_objs": objs,
             "rank": rank,
             "kind": kind,
             "note": why,
+            "liveness": live,
+            # Kept so nothing the old ranking knew is lost -- it is the "why is
+            # this unpaired" axis, which is orthogonal to "does it matter".
+            "shape": shape,
+            "shape_note": shape_note,
+            # An alias asserts "this port symbol IS the port of that binary
+            # symbol", so only propose it where the two really are the same
+            # body under a different signature: a threaded-in extra argument
+            # (the established Draw(Renderer&) / Render(mtx&) port refactor),
+            # a const/ref/width-only difference, or a namespace move.
+            # "param TYPE differs" at equal arity is excluded -- unrelated
+            # types at the same position mean the port function may be a
+            # DIFFERENT function, and aliasing would hide a real gap behind a
+            # fake pairing.
+            "alias_candidate": bool(actionable and live == "LIVE"
+                                    and "<" not in base
+                                    and shape_note != "param TYPE differs"),
         })
 
-    findings.sort(key=lambda f: (RANK_ORDER[f["rank"]],
-                                 "<" in f["base_identity"],
+    # Rank first, then biggest-undiffed-body first inside a rank.
+    findings.sort(key=lambda f: (RANK_ORDER[f["rank"]], -f["binary_bytes"],
                                  f["base_identity"]))
 
     pathlib.Path(args.out).parent.mkdir(parents=True, exist_ok=True)
@@ -362,21 +568,45 @@ def main():
     n_med = sum(1 for f in findings if f["rank"] == "MED")
     n_low = sum(1 for f in findings if f["rank"] == "LOW")
 
+    cands = [f for f in findings if f["alias_candidate"]]
+    live_bytes = sum(f["binary_bytes"] for f in findings
+                     if f["liveness"] == "LIVE")
+
     print(f"# Signature-mismatch (demangled-name matches, mangled differs -> "
           f"silently UNPAIRED by run.sh)\n")
     print(f"binary FUNC symbols: {len(bin_by_mangled)}   "
           f"port text symbols: {len(port_objs)}")
-    print(f"fully-paired bases (asm-verify sees these): {n_paired_exact}")
+    print(f"fully-paired bases (asm-verify sees these): {n_paired_exact}"
+          f"   [{n_aliased} via manifest port_mangled aliases]")
     print(f"SIGNATURE-MISMATCH findings: {len(findings)}  "
-          f"(HIGH={n_high} MED={n_med} LOW={n_low})\n")
-    print("| # | rank | base identity | binary params | port params | note |")
-    print("|---|------|---------------|---------------|-------------|------|")
-    for i, f in enumerate(findings[:30], 1):
-        bp = " ; ".join(f["binary_params"])[:46]
-        pp = " ; ".join(f["port_params"])[:46]
-        print(f"| {i} | {f['rank']} | `{f['base_identity'][:48]}` | "
+          f"(HIGH={n_high} MED={n_med} LOW={n_low})  "
+          f"live undiffed bytes: {live_bytes}")
+    print(f"alias candidates (1:1, live): {len(cands)}"
+          + ("   -- rerun with --write-back to apply"
+             if cands and not args.write_back else ""))
+    print()
+    print("| # | rank | bytes | base identity | binary params | port params | why |")
+    print("|---|------|-------|---------------|---------------|-------------|-----|")
+    for i, f in enumerate(findings[:args.top], 1):
+        bp = " ; ".join(f["binary_params"])[:40]
+        pp = " ; ".join(f["port_params"])[:40]
+        print(f"| {i} | {f['rank']} | {f['binary_bytes']} | "
+              f"`{f['base_identity'][:44]}` | "
               f"`{bp}` | `{pp}` | {f['note']} |")
-    print(f"\nFull JSON: {pathlib.Path(args.out).relative_to(PROJECT).as_posix()}")
+
+    if args.write_back:
+        applied = write_back(cands, pathlib.Path(args.manifest))
+        print(f"\nwrite-back: appended {len(applied)} port_mangled aliases to "
+              f"{pathlib.Path(args.manifest).relative_to(PROJECT).as_posix()} "
+              f"({len(cands) - len(applied)} already present).")
+        for f in applied:
+            print(f"  + {f['base_identity']}  ({f['binary_bytes']} B)")
+
+    try:
+        out_disp = pathlib.Path(args.out).relative_to(PROJECT).as_posix()
+    except ValueError:
+        out_disp = args.out
+    print(f"\nFull JSON: {out_disp}")
     return 0
 
 

@@ -11,6 +11,12 @@
 #   PathCI.cpp — POSIX dirent utility, port-only (no binary counterpart)
 #   mainEmscripten.cpp — Emscripten platform entry point
 #   DebugFlags.cpp — guarded by #ifndef __bada__
+#   TiXml.cpp — the port's TiXml* methods are void*-cast forwarders onto
+#     tinyxml2; the binary's are the real TinyXML implementation. Same 20
+#     mangled names, deliberately different bodies, so pairing them would add
+#     20 guaranteed-DIVERGE rows that measure the substitution, not the port.
+#     (It also can't compile here: <tinyxml2.h> is a FetchContent dep that the
+#     container has no copy of.) See the file header of src/engine/xml/TiXml.cpp.
 #
 # This file is the single source of truth; the old duplicated list in
 # cross-build/CMakeLists.txt has been removed.
@@ -41,6 +47,8 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/asset/MeshManager.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Model.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/DataStreamReader.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/FileDataReader.cpp"
+    "${_PROJECT_ROOT}/src/engine/asset/TextureConverter.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/Effect.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/ResourceLoader.cpp"
     "${_PROJECT_ROOT}/src/engine/asset/SharedEffectProperties.cpp"
@@ -81,16 +89,21 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/engine/render/QuadUtil.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Renderer.cpp"
     "${_PROJECT_ROOT}/src/engine/render/Utf8StringIterator.cpp"
+    "${_PROJECT_ROOT}/src/engine/render/Utf8StringProxy.cpp"
+    "${_PROJECT_ROOT}/src/engine/system/PlatformFuncs.cpp"
     "${_PROJECT_ROOT}/src/engine/util/AsciiString.cpp"
     "${_PROJECT_ROOT}/src/engine/util/Transition.cpp"
     "${_PROJECT_ROOT}/src/engine/util/Immutable.cpp"
     "${_PROJECT_ROOT}/src/engine/util/LinkedHeap.cpp"
     "${_PROJECT_ROOT}/src/engine/util/Localisation.cpp"
     "${_PROJECT_ROOT}/src/engine/util/StringTable.cpp"
+    "${_PROJECT_ROOT}/src/engine/util/PathFunctions.cpp"
     "${_PROJECT_ROOT}/src/engine/util/StringHash.cpp"
+    "${_PROJECT_ROOT}/src/engine/xml/BinaryXml.cpp"
 
     # Entities
     "${_PROJECT_ROOT}/src/entities/ActorManager.cpp"
+    "${_PROJECT_ROOT}/src/entities/EntityTracker.cpp"
     "${_PROJECT_ROOT}/src/entities/Bomb.cpp"
     "${_PROJECT_ROOT}/src/entities/BombBlast.cpp"
     "${_PROJECT_ROOT}/src/entities/BombFlash.cpp"
@@ -109,6 +122,9 @@ set(VERIFY_SOURCES
 
     # Game
     "${_PROJECT_ROOT}/src/game/AchievementManager.cpp"
+    "${_PROJECT_ROOT}/src/game/CoinChanceinator.cpp"
+    "${_PROJECT_ROOT}/src/game/DeviceQuery.cpp"
+    "${_PROJECT_ROOT}/src/game/EntityTypes.cpp"
     "${_PROJECT_ROOT}/src/game/DRMManager.cpp"
     "${_PROJECT_ROOT}/src/game/Leaderboard.cpp"
     "${_PROJECT_ROOT}/src/game/Licensing.cpp"
@@ -165,6 +181,10 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/hud/IngamePopup.cpp"
     "${_PROJECT_ROOT}/src/hud/BSButton.cpp"
     "${_PROJECT_ROOT}/src/hud/CheckBox.cpp"
+    "${_PROJECT_ROOT}/src/hud/ComboBox.cpp"
+    "${_PROJECT_ROOT}/src/hud/ListBox.cpp"
+    "${_PROJECT_ROOT}/src/hud/ScoreMultiplyerBoard.cpp"
+    "${_PROJECT_ROOT}/src/hud/TimeSinkControl.cpp"
     "${_PROJECT_ROOT}/src/hud/GenericHUDControl.cpp"
     "${_PROJECT_ROOT}/src/hud/HUDControl.cpp"
     "${_PROJECT_ROOT}/src/hud/CoinCounter.cpp"
@@ -211,6 +231,7 @@ set(VERIFY_SOURCES
     "${_PROJECT_ROOT}/src/screens/PurchaseInfo.cpp"
     "${_PROJECT_ROOT}/src/screens/ScreenButton.cpp"
     "${_PROJECT_ROOT}/src/screens/ShopScreen.cpp"
+    "${_PROJECT_ROOT}/src/screens/UpsellScreen.cpp"
 
     # Debug + platform-portable
     "${_PROJECT_ROOT}/src/debug/CrashHandler.cpp"

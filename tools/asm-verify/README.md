@@ -47,6 +47,8 @@ parallel: [9] bindiff/ (whole-program twins -> ranked CSV)
 | asm-verify report (full sweep) | `tmp/asm-verify/report.json` + `.md` | No (gitignored) |
 | asm-verify report (filtered run) | `tmp/asm-verify/report.scoped.json` + `.md` | No (gitignored) |
 | Classification (triager input) | `report.json` `cause`/`likelihood` fields + `tmp/asm-verify/suggested-triage.json` | No (gitignored) |
+| Full binary+port symbol sets + demangle map | `tmp/asm-verify/symbol-index.json` | No (gitignored) |
+| Pairing-gap findings | `tmp/asm-verify/signature-mismatch.json` | No (gitignored) |
 | BinDiff CSV | `tmp/bindiff-out/` | No (gitignored) |
 | Class-size / typeinfo reference | `tmp/binary-class-sizes.json`, `tmp/typeinfo-tree.json` | No (gitignored) |
 
@@ -95,6 +97,7 @@ asm-verify.py             -- operand-level diff + classify + report writer
 operand_resolve.py        -- --resolve-operands: CALL-target / data-symbol identity (see below)
 resolve-eval.py           -- quantify what --resolve-operands adds and costs (JSON -> tmp/asm-verify/resolve-eval/)
 classify-divergences.py   -- rank divergences (HIGH/MED/LOW); enrich report.json cause/likelihood + suggested-triage.json (ranked shortlist -> stdout)
+signature-mismatch.py     -- PAIRING-GAP guard: same qualified name, different signature => never paired, never diffed (see below); JSON -> tmp/asm-verify/
 detect-gutted-bada.py     -- find bodies the -D__bada__ cross-build silently guts (see below); JSON -> tmp/gutted-bada/
 triage.sh / triage.json   -- sticky per-asm_hash verdicts
 asm-verify-hook.sh        -- pre-commit hook entry
@@ -198,10 +201,57 @@ rows differ).
 - **Draw ORDER / count of identical calls.** N identical `CALL =f` lines compare
   as a multiset under LCS; a reordering inside a matched run is not surfaced.
 - **Everything the baseline is already blind to** -- excluded platform TUs,
-  `!__bada__` code, gutted `__bada__` bodies, unpaired symbols (~50% of the
-  binary's `FUNC`s never pair at all).
+  `!__bada__` code, gutted `__bada__` bodies, and unpaired symbols (see
+  "Pairing gap" below).
 - **Indirect calls.** `blx rN` through a vtable or function pointer has no
   static target; unchanged.
+
+## Pairing gap
+
+`discover-symbols.py` pairs binary<->port on the **exact mangled name**. A binary
+symbol that does not pair is **invisible**: it has no row, so it cannot fail, so
+it silently reads as "no problem". This is the sweep's largest structural blind
+spot and it does not show up anywhere in the report.
+
+Scale, stated honestly. Of 9619 binary `FUNC` symbols, ~2500 pair — but unpaired
+symbols skew tiny, so the count understates coverage badly. Measured in **bytes
+of non-template project code**, roughly **three quarters is covered** and about a
+quarter is undiffed; "~75% of symbols never diffed" is true by count and
+misleading as a statement about blindness. Rank by bytes, not by symbol count.
+
+Three causes, three remedies:
+
+1. **Symbol class.** GCC 4.4 emits most C++ bodies as `W` (weak) — inline
+   members, template instantiations, implicit ctors/dtors: 5880 of the binary's
+   9619. `run_nm()` accepts `T/t/W/w`. `V/v` are weak *objects* (typeinfo,
+   vtables, guard vars — all past the end of `.text`) and are correctly refused;
+   libstdc++/`__gnu_cxx`/`__cxxabiv1` weak instantiations are filtered by
+   `SKIP_PREFIXES` because diffing them measures the two libstdc++ header
+   versions, not the port.
+2. **TU not cross-compiled.** A symbol whose `.cpp` is absent from
+   `verify-sources.cmake` can never pair. Adding a TU is the cheapest yield in
+   the whole pipeline — but only for TUs whose port body is a real port of the
+   binary body (see the exclusion list at the top of `verify-sources.cmake`).
+3. **Signature drift.** Same fully-qualified name on both sides, different
+   mangled signature (`Fruit::Draw()` vs `Fruit::Draw(Renderer&)`), so the
+   exact-name intersection never fires. `signature-mismatch.py` is the detector;
+   `run.sh` calls it after the sweep and prints the ranked top rows.
+
+```sh
+python tools/asm-verify/signature-mismatch.py              # report only
+python tools/asm-verify/signature-mismatch.py --write-back # apply aliases
+```
+
+It ranks by **live undiffed bytes**, not by signature shape — a well-understood
+cause (the established `Draw(Renderer&)` port refactor) means the finding is
+*cheap to fix*, not that it is unimportant. `--write-back` appends a
+`port_mangled = ` alias to `manifest.toml` for the unambiguous 1:1 live
+findings; aliasing is preferred to renaming port code (a few TOML lines, no ABI
+churn) and the alias states the honest assertion "this port symbol IS the port of
+that binary symbol". Findings with a differing param TYPE at equal arity are
+never auto-aliased — those may be genuinely different functions, and an alias
+there would hide a real gap behind a fake pairing. Symbols already aliased drop
+out of the report, so the list drains as it is worked.
 
 ## Gutted `__bada__` bodies
 

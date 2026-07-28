@@ -28,9 +28,15 @@
 #   verified pairing. The alias asserts "this other symbol IS the faithful
 #   port of this binary function" -- nothing less.
 #
-#   The aliased port symbol's mangled name must be exact (read it off the
-#   cross-build nm / tools/asm-verify/dump-port-nm.sh); a typo or stale name
+#   The aliased port symbol's mangled name must be exact (read it off
+#   tmp/asm-verify/symbol-index.json, written by discover-symbols.py during
+#   every sweep, or tools/asm-verify/dump-port-nm.sh); a typo or stale name
 #   surfaces as UNPAIRED "port symbol <alias> not found in .o".
+#
+#   tools/asm-verify/signature-mismatch.py --write-back generates these
+#   automatically for the unambiguous 1:1 live findings (same fully-qualified
+#   name on both sides, different mangled signature). Review what it appends:
+#   it cannot tell a signature refactor from a genuinely unported body.
 
 # v1.6.1 Fruit::LoadInfo @0x001e1084. Port body is FruitInfo_Load(const char*)
 # in src/entities/FruitInfo.cpp (different TU); the port's Fruit::LoadInfo
@@ -57,3 +63,221 @@ notes        = "binary body ported as the canonical DrawString overload; binary-
 mangled      = "_ZN10ShopScreen4InitEv"
 port_mangled = "_ZN10ShopScreen14CreateShopListEv"
 notes        = "binary Init body ported as CreateShopList(); port Init forwards to it"
+
+# ---------------------------------------------------------------------------
+# signature-mismatch write-back (tools/asm-verify/signature-mismatch.py
+# --write-back). Each entry below is a base identity that exists on BOTH sides
+# with the SAME fully-qualified name but a different mangled signature, so the
+# exact-mangled-name intersection in discover-symbols.py never paired it and
+# asm-verify never diffed it. The alias states that the port symbol IS the port
+# of the binary symbol. Re-check any entry you doubt and delete it -- an alias
+# onto an UNPORTED body would hide a real gap behind a fake pairing.
+# ---------------------------------------------------------------------------
+
+# UpsellScreen::MakeMainUpsellScreen @0x001b7870 (2256 B)  [HIGH]
+#   binary: UpsellScreen::MakeMainUpsellScreen()
+#   port:   UpsellScreen::MakeMainUpsellScreen(Mortar::Delegate0<void>)   [UpsellScreen.cpp.obj]
+[[symbol]]
+mangled      = "_ZN12UpsellScreen20MakeMainUpsellScreenEv"
+port_mangled = "_ZN12UpsellScreen20MakeMainUpsellScreenEN6Mortar9Delegate0IvEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::Delegate0<void>)"
+
+# UpsellScreen::MakeModeUpsellScreen @0x001b7168 (1800 B)  [HIGH]
+#   binary: UpsellScreen::MakeModeUpsellScreen(int)
+#   port:   UpsellScreen::MakeModeUpsellScreen(Mortar::Delegate0<void>, int)   [UpsellScreen.cpp.obj]
+[[symbol]]
+mangled      = "_ZN12UpsellScreen20MakeModeUpsellScreenEi"
+port_mangled = "_ZN12UpsellScreen20MakeModeUpsellScreenEN6Mortar9Delegate0IvEEi"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::Delegate0<void>, int)"
+
+# Fruit::Draw @0x001d0524 (968 B)  [HIGH]
+#   binary: Fruit::Draw()
+#   port:   Fruit::Draw(Renderer&)   [Fruit.cpp.obj]
+[[symbol]]
+mangled      = "_ZN5Fruit4DrawEv"
+port_mangled = "_ZN5Fruit4DrawER8Renderer"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Renderer&)"
+
+# Mortar::Geometry::Render @0x00254468 (692 B)  [HIGH]
+#   binary: Mortar::Geometry::Render()
+#   port:   Mortar::Geometry::Render(_Matrix44<float> const&)   [Geometry.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar8Geometry6RenderEv"
+port_mangled = "_ZN6Mortar8Geometry6RenderERK9_Matrix44IfE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (_Matrix44<float> const&)"
+
+# Bomb::Draw @0x001c6c30 (420 B)  [HIGH]
+#   binary: Bomb::Draw()
+#   port:   Bomb::Draw(Renderer&)   [Bomb.cpp.obj]
+[[symbol]]
+mangled      = "_ZN4Bomb4DrawEv"
+port_mangled = "_ZN4Bomb4DrawER8Renderer"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Renderer&)"
+
+# Mortar::Model::Draw @0x002270cc (404 B)  [HIGH]
+#   binary: Mortar::Model::Draw(_Matrix44<float> const&) const
+#   port:   Mortar::Model::Draw(_Matrix44<float> const&)   [Model.cpp.obj]
+[[symbol]]
+mangled      = "_ZNK6Mortar5Model4DrawERK9_Matrix44IfE"
+port_mangled = "_ZN6Mortar5Model4DrawERK9_Matrix44IfE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (_Matrix44<float> const&)"
+
+# Mortar::SubstituteApparentSizeTextureSource::SetSource @0x00215c0c (284 B)  [HIGH]
+#   binary: Mortar::SubstituteApparentSizeTextureSource::SetSource(Mortar::SmartPtr<Mortar::TextureSource> const&)
+#   port:   Mortar::SubstituteApparentSizeTextureSource::SetSource(Mortar::SmartPtr<Mortar::TextureSource>&)   [AlternativeTextureLoader.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar35SubstituteApparentSizeTextureSource9SetSourceERKNS_8SmartPtrINS_13TextureSourceEEE"
+port_mangled = "_ZN6Mortar35SubstituteApparentSizeTextureSource9SetSourceERNS_8SmartPtrINS_13TextureSourceEEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::SmartPtr<Mortar::TextureSource>&)"
+
+# Mortar::Touch::___UpdateInternal @0x00232868 (240 B)  [MED]
+#   binary: Mortar::Touch::___UpdateInternal(unsigned int, bool, float, float)
+#   port:   Mortar::Touch::___UpdateInternal(unsigned long, bool, float, float)   [Touch.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar5Touch17___UpdateInternalEjbff"
+port_mangled = "_ZN6Mortar5Touch17___UpdateInternalEmbff"
+notes        = "signature-mismatch write-back: same qualified name, port signature (unsigned long, bool, float, float)"
+
+# Coin::Draw @0x001c8810 (200 B)  [MED]
+#   binary: Coin::Draw()
+#   port:   Coin::Draw(Renderer&)   [Coin.cpp.obj]
+[[symbol]]
+mangled      = "_ZN4Coin4DrawEv"
+port_mangled = "_ZN4Coin4DrawER8Renderer"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Renderer&)"
+
+# Mortar::SubstituteApparentSizeTextureSource::SetApparentSize @0x00215b0c (188 B)  [MED]
+#   binary: Mortar::SubstituteApparentSizeTextureSource::SetApparentSize(Mortar::SmartPtr<Mortar::TextureSource> const&)
+#   port:   Mortar::SubstituteApparentSizeTextureSource::SetApparentSize(Mortar::SmartPtr<Mortar::TextureSource>&)   [AlternativeTextureLoader.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar35SubstituteApparentSizeTextureSource15SetApparentSizeERKNS_8SmartPtrINS_13TextureSourceEEE"
+port_mangled = "_ZN6Mortar35SubstituteApparentSizeTextureSource15SetApparentSizeERNS_8SmartPtrINS_13TextureSourceEEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::SmartPtr<Mortar::TextureSource>&)"
+
+# ComboControl::Draw @0x001595b0 (184 B)  [MED]
+#   binary: ComboControl::Draw()
+#   port:   ComboControl::Draw(float*)   [ComboControl.cpp.obj]
+[[symbol]]
+mangled      = "_ZN12ComboControl4DrawEv"
+port_mangled = "_ZN12ComboControl4DrawEPf"
+notes        = "signature-mismatch write-back: same qualified name, port signature (float*)"
+
+# Mortar::GetConversionChannelRank @0x0025b75c (180 B)  [MED]
+#   binary: Mortar::GetConversionChannelRank(Mortar::TextureInfo::ChannelDescription const&, Mortar::TextureInfo::ChannelDescription const&)
+#   port:   Mortar::GetConversionChannelRank(Mortar::TextureInfo::ChannelDescription const&, Mortar::TextureInfo::ChannelDescription const&)   [TextureConverter.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6MortarL24GetConversionChannelRankERKNS_11TextureInfo18ChannelDescriptionES3_"
+port_mangled = "_ZN6Mortar24GetConversionChannelRankERKNS_11TextureInfo18ChannelDescriptionES3_"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::TextureInfo::ChannelDescription const&, Mortar::TextureInfo::ChannelDescription const&)"
+
+# Mortar::Touch::__UpdateInternal @0x00232d98 (140 B)  [MED]
+#   binary: Mortar::Touch::__UpdateInternal(unsigned int, bool, float, float, float)
+#   port:   Mortar::Touch::__UpdateInternal(unsigned long, bool, float, float, float)   [Touch.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar5Touch16__UpdateInternalEjbfff"
+port_mangled = "_ZN6Mortar5Touch16__UpdateInternalEmbfff"
+notes        = "signature-mismatch write-back: same qualified name, port signature (unsigned long, bool, float, float, float)"
+
+# Mortar::EffectGroup::AddEffect @0x0024f518 (120 B)  [MED]
+#   binary: Mortar::EffectGroup::AddEffect(Mortar::SmartPtr<Mortar::Effect> const&)
+#   port:   Mortar::EffectGroup::AddEffect(Mortar::SmartPtr<Mortar::Effect>)   [Effect.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar11EffectGroup9AddEffectERKNS_8SmartPtrINS_6EffectEEE"
+port_mangled = "_ZN6Mortar11EffectGroup9AddEffectENS_8SmartPtrINS_6EffectEEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::SmartPtr<Mortar::Effect>)"
+
+# Mortar::Touch::GetTouchDelta @0x00232a20 (120 B)  [MED]
+#   binary: Mortar::Touch::GetTouchDelta(unsigned int, float&, float&)
+#   port:   Mortar::Touch::GetTouchDelta(unsigned long, float&, float&)   [Touch.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar5Touch13GetTouchDeltaEjRfS1_"
+port_mangled = "_ZN6Mortar5Touch13GetTouchDeltaEmRfS1_"
+notes        = "signature-mismatch write-back: same qualified name, port signature (unsigned long, float&, float&)"
+
+# Jiblet::Draw @0x001d5750 (116 B)  [MED]
+#   binary: Jiblet::Draw()
+#   port:   Jiblet::Draw(Renderer&)   [Jiblet.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Jiblet4DrawEv"
+port_mangled = "_ZN6Jiblet4DrawER8Renderer"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Renderer&)"
+
+# Mortar::Geometry::BuildPropList @0x00254170 (84 B)  [MED]
+#   binary: Mortar::Geometry::BuildPropList(Mortar::SmartPtr<Mortar::SharedEffectProperties> const&)
+#   port:   Mortar::Geometry::BuildPropList(Mortar::SmartPtr<Mortar::SharedEffectProperties>)   [Geometry.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar8Geometry13BuildPropListERKNS_8SmartPtrINS_22SharedEffectPropertiesEEE"
+port_mangled = "_ZN6Mortar8Geometry13BuildPropListENS_8SmartPtrINS_22SharedEffectPropertiesEEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::SmartPtr<Mortar::SharedEffectProperties>)"
+
+# Mortar::MeshManager::Release @0x00226908 (84 B)  [MED]
+#   binary: Mortar::MeshManager::Release(Mortar::SmartPtr<Mortar::Model> const&)
+#   port:   Mortar::MeshManager::Release(Mortar::SmartPtr<Mortar::Model>)   [MeshManager.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar11MeshManager7ReleaseERKNS_8SmartPtrINS_5ModelEEE"
+port_mangled = "_ZN6Mortar11MeshManager7ReleaseENS_8SmartPtrINS_5ModelEEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::SmartPtr<Mortar::Model>)"
+
+# Mortar::Touch::GetTouchPos @0x002329d4 (76 B)  [MED]
+#   binary: Mortar::Touch::GetTouchPos(unsigned int, float&, float&)
+#   port:   Mortar::Touch::GetTouchPos(unsigned long, float&, float&)   [Touch.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar5Touch11GetTouchPosEjRfS1_"
+port_mangled = "_ZN6Mortar5Touch11GetTouchPosEmRfS1_"
+notes        = "signature-mismatch write-back: same qualified name, port signature (unsigned long, float&, float&)"
+
+# Mortar::CorrectHalfTexel @0x0024805c (56 B)  [LOW]
+#   binary: Mortar::CorrectHalfTexel(float, float&, float&)
+#   port:   Mortar::CorrectHalfTexel(float, float&, float&)   [TextureConverter.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6MortarL16CorrectHalfTexelEfRfS0_"
+port_mangled = "_ZN6Mortar16CorrectHalfTexelEfRfS0_"
+notes        = "signature-mismatch write-back: same qualified name, port signature (float, float&, float&)"
+
+# Mortar::Touch::FindTouch @0x002329a8 (44 B)  [LOW]
+#   binary: Mortar::Touch::FindTouch(unsigned int)
+#   port:   Mortar::Touch::FindTouch(unsigned long)   [Touch.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar5Touch9FindTouchEj"
+port_mangled = "_ZN6Mortar5Touch9FindTouchEm"
+notes        = "signature-mismatch write-back: same qualified name, port signature (unsigned long)"
+
+# ListBox::SetCallback @0x001591b4 (8 B)  [LOW]
+#   binary: ListBox::SetCallback(Mortar::Delegate0<void>)
+#   port:   ListBox::SetCallback(Mortar::Delegate0<void> const&)   [ListBox.cpp.obj]
+[[symbol]]
+mangled      = "_ZN7ListBox11SetCallbackEN6Mortar9Delegate0IvEE"
+port_mangled = "_ZN7ListBox11SetCallbackERKN6Mortar9Delegate0IvEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::Delegate0<void> const&)"
+
+# Mortar::Mesh::AddGeometry @0x00262fc8 (8 B)  [LOW]
+#   binary: Mortar::Mesh::AddGeometry(Mortar::SmartPtr<Mortar::Geometry> const&)
+#   port:   Mortar::Mesh::AddGeometry(Mortar::SmartPtr<Mortar::Geometry>)   [Mesh.cpp.obj]
+[[symbol]]
+mangled      = "_ZN6Mortar4Mesh11AddGeometryERKNS_8SmartPtrINS_8GeometryEEE"
+port_mangled = "_ZN6Mortar4Mesh11AddGeometryENS_8SmartPtrINS_8GeometryEEE"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::SmartPtr<Mortar::Geometry>)"
+
+# BombBlast::Draw @0x001c4dd0 (4 B)  [LOW]
+#   binary: BombBlast::Draw()
+#   port:   BombBlast::Draw(Renderer&)   [BombBlast.cpp.obj]
+[[symbol]]
+mangled      = "_ZN9BombBlast4DrawEv"
+port_mangled = "_ZN9BombBlast4DrawER8Renderer"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Renderer&)"
+
+# FruitRay::Draw @0x001d4fd4 (4 B)  [LOW]
+#   binary: FruitRay::Draw()
+#   port:   FruitRay::Draw(Renderer&)   [FruitRay.cpp.obj]
+[[symbol]]
+mangled      = "_ZN8FruitRay4DrawEv"
+port_mangled = "_ZN8FruitRay4DrawER8Renderer"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Renderer&)"
+
+# SlashEntity::Draw @0x001d6168 (4 B)  [LOW]
+#   binary: SlashEntity::Draw()
+#   port:   SlashEntity::Draw(Renderer&)   [SlashEntity.cpp.obj]
+[[symbol]]
+mangled      = "_ZN11SlashEntity4DrawEv"
+port_mangled = "_ZN11SlashEntity4DrawER8Renderer"
+notes        = "signature-mismatch write-back: same qualified name, port signature (Renderer&)"

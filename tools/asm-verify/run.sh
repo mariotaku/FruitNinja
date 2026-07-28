@@ -115,6 +115,12 @@ docker run --rm \
         mkdir -p /work/tmp/asm-verify
         cp /staging/tmp/asm-verify/report.md   "/work/tmp/asm-verify/${REPORT_BASE}.md"
         cp /staging/tmp/asm-verify/report.json "/work/tmp/asm-verify/${REPORT_BASE}.json"
+        # Full binary+port symbol sets and the c++filt demangle map, written by
+        # discover-symbols.py. Independent of --filter (discovery always runs
+        # whole-program), so it keeps one fixed name. signature-mismatch.py
+        # reads it host-side, where the cross toolchain does not exist.
+        cp /staging/tmp/asm-verify/symbol-index.json \
+           /work/tmp/asm-verify/symbol-index.json 2>/dev/null || true
     '
 
 if [ "$REPORT_BASE" != "report" ]; then
@@ -170,6 +176,24 @@ fi
         "$PY" tools/asm-verify/detect-gutted-bada.py \
             --report-json "tmp/asm-verify/${REPORT_BASE}.json" --min-rank HIGH --top 8 2>&1 \
             | grep -vE '^\s*$' | head -32
+    fi
+) || true
+
+# Host-side: signature-mismatch (PAIRING-GAP guard). run.sh pairs binary<->port
+# on the EXACT mangled name, so a function whose fully-qualified name matches on
+# both sides but whose SIGNATURE differs is never paired and never diffed -- it
+# cannot fail, so it silently reads as "no problem". This surfaces those, ranked
+# by live undiffed bytes. Findings become real diffs via a `port_mangled` alias
+# (signature-mismatch.py --write-back). Non-fatal.
+(
+    cd "$PROJECT_ROOT" || exit 0
+    PY=""
+    command -v python > /dev/null 2>&1 && PY=python
+    [ -z "$PY" ] && command -v py > /dev/null 2>&1 && PY=py
+    if [ -n "$PY" ] && [ -f tmp/asm-verify/symbol-index.json ]; then
+        echo
+        echo "=== signature-mismatch (pairing-gap guard) ==="
+        "$PY" tools/asm-verify/signature-mismatch.py --top 10 2>&1 | head -24
     fi
 ) || true
 
