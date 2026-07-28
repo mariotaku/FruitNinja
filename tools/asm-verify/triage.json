@@ -173,10 +173,10 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_Z11DrawCritHitv": {
-    "verdict": "ACCEPT-cosmetic",
-    "reason": "drain #316: source faithful (untextured DrawQuadUnCached); residual = SDL/GL platform render substitution",
     "asm_hash": "48dc8986fd43c89b",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain #316: source faithful (untextured DrawQuadUnCached); residual = SDL/GL platform render substitution",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_Z11GameDestroyv": {
     "decided_at": "2026-06-14T07:00Z",
@@ -195,6 +195,14 @@
     "decided_at": "2026-06-26T00:00Z",
     "reason": "Port uses incremental ldrb byte scan; binary uses bulk ldm/stm + index arithmetic. Different iteration strategy, same parse result. No missing operation identified.",
     "verdict": "ACCEPT-deferred"
+  },
+  "_Z11UnloadRingsv": {
+    "asm_hash": "5f3526113be6e69c",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 55,
+    "reason": "68.1% LCS, 55 instrs. Whole delta: (a) the port passes an extra `mov r1,#0` argument to every SmartPtr null-assign (17 of them) that the binary's SetNull() does not take -- a signature/default-argument difference in the SmartPtr helper, not a behaviour change; (b) the four independent SetNull calls at base+0x620 and base+0x630 are interleaved in a different order (the port does 0x620+4, 0x620+8, 0x630+0, 0x630+4, 0x620+12, ... where the binary does 0x620+4, +8, +12, 0x630+4, +0, +8, ...). Verified the offset SETS are identical: both release exactly {0x620,0x630,0x640,0x650}+{0,4,8,12} and 0x660+{0,4}, 17 calls each, and the tail `b <SYM>` is shared.",
+    "score": 17569,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_Z11UnpauseGamev": {
     "asm_hash": "85d0796c6acd341e",
@@ -271,6 +279,14 @@
     "reason": "False positive (task #200 asm-inspector confirmation). Binary uses a two-stage VFP guard: vcmpe vs 1.55f (0x3fc66666) then vs 1.0f. Because any value < 1.0 is also < 1.55, the two-stage reduce to exactly `return m_BombHitTimer < 1.0f`, which is what the port does. The prior triage misread the two vcmpe immediates as a < 0.0f threshold.",
     "verdict": "ACCEPT-cosmetic"
   },
+  "_Z13EndRetryLevelv": {
+    "asm_hash": "7700e84ec93eb7b3",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 45,
+    "reason": "needs asm-inspector compile pass. 37.7% LCS, 45-instr retry-teardown. Rationale coverage ~50%: two port-added singleton null guards (`ldr [got]; ldr [r]; cmp #0; popeq` and a `cmp #0` that predicates the whole first block to ...ne) that the binary does not have, plus if-conversion. UNEXPLAINED: the field cluster is written 12 bytes apart -- binary `str [+0x118]` + `vstr [+0x11C]`, port `str [+0x10C]` + `vstr [+0x110]` -- and the binary reads `ldrb [+0x174]` before its tail branch with no port counterpart. Offsets +0x11C/+0x120/+0x124/+0x128 DO match on both sides, so the shifted pair is either a real struct-offset bug or a different base register; the normalizer masks the base. Settle before shipping -- this runs on every level retry.",
+    "score": 28018,
+    "verdict": "FIX-NEEDED"
+  },
   "_Z13ParseGameModem": {
     "asm_hash": "7d3ef50b2081d26d",
     "decided_at": "2026-07-02T16:12Z",
@@ -285,11 +301,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_Z13SetupGameWorkv": {
-    "asm_hash": "f351a31ab619f565",
-    "decided_at": "2026-07-02T16:12Z",
-    "max_score": 5400,
-    "reason": "Same +0x10000 tool address bug as ParseGameMode (report cites 0x0010c06c -> real function is at 0x0011c06c, confirmed via get_function_by_address; src/game/SetupGameWork.cpp:1 already correctly cites a THIRD, older address 0x0010ed34 from a prior re-analyst pass -- all three numbers point at the same real function per behavioural match below, but only 0x0011c06c is Ghidra-name-confirmed 'SetupGameWork'). Direct decompile of 0x0011c06c against src/game/SetupGameWork.cpp:12-105 finds one clear, high-confidence bug: the binary's very first statement is 'FruitSaveData::AddToTotal(this, \"sessions\", StringHash(\"sessions\"), 1, true, true)' -- the port's line 17 instead bumps 'plays_total' ('save->AddToTotal(\"plays_total\", StringHash(\"plays_total\"), 1, true, true);'). This is a real stat-key mismatch (session-count vs a differently-named/nonexistent binary stat), not a naming difference -- the binary genuinely increments a save-data total keyed 'sessions', not 'plays_total'. Every other field store in the decompile (bM_State=2, nM_gameDataLicensedState=0, flM_BombSize=50.0, flM_BombHitTimer=0.0, bHudDestructing=0, flM_CritTimer=0.0, bM_bUnsullied=0, flM_QuitTransitionTimer=0.0, nM_ScoreThreshold=save->m_CriticalChance, coin trio=0, reserved bytes, 3 pointer clears) appears consistent with the port's fields by value, though exact 1:1 offset/name mapping for the P2P-reserved-byte cluster (+0x1a2..+0x1a5 in port vs a single 'bReservedP2P_1a6' store seen in the decompile) and the 3 pointer clears (pM_pTransientScreen/pM_pOverlayScreen/pM_pMainScreen vs port's mMainScreen/pGameOverScreen/m_pActiveHUDControl) could not be fully cross-verified against GameWork.h offsets in this pass -- flag for a follow-up re-analyst offset audit if time allows, but the AddToTotal key bug alone is actionable now.",
-    "score": 5715,
+    "asm_hash": "72a677aca72abc1e",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 54,
+    "reason": "needs asm-inspector compile pass. 53.4% LCS, 54-instr game_work initialiser. Extracted the store-offset SETS from the diff; 21 of 24 offsets match exactly (0,6,16,28,32,36,40,44,48,52,140,356,360,368,372,400,404,424,436,440,444). BINARY-ONLY: strb +0x1A0, strb +0x1A1, strb +0x1A6. PORT-ONLY:   strb +0x198, strb +0x199, strb +0x1A2..+0x1A5, vstr +0x1B0. src/game/GameWork.h:161 itself asserts 'SetupGameWork zeroes 1a2..1a6', which the binary side of this diff does not show, and src/game/SetupGameWork.cpp writes +0x198/+0x199/+0x1A2..0x1A5 but never +0x1A0/+0x1A1/+0x1A6. So either the port's SetupGameWork field list or GameWork.h's P2P byte-cluster layout is off by one cluster. The diff cannot settle it because several stores in this function use a second base register (m_SaveData / +272) that the normalizer masks to the same GREG. Disassemble 0x0011c06c and pin the base of each strb.",
+    "score": 25137,
     "verdict": "FIX-NEEDED"
   },
   "_Z13UpdateBombHitf": {
@@ -461,6 +477,14 @@
     "decided_at": "2026-06-26T00:00Z",
     "reason": "Defunct: IAP -- no-op stub; src/game/Licensing.cpp:15. Binary loads float+int id=10 and tail-calls Bada IAP; port body is empty.",
     "verdict": "ACCEPT-defunct"
+  },
+  "_Z7MemHashPKvm": {
+    "asm_hash": "0a39231d8bbb2ae0",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 132,
+    "reason": "52.4% LCS, 132 instrs, but the hash math is BYTE-IDENTICAL: both sides run the same Bob-Jenkins lookup3 mix twice (the 27-instruction rsb/rsb/eor chain with shifts 13,8,13,12,16,5,3,10,15) over the same seed (0x9E3779B9 -- binary from the literal pool `.word 0x9e3779b9`, port materialised as movw #31161/movt #40503) and the same c=0x805, and the tail switch has the same 11-case jump table with the same `add r,r,r,lsl#8/#16/#24` byte assembly in the same order. Whole delta accounted: src/engine/util/StringHash.cpp:167-196 copies the 12-byte block into a local `uint8_t buf[12]` before mixing (and copies the tail bytes too), so the port emits `ldrb [data,#i]; strb [sp,#4+i]; ldrb [sp,#4+i]` triples where the binary reads the source pointer directly with negative displacements after advancing it. Byte order verified 1:1 (port [sp,#4..#14] maps exactly onto binary [p,#0..#10]). Output identical; the buf[] copy is redundant but harmless.",
+    "score": 62823,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_Z8GameDrawfb": {
     "decided_at": "2026-06-18T05:57Z",
@@ -1016,11 +1040,12 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN10ScreenTint5ParseEP12TiXmlElement": {
-    "decided_at": "2026-06-18T02:22Z",
-    "max_score": 5600,
-    "reason": "New symbol (TiXmlElement signature match). Score 11675/5600. [auto-triaged 2026-06-18T02:22Z]",
-    "score": 11675,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "b0c2f9e97e45c809",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 56,
+    "reason": "67.9% LCS, 56 instrs. Whole delta: (a) the source Vec3 is copied with one `ldm {r,r,r}` / `stm {r,r,r}` pair in the port where the binary emits three `vldr [+16]/[+20]/[+24]` + `vstr [+28]/[+32]/[+36]` -- same three fields, same direction; (b) PIC-anchor arithmetic folded differently (`add #16` then `add #28` vs a single `add #28`) and the corresponding literal-pool shrink; (c) the port hoists an `if (!e) return` (`subs r,r,#0; popeq`) to the top -- a port-added null guard, noted but harmless on an XML parse entry. The three CALL/`mov #3` parse-helper triples are identical in count and order.",
+    "score": 17999,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN10ShopScreen11LoadContentEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -1421,10 +1446,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11EffectImage12LoadTexturesEv": {
-    "verdict": "MATCH",
-    "reason": "drain-fixed 2026-07, now pairs",
     "asm_hash": "3c1b1f9509ed36b8",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "verdict": "MATCH"
   },
   "_ZN11EffectImage5ParseEP12TiXmlElement": {
     "decided_at": "2026-06-18T02:22Z",
@@ -1481,10 +1506,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11FileManager20GetSaveRootDirectoryEPcPKcbb": {
-    "verdict": "MATCH",
-    "reason": "drain-fixed 2026-07, now pairs",
     "asm_hash": "afa9d7fefdda6d14",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "verdict": "MATCH"
   },
   "_ZN11FileManager8FileSizeEPKcm": {
     "decided_at": "2026-06-14T05:55Z",
@@ -1792,17 +1817,19 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl12MakeCriticalE8_Vector3IfEi": {
-    "decided_at": "2026-06-18T05:57Z",
-    "max_score": 9700,
-    "reason": "MissControl::MakeCritical -- GOT encoding changes from R9 swap. Score 14885/11100 [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 14885/11100 -> 16245/9700]",
-    "score": 16730,
+    "asm_hash": "91a885c5de8e5cfe",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 97,
+    "reason": "48.5% LCS, 97-instr LIVE. Delta ~90% accounted: the binary constructs the size Vec3 and the clamp temporaries out-of-line (`add r0,sp,#4; bl <Vec3 ctor>; ldm/stm`), the port inlines them as vmul/vadd/vstr against the same offsets (+0x20/+0x24/+0x28 size, +0x08/+0x0C pos) with the same 4 vcmpe/vsubgt/vstrgt + 2 vldrmi/vsubmi/vstrmi clamps. BLOCKER: the port adds `cmp r,#0; beq` around the size block -- that is the `if (s_TexCritical.IsValid())` guard at src/hud/MissControl.cpp:399. The binary's diff side contains NO cmp/beq at all here: it dereferences the texture (`ldr [+116]; ldr [+36]; ldr [+40]`) unconditionally. Per the project's no-production-guards rule that guard is a port addition, not fidelity; drop it (and fix the fixture) when the texture-load path is next touched. Same applies to MakeRare/MakeCombo which share the block.",
+    "score": 49940,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl13MakeDisappearE8_Vector3IfEiN6Mortar8SmartPtrINS2_7TextureEEE": {
-    "decided_at": "2026-06-18T05:57Z",
-    "max_score": 13300,
-    "reason": "MissControl::MakeDisappear -- port has documented TODOs: g_HudScale module-static Vec3 ptr (src/hud/MissControl.cpp:496), accel seed (src/hud/MissControl.cpp:545). Score 17855/14300 [triaged 2026-05-24 post R8/R9/R10]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 17855/14300 -> 24645/13300]",
-    "score": 27282,
+    "asm_hash": "c3aa0b562ec4f770",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 133,
+    "reason": "31.3% LCS, 133-instr LIVE miss/critical popup. Delta fully accounted, ~100%: (a) BLOCKER -- `_Vector3<float>::One()` is a Meyers function-local static (src/engine/math/_Vector3.h:92), so GCC emits __cxa_guard_acquire/release plus an inline (1,1,1) construction at BOTH call sites (`tst r,#1; beq`, `bl <guard>; cmp #0; beq`, `vmov s,#112; vstr [r]/[r,#4]/[r,#8]`, ~20 instrs each = ~30% of the delta). The binary has a plain static-init'd BSS global (`_Vector3<float>::One` @0x001f4334, cited in src/hud/MissControl.cpp:556-561) with no guard. Fix = make Zero()/One() namespace-scope static const members constructed by the file's static ctor; that also shrinks FruitRay::Init and every other Vec3-constant user. (b) the Vec3*scalar product is inlined as 3x vldr/vmul where the binary calls operator* and ldm/stm-copies the sret temp (the known Vec3 return-by-value ABI, see the reverted copy-ctor experiment). Verified NOT divergent: field offsets identical on both sides (+0x5f alpha, +0x7c/+0x7d/+0x7e/+0x80/+0x84 state, pos +0x08/+0x0C, size +0x20/+0x24/+0x28); both sides emit exactly 4 vcmpe clamp compares (2 per axis) in the same order.",
+    "score": 91386,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11MissControl19MakeEmAllDissappearEv": {
@@ -2530,10 +2557,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11TimeControl5ResetEv": {
-    "decided_at": "2026-06-14T07:00Z",
-    "max_score": 4600,
-    "reason": "game_work offsets MATCH: game_work loaded via GOT+0xbc; [r5,#4] gameMode byte same as binary [r3,#4]; [r5,#0x164] MainScreen ptr access matches binary pattern; [r3,#0x50] FruitSaveData same. Score 6860/4600. Residual: port adds MortarGame guard + game_work null-guard; port adds GetCameraTransition() call and camera-fade gate (binary state=2 path goes direct); port adds extra strb flags at [r4,#0x5c/5d/5e/5f]. Pre-existing Tier-2 TimeControl gaps. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 6865/4600 2026-06-14T05:55Z]",
-    "score": 6860,
+    "asm_hash": "3c48469b4dbb4fb8",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 46,
+    "reason": "50.0% LCS, 46 instrs. ~85% accounted: the port inlines the white-Colour fill as four `mvn r,#0; strb [+92..+95]` where the binary copies a global Colour (`ldr [got]; add r,r,#92; bl <SYM>`); the port calls an accessor where the binary loads `[+12]` inline; plus PIC-anchor and scheduling noise. Same field set on both sides (+124, +192, +196, +200, +268, +80, +356). BLOCKER: the port adds THREE null guards the binary does not have -- `cmp #0; beq` on the Game singleton, on m_SaveData (+80), and on +356 -- each producing a branch the binary walks straight through. Port-added defensive guards; per the project rule they should come out (fix the fixture, not the production path) when TimeControl is next revisited.",
+    "score": 23000,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN11TimeControl6UpdateEf": {
@@ -2857,9 +2885,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN12BonusManager16ClearBestBonusesEv": {
-    "verdict": "ACCEPT-cosmetic",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Real binary function exists: v1.6.1 BonusManager::ClearBestBonuses @0x0012eb38 (a thunk at @0x0010d7b8 also resolves to it -- both confirmed via decompile_function; search_functions with pattern 'BonusManager' misses it for the same namespace-index quirk as the FruitFactControl pair above, but pattern 'Bonus' finds it). Decompiled body is a single call: `this->m_BestBonuses.clear();` (std::list<Bonus>::clear) -- matches port src/game/BonusManager.cpp:79-81 exactly (`void BonusManager::ClearBestBonuses() { m_BestBonuses.clear(); }`). No semantic gap; prior 'method stub/divergence' entry was a vague asm-verify LCS score with no concrete blocker.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN12BonusManager16GetNextBestBonusERSt14_List_iteratorI5BonusE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -3266,6 +3294,14 @@
     "score": 21230,
     "verdict": "ACCEPT-deferred"
   },
+  "_ZN12ShopListItem8DrawIconEv": {
+    "asm_hash": "3fe211874dfbd8a5",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 87,
+    "reason": "37.8% LCS, 87-instr LIVE shop-list draw. Rationale coverage ~70%: the binary builds Matrix44/Colour/Vec3 temporaries out-of-line at sp+68/80/92/104/108 and passes their addresses, the port inlines them as direct `vstr [sp,#N]`; plus a port-added MatrixManager-singleton null guard (`ldr [got]; ldr [r]; cmp #0; beq`) where the binary loads the instance field at +72 unguarded. UNEXPLAINED ~30%: the binary's locked branch ends with `ldr r,[this,#628]; ldr vptr,[r]; mov r1,#1; ldr fn,[vptr,#16]; blx fn` -- a Texture vtable call at slot +0x10 taking the literal 1 -- and the port emits no counterpart (src/hud/ShopListItem.cpp:553-563 only issues Set() at +8 and UnSet() at +12, i.e. UnSet(false)). Either the port calls UnSet() where the binary calls UnSet(true), or the port's Texture vtable slot order is off by one relative to the binary. Settle with asm-inspector against Mortar::Texture's real vtable, then fix the call.",
+    "score": 54133,
+    "verdict": "FIX-NEEDED"
+  },
   "_ZN12ShopListItemC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 4700,
@@ -3314,9 +3350,9 @@
   },
   "_ZN12SlashModInfo5ParseEP12TiXmlElement": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 42984,
     "max_score": 3700,
     "reason": "FIX-NEEDED #356 batch2 (was never actually triaged -- prior entry was auto-triaged sig-match only): decompiled binary SlashModInfo::Parse @0x0013935c -- after ParseSlashModInfo() runs, if m_pColours is still null (no <colour> XML children), binary allocates ONE default-constructed Colour (opaque black 0/0/0/255 per src/engine/math/Colour.h:11) and sets m_ColourCount=1 (fallback so every slash mod has at least one colour). Port src/game/ItemInfo.cpp:492-515 only populates m_pColours/m_ColourCount inside `if (count > 0)` (count = number of <colour> children); when a mod's XML has zero <colour> children, port leaves m_pColours=nullptr and m_ColourCount=0 -- the default-colour fallback is entirely missing. Impact: any slash mod without an explicit <colour> block (likely the common case) gets m_ColourCount==0, which risks div-by-zero/no-colour in downstream SetModColours indexing and a missing/undefined blade colour visually. Fix: after the `if (count > 0) {...}` block (ItemInfo.cpp:515), add an else-equivalent: if m_pColours is still null, malloc a 1-element Colour buffer with the same (element_size=4,count=1) header layout used elsewhere in this function, default-construct one Colour, and set m_ColourCount=1.",
+    "score": 42984,
     "verdict": "FIX-NEEDED"
   },
   "_ZN12SlashModInfo7UnEquipEv": {
@@ -3489,16 +3525,16 @@
   },
   "_ZN12WaveModifierD1Ev": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 16255,
     "max_score": 2100,
     "reason": "Re-triaged #356 batch2: decompiled binary WaveModifier::~WaveModifier @0x0015048c -- destroys std::vector<PROBABILITY_OVERIDE> m_Overrides then chains GameModifier::~GameModifier. Port src/game/WaveModifier.cpp:250 `WaveModifier::~WaveModifier() {}` -- empty body still triggers the SAME implicit member (m_Overrides vector) + base (GameModifier) destructor chaining per C++ object model; explicit body content is irrelevant to that chaining. Semantically identical. ACCEPT-cosmetic.",
+    "score": 16255,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN12WaveModifierD2Ev": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 16255,
     "max_score": 2100,
     "reason": "Same as D1Ev (C1/C2 dtor alias). See _ZN12WaveModifierD1Ev reason.",
+    "score": 16255,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN13FruitSaveData10AddToTotalEPKcmibb": {
@@ -3974,10 +4010,12 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN13SliderControl19UpdateTouchPositionEv": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "dead code: all SliderControl ctors have 0 call xrefs in v1.6.1",
-    "asm_hash": "998604d6c1036abf",
-    "decided_at": "2026-07-04T00:00Z"
+    "asm_hash": "8bbaf32a7420a913",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 67,
+    "reason": "63.5% LCS, 67-instr LIVE settings slider. ~90% accounted: the port inlines Mortar::Delegate0::operator() -- its bound-flag check (`ldrb [+216]; cmp #0; popne`) and a vtable-slot-2 dispatch (`ldr vptr,[+184]; ldr fn,[vptr,#8]`) -- where the binary tail-calls it out-of-line (`add r0,r0,#184; pop {r?,lr}; b <SYM>`); plus x12 strength reduction (port `add r,r,r,lsl#1` + `add r,r,r,lsl#2` vs binary `mov r,#12; mla`) and vmla/vsub reassociation. Same touch-record stride and the same +164 ldm/stm capture on both sides. BLOCKER (~10%): the binary's value clamp has one extra `movge` in the min/max chain that the port lacks (binary cmp/movge/cmp/movge/movlt, port cmp/movge/cmp/movlt). Most likely a register shuffle around the same two-sided clamp, but it is a clamp bound and it is unverified -- check it if slider values ever pin at the wrong end.",
+    "score": 24445,
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN13SliderControl4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4092,10 +4130,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13SystemManager6UpdateEPf": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 6900,
-    "reason": "SystemManager method stub/divergence. Score 15015/6900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 15355/6900 -> 15360/6900]",
-    "score": 15360,
+    "asm_hash": "ebc42eba2c1f5cea",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 68,
+    "reason": "23.5% LCS, 68 instrs -- but the low score is an artifact, not a divergence. Delta ~100% accounted: (1) BLOCKER -- the binary's body is THUMB-2 (`it cc` / `it lt` / `it ge` IT blocks, `movs`, `adds`, `subs`) while the cross-build emits ARM. Nothing in the normalizer absorbs an ISA change, so an integer-heavy min/max/sum loop scores near-zero even when identical. This row will not improve until the verifier can compare across ISA state. (2) the port adds `if (dt)` (src/engine/core/SystemManager.cpp:63) -- emitted as `cmp r0,#0; vldrne; vstrne` -- where the binary stores *dt unconditionally. Port-added guard. Verified NOT divergent: every field offset matches src/engine/core/SystemManager.h exactly -- m_LastFrameTime +0x06, m_AvgFPS +0x08, m_MinFPS +0x0A, m_MaxFPS +0x0C, m_RingMaxIdx +0x0E, m_RingWriteIdx +0x0F, and both sides walk a 30-entry int16 ring with the same 29/28 wrap constants and the same `sum/count` division.",
+    "score": 52000,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN13SystemManager8QuitGameEv": {
@@ -4160,10 +4199,11 @@
     "verdict": "FIX-NEEDED"
   },
   "_ZN14GameModeScreen14SwitchToUpsellEi": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 5000,
-    "reason": "Port has bx lr (empty stub) vs binary has full upsell handoff. Defunct: upsell store handoff. See src/screens/GameModeScreen.cpp:667-670. Score 5500/5200. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4514/5200 -> 3740/5000]",
-    "score": 3740,
+    "asm_hash": "cb335335c624acb8",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 50,
+    "reason": "Documented defunct upsell glue: src/screens/GameModeScreen.cpp:1128 `// Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 binary @0x001811c8 sets m_State=10 + bumps modeS_p* counters`, with the elided pieces named inline at lines 1139 (m_State=10) and 1122-1126 (BuyNow/UpsellFinished). The 60% of the binary the port omits is exactly that: `str #10,[+0x90]`, `str #0,[+0xCC]`, and the second, `cmp; bgt`-selected AddToTotal branch (the binary picks between two save keys; the port keeps only the unconditional modeS_p<idx> bump at line 1137). UpsellScreen is Phantom in v1.6.1 so SwitchToUpsell has no reachable call site. Accepted indefinitely; the second AddToTotal branch is noted here so it is not re-discovered as a new finding.",
+    "score": 30000,
     "verdict": "ACCEPT-defunct"
   },
   "_ZN14GameModeScreen14UpdateSpecificEf": {
@@ -4319,11 +4359,12 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14GameOverScreen10InitialiseEPKcifiiii": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 38800,
-    "reason": "Tier-2 init flow; port uses MortarGame singleton for game-data access, binary used GOT-resolved direct path. Multiple sub-controls and state initializations differ. See src/screens/GameOverScreen.cpp:116. Score 35496/20600. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 36089/20600 -> 58527/38800]",
-    "score": 58527,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "75ff41c3b03b3309",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 388,
+    "reason": "27.4% LCS on a 388-instr LIVE screen init. Rationale coverage ~65%: out-of-line Colour(r,g,b,a)/Vec3 temporaries in the binary vs inlined strb-to-sp in the port (colour byte SETS verified identical: {13,26,120}/{22,71,209}, {7,51,0}/{251,243,0}, {23,78,209}), inlining of GetCurrentModeHighscore, and basic-block layout. UNEXPLAINED ~35%, two concrete divergences: (1) RNG -- binary does `mov r?,#2; bl <rand>; add #2` and `mov r?,#3; bl <rand>; add #1` (a bounded rand call); src/screens/GameOverScreen.cpp:473,479 uses libc `rand()%2+2` / `rand()%3+1`, which both inlines the modulo (extra smull 0x55555556 /3 magic in the port) and draws from the wrong stream -- the project's RNG is Math::Random (src/engine/math/Random.h), not libc rand(). Fix: route both through the binary's bounded-rand entry. (2) port-only null guards -- `Game::GetInstance()` is null-checked and every game_work read is ternary-guarded (`game ? ... : 0`, lines 376/459/507/529), producing the leading `ldrb;cmp #0;beq` the binary does not have; the binary reads game_work unguarded.",
+    "score": 281820,
+    "verdict": "FIX-NEEDED"
   },
   "_ZN14GameOverScreen11LoadContentEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4367,10 +4408,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN14GameOverScreen13UnLoadContentEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 6700,
-    "reason": "Score drift 4775->4995/6800. Both sides call NullTex thunk in same order; port uses LANCHOR labels vs binary GOT offsets. Structural cosmetic. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4995/6800 -> 6320/6700]",
-    "score": 6320,
+    "asm_hash": "fec4c814721f5eab",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 67,
+    "reason": "59.7% LCS, 67 instrs. Whole delta is the documented residual PIC/GOT artifact and nothing else: every changed line is the binary's linked `ldr rX,[pc,#POOL]; ldr rY,[rX,rZ]` GOT load against the port .o's unlinked `-fpic` `ldr rX,[pc,#POOL]; add rY,rY,rX` anchor form. The CALL sequence is identical in count and order, and the `add r0,r0,#4 / #4 / #8 / #8` SmartPtr-walk tail plus the `strb #0,[...]` guard reset match line for line. This is precisely the residual case documented in classify_lcs's block comment.",
+    "score": 27000,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN14GameOverScreen14DeletedControlEP10HUDControl": {
@@ -4790,11 +4832,12 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN15TutorialControl18ButtonPressedAtPosEP10MenuButton": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 4700,
-    "reason": "TutorialControl method stub/divergence. Score 2830/5000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2830/5000 -> 4350/4700]",
-    "score": 4350,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "bc5e975f3fcbdab8",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 47,
+    "reason": "74.5% LCS, 47 instrs. Whole delta is store folding: the binary stores then conditionally overwrites (`vstr [+152]` then `vmovgt; vmulgt; vstrgt [+152]`, and `strb [+156]` then `eorne; strbne [+156]`), while the port computes the final value first and stores once. Verified the resulting values are the same on both paths -- the +156 flag is `(x > 0) ^ (m_field304 != 0)` on both sides, and the +152 scale takes the same vmov #96 (0.5) multiply under the same `vcmpe; gt` condition. Also `push {r?,lr}` + `poppl {r?,pc}` vs the port's leaf `push {r?}` / `bx lr`. Same constants (`.word 0x43800000` = 256.0f) and same offsets (+124, +152, +156, +304, +316, +360).",
+    "score": 12000,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN15TutorialControl4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4881,9 +4924,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl11LoadContentEv": {
-    "verdict": "ACCEPT-cosmetic",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Real binary function exists at v1.6.1 FruitFactControl::LoadContent @0x00170b1c (same namespace-qualification quirk as UnLoadContent -- confirmed via get_function_by_address: __thiscall LoadContent(FruitFactControl*this)). Decompiled body: guard check, then 3x LoadLocalisedTexture() into s_boardTexture/s_senseiHead/s_buttonTexture statics -- matches port src/hud/FruitFactControl.cpp:45-51 exactly (fact_board.tex, sensei_head.tex, arcade_results_arrow.tex loaded into g_factTex0/1/2 under the same guard). No semantic gap.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN16FruitFactControl11RightButtonEv": {
     "decided_at": "2026-06-18T02:35Z",
@@ -4906,9 +4949,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl13UnLoadContentEv": {
-    "verdict": "ACCEPT-cosmetic",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Real binary function exists at v1.6.1 FruitFactControl::UnLoadContent @0x00171a4c (Ghidra search_functions with pattern 'FruitFactControl' misses it because the symbol isn't namespace-qualified in the index, but get_function_by_address/decompile_function confirm __thiscall UnLoadContent(FruitFactControl*this)). Decompiled body: clear guard byte then 3x SmartPtr<Texture>::~SmartPtr release calls (T_1073 x3) -- matches port src/hud/FruitFactControl.cpp:53-60 exactly (g_factContentLoaded=false; g_factTex0/1/2.SetNull()). No semantic gap; prior 'method stub/divergence' entry was a vague asm-verify LCS score with no concrete blocker cited.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN16FruitFactControl4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -4932,10 +4975,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN16FruitFactControl9BeginDrawEf": {
-    "verdict": "MATCH",
-    "reason": "drain-fixed 2026-07, now pairs",
     "asm_hash": "9e20956ccac4e290",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "verdict": "MATCH"
   },
   "_ZN16FruitFactControl9UpPressedEP10InputEvent": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5013,10 +5056,12 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN16VerticalScroller19UpdateTouchPositionEv": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "dead code: ComboBox->ListBox->VerticalScroller creation chain has 0 xrefs in v1.6.1",
-    "asm_hash": "e053fcd98ebe7402",
-    "decided_at": "2026-07-04T00:00Z"
+    "asm_hash": "8685855f1d438d14",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 96,
+    "reason": "11.5% LCS (21p vs 96b) -- the port is a deliberate partial. 100% of the missing 78% is the gap the source TODO already specifies: src/hud/VerticalScroller.cpp:261-264 `// TODO: v1.6.1 VerticalScroller::UpdateTouchPosition -- the drag-mode (m_State==3) touch.y -> m_CurrentValue mapping is not yet ported`. The binary's extra body is exactly that: `ldrb [+162]; cmp #3; bxne` then the float remap over +12/+156/+172/+124/+128 writing m_CurrentValue at +136, plus the `ldrb [+161]` reverse-direction fixup. The capture the port DOES implement (touch-id bounds check + m_LastTouchPos copy via ldm/stm at +164) matches the binary instruction-for-instruction. Additionally the whole widget triple is dead in v1.6.1 -- src/hud/VerticalScroller.cpp:302 `// Defunct: ComboBox/ListBox/VerticalScroller dropdown widget triple` and :275-279 note vbar/vslider/arrow.tex are not shipped, so it never draws. Not scheduled; revisit only if the dropdown stack is ever revived.",
+    "score": 85000,
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN16VerticalScroller4InitEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5360,14 +5405,14 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18AchievementManagerC1Ev": {
-    "verdict": "FIX-NEEDED",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Missing struct field + missing population logic, found while pinning down the real ctor address (the port header's whole 'Binary addresses:' block is stale/wrong -- see below). The REAL v1.6.1 AchievementManager ctor bodies are at 0x00117494 (C1) / 0x001174d0 (C2) (identical bodies; thunk @ 0x001143a4 is called from the LIVE GetInstance @ 0x00117e08, confirmed via xrefs -- Meyers-singleton lazy-init with __cxa_guard_acquire). Ctor decompile shows: map pM_All ctor, then an 11-iteration loop constructing pM_ByType[0..10], THEN an explicit `std::vector<unsigned_long>::vector(&this->m_AllHashes)` -- a 12th field the port does not have. Confirmed real (not dead/vestigial) by two more facts: (a) dtor @ 0x00117f58 destroys m_AllHashes explicitly before the map-array teardown loop, and the loop's upper bound is `&this->pM_ByType_0`, proving m_AllHashes sits immediately after pM_ByType[10] in memory; (b) AchievementManager::LoadAchievementInfo @ 0x00118198 (the real, live per-XML-load parse) does `std::vector<unsigned_long>::push_back(&this->m_AllHashes, &local_34)` for every loaded achievement's idHash -- real, non-defunct logic executed on every game boot. Port: src/game/AchievementManager.h:155-156 declares only `m_All` + `m_ByType[11]` (static_assert sizeof==0x120 at line 162); m_AllHashes is entirely absent, so sizeof is wrong (binary is 0x12C = 300 bytes; port asserts 0x120 = 288) and src/game/AchievementManager.cpp's LoadAchievementInfo (lines 85-237) never collects the per-achievement hash list. Impact: whatever downstream code reads m_AllHashes in the binary is silently missing its data source in the port -- consumer not yet located, needs a re-analyst follow-up (xrefs to the m_AllHashes field / vector reads in AchievementManager methods) before a fix can land. Also flagging: AchievementManager.h's entire address-list comment (lines 12-34) is unreliable -- spot check on the ctor's own cited address (0x00108930) resolves to a COMPLETELY unrelated function, `Mortar::ResourceLoaderHelper::ReadType<Mortar::Skeleton::Bone>` (confirmed via get_function_by_address), and GetInstance/UnLoadAchievementInfo/AchievementExists/UnlockedAchievement/UnlockTotalFruitAchievement/UnlockScoreAchievement/etc addresses in that same comment block (0x00108xxx-0x00109xxx range) match NEITHER of the two real compiled copies actually present in the binary (thunks at 0x00103xxx-0x00105xxx + 0x00108000-0x00113xxx range, real bodies at 0x00116xxx-0x00118xxx range) -- looks like stale carried-over v1.5.1 addresses per the project's marker-staleness rule. A couple of individual .cpp markers do spot-match the real Set-A-thunk addresses (QueAchievement 0x001106a4, UnlockBonusAchievement 0x0010f7c4, UnlockAchievementInNetwork 0x0010bd34) so those specific ones are fine; the header's summary block as a whole needs a re-analyst re-verify pass.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "FIX-NEEDED"
   },
   "_ZN18AchievementManagerC2Ev": {
-    "verdict": "FIX-NEEDED",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Same finding as _ZN18AchievementManagerC1Ev (C1/C2 Itanium ABI pair, identical ctor bodies at v1.6.1 0x00117494 / 0x001174d0): binary ctor constructs an extra `std::vector<unsigned long> m_AllHashes` field after the 11 pM_ByType maps, populated by LoadAchievementInfo @ 0x00118198 via push_back per achievement idHash, destroyed by dtor @ 0x00117f58. Port's src/game/AchievementManager.h:155-156 / .cpp have no such field. See the C1Ev entry for full evidence chain (ctor/dtor/LoadAchievementInfo decompiles, xref confirmation of which of the two duplicate AchievementManager implementations is live, and the stale-address audit of the header's binary-addresses comment block).",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "FIX-NEEDED"
   },
   "_ZN18AchievementManagerD1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -5425,9 +5470,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN18PSPParticleManager6UpdateEfb": {
-    "verdict": "ACCEPT-cosmetic",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Binary function DOES exist (prior sweep's search missed it): PSPParticleManager::Update (float,bool) @ v1.6.1 0x0013cee8 (thunk @ 0x0010c8d8). Decompiled body: walks m_pActiveEmitters as an intrusive singly-linked list via a &next-field cursor (ppPVar2/this_01->m_Next), calling PSPParticleEmitter::Update per active+non-paused emitter, then expiry-checks each against its template's m_MaxLifetime (keep if Timer<MaxLifetime, or if MaxLifetime<=0 keep iff !PSPEmitterTemplate::Ends()), splicing expired emitters back into the MemoryPool via MemoryPool::Push. Port: src/engine/particle/PSPParticleManager.cpp:387-419 (PSPParticleManager::Update) is a line-for-line match of this exact algorithm: same intrusive-list cursor walk over m_pActiveEmitters/m_Next, same started/RateScale/paused gate calling a helper (UpdateEmitter, mirroring PSPParticleEmitter::Update) per active emitter, same keep-condition logic (MaxLifetime>0 -> Timer<MaxLifetime; else -> !EmitterTemplateEnds()), same MemoryPool::Push splice-out. Correcting the prior triage note: there is NO std::vector<PSPEmitterTemplate> anywhere in this file or PSPParticleManager.h -- particle templates are a byte-faithful raw blob (uint8_t* m_pTemplates, fixed 0xB8 stride, static_assert'd offsets) and emitter templates are a variable-stride blob walk (GetEmitterTemplate/FindTemplate), exactly matching the binary's custom structures per the project's faithful-impl-over-std policy. The 'aging pass' (per-particle integrate) lives in PSPParticleManager::Draw, not Update, and it also walks per-template intrusive live-lists (tmpl->m_LiveHead / particle->m_NextLink), not a std::vector. The old note's claim of a std::vector-based aging pass appears to be stale/inaccurate; no fidelity gap found on re-decompile.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN18PSPParticleManager7DestroyEv": {
     "decided_at": "2026-06-18T05:57Z",
@@ -5501,9 +5546,9 @@
   },
   "_ZN19NotificationControl7ReleaseEv": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 2110,
     "max_score": 300,
     "reason": "Re-triaged #356 batch2: decompiled binary NotificationControl::Release @0x001a46d8 -- body is exactly `m_Texture.SetPtr(nullptr)` (Mortar::SmartPtr<Texture>::SetPtr). Port src/hud/NotificationControl.cpp:267-269 is byte-identical in semantics (m_Texture.SetPtr(nullptr)). Diff is SmartPtr template codegen/reg-alloc boilerplate only. ACCEPT-cosmetic.",
+    "score": 2110,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN19NotificationControlC1EPKciN6Mortar8SmartPtrINS2_7TextureEEENS_16NotificationTypeE": {
@@ -5659,10 +5704,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN23ProgressionTimerControl6UpdateEf": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 5900,
-    "reason": "ProgressionTimerControl method stub/divergence. Score 8825/6100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 8825/6100 -> 9335/5900]",
-    "score": 9335,
+    "asm_hash": "5713caf02dfac7a6",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 59,
+    "reason": "54.2% LCS, 59 instrs. ~85% accounted: the binary if-converts the +/-k rate select into `vmoveq/vmovne` on one path, the port branches to two duplicated blocks (same VFP immediates #8 and #136 on both sides); same field set on both sides (+128 timer, +132 accumulator, +200/+201/+202 state bytes) with the same clamp-to-0 and clamp-to-1 arms. BLOCKER: the binary promotes the timer to DOUBLE around its out-of-line call (`vldr s,[+128]; vcvt.f64.f32 d,s; bl <SYM>; ...; vcvt.f32.f64 s,d; vmov r,s`) while the port calls the single-precision variant (`bl <SYM>; vcvt; vmov r,s`) -- i.e. the port is calling the `f`-suffixed libm/format entry where the binary calls the double one. Results agree to float precision but not bit-exactly; swap to the double form when this file is next touched.",
+    "score": 27000,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN23ProgressionTimerControl7ReleaseEv": {
@@ -5706,6 +5752,14 @@
     "reason": "ProgressionTimerControl method stub/divergence. Score 2540/2300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2540/2300 -> 2360/2100]",
     "score": 2360,
     "verdict": "ACCEPT-deferred"
+  },
+  "_ZN24GlobalProbabilityOveride16CheckForOverrideERi": {
+    "asm_hash": "b80c5a5872bae7d2",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 69,
+    "reason": "47.3% LCS, 69-instr LIVE wave-probability gate. Rationale coverage ~55%: inlining of the file-static T_872()/LerpF_int() helpers (src/game/GlobalProbabilityOveride.cpp:21,35) that the binary calls out-of-line, plus inlining of GetModeBitMask into `ands r,mask,r0,lsl r1`. UNEXPLAINED, two concrete items: (1) VTABLE SLOT -- the CanSpawn() dispatch is `ldr vptr,[obj]; ldr fn,[vptr]` (slot 0) in the binary but `ldr vptr,[obj]; ldr fn,[vptr,#8]` (slot 2) in the port. If the port added a virtual dtor pair the binary does not have, EVERY slot number asserted in that file is +2 (the comments claim PushbackSpawn=slot3 @0x00120b70, NewGameStarted=slot4 @0x00121c7c). This must be settled -- a shifted vtable breaks every override in the class hierarchy. (2) GUARD ORDER -- the port checks `!game_work.m_SaveData` FIRST (line 142) then the mode mask; the binary tests the mode mask first (`ldrb gameMode; bl GetModeBitMask; ldr [+28]; tst; beq`) and then dereferences m_SaveData with NO null check. The port's guard is a port-added defensive branch. Note the function already carries an `ASM-verified: 2026-06-26 (asm-inspector)` marker -- that marker is contradicted by this diff and should be re-checked.",
+    "score": 36364,
+    "verdict": "FIX-NEEDED"
   },
   "_ZN24GlobalProbabilityOverideD1Ev": {
     "asm_hash": "08cf9f48fea46358",
@@ -5755,9 +5809,9 @@
   },
   "_ZN3HUD4InitEv": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 1500,
     "max_score": 100,
     "reason": "Re-triaged #356 batch2: no standalone binary HUD::Init exists -- HUD init is folded entirely into the ctor HUD::HUD @0x0018c1a0 (std::list::list sentinel init + 7 float fields set to 1.0f), already ASM-verified separately (src/hud/HUD.cpp:10-17). The asm-verify pairing mis-diffs the port's distinct HUD::Init() (src/hud/HUD.cpp:25-27, `controls.clear()`) against that ctor -- comparing a fresh-empty-list constructor to a clear-existing-list method is an invalid pairing (no true binary Init counterpart to diverge from). `controls.clear()` on std::list<HUDControl*> is standard node-dealloc container boilerplate, not a semantic gap. ACCEPT-cosmetic (mis-paired diff, no binary Init to defer against).",
+    "score": 1500,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN3HUD4SaveEv": {
@@ -5856,11 +5910,12 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN4Bomb15GetHeighestBombEv": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 4400,
-    "reason": "Port adds null check for ActorManager::GetInstance() (returns -10000.0f if null); binary has no such guard. Port uses named GetEntityFirst/GetEntityNext API; binary uses blx GOT. Core loop semantics identical (iterate type-1, skip m_bMenuBombHit, track max pos.y+160). Score 4165/4500. See src/entities/Bomb.cpp:811. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4165/4500 -> 5465/4400]",
-    "score": 5465,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "74da3f4bf5db83fd",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 44,
+    "reason": "61.4% LCS, 44 instrs. Whole delta accounted, ~100%: (a) the port hoists all three float constants (-10000.0f / 160.0f / 240.0f -- the binary's `.word 0xc61c4000 / 0x43200000 / 0x43700000`, which the port's pool reproduces verbatim) to the loop preheader while the binary loads them lazily inside each arm; (b) the multiplayer x-remap is if-converted -- binary `bpl; vadd; b; vldr; vsub` vs port `vaddmi; vsubpl` -- same two arms, same constants; (c) the max select is `vmovgt` in the binary and `vmovmi` in the port, which is the same `best < metric` test (src/entities/Bomb.cpp:483) with the vcmp operands swapped; (d) the `if (!e) return best` loop-guard is peeled in the port and folded into the loop head in the binary. Field offsets (+16 pos.x, +20 pos.y, +136 m_bMenuBombHit) identical. Already carries an ASM-verified marker at src/entities/Bomb.cpp:461.",
+    "score": 17000,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Bomb17CollisionResponseEPN6Mortar6EntityEmmP8_Vector3IfE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6007,9 +6062,12 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN4Coin8InitCoinE8_Vector3IfES1_timmN6Mortar9Delegate1IvPS_EEfb": {
-    "decided_at": "2026-07-01T00:00Z",
-    "reason": "sig-mismatch: binary Coin::InitCoin(Vec3,Vec3,ushort,int,ulong,ulong,Delegate1,float,bool) vs port (Vec3,Vec3,ushort,int,ushort,int,char*,char*,Delegate1,float,bool). Port adds 4 extra params (ushort,int,char*,char*) for texture IDs not present in binary. Fix: remove extra texture-name params; use the existing ulong hash params to identify textures.",
-    "verdict": "FIX-NEEDED"
+    "asm_hash": "59f514dbacedd7c1",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 81,
+    "reason": "22.1% LCS, 81-instr LIVE coin spawn. Delta ~75% accounted by two named blockers: (1) `m_OnArrived = onArrived` (src/entities/Coin.cpp:192) -- the port's Mortar::Delegate1<void,Coin*> copy-assign is inlined into a clone-into-StackAllocatedPointer path: 8 words zeroed at +112..+140, flags at +144..+147, then a vtable call (`ldr [obj]; ldr [+12]; blx`) and a second `ldr [+112]; mov r1,#1; ldr [obj]; blx` fallback. The binary just copies the words (`ldr [sp,#60]; add r,r,#112; ldr [sp,#68]; str [+84]; ldr [sp,#64]; str [+88]`). The layout matches (36-byte delegate) -- only the assign codegen differs. Fix belongs in Mortar::Delegate1, not in Coin. (2) RNG -- src/entities/Coin.cpp:178 uses libc `rand() % 524288` (the port emits the asr#31/lsr#13/bic/rsb signed-modulo idiom) where the binary calls Rand32(0x7FFFF); the file's own comment at line 177 admits the substitution. Same libc-rand-vs-Math::Random stream issue flagged on GameOverScreen::Initialise -- fix them together. Remaining ~25% is Vec3 inline-vs-outline + scheduling. No field-offset divergence found.",
+    "score": 63079,
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN4Coin9MakeCoinsEii8_Vector3IfEttPS1_ffPKcS4_N6Mortar9Delegate1IvPS_EEb": {
     "decided_at": "2026-07-01T00:00Z",
@@ -6059,10 +6117,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN4Math10CompressLZEPKhmPh": {
-    "verdict": "ACCEPT-deferred",
-    "reason": "authoring-only: 0 runtime xrefs; game only decompresses",
     "asm_hash": "c47f174196d1d2e3",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "authoring-only: 0 runtime xrefs; game only decompresses",
+    "verdict": "ACCEPT-deferred"
   },
   "_ZN4Math11DivAsyncGetEv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6091,6 +6149,14 @@
     "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 1225/1800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1225/1800 -> 940/1700]",
     "score": 940,
     "verdict": "ACCEPT-deferred"
+  },
+  "_ZN4Math13LineIntersectER8_Vector3IfES2_S2_S2_S2_": {
+    "asm_hash": "254352a75541b62a",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 88,
+    "reason": "needs asm-inspector compile pass. 55.7% LCS, 88-instr LIVE 2D segment-intersection (blade/slash collision). Shape matches: one vdiv per parameter, 4 clamp compares total, same vmul/vnmls chain. UNSETTLED ~35%: the binary's final result store is predicated `ls` (`vstrls [out]; vstrls [out,#4]; movls r0,#1; bxls lr`) while the port uses `pl` (`vstrpl [out,#4]; vstrpl [out]; movpl r0,#1; bxpl lr`), and every intermediate compare flips polarity in the same way (binary blt/bhi + vmovpl/vmovmi vs port bgt/bmi + vmovle/vmovgt); the binary also uses non-signalling `vcmp` where the port uses `vcmpe`. That is equivalent ONLY if the vcmp operands are swapped -- which the operand-masking normalizer hides. An inverted containment test here silently changes every blade hit. Compile the real .cpp and diff the register operands.",
+    "score": 39000,
+    "verdict": "FIX-NEEDED"
   },
   "_ZN4Math13UncompressLZ8EPKvPv": {
     "decided_at": "2026-06-14T05:55Z",
@@ -6126,10 +6192,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN4Math6CosIdxEt": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1200,
-    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary indexes a 4096-entry sin LUT @0x001be4a4; the port calls cosf. Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table index+load -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 2160/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2160/1500 -> 1860/1200] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
-    "score": 1860,
+    "asm_hash": "c047a5f2b512637f",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 12,
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary indexes a 4096-entry sin LUT @0x001be4a4; the port calls cosf. Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table index+load -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 2160/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2160/1500 -> 1860/1200] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run] [2026-07-28: re-stamped with the current asm_hash so the entry stops re-escalating; verdict unchanged.]",
+    "score": 12000,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Math6RandomC1Ev": {
@@ -6147,10 +6214,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN4Math6SinIdxEt": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 1000,
-    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary indexes a 4096-entry sin LUT @0x001be4a4; the port calls sinf. Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table index+load -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 1860/1200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1860/1200 -> 1660/1000] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
-    "score": 1660,
+    "asm_hash": "1f1f478910e5f430",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 10,
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary indexes a 4096-entry sin LUT @0x001be4a4; the port calls sinf. Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table index+load -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 1860/1200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1860/1200 -> 1660/1000] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run] [2026-07-28: re-stamped with the current asm_hash so the entry stops re-escalating; verdict unchanged.]",
+    "score": 10000,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Math6TanIdxEt": {
@@ -6175,17 +6243,19 @@
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Math7AtanIdxEf": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 6500,
-    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary walks a quadrant-folded 129-entry int16 atan LUT (GOT+0xd18); the port calls atan2f(x,1). Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table walk -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 7035/6800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7035/6800 -> 6995/6500] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
-    "score": 6995,
+    "asm_hash": "e7ac55d3d2eb70ba",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 65,
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary walks a quadrant-folded 129-entry int16 atan LUT (GOT+0xd18); the port calls atan2f(x,1). Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table walk -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 7035/6800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 7035/6800 -> 6995/6500] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run] [2026-07-28: re-stamped with the current asm_hash so the entry stops re-escalating; verdict unchanged.]",
+    "score": 60000,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN4Math8Atan2IdxEff": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 11400,
-    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary walks a quadrant-folded 129-entry int16 atan LUT (GOT+0xd18) with sign/swap folding; the port calls atan2f(y,x). Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table walk -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 11660/11600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 11660/11600 -> 11935/11400] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run]",
-    "score": 11935,
+    "asm_hash": "441064859a584d70",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 114,
+    "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary walks a quadrant-folded 129-entry int16 atan LUT (GOT+0xd18) with sign/swap folding; the port calls atan2f(y,x). Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table walk -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 11660/11600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 11660/11600 -> 11935/11400] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run] [2026-07-28: re-stamped with the current asm_hash so the entry stops re-escalating; verdict unchanged.]",
+    "score": 105000,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN5Bonus10IsAchievedEiRSt3mapImiSt4lessImESaISt4pairIKmiEEE": {
@@ -6973,9 +7043,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar11StringTable10LoadHeaderERNS_4FileE": {
-    "verdict": "ACCEPT-cosmetic",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Binary function DOES exist (prior sweep's search missed the overload): Mortar::StringTable::LoadHeader(Mortar::File&) @ v1.6.1 0x0022d7b0. Decompiled body: reads a 76-byte FileHeader via File::Read<FileHeader>, calls FileHeader::Check, then on success delegates to the generic engine helper FileData<HeaderLookup>::Load(...) which does the single alloc (entries+key-blob) + key_ptr fixup. Port: src/engine/util/StringTable.cpp:130-189 hand-implements that same alloc-once + key-blob-fixup algorithm inline rather than calling a generic FileData<T>::Load template helper -- same pattern as the accepted 'inlined std::container::op' exception (a generic engine helper manually reimplemented, not a custom-binary-structure substitution). NOTE (comment-only bug, not a functional gap): the port's own citation at StringTable.cpp:128 'binary @ 0x0021d7b0' is WRONG -- that address actually resolves to FreeType's open_face_from_buffer (confirmed via get_function_by_address), a totally unrelated function; real address is 0x0022d7b0 (off by 0x10000). Same bug at StringTable.cpp:207 citing LoadLanguage(File&) @ '0x0021d6fc' (resolves to FreeType's FT_GlyphLoader_CopyPoints); real address is 0x0022d6fc. Flagging for a follow-up doc-only fix; does not block this triage since LoadHeader's actual behavior matches the binary.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar11StringTable12LoadLanguageEPKc": {
     "decided_at": "2026-06-18T03:11Z",
@@ -7304,9 +7374,9 @@
   },
   "_ZN6Mortar12IFile_Direct4TellEv": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 1705,
     "max_score": 200,
     "reason": "Re-triaged #356 batch2: corrected -- binary Mortar::IFile_Direct::Tell @0x002550fc is NOT a bx-lr stub (old reason was wrong); it does `return this->m_Position` (cached field). Port src/engine/asset/IFile_Direct.cpp:81-86 instead calls ftell(m_fp) every time and refreshes m_cursor as a side effect (falling back to cached m_cursor only if m_fp is null). Port's Read()/Write() never update m_cursor themselves (only Seek() does), so the live ftell() call is load-bearing for port correctness today -- but the OS file cursor and binary's m_Position track the same value after every Read/Write/Seek, so both return the same observable position. Divergence is an implementation-strategy difference (cached field vs recomputed syscall), not an output bug. ACCEPT-cosmetic.",
+    "score": 1705,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar12IFile_Direct5CloseEv": {
@@ -7529,9 +7599,9 @@
   },
   "_ZN6Mortar14AnimationState11GetAnimIterERKNS_11AsciiStringE": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 3830,
     "max_score": 500,
     "reason": "Re-triaged #356 batch2: corrected wrong marker -- old reason cited 0x0019cec0 as the binary address, but that address resolves to MenuButton::AddPiece (unrelated function), not AnimationState::GetAnimIter. Correct binary address is 0x0026ed8c (non-const overload): body is `std::_Rb_tree::find((this->m_AnimList).f0 + 0xc, param_1)` -- a 5-instruction thunk taking &m_AnimList's _Rb_tree sub-object and tail-calling the real libstdc++ find(). This is the inlined-std-container base+offset trap: if the port hand-rolls a BST walk with AsciiString::Compare instead of calling std::map::find, offsetof is identical and semantics match as long as AsciiString::Compare matches std::less<AsciiString> ordering (lexicographic) -- not a layout bug. ACCEPT-cosmetic, with the address citation corrected for future re-triage.",
+    "score": 3830,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar14AnimationState11GetAnimIterEm": {
@@ -7645,10 +7715,10 @@
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar14BakedStringBox24SetHorizontalLineSpacingEi": {
-    "verdict": "MATCH",
-    "reason": "drain-fixed 2026-07, now pairs",
     "asm_hash": "37c5f80bd436a558",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "verdict": "MATCH"
   },
   "_ZN6Mortar14BakedStringBox4DrawE8_Vector2IfEfb": {
     "decided_at": "2026-07-01T00:00Z",
@@ -7668,6 +7738,14 @@
   "_ZN6Mortar14BakedStringBoxC1EPNS_18FontCacheObjectTTFEfiiNS_14ALIGNMENT_TYPEEii": {
     "decided_at": "2026-07-01T00:00Z",
     "reason": "sig-mismatch MED: binary BakedStringBox ctor(FontCacheObjectTTF*, float, int, int, ALIGNMENT_TYPE, int, int) vs port (FontCacheObjectTTF*, float, float, float, int, int, int). Params 3-4 int->float and ALIGNMENT_TYPE->int. Fix: change params 3 and 4 back to int and use ALIGNMENT_TYPE for param 5.",
+    "verdict": "FIX-NEEDED"
+  },
+  "_ZN6Mortar14BakedStringTTF12ApplyEffectsEv": {
+    "asm_hash": "6c4e362e4863361b",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 63,
+    "reason": "35.4% LCS, 63-instr LIVE font-effect pass. Rationale coverage ~25%: the binary copies each Colour argument byte-by-byte into sp+4/+8/+12 and passes the addresses (non-trivial-copy Colour ABI), the port passes the caller pointers straight through. UNEXPLAINED ~75%: over the glyph array the binary indexes raw memory (`ldr [+24]; ldr [+28]; rsb; asr #3` for the count, then `add r,r,r,lsl#3; ldrb [r, r, lsl #3]`) with a single loop-back `cmp r,r,asr #3; blt`; the port instead issues FIVE out-of-line `CALL` sites each followed by a `cmp; bcs`/`bcc` bounds branch, plus port-only `cmp #2; beq` and `cmp #0; beq` early-outs and hard-coded `mov #3 / sub #3 / add #16` and `mov #4 / add #24` index arithmetic that has no binary counterpart. That is a container/accessor substitution over what the binary treats as a flat 8-byte-stride array -- exactly the pattern the faithful-impl-over-std rule targets. Port the flat indexed walk.",
+    "score": 40707,
     "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar14BakedStringTTF14DeleteSurfacesEv": {
@@ -7942,10 +8020,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar15InputDeviceBada7DestroyEv": {
-    "verdict": "MATCH",
-    "reason": "drain-fixed 2026-07, now pairs",
     "asm_hash": "3c1b1f9509ed36b8",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "verdict": "MATCH"
   },
   "_ZN6Mortar15InputDeviceBadaC1Ev": {
     "decided_at": "2026-06-14T05:55Z",
@@ -7981,6 +8059,38 @@
     "reason": "InputManager/InputDeviceBada stub; see src/engine/input/InputDeviceBada.cpp TODOs. Score 2065/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2065/1500 -> 1970/1300]",
     "score": 1970,
     "verdict": "ACCEPT-deferred"
+  },
+  "_ZN6Mortar16FancyBakedString8ShutdownEv": {
+    "asm_hash": "fea90bb2a1e54874",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 57,
+    "reason": "75.4% LCS, 57 instrs. Whole delta: (a) the teardown order of two INDEPENDENT slots is swapped -- the binary frees +0x18, +0x20, +0x1C, +0x24, +0x28, +0x2C; the port frees +0x18, +0x1C, +0x20, +0x24, +0x28, +0x2C. Same six slots, same `cmp; beq; bl dtor; bl operator delete; mov #0; str` pattern per slot, each slot's null-store correctly paired with its own offset on both sides, and no slot's destructor observes another's -- so the order is unobservable. (b) the binary compares against the `#0` immediate while the port compares against a zeroed register (`cmp r,r`). Nothing else changed.",
+    "score": 14000,
+    "verdict": "ACCEPT-cosmetic"
+  },
+  "_ZN6Mortar16FancyBakedStringC1EPNS_18FontCacheObjectTTFEPKcf6ColouriffS5_fS5_fS5_ifiS5_S5_": {
+    "asm_hash": "f12c55925807f33f",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 78,
+    "reason": "19.2% LCS, 78-instr ctor; the port is SMALLER (44p) which rules out extra work. ~90% accounted: the binary copies each of the FIVE `Colour` by-value arguments byte-by-byte into stack temps (sp+36/40/44/48/52, four `ldrb [p,#k]; strb [sp,#n+k]` each) and forwards the temps' addresses; the port forwards the caller's pointers straight through. Same ABI (mangled name is `6Colour` on both sides), semantically identical because the delegated ctor only reads them. BLOCKER (~10% unaccounted): the port additionally writes 0.0f to six floats at +0x00, +0x04, +0x08, +0x0C, +0x10, +0x14 before delegating; the binary writes none of them and leaves those fields to the delegated ctor. Harmless duplication if the delegate also zeroes them, a divergence if it does not -- confirm and drop the redundant member-init when this ctor is next touched.",
+    "score": 63000,
+    "verdict": "ACCEPT-deferred"
+  },
+  "_ZN6Mortar16FancyBakedStringC2EPNS_18FontCacheObjectTTFEPKcf6ColouriffS5_fS5_fS5_ifiS5_S5_": {
+    "asm_hash": "f12c55925807f33f",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 78,
+    "reason": "C2 (base) variant of the C1 ctor -- identical body and identical diff. 19.2% LCS, 78-instr ctor; the port is SMALLER (44p) which rules out extra work. ~90% accounted: the binary copies each of the FIVE `Colour` by-value arguments byte-by-byte into stack temps (sp+36/40/44/48/52, four `ldrb [p,#k]; strb [sp,#n+k]` each) and forwards the temps' addresses; the port forwards the caller's pointers straight through. Same ABI (mangled name is `6Colour` on both sides), semantically identical because the delegated ctor only reads them. BLOCKER (~10% unaccounted): the port additionally writes 0.0f to six floats at +0x00, +0x04, +0x08, +0x0C, +0x10, +0x14 before delegating; the binary writes none of them and leaves those fields to the delegated ctor. Harmless duplication if the delegate also zeroes them, a divergence if it does not -- confirm and drop the redundant member-init when this ctor is next touched.",
+    "score": 63000,
+    "verdict": "ACCEPT-deferred"
+  },
+  "_ZN6Mortar17InputActionMapper12ProcessEventEP10InputEvent": {
+    "asm_hash": "54ff6e737793228c",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 43,
+    "reason": "43.1% LCS, 43-instr LIVE input dispatch. Rationale coverage ~50%: the port inlines Mortar::Delegate0::operator() (its +0x40 bound-flag check `ldrb [+64]; cmp #0; popne` and a vtable-slot-2 dispatch `ldr vptr,[+32]; ldr fn,[vptr,#8]`) where the binary tail-calls it out-of-line (`add r0,r0,#32; pop; b <SYM>`); plus if-conversion of the branch results into `movne #0 / moveq #1` booleans. Same Delegate0 shape as BSButton::Update / SliderControl::UpdateTouchPosition, which is why those are accepted. UNEXPLAINED: the binding-field reads do not line up -- binary `ldr [obj]` / `ldr [obj,#8]` / `ldrh [obj,#6]`, port `ldr [obj,#4]` / `ldr [obj,#32]` / `ldrh [obj,#28]`. The action-code compare (`ldrh [obj,#6]` vs `ldrh [event,#18]` in the binary) is reading a different field in the port. If these share a base the port matches the wrong binding and input actions silently never fire. Confirm the InputActionMapper binding layout with asm-inspector.",
+    "score": 24450,
+    "verdict": "FIX-NEEDED"
   },
   "_ZN6Mortar17InputActionMapperC1E10InputEventNS_9Delegate1IbPS1_EEmm": {
     "decided_at": "2026-07-01T00:00Z",
@@ -8022,11 +8132,19 @@
     "reason": "sig-mismatch: binary StartNewsRender(SmartPtr<Texture> const&, Font*) vs port (void*, void*). Defunct OpenFeint news renderer; port stubs with void* to avoid pulling in unported types.",
     "verdict": "ACCEPT-defunct"
   },
+  "_ZN6Mortar22BakedStringTTF_Surface12UpdateBoundsEv": {
+    "asm_hash": "65a9ff800c9fa2eb",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 63,
+    "reason": "25.4% LCS, 63-instr LIVE text-bounds pass. ~80% accounted: both sides seed the four bounds words at +0x28/+0x2C/+0x30/+0x34 with the SAME constants (999999 / -999999 -- binary from the literal pool `.word 0xf423f` / `.word 0xfff0bdc1`, port materialised as movw/movt), make the same four out-of-line calls, and store the same four fields. BLOCKER: the min/max compare happens in a different domain. The binary promotes the int bound to double (`vldr s,[+40]; vcvt.f64.s32 d,s; vcmpe d,d`) and truncates only on store (`vcvtmi; vmovmi; strmi`); the port truncates the glyph metric to int FIRST (`vcvt; vmov r,s`) and then does an integer `cmp; strlt/strgt`. Equivalent under truncate-toward-zero for the cases I could reason about, but not proven for all inputs and not free (it changes which value wins on a tie). Also two port-added null guards (`ldr [+4]; cmp #0; beq` and `ldr [+8]; cmp #0; beq`) the binary does not have.",
+    "score": 47000,
+    "verdict": "ACCEPT-deferred"
+  },
   "_ZN6Mortar35SubstituteApparentSizeTextureSource12UnlockLayersEPKNS_13TextureSource4DataE": {
-    "verdict": "MATCH",
-    "reason": "drain-fixed 2026-07, now pairs",
     "asm_hash": "33c977d201b6e3fa",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "verdict": "MATCH"
   },
   "_ZN6Mortar39SubstituteApparentSizeTextureSourceDataC1ERKNS_8SmartPtrINS_13TextureSourceEEEmm": {
     "decided_at": "2026-07-01T00:00Z",
@@ -8217,9 +8335,9 @@
     "verdict": "ACCEPT-defunct"
   },
   "_ZN6Mortar4Mesh11AddGeometryERKNS_8SmartPtrINS_8GeometryEEE": {
-    "verdict": "ACCEPT-cosmetic",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Binary function DOES exist (prior sweep's search missed it): Mortar::Mesh::AddGeometry(SmartPtr<Geometry> const&) @ v1.6.1 0x00272fc8 (thunk @ 0x00108d18), decompiled body is `m_Geometries.push_back(param_1)` -- a plain std::vector push_back, no custom binary structure involved. Port: src/engine/asset/Mesh.cpp:250-252 `Mesh::AddGeometry(SmartPtr<Geometry> geom) { m_Geometries.push_back(geom); }` -- identical algorithm, same container type (std::vector<SmartPtr<Geometry>>) on both sides. No fidelity gap.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4Mesh11DrawTriListEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
     "decided_at": "2026-07-01T00:00Z",
@@ -8274,9 +8392,9 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar4Mesh4DrawERK9_Matrix44IfE": {
-    "verdict": "ACCEPT-cosmetic",
+    "decided_at": "2026-07-03T15:20Z",
     "reason": "Decompiled binary @ v1.6.1 0x00272e98 confirms algorithm order matches port exactly: (1) single-bone-count branch composing finalWorld via GetBoneVertTransform*worldTransform, else worldTransform unchanged; (2) SetValue on m_WorldProp/m_ViewProp/m_ProjProp; (3) conditional WVP = Proj*(View*World) compute + SetValue when m_WVPProp != null; (4) loop over m_Geometries calling Geometry::Render per entry. Port: src/engine/asset/Mesh.cpp:156-201 (Mesh::Draw), which already carries detailed DIFFERS/Port-specific comments (lines 148-155) explaining the two known structural divergences: EffectProperty SetValue calls are defunct-stubbed no-ops (call shape preserved), and Geometry::Render takes an explicit wvp arg (GLES2 shader path) vs the binary's fixed-function GL1.x matrix-stack global read -- same fixed-function GL output, different mechanism, already documented project-wide. Confirms the prior 'cross-build ASM stable (0 raw DIVERGE)' finding; promoting out of permanent-limbo 'deferred for re-verify' to a firm ACCEPT-cosmetic since no new gap was found on re-decompile.",
-    "decided_at": "2026-07-03T15:20Z"
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4Mesh8DrawCubeEfff6ColourPNS_19DrawEffectContainerE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8344,6 +8462,14 @@
     "max_score": 4500,
     "reason": "Re-triaged #356: the m_Materials port-only field this entry was deferred on was REMOVED in #301 (Mesh::m_Name std::string->AsciiString layout fix), which restored Mesh to the binary's exact field shape (m_Name +0x0C, m_BoneBindings +0x34, m_Geometries +0x40, m_OwnGroup +0x4C, m_GroupsByName +0x50, sizeof=0x7C). Confirmed via decompile: binary Mortar::Mesh::~Mesh (0x00272dc8, deleting @0x00272e7c) cleans up m_GroupsByName (_Rb_tree erase), m_OwnGroup (SmartPtr::Clear), m_Geometries (vector dtor), m_BoneBindings (vector dtor), m_Name (AsciiString dtor) -- field-for-field identical to the port's current empty-body ~Mesh() (src/engine/asset/Mesh.cpp:38-41), which relies on implicit member destruction for the same 5 members. Remaining diff is pure C++ dtor-codegen inlining, not a missing cleanup. Stale reason (m_Materials) no longer applies -- reclassified ACCEPT-cosmetic.",
     "score": 22340,
+    "verdict": "ACCEPT-cosmetic"
+  },
+  "_ZN6Mortar4utf824encode_unicode_characterEPcPim": {
+    "asm_hash": "eb1a7b4ec3133e2f",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 62,
+    "reason": "27.3% LCS and the port is 139 instrs vs the binary's 62 -- the port is 2.2x BIGGER, which rules out missing work. Whole delta is if-conversion: the binary merges all six length arms into one predicated fall-through chain (`ldrls`, `lsrcc`, `mvncc`, `ldrls`, `bxlt lr`), the port emits six separate basic blocks with a duplicated store/advance tail in each. Verified case-for-case identical: the same six range tests (127 / 2048 / 65536 / 2097152 / cmn #-67108863 / <0), the same continuation-byte extraction widths (ubfx #24,#6 / #18,#6 / #12,#6 / #6,#6 / and #63) and the same `mvn r,r,lsl#25; mvn r,r,lsr#25` = OR 0x80 idiom, and the same lead-byte prefixes (lsl/lsr #26/#27/#28/#29/#30 for 2/3/4/5/6-byte forms). Port needs a small frame only because it cannot share registers across the split blocks.",
+    "score": 45050,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar4utf829decode_next_unicode_characterEPPKc": {
@@ -8655,10 +8781,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN6Mortar8Geometry11GetPropertyEPKc": {
-    "verdict": "ACCEPT-cosmetic",
-    "reason": "drain #9: char* param faithful; residual cosmetic (m_PropList null path)",
     "asm_hash": "d0ad4e16a3ec47ca",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain #9: char* param faithful; residual cosmetic (m_PropList null path)",
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN6Mortar8Geometry6RenderEv": {
     "decided_at": "2026-07-01T00:00Z",
@@ -8699,11 +8825,12 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN7ColAABB11ColAABBAABBEPS_S0_P8_Vector3IfE": {
-    "decided_at": "2026-06-14T05:55Z",
-    "max_score": 8500,
-    "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 10100/9800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 10100/9800 -> 6550/8500]",
-    "score": 6550,
-    "verdict": "ACCEPT-deferred"
+    "asm_hash": "f6f6b091f83220e0",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 85,
+    "reason": "74.1% LCS, 85 instrs. Whole delta accounted: (a) the binary compares against the `#0.0` VFP immediate (`vcmpe s,#0.0`) while the port keeps 0.0f in a register loaded from the pool (`vldr s,[pc]; vcmpe s,s`) -- the port's pool literal is `.word 0x0` where the binary has two PICOFF words, consistent; (b) the zero-vector output is written as three inline `vstr` in the port where the binary ldm/stm-copies the `_Vector3<float>::Zero` BSS global; (c) the `mov r0,#1; bx lr` epilogue is tail-duplicated into each axis arm in the port and shared via `b` in the binary. All 6 AABB axis tests, the abs/add/sub penetration math, the +4/+8/+12 and +20/+24/+28 field offsets, and the vmov #112/#240 sign-select are identical.",
+    "score": 22000,
+    "verdict": "ACCEPT-cosmetic"
   },
   "_ZN7ColAABB11ColAABBLineEPS_P7ColLineP8_Vector3IfE": {
     "decided_at": "2026-06-14T05:55Z",
@@ -8816,10 +8943,11 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZN7Emmiter5ParseEP12TiXmlElement": {
-    "decided_at": "2026-06-18T02:22Z",
-    "max_score": 4600,
-    "reason": "New symbol (TiXmlElement signature match). Score 9295/4600. [auto-triaged 2026-06-18T02:22Z]",
-    "score": 9295,
+    "asm_hash": "f944191e266444dc",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 46,
+    "reason": "43.5% LCS, 46 instrs. ~85% accounted: the binary parses each Vec3 into a stack temp and ldm/stm-copies it into place; the port writes the fields directly with `vstr`. The target offsets are IDENTICAL on both sides (+0x08/+0x0C/+0x10 and +0x14/+0x18/+0x1C), so this is purely the Vec3 sret-temp ABI again. BLOCKER: two port-added early-outs (`subs r,r,#0; popeq` at entry and mid-body) where the binary has an inline `cmp #0; beq` in only one place, and the port emits 7 calls to the binary's 6 -- one extra out-of-line helper invocation that the temp-elision rationale does not explain. Small, but unaccounted; confirm the parse-helper call shape if emitter XML ever misreads.",
+    "score": 26000,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN7PowerUp10DeactivateEb": {
@@ -8985,6 +9113,14 @@
     "reason": "Port expands SmartPtr refcount inline (inc new ref, dec old, delete-if-zero); binary delegates via single CALL. Structurally different but semantically equivalent.",
     "verdict": "ACCEPT-deferred"
   },
+  "_ZN8BSButton6UpdateEf": {
+    "asm_hash": "ead0cab5db5514f0",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 84,
+    "reason": "58.2% LCS, 84 instrs. Whole delta accounted: the port inlines Mortar::Delegate0::operator() for `m_ClickCallback()` (src/hud/BSButton.cpp:281) -- the `ldrb [+224]; cmp #0; bne` is the delegate's own bound-flag inside m_ClickCallback (+0xC0..+0xE3 per BSButton.h:69), NOT a BSButton field guard, and `ldr vptr,[+192]; ldr fn,[vptr,#8]` is its dispatch -- where the binary calls it out-of-line (`add r0,r0,#192; bl <SYM>`). The rest is condition-code spelling on the same four hit-test compares (binary `bhi`/`bls`/`movls #1` vs port `blt`/`movlt #0; movge #1`, both computing `inside ? 1 : 0` into m_bPressed) plus epilogue tail duplication. Field offsets verified against BSButton.h: m_TouchId +0x88, m_TouchX/+0x8C, m_TouchY/+0x90, m_ClickCallback +0xC0, m_bEnabled +0xE4(228), m_bPressed +0xE5(229) -- all identical.",
+    "score": 35076,
+    "verdict": "ACCEPT-cosmetic"
+  },
   "_ZN8CheckBox11LoadContentEv": {
     "decided_at": "2026-06-14T05:55Z",
     "max_score": 4200,
@@ -9081,6 +9217,14 @@
     "max_score": 2900,
     "reason": "CheckBox method stub/divergence. Score 2445/2400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2445/2400 -> 3180/2900]",
     "score": 3180,
+    "verdict": "ACCEPT-deferred"
+  },
+  "_ZN8FruitRay4InitEP5Fruit11_QuaternionIfE": {
+    "asm_hash": "d3cf3f246315b0d1",
+    "decided_at": "2026-07-28T13:10Z",
+    "max_score": 84,
+    "reason": "19.3% LCS but the port is 166 instrs vs the binary's 84 -- the port is BIGGER, which rules out a missing-work bug. Delta ~95% accounted: (a) BLOCKER -- the same `_Vector3<float>::One()` Meyers-static guard as MissControl::MakeDisappear, emitted TWICE here (`bl <guard_acquire>; cmp #0; beq; vmov s,#112; vstr [r]/[r,#4]/[r,#8]; bl <guard_release>; ldr [r]; and #1` plus two `tst r,#1; beq` tests) -- roughly 40 of the 82 extra instructions. Fix is the shared one: give _Vector3<float>::Zero/One real static-init'd globals (src/engine/math/_Vector3.h:91-92). (b) the Matrix44 identity is built inline as 16 `vstr [sp,#N]` where the binary calls a ctor; the Vec3*scalar products are inlined (same Vec3 sret ABI as above). Verified NOT divergent: `bic r,r,#17` (port) == `and r,r,#239` + `bfc r,#0,#1` (binary) -- identical flag mask; every written field offset matches (+188, +192, +196, +200, +204, +208, +212, +216, +220, +224) and the two 16-word ldm!/stmia! matrix copies line up.",
+    "score": 67807,
     "verdict": "ACCEPT-deferred"
   },
   "_ZN8ItemInfo5ParseEP12TiXmlElement": {
@@ -9574,9 +9718,9 @@
   },
   "_ZNK6Mortar14AnimationState11GetAnimIterERKNS_11AsciiStringE": {
     "decided_at": "2026-07-03T15:10Z",
-    "score": 3830,
     "max_score": 500,
     "reason": "Re-triaged #356 batch2: corrected wrong marker -- old reason cited 0x0019ce74, which resolves to MenuButton::AddPiece (unrelated), not AnimationState::GetAnimIter. Correct binary address is 0x0026ed54 (const overload): identical 5-instruction thunk to the non-const variant, `std::_Rb_tree::find((this->m_AnimList).f0 + 0xc, param_1)`. Same inlined-std-container base+0xc trap as the non-const variant -- ACCEPT-cosmetic, address citation corrected.",
+    "score": 3830,
     "verdict": "ACCEPT-cosmetic"
   },
   "_ZNK6Mortar14AnimationState11GetAnimIterEm": {
@@ -9615,10 +9759,10 @@
     "verdict": "ACCEPT-deferred"
   },
   "_ZNK6Mortar18EffectPropertyList11GetPropertyEPKc": {
-    "verdict": "MATCH",
-    "reason": "drain-fixed 2026-07, now pairs",
     "asm_hash": "3c1b1f9509ed36b8",
-    "decided_at": "2026-07-04T00:00Z"
+    "decided_at": "2026-07-04T00:00Z",
+    "reason": "drain-fixed 2026-07, now pairs",
+    "verdict": "MATCH"
   },
   "_ZNK6Mortar4Bada14Texture2D_Bada7GetHashEv": {
     "asm_hash": "901245a0fbee046c",
