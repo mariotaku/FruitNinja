@@ -83,7 +83,14 @@ public:
         , m_pDeferInfo(nullptr)
     {}
 
-    virtual ~GameModifier() {}
+    // [0]/[1] ~GameModifier — MUST stay out-of-line (defined in GameModifier.cpp).
+    // The binary's subclass destructors call it via PLT thunk 0x001127c0, so the
+    // derived vptr store that precedes the call survives. Defining the body inline
+    // here lets GCC inline the base dtor into every subclass D0/D1 and then
+    // dead-store-eliminate the derived vptr write, leaving only "vtable for
+    // GameModifier" in the derived deleting destructor — the opposite of the
+    // binary. Keep it out-of-line.
+    virtual ~GameModifier();
 
     // [2] ResetSpecific — clears per-modifier state; PURE in binary (0x360434)
     virtual void ResetSpecific() = 0;

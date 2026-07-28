@@ -67,9 +67,14 @@ public:
     static const float MOVE_THRESH_ACTIVE;   // 5.0  -- min move^2 = 25 to add point
     static const float MOVE_THRESH_INACTIVE; // 50.0 -- min move^2 = 2500 when blade off
 
-    // Global SlashEntity::ModPowerMask (binary BSS 0x0024d8cc). A uint32_t
-    // bitmask that active SlashModifier instances OR their bits into each
-    // frame; cleared at the top of PowerUpManager::Update via SetDefaults.
+    // Global SlashEntity::ModPowerMask (_ZN11SlashEntity12ModPowerMaskE,
+    // binary .bss @ 0x00332bc8, GOT entry 0x002d8674). A uint32_t bitmask that
+    // active modifiers OR their bits into each frame; cleared at the top of
+    // PowerUpManager::Update via SetDefaults.
+    // Bits: 0x01/0x02 fruit repel/attract, 0x04/0x08 bomb attract/repel,
+    // 0x10 bomb-push, 0x20 hard-bounce (arcade), 0x40 blade-suppress
+    // (ScrollingMenu), 0x80 combo-modifier active (ComboModifier::
+    // UpdateSpecific @0x00132b48 -- suppresses SlashEntity's own combo popup).
     static uint32_t s_ModPowerMask;
 
     SlashEntity();

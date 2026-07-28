@@ -802,7 +802,7 @@ void Fruit::Update(float dt) {
 }
 
 // Zen-mode "mirror bounce at X limits" flag. Reads bit 0x20 of
-// SlashEntity::s_ModPowerMask (binary BSS 0x0024d8cc) — a uint bitmask
+// SlashEntity::s_ModPowerMask (binary .bss 0x00332bc8) — a uint bitmask
 // that active SlashModifier instances OR their bits into each frame.
 // Bit 0x20 of SlashEntity::s_ModPowerMask is set by a SlashModifier
 // registered in the Arcade-mode wave list. When active, vertical-gravity

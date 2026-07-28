@@ -240,13 +240,6 @@ extern float g_unpauseDelay;   // @ 0x00316708
 extern int   g_unpause_game;   // @ 0x0031670c  (byte in binary)
 extern float g_repauseDelay;   // @ 0x00316710
 
-// Shared per-frame gameplay/render flag bitfield -- binary standalone .bss
-// uint32_t @ 0x00332bc8 (GOT-loaded, NOT a game_work field). Subsystems OR/BIC
-// individual bits each frame: 0x80 = combo-modifier active (ComboModifier::
-// UpdateSpecific/RemoveModifier), 0x40 = slice-trail (Game::Update), 0x20 =
-// read by DrawUpdate @ 0x1da688. Zeroed by PowerUpManager::SetDefaults/Reset.
-extern uint32_t g_GameFrameFlags;
-
 #ifdef __bada__
 #include <cstddef>
 static_assert(offsetof(GameWork, bM_Mode)               == 0x02,  "GameWork::bM_Mode");

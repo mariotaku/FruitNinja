@@ -12,8 +12,6 @@
 #include <cstdint>
 #include <list>
 
-uint32_t g_GameFrameFlags = 0;   // binary .bss @ 0x00332bc8 (shared frame-flags word)
-
 ComboModifier::ComboModifier()
     : GameModifier()
 {}
@@ -30,23 +28,26 @@ void ComboModifier::ResetSpecific() {
             this, &ComboModifier::ComboWasCanceled);
 }
 
-// @ 0x00132b48 — UpdateSpecific: OR combo-active bit (0x80) into the shared
-// game frame-flags word each frame.
+// @ 0x00132b48 — UpdateSpecific: OR the combo-active bit (0x80) into
+// SlashEntity::ModPowerMask each frame.
 //
-// RE (binary @ 0x132b48): loads a GOT-relative pointer (literal pool
-// DAT_0x132b6c=0x0019e5d4, DAT_0x132b70=0x7544; PC base 0x132b5c -> GOT entry
-// 0x002d8674 -> global @ 0x00332bc8, a standalone .bss uint32_t, NOT inside
-// game_work), then *p |= 0x80; returns 0.
-//
-// The global is a shared per-frame bitfield: different subsystems claim
-// different bits each frame -- 0x80 = combo-modifier active (set here, cleared
-// in ComboModifier::RemoveModifier @ 0x132d70 and PowerUpManager::SetDefaults/
-// Reset which zero the whole word); 0x40 = Game::Update slice trail (set @
-// 0x1b0444, cleared @ 0x1b07e8); 0x20 = tested by a DrawUpdate @ 0x1da688.
+// The GOT chain (literal pool DAT_0x132b6c=0x0019e5d4, DAT_0x132b70=0x7544;
+// PC base 0x132b5c -> GOT entry 0x002d8674) resolves to the standalone .bss
+// uint32_t @ 0x00332bc8, whose symbol is _ZN11SlashEntity12ModPowerMaskE —
+// the SAME global SlashModifier::UpdateSpecific @0x0014b000, ScrollingMenu::
+// Update @0x001b0440 and PowerUpManager::SetDefaults/Reset touch. Bit 0x80
+// suppresses SlashEntity::Update's own combo popup (@0x001e8d08) so that
+// ComboModifier::ComboWasCanceled owns the combo-bonus popup while the
+// modifier is live.
 int ComboModifier::UpdateSpecific(float /*dt*/) {
-    g_GameFrameFlags |= 0x80u;   // binary @ 0x132b60: orr r2,r2,#0x80 ; global @ 0x00332bc8
+    SlashEntity::s_ModPowerMask |= 0x80u;   // binary @ 0x132b60: orr r2,r2,#0x80
     return 0;
 }
+
+// TODO: v1.6.1 0x00132c94 (ComboModifier::RemoveModifier) — unported vtable
+// slot 6 override: unsubscribes both delegates, walks m_SlicedFruit clearing
+// each fruit's m_bFrozen(+0x16c) and emptying the list, then zeroes the WHOLE
+// of SlashEntity::ModPowerMask (str r0,[r3,#0] with r0==0 @ 0x132d70).
 
 // @ 0x00132e34
 // Binary: if m_BonusAccum(+0x0c)<=0 (not already active), register in order:

@@ -6,6 +6,11 @@
 #include "game/PowerUpManager.h"
 #include "util/StringHash.h"
 
+// Binary @ 0x00143760 -- GameModifier::~GameModifier (D1/D2). Empty body; it
+// exists only to store the GameModifier vptr. Out-of-line on purpose (see the
+// note on the declaration in GameModifier.h).
+GameModifier::~GameModifier() {}
+
 // Binary @ 0x13fdc4 -- GameModifier::Update(float)
 // Base dispatcher. Returns 0 = still alive, 1 = expired.
 //   (1) Deferred-apply gate: while m_bApplied (+0x18) is set, waits until the saved

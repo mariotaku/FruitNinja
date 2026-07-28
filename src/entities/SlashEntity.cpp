@@ -164,7 +164,7 @@ static signed char s_CheckComboFlag = -1;
 const float SlashEntity::POINT_SPACING         = 64.0f;   // DAT_0017d5fc
 const float SlashEntity::MOVE_THRESH_ACTIVE    = 5.0f;    // sqrt(25)
 
-// Binary global SlashEntity::ModPowerMask @ BSS 0x0024d8cc.
+// Binary global SlashEntity::ModPowerMask @ .bss 0x00332bc8 (GOT 0x002d8674).
 uint32_t SlashEntity::s_ModPowerMask = 0;
 
 // NOTE: MOVE_THRESH_INACTIVE is vestigial in the binary. The decomp of
