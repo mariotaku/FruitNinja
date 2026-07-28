@@ -178,7 +178,7 @@ Utf8StringIterator Utf8StringIterator::operator+(int n) const {
 }
 
 // Binary @ 0x0021ec20 (_Init / Reset) — rewinds cursor to string start and
-// re-primes the first codepoint. Used by BakedString::Bake between passes.
+// re-primes the first codepoint.
 // DIFFERS: binary re-seeds from a fresh Utf8StringProxy via _Init;
 // port uses port-only m_Begin to avoid re-creating the proxy.
 // v1.6.1 Utf8StringIterator @ 0x0021ec20

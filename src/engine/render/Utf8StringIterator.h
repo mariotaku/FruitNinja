@@ -56,14 +56,13 @@ public:
 
     // _Init / Reset — binary @ 0x0021ec20.
     // Rewinds cursor to string start and re-primes the first codepoint.
-    // Used by BakedString::Bake between pass 1 and pass 2.
     // DIFFERS: binary re-seeds from a fresh Utf8StringProxy via _Init;
     // port uses port-only m_Begin to avoid re-creating the proxy.
     // v1.6.1 Utf8StringIterator @ 0x0021ec20
     void Reset();
 
     // +0x08 — decoded codepoint value; 0 = end-of-string.
-    // Public for direct access by Font.cpp / BakedString.cpp consumers.
+    // Public for direct access by Font.cpp consumers.
     uint32_t m_CurrentCodepoint;
 
 private:

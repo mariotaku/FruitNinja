@@ -186,7 +186,6 @@ target_sources(mortar_engine PRIVATE
     render/Utf8StringProxy.cpp
     render/Utf8StringIterator.cpp
     render/Font.cpp
-    render/BakedString.cpp
     render/FontInterface.cpp
     render/BakedStringBox.cpp
     render/BakedStringTTF.cpp

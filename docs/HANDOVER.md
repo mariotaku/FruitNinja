@@ -67,7 +67,7 @@ Small set of docs that capture **information not derivable from source**:
 | `docs/engine/binary-static-init.md` | Pre-`OspMain` static init order |
 | `docs/engine/binary-build-evidence.md` | Toolchain / ABI (Sourcery 4.4.1, hard-float) |
 | `docs/engine/online-services-audit.md` | Defunct subsystem inventory + stub list |
-| `docs/engine/string-hash.md`, `font.md`, `particles.md`, `mesh.md`, `baked-string.md`, `localisation.md` | File/data formats |
+| `docs/engine/string-hash.md`, `font.md`, `particles.md`, `mesh.md`, `localisation.md` | File/data formats |
 | `docs/engine/formats/` | Detailed asset format specs (textures, audio, models, fonts) |
 
 **Per-class/per-screen RE narratives have been removed** — they lived in `src/` comments now.

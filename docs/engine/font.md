@@ -124,7 +124,25 @@ for the font-slot system:
 
 - `Font::Init` — does not exist as a separate function in the binary; `Font::Font` (ctor) + `Font::Load` is the complete construction sequence.
 - `Font::SetScale` — not present in binary.
-- `BakedString::Bake` — exists in the binary (`0x00198e44` region) but is a separate text-caching feature not yet needed by any ported screen.
+- Baked (cached) text meshes — a separate feature; see "Baked-string classes" below.
+
+---
+
+## Baked-string classes
+
+There is **no bitmap `Mortar::BakedString` class in v1.6.1**. The only
+baked-string classes are `BakedStringTTF`, `BakedStringBox` and
+`FancyBakedString` — all TTF-backed, all built on `FontCacheObjectTTF`, none of
+them consumers of the `.fnt` bitmap `Font` documented above. (`MenuButton::SetText`,
+historically cited as the bitmap-BakedString consumer, is v1.6.1
+`MenuButton::SetText @0x0019b0ac` and builds `BakedStringTTF` objects only.)
+
+Per the code-is-canonical policy their layouts, vtables and call contracts live
+in the port headers, not here:
+
+- `src/engine/render/BakedStringTTF.h`
+- `src/engine/render/BakedStringBox.h`
+- `src/engine/render/FancyBakedString.h`
 
 ---
 
@@ -154,11 +172,16 @@ string in the binary: `electrofied_medium.fnt`, `fruit_ninja_numbers_blue.fnt`,
 
 ---
 
-## Font_DrawString Implementation
+## Font::DrawString Implementation
 
-<!-- Analysed: 2026-04-27T07:00 -->
+Binary: **v1.6.1 `Mortar::Font::DrawString` @ `0x0024c7f0`** (the 10-param
+`_Vector3` overload) — this is the owner of the scale / rotate / align / position
+math described below.
 
-Binary: `0x00198e44` (Font_DrawString). 719 decompiled lines.
+> Address hygiene: addresses in this section that carry no `v1.6.1` prefix are
+> **unverified v1.5.1-era** and must be re-checked against v1.6.1 before use
+> (see CLAUDE.md "Source-side comment grammar"). The signature and per-glyph
+> vertex maths below are believed still accurate; only the addresses are suspect.
 
 ### True Signature
 
@@ -198,25 +221,42 @@ selects the 0.5 factor — so `0xe` means **right-align, shift UP by half line-h
 
 IMPORTANT: The binary shifts text UPWARD via `MatrixStack::TranslateLocal(0, +factor, 0)` before scaling.
 
+### Transform order — v1.6.1 `Mortar::Font::DrawString` @ `0x0024c7f0`
+
+The scale / rotate / align / position math is owned by the 10-param `_Vector3`
+overload `Mortar::Font::DrawString @0x0024c7f0`. Order is taken from the flush
+block `0x0024d610`–`0x0024d694` and the align branch `0x0024d2f4`–`0x0024d37c`.
+**Order matters** — each step composes onto the result of the previous one:
+
+1. `world.m_Current = _Matrix44<float>::Identity` (inlined Reset), then bump
+   `m_Version`. The world matrix is *replaced*, not pushed onto.
+2. `MatrixStack::Scale @0x0015d100` → `_Matrix44<float>::Scale44 @0x0015d06c`
+   with `(scale, scale, 1.0f)`. This is a LEFT / row multiply (`S*M`), but it is
+   applied to Identity, so the side is inert here.
+3. `MatrixStack::RotZ @0x00105338`.
+4. **Vertical** alignment only, gated on `tst r2, #0xc`:
+   ```c
+   alignY = (-height - cursorY) * ((align & 4) ? 0.5f : 1.0f);
+   MatrixStack::TranslateLocal @0x0024a150  ->  LocalTranslate44(0, alignY, 0);
+   ```
+   Because it lands **after** scale and rotate, the alignment offset is itself
+   scaled and rotated.
+5. `MatrixStack::Translate @0x00107d84` → `GlobalTranslate44(pos)` — world anchor.
+6. `_UploadCurrentMatrices(1)`, then per-page `DrawTriStrip`.
+
+**Horizontal alignment is not a matrix operation at all.** It is folded into the
+scalar x-cursor offset baked into each glyph vertex (`LAB_0024c998`, recomputed
+per line at `0x0024ca3c`). Only vertical alignment touches the matrix. Getting
+this wrong is the standard failure mode when re-deriving this function.
+
 ### GL State Changes — NONE
 
-`Font_DrawString` makes **no direct GL calls**. All rendering goes through the
-engine's MatrixManager/Mesh pipeline:
-
-1. `MatrixStack::Push` — saves current world matrix.
-2. `MatrixStack::Scale(Vec3(scale, scale, 1.0))` — applies em-size scale.
-3. `MatrixStack::RotZ(rotZ)` — rotates (0 for upright).
-4. `MatrixStack::TranslateLocal(...)` — vertical alignment offset.
-5. `MatrixStack::Translate(&world, pos)` — places text at world anchor.
-6. `MatrixManager::UploadCurrentMatrices(true)` — uploads MVP to the shader.
-7. Per page: `Texture::Set(page_tex)` + `Mesh::DrawTriStrip(verts, count*6, false, null)`.
-8. `MatrixStack::Pop` — restores saved matrix.
-
-The function does **not** call `glEnable(GL_BLEND)`, `glDisable(GL_DEPTH_TEST)`,
-`glOrtho`, or any raw GL state. The blend/depth state is whatever the
-surrounding HUD/world rendering has already set. Glyph quads are added to
-per-page vertex arrays (one `QUADCUSTOMVERTEX` tristrip per glyph) and
-submitted all at once via `Mesh::DrawTriStrip`.
+`Font::DrawString` makes **no direct GL calls** — no `glEnable(GL_BLEND)`, no
+`glDisable(GL_DEPTH_TEST)`, no `glOrtho`. Blend/depth state is whatever the
+surrounding HUD/world rendering already set. Glyph quads accumulate into
+per-page vertex arrays (one `QUADCUSTOMVERTEX` tristrip per glyph) and are
+submitted all at once via `Mesh::DrawTriStrip`, with
+`Texture::Set(page_tex)` around each page.
 
 ### CharTemplate Binary Layout (ARM-confirmed, 0x24 bytes each)
 

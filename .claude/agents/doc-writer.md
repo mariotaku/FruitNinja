@@ -34,7 +34,6 @@ Update or maintain only docs in this whitelist:
 | `docs/engine/font.md` | `.fnt` bitmap-font format |
 | `docs/engine/particles.md` | particle-system XML / pool layout |
 | `docs/engine/mesh.md` | `.mad` / `.mmd` mesh format |
-| `docs/engine/baked-string.md` | string-table binary format |
 | `docs/engine/localisation.md` | `.str` file format |
 | `docs/engine/formats/`, `docs/gallery/` | binary asset formats + extracted gallery |
 

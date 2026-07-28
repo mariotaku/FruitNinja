@@ -34,9 +34,8 @@ The remaining docs cover information that **isn't derivable from `src/`**:
 
 ### File / data formats
 - [`engine/string-hash.md`](engine/string-hash.md) — Jenkins lookup3 variant (constants + folding).
-- [`engine/baked-string.md`](engine/baked-string.md) — `BakedString` binary format.
 - [`engine/localisation.md`](engine/localisation.md) — `.str` file format.
-- [`engine/font.md`](engine/font.md) — `.fnt` bitmap-font format + g_GameData font slots.
+- [`engine/font.md`](engine/font.md) — `.fnt` bitmap-font format, g_GameData font slots, `Font::DrawString` transform order, baked-string classes.
 - [`engine/particles.md`](engine/particles.md) — particle XML schema + 0xA4-byte template layout.
 - [`engine/mesh.md`](engine/mesh.md) — `.mad` / `.mmd` mesh format (HBR0 container).
 - [`engine/formats/`](engine/formats/) — `audio.md`, `fonts.md`, `models.md`, `textures.md` (raw asset format docs).

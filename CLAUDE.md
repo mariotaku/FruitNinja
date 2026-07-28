@@ -198,7 +198,7 @@ The canonical RE record is in `src/`. The surviving `docs/` set is small and loa
 - `docs/engine/binary-static-init.md` — pre-`OspMain` static-init order.
 - `docs/engine/binary-build-evidence.md` — toolchain / ABI provenance.
 - `docs/engine/online-services-audit.md` — what we intentionally skip and why.
-- `docs/engine/string-hash.md`, `docs/engine/font.md`, `docs/engine/particles.md`, `docs/engine/mesh.md`, `docs/engine/baked-string.md`, `docs/engine/localisation.md`, `docs/engine/formats/` — file/data formats.
+- `docs/engine/string-hash.md`, `docs/engine/font.md`, `docs/engine/particles.md`, `docs/engine/mesh.md`, `docs/engine/localisation.md`, `docs/engine/formats/` — file/data formats.
 - `docs/gallery/` — extracted models / textures.
 - `tools/asm-verify/triage.json` — sticky verdicts for asm-verify divergences.
 
