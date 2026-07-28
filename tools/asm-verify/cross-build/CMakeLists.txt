@@ -42,13 +42,28 @@ target_include_directories(fnverify PRIVATE
 
 set_target_properties(fnverify PROPERTIES LINKER_LANGUAGE CXX)
 
-# ColAABB functions are ARM mode in the binary (confirmed 2026-06-18:
-# UpdateVertices @ 0x00275ccc, ColAABBAABB @ 0x00275d60 both end with
-# ARM bx lr = e12fff1e). Compile with -marm to eliminate mode mismatch
-# false positive in asm-verify scores.
-set_source_files_properties(
-    "${_PROJECT_ROOT}/src/engine/collision/ColAABB.cpp"
-    PROPERTIES COMPILE_FLAGS "-marm -mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3")
+# Per-TU ISA overrides. The binary is mixed-ISA and GCC 4.4.1 has no
+# per-function mode knob, so the TU is the finest granularity; the file list
+# lives in ../isa-overrides.cmake, shared with detect-isa-mismatch.py so the
+# tagger knows which TUs are already mode-matched.
+include("${_ASM_VERIFY}/isa-overrides.cmake")
+
+set(_FN_ISA_COMMON "-mcpu=cortex-a8 -mfloat-abi=hard -mfpu=vfpv3")
+if(DEFINED ENV{FN_ARM_MODE})
+    # A twin build (bindiff-pipeline.sh) deliberately compiles EVERYTHING in one
+    # mode so mode-match-merge.py can pick per function. Per-TU overrides would
+    # poison exactly the twin they are meant to help, so they are skipped.
+    message(STATUS "fnverify: FN_ARM_MODE=$ENV{FN_ARM_MODE} -- per-TU ISA overrides skipped (twin build)")
+else()
+    foreach(_isa_src IN LISTS FN_ISA_ARM_SOURCES)
+        set_source_files_properties("${_PROJECT_ROOT}/${_isa_src}"
+            PROPERTIES COMPILE_FLAGS "-marm ${_FN_ISA_COMMON}")
+    endforeach()
+    foreach(_isa_src IN LISTS FN_ISA_THUMB_SOURCES)
+        set_source_files_properties("${_PROJECT_ROOT}/${_isa_src}"
+            PROPERTIES COMPILE_FLAGS "-mthumb ${_FN_ISA_COMMON}")
+    endforeach()
+endif()
 
 # Force recompilation of key TUs on every cmake --build run.
 add_custom_target(force_struct_recompile ALL

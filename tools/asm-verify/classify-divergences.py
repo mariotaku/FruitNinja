@@ -48,6 +48,39 @@ from collections import Counter, defaultdict
 ESCALATED = {"SUSPICIOUS", "DIVERGE", "UNPAIRED"}
 
 # ---------------------------------------------------------------------------
+# ISA mismatch (#111) -- Thumb-2 binary body vs ARM cross-build body.
+#
+# The two instruction streams are incomparable BY CONSTRUCTION (different
+# encodings, IT blocks vs ARM predication, movs/adds vs mov/add), so the LCS
+# score is neither a pass nor a fail -- it is noise. Rows in this set are tagged
+# `isa-mismatch` / LOW so they rank as noise instead of as high-ratio
+# divergences, and carry `isa_mismatch: true` in report.json regardless of
+# verdict (an already-triaged row must still be findable for re-triage).
+#
+# The set comes from tmp/asm-verify/isa-modes.json, written by
+# detect-isa-mismatch.py. NO FILE => FEATURE OFF => the report is bit-identical
+# to the pre-#111 output. Same for --no-isa.
+#
+# `isa-mismatch` is deliberately NOT in BENIGN_VERDICT: "the score cannot be
+# computed" is not "the code is correct". These rows are excluded, not accepted.
+ISA_MISMATCH = set()
+
+
+def load_isa_modes(report_path):
+    """Populate ISA_MISMATCH from isa-modes.json next to the report. Best effort."""
+    path = os.path.join(os.path.dirname(os.path.abspath(report_path)),
+                        "isa-modes.json")
+    if not os.path.exists(path):
+        return 0
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:                                            # noqa: BLE001
+        return 0
+    ISA_MISMATCH.update(data.get("mismatched", []))
+    return len(ISA_MISMATCH)
+
+# ---------------------------------------------------------------------------
 # Small parsing helpers
 # ---------------------------------------------------------------------------
 
@@ -523,6 +556,12 @@ def classify(sym):
     lcs = parse_lcs(sym.get("reason", ""))
     common, bin_only, port_only = split_sides(diff)
 
+    # ISA mismatch outranks every detector: when the binary body is Thumb-2 and
+    # the cross-build body is ARM, EVERY line of the diff is encoding noise, so
+    # any other cause read off that diff would be a fiction.
+    if mangled in ISA_MISMATCH:
+        return ("isa-mismatch", "LOW")
+
     # Compiler-generated TU static-init is identifiable by NAME alone -- classify
     # it even when the diff is empty/missing (e.g. UNPAIRED rows) so a
     # _GLOBAL__I_* row can never fall through to the MED shortlist as `unknown`.
@@ -585,9 +624,19 @@ def run(report_path):
         report = json.load(fh)
     symbols = report["symbols"]
 
+    # Populate ISA_MISMATCH before classifying. Absent isa-modes.json => empty
+    # set => feature off => output byte-identical to the pre-#111 report.
+    load_isa_modes(report_path)
+
     out_dir = os.path.dirname(os.path.abspath(report_path))
     rows = []  # (sym, cause, likelihood, lcs)
     for sym in symbols:
+        # Factual row metadata, independent of verdict: an ALREADY-TRIAGED row
+        # whose score is ISA noise must stay findable so it can be re-triaged.
+        # Only written when true, so with the feature off report.json is
+        # byte-identical to the pre-#111 output.
+        if sym.get("mangled") in ISA_MISMATCH:
+            sym["isa_mismatch"] = True
         if sym.get("verdict") not in ESCALATED:
             # Non-escalated rows (MATCH / COSMETIC / ...) aren't classified.
             # Set the two fields to null consistently so every symbol carries
