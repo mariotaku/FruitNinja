@@ -548,9 +548,18 @@ void Fruit::Update(float dt) {
                     }
                     SetTrailParticles(pick);
                 }
-                // Per-tick m_pEmitter1 follow-position (binary's GOT offset Vec3 is
-                // BSS-zero, so the addend collapses to just pos).
-                if (m_pEmitter1) m_pEmitter1->m_Pos = pos;
+                // ASM-spec v1.6.1 Fruit::Update @0x001df828 (block @0x001dfdb0-0x001dfdf0):
+                // per-tick m_pEmitter1 follow-position is
+                //   m_Pos = pos + _Vector3<float>::UnitZ * m_ZPosition
+                // raw -- no -20 bias and no z override on this path.
+                // UnitZ is _Vector3<float>::UnitZ @0x003328ac, a guard-protected .bss
+                // static (_ZGVN8_Vector3IfE5UnitZE @0x003328a8) constructed at runtime
+                // as (0,0,1) by global.constructors.keyed.to.Fruit.cpp @0x001e2624; it
+                // reads as zeros in the file image only because it lives in .bss.
+                if (m_pEmitter1) {
+                    m_pEmitter1->m_Pos   = pos;
+                    m_pEmitter1->m_Pos.z = pos.z + m_ZPosition;
+                }
             }
 
             // binary @0x001dfd80 -- cascade fruit-spawn fires ONCE on the transition
@@ -751,22 +760,40 @@ void Fruit::Update(float dt) {
     }
 
     // binary @0x001e034e -- per-frame emitter position/rotation tracking.
-    // The "direction" Vec3 at GOT[DAT_00177d0c]/DAT_001e0424/DAT_001e0428 is BSS-zero,
-    // so the matrix-rotate -> Atan2Idx pipeline collapses to (sin=0, cos=1). We
-    // still write those slots to clear any stale orientation from a previous trail.
-    // Binary forces emitter1.z to -5000.0f (DAT_001e0420) off-camera depth marker.
+    //
+    // ASM-spec v1.6.1 Fruit::Update @0x001df828: the emitter direction is COMPUTED
+    // per frame from the fruit's spin, identically for BOTH tails -- emitter2 also
+    // uses m_Rot1, NOT m_Rot2:
+    //   d = Matrix33(m_Rot1) * _Vector3<float>::UnitZ   // = column 2 of ToMatrix44
+    //   a = Math::Atan2Idx(d.x, d.y)   // arg order is (x, y) -- NOT atan2(y, x)
+    //   e->m_DirSin = Math::SinIdx(a);  // +0x34, written FIRST
+    //   e->m_DirCos = Math::CosIdx(a);  // +0x30, written SECOND
+    // UnitZ is _Vector3<float>::UnitZ @0x003328ac, a guard-protected .bss static
+    // (_ZGVN8_Vector3IfE5UnitZE @0x003328a8) constructed at runtime as (0,0,1) by
+    // global.constructors.keyed.to.Fruit.cpp @0x001e2624-0x001e263c; it reads as
+    // zeros in the file image only because it lives in .bss.
+    //
+    // Positions: emitter1 (@0x001e034e) is pos + UnitZ*(m_ZPosition - 20.0f) with z
+    // then overwritten by DAT_001e0420 = -5000.0f, so the UnitZ term is dead there.
+    // emitter2 (@0x001e0438-0x001e0474) is m_SecondPos + UnitZ*m_ZPosition raw --
+    // no -20 bias and no z override.
     if (m_pEmitter1) {
+        Matrix44 rotMat = m_Rot1.ToMatrix44();
+        _Vector3<float> dir(rotMat.m[8], rotMat.m[9], rotMat.m[10]);
+        unsigned short ang = (unsigned short)Math::Atan2Idx(dir.x, dir.y);
         m_pEmitter1->m_Pos     = pos;
         m_pEmitter1->m_Pos.z   = -5000.0f;  // DAT_001e0420
-        m_pEmitter1->m_DirCos  = 1.0f;      // binary +0x30 = CosIdx(0)
-        m_pEmitter1->m_DirSin  = 0.0f;      // binary +0x34 = SinIdx(0)
-        // TODO: 0x1e03c0 emitter rotation via m_Rot1.Matrix33 x gEmitVec -> Atan2Idx; port collapses to (1,0)
+        m_pEmitter1->m_DirSin  = Math::SinIdx(ang);
+        m_pEmitter1->m_DirCos  = Math::CosIdx(ang);
     }
     if (m_pEmitter2) {
+        Matrix44 rotMat = m_Rot1.ToMatrix44();
+        _Vector3<float> dir(rotMat.m[8], rotMat.m[9], rotMat.m[10]);
+        unsigned short ang = (unsigned short)Math::Atan2Idx(dir.x, dir.y);
         m_pEmitter2->m_Pos     = m_SecondPos;  // binary calls this m_HalfB_pos; slot +0xC8
-        m_pEmitter2->m_DirCos  = 1.0f;
-        m_pEmitter2->m_DirSin  = 0.0f;
-        // NOTE: binary does NOT force emitter2.z to -5000.0f (only emitter1).
+        m_pEmitter2->m_Pos.z   = m_SecondPos.z + m_ZPosition;
+        m_pEmitter2->m_DirSin  = Math::SinIdx(ang);
+        m_pEmitter2->m_DirCos  = Math::CosIdx(ang);
     }
 
     if (CheckHasGoneOffscreen()) {
