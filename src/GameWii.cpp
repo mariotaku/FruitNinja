@@ -143,7 +143,7 @@ bool Game::init(void* win, void* gl) {
     // horizontally distorted on a 16:9-configured console.
     s_displayAspect = (CONF_GetAspectRatio() == CONF_ASPECT_16_9) ? (16.0f / 9.0f) : (4.0f / 3.0f);
 
-    // Port specific: pre-load pSplashTex here (same call GameInit.cpp's
+    // Port specific: pre-load m_StartupTexture here (same call GameInit.cpp's
     // GameUpdate makes lazily on first splashFadeTimer>0 tick) so it's already
     // resident before the main loop's first renderFrame. mainWii's boot splash
     // (SplashBootScreen) is still the visible XFB at this point, and the SD
@@ -154,8 +154,8 @@ bool Game::init(void* win, void* gl) {
     // latency behind the still-displayed boot splash instead. Does not change
     // splash semantics: same texture, same DrawStartFade draw, same release at
     // splashFadeTimer<=0 (GameInit.cpp).
-    if (!pSplashTex) {
-        pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
+    if (!m_StartupTexture) {
+        m_StartupTexture = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
     }
 
     // Port specific: pre-load the IR hand-pointer texture (see WiiPointer.h)

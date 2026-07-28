@@ -1,6 +1,6 @@
-// Analysed: 2026-05-04T00:00
 #include "core/MortarGame.h"
 #include "core/SystemManager.h"
+#include "asset/Texture.h"
 #include "Game.h"
 #include <cstring>
 #include <cstdio>
@@ -10,11 +10,18 @@ namespace Mortar {
 
 MortarGame* MortarGame::s_instance = nullptr;
 
-// Matches 0x0018ab6c — zeros all fields, calls SetVersion(SelfVersion())
+// v1.6.1 Mortar::MortarGame::MortarGame @0x0022e0c0 — stores &vtable+8, byte-zeroes
+// m_versionString / m_formattedVersion / m_hardwareString, clears the version ints,
+// m_bFastHardware, m_licensedState and m_StartupTexture, then
+// `if (SelfVersion()) SetVersion(SelfVersion())`.
 MortarGame::MortarGame() {
-    // Zero +0x04..+0xF8 (everything after vtable)
     memset(m_versionString, 0, sizeof(m_versionString));
     memset(m_formattedVersion, 0, sizeof(m_formattedVersion));
+    // DIFFERS: the binary's ctor does NOT touch m_languageString (+0x84) — it relies on
+    //          theGame living in zero-initialised BSS. The port heap-allocates Game via
+    //          `new Game()`, so the buffer would hold garbage and Game::Init's
+    //          strcmp(m_languageString, "fr"/"de"/...) language probe would read it.
+    //          Port zeroes it; costs one memset, removes the UB.
     memset(m_languageString, 0, sizeof(m_languageString));
     m_versionCombined = 0;
     m_versionMajor = 0;
@@ -23,86 +30,103 @@ MortarGame::MortarGame() {
     memset(m_hardwareString, 0, sizeof(m_hardwareString));
     m_bFastHardware = false;
     m_licensedState = 0;
+    // m_StartupTexture is null-constructed by SmartPtr's default ctor (binary: `str #0, [this,#0xfc]`).
 
     SetVersion(SelfVersion());
 
+    // Port specific: the binary reaches the instance through the `theGame` GOT global,
+    // which ReturnsAnInstanceOfThisMortarGame @0x11f6ac writes. The port publishes it here.
     s_instance = this;
 }
 
+// slots 0/1 v1.6.1 Mortar::MortarGame::~MortarGame @0x0022e070 (D1) / @0x0022e0a4 (D0)
+// Binary D1: restores the vptr to &vtable+8, then SmartPtr<Texture>::Clear(&m_StartupTexture).
 MortarGame::~MortarGame() {
+    m_StartupTexture.SetNull();
     if (s_instance == this) {
         s_instance = nullptr;
     }
 }
 
-// --- Vtable slot implementations (binary @ 0x001eae58, 24 slots) ---
+// --- Vtable slot implementations --- v1.6.1 _ZTVN6Mortar10MortarGameE @0x002cfa88, 34 slots ---
 
-// slot 0 @ 0x0010d9d0
+// slot 2 v1.6.1 Mortar::MortarGame::GetHardwareString @0x0011fb80
+// DIFFERS: the binary returns `this+0x04` (m_versionString), NOT the +0xB4 buffer that
+//          SetHardware @0x0022e038 writes. That looks like an original-source bug; the
+//          port returns m_hardwareString so DeviceQuery's GetHardwareString() reports the
+//          hardware name instead of the version string.
 const char* MortarGame::GetHardwareString() { return m_hardwareString; }
 
-// slot 1 @ 0x0010d9d4
+// slot 3 v1.6.1 Mortar::MortarGame::IsFastHardware @0x0011fb88
 bool MortarGame::IsFastHardware() { return m_bFastHardware; }
 
-// slot 2 @ 0x0018aa14 — base no-op; Game overrides to check slow-hardware list
+// slot 4 v1.6.1 Mortar::MortarGame::RenderAtHalfFrames @0x0022de74 — base no-op; Game overrides
 void MortarGame::RenderAtHalfFrames(const char* hwName, const char* model) {
     (void)hwName; (void)model;
 }
 
-// slot 3 @ 0x0018ac80
+// slot 5 v1.6.1 Mortar::MortarGame::GetHighResolutionScale @0x0022e194
 float MortarGame::GetHighResolutionScale() { return 1.0f; }
 
-// slot 4 @ 0x0018ac88
-// Defunct: OpenFeint — no-op stub; v1.6.1 binary @ 0x0018ac88
+// slot 6
+// Defunct: OpenFeint — no-op stub; v1.6.1 Mortar::MortarGame::GetOpenFeintProductKey @ 0x0022e19c
 const char* MortarGame::GetOpenFeintProductKey() { return ""; }
 
-// slot 5 @ 0x0018ac8c
-// Defunct: OpenFeint — no-op stub; v1.6.1 binary @ 0x0018ac8c
+// slot 7
+// Defunct: OpenFeint — no-op stub; v1.6.1 Mortar::MortarGame::GetOpenFeintSecret @ 0x0022e1a4
 const char* MortarGame::GetOpenFeintSecret() { return ""; }
 
-// slot 6 @ 0x0018ac90
-// Defunct: OpenFeint — no-op stub; v1.6.1 binary @ 0x0018ac90
+// slot 8
+// Defunct: OpenFeint — no-op stub; v1.6.1 Mortar::MortarGame::GetOpenDisplayName @ 0x0022e1ac
 const char* MortarGame::GetOpenDisplayName() { return ""; }
 
-// slot 7 @ 0x0018ac94
-// Defunct: Playhaven — no-op stub; v1.6.1 binary @ 0x0018ac94
+// slot 9
+// Defunct: Playhaven — no-op stub; v1.6.1 Mortar::MortarGame::GetPlayhavenToken @ 0x0022e1b4
 const char* MortarGame::GetPlayhavenToken() { return ""; }
 
-// slot 8 @ 0x0010d9dc
+// slot 10 v1.6.1 Mortar::MortarGame::GetHurtzRate @0x0011fb90 — constant 60.0 (double literal
+// 0x404e000000000000 at 0x0011fb98); no subclass override exists in v1.6.1.
+double MortarGame::GetHurtzRate(const char* hwName, const char* model) {
+    (void)hwName; (void)model;
+    return 60.0;
+}
+
+// slot 11 v1.6.1 Mortar::MortarGame::GetCacheDataArchive @0x0011fba0
 void* MortarGame::GetCacheDataArchive() { return 0; }
 
-// slot 9 @ 0x0018ac98 — base no-op; Game overrides to setup FileSystem_Direct
+// slot 12 v1.6.1 Mortar::MortarGame::CreateFileSystems @0x0022e1bc — base no-op; Game overrides
 void MortarGame::CreateFileSystems(const char* a, const char* b) {
     (void)a; (void)b;
 }
 
-// slot 10 @ 0x0018aa28 — base no-op; Game overrides to set HUD+WaveManager
+// slot 13 v1.6.1 Mortar::MortarGame::TellGameToStart @0x0022de8c — base no-op; Game overrides
 void MortarGame::TellGameToStart(int multiplayer) { (void)multiplayer; }
 
-// slot 11 @ 0x0018aa1c
+// slot 14 v1.6.1 Mortar::MortarGame::Update @0x0022de80
 void MortarGame::Update(float dt) { (void)dt; }
 
-// slot 12 @ 0x0018aa18
+// slot 15 v1.6.1 Mortar::MortarGame::Draw @0x0022de7c
 void MortarGame::Draw(float dt) { (void)dt; }
 
-// slot 13 @ 0x0018aa20
+// slot 16 v1.6.1 Mortar::MortarGame::Init @0x0022de84
 void MortarGame::Init(int argc, const char** argv) { (void)argc; (void)argv; }
 
-// slot 14 @ 0x0018aa24 — base returns this
+// slot 17 v1.6.1 Mortar::MortarGame::End @0x0022de88 — base returns this
 MortarGame* MortarGame::End() { return this; }
 
-// slot 15 @ 0x0018aa2c
+// slot 18 v1.6.1 Mortar::MortarGame::Paused @0x0022de90
 void MortarGame::Paused() {}
 
-// slot 16 @ 0x0018aa30
+// slot 19 v1.6.1 Mortar::MortarGame::UnPaused @0x0022de94
 void MortarGame::UnPaused() {}
 
-// slot 17 @ 0x0018aa38 — base returns "1.0.0"; Game overrides to "1.5.1"
+// slot 20 v1.6.1 Mortar::MortarGame::SelfVersion @0x0022de9c — base "1.0.0"; Game overrides to "1.6.1"
 const char* MortarGame::SelfVersion() { return "1.0.0"; }
 
-// slot 18 @ 0x0018aa34
+// slot 21 v1.6.1 Mortar::MortarGame::SaveOnExit @0x0022de98
 void MortarGame::SaveOnExit() {}
 
-// slot 19 @ 0x0018aa50 — can't downgrade from licensed(1) to unlicensed(2)
+// slot 22 v1.6.1 Mortar::MortarGame::SetAppLicensed @0x0022deb8 — can't downgrade licensed(1) to unlicensed(2)
 void MortarGame::SetAppLicensed(bool licensed) {
     if (licensed) {
         m_licensedState = 1;
@@ -111,34 +135,63 @@ void MortarGame::SetAppLicensed(bool licensed) {
     }
 }
 
-// slot 20 @ 0x0018aa68
+// slot 23 v1.6.1 Mortar::MortarGame::GetAppLicensedState @0x0022dedc (ldr r0,[r0,#0xf8]; bx lr)
 int MortarGame::GetAppLicensedState() { return m_licensedState; }
 
-// slot 21 @ 0x0018aa70 — Game does NOT override; base writes m_languageString
+// slot 24 v1.6.1 Mortar::MortarGame::SetLanguage @0x0022dee4 (add r0,#0x84; b strcpy) — Game does NOT override
 void MortarGame::SetLanguage(const char* lang) {
     if (lang) {
         strcpy(m_languageString, lang);
     }
 }
 
-// slot 22 @ 0x0018ac9c
+// slot 25 v1.6.1 Mortar::MortarGame::DefaultOrientation @0x0011fba8 (mov r0,#3; bx lr)
+int MortarGame::DefaultOrientation() { return 3; }
+
+// slot 26 v1.6.1 Mortar::MortarGame::AllowOrientationChange @0x0011fbb0
 bool MortarGame::AllowOrientationChange(int orientation) { (void)orientation; return false; }
 
-// slot 23 @ 0x0010d9e0 — no-op (single bx lr in binary)
+// slot 27 v1.6.1 Mortar::MortarGame::OrientationDidChange @0x0011fbb8 — no-op (single bx lr)
 void MortarGame::OrientationDidChange(int orientation) { (void)orientation; }
+
+// slot 28 v1.6.1 Mortar::MortarGame::SetStartupTexture @0x001208dc
+// (add r0,#0xfc; b SmartPtr<Texture>::operator=) — tail-call assignment into m_StartupTexture.
+void MortarGame::SetStartupTexture(SmartPtr<Texture> tex) {
+    m_StartupTexture = tex;
+}
+
+// slot 29 v1.6.1 Mortar::MortarGame::GetStartupTexture @0x001208f4
+// (add r1,#0xfc; bl SmartPtr<Texture>::SmartPtr(const&)) — returns a copy, so the caller
+// holds its own reference.
+SmartPtr<Texture> MortarGame::GetStartupTexture() {
+    return m_StartupTexture;
+}
+
+// Defunct: on-screen keyboard — no-op stub; v1.6.1 Mortar::MortarGame::KeyboardProcessCharacter @ 0x0011fbbc
+void MortarGame::KeyboardProcessCharacter(int ch) { (void)ch; }
+
+// Defunct: on-screen keyboard — no-op stub; v1.6.1 Mortar::MortarGame::KeyboardProcessDelete @ 0x0011fbc0
+void MortarGame::KeyboardProcessDelete() {}
+
+// Defunct: on-screen keyboard — no-op stub; v1.6.1 Mortar::MortarGame::KeyboardProcessDone @ 0x0011fbc4
+// Binary body is `mov r0,#0; bx lr`. Return type inferred as bool from the identical codegen
+// of AllowOrientationChange; it is not encoded in the mangled name, so symbol-diff is unaffected.
+bool MortarGame::KeyboardProcessDone() { return false; }
+
+// Defunct: on-screen keyboard — no-op stub; v1.6.1 Mortar::MortarGame::KeyboardProcessCancelled @ 0x0011fbcc
+void MortarGame::KeyboardProcessCancelled() {}
 
 // --- Non-virtual methods ---
 
-// Matches 0x0018ac64
+// Matches v1.6.1 TellGameToQuit @0x0022e054
 void MortarGame::TellGameToQuit() {
     SystemManager::GetInstance().QuitGame();
 }
 
-// Matches 0x0018aa90 — parses "M.m.p", fills version fields, sets hardware default
+// Matches v1.6.1 MortarGame::SetVersion @0x0022deec — parses "M.m.p", fills version fields, sets hardware default
 // DIFFERS: binary multiplies single-digit version sections by 10
 //          (e.g. "1.5.1" -> minor=50, patch=10, combined=15010);
 //          port keeps direct semver (combined=10501). No callers read m_versionCombined.
-//          binary @ 0x0018aa90
 void MortarGame::SetVersion(const char* version) {
     if (!version) return;
 
@@ -169,7 +222,7 @@ void MortarGame::SetVersion(const char* version) {
     snprintf(m_hardwareString, sizeof(m_hardwareString), "BADA");
 }
 
-// Matches 0x0018aa7c
+// Matches v1.6.1 MortarGame::SetHardware @0x0022e038
 void MortarGame::SetHardware(const char* hw, bool fast) {
     if (hw) {
         strcpy(m_hardwareString, hw);

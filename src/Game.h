@@ -26,7 +26,7 @@
 //
 // The port's Stage-2 refactor honours this split: this `Game` class holds
 // only the engine-singleton fields (MortarGame base + the three Game-specific
-// extensions m_bSlowHardware / m_bLanguageSet / m_appState) plus port-only
+// extensions m_bSlowHardware / m_bLanguageSet / m_Orientation) plus port-only
 // SDL plumbing. All gameplay-state fields live in the `game_work` global
 // (src/game/GameWork.h) and are accessed directly as `game_work.X`.
 //
@@ -52,15 +52,18 @@ class InputTranslatorSDL;
 namespace Mortar { class ActorManager; }
 
 struct Game : public Mortar::MortarGame {
-    // === Game-specific fields beyond MortarGame base (original +0xFC..+0x103) ===
-    uint8_t m_bSlowHardware;       // +0xFC: set by RenderAtHalfFrames when device matches old-iOS list
-    uint8_t m_bLanguageSet;        // +0xFD: set to 1 at end of Game::Init
-    // +0xFE..+0xFF: padding
-    int m_appState;                // +0x100: app lifecycle state, init=0, no read xrefs found
+    // === Game-specific fields beyond MortarGame base (original +0x100..+0x107) ===
+    // v1.6.1 Game::RenderAtHalfFrames @0x001207f0 writes `field_0x100 = 1`, and
+    // LowResBackgrounds @0x0011f3c0 does `ldrb r0,[r3,#0x100]` -- so the first
+    // subclass field sits at +0x100, right after MortarGame::m_StartupTexture (+0xFC).
+    uint8_t m_bSlowHardware;       // +0x100: set by RenderAtHalfFrames when device matches old-iOS list; read back by LowResBackgrounds()
+    uint8_t m_bLanguageSet;        // +0x101: set to 1 at end of Game::Init (v1.6.1 @0x00120374 `this->field_0x101 = 1`)
+    // +0x102..+0x103: padding
+    int m_Orientation;             // +0x104: current orientation, read by CurrentOrientation @0x0011f4c4 (ldr r0,[r3,#0x104])
 
-    // +0xF4: splash logo texture (HB_logo.tex), loaded on demand in GameUpdate.
-    // Released when splashFadeTimer reaches 0.
-    Mortar::SmartPtr<Mortar::Texture> pSplashTex;
+    // The splash logo texture is NOT a Game field -- it lives in the base at
+    // MortarGame::m_StartupTexture (+0xFC), reached via the SetStartupTexture /
+    // GetStartupTexture vtable slots (28/29).
 
     // === Port-specific fields (SDL replacements for Bada OS) ===
 
@@ -106,33 +109,37 @@ struct Game : public Mortar::MortarGame {
     static Game* GetInstance() { return static_cast<Game*>(s_instance); }
 
     // === MortarGame vtable overrides (TODO: re-verify v1.6.1 Game vtable address) ===
-    // Inherited (not overridden): GetHardwareString(0), IsFastHardware(1),
-    //   GetCacheDataArchive(8), SetLanguage(21), AllowOrientationChange(22), OrientationDidChange(23).
-    void RenderAtHalfFrames(const char* hwName, const char* model) override;  // slot 2; v1.6.1 Game::RenderAtHalfFrames @0x001207f0
-    float GetHighResolutionScale() override;                // slot 3; v1.6.1 Game::GetHighResolutionScale @0x0011fbd0 returns 2.0f
-    // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetHighResolutionScale @ 0x0011fbd0
-    const char* GetOpenFeintProductKey() override;          // slot 4; v1.6.1 Game::GetOpenFeintProductKey @0x0011fbf4
+    // Slot numbers are MortarGame's 34-slot vtable (_ZTVN6Mortar10MortarGameE @0x002cfa88):
+    // slots 0/1 are the D1/D0 destructors, so the first non-dtor slot is 2.
+    // Inherited (not overridden): GetHardwareString(2), IsFastHardware(3), GetHurtzRate(10),
+    //   GetCacheDataArchive(11), SetLanguage(24), DefaultOrientation(25),
+    //   AllowOrientationChange(26), OrientationDidChange(27), SetStartupTexture(28),
+    //   GetStartupTexture(29), KeyboardProcess* (30-33).
+    void RenderAtHalfFrames(const char* hwName, const char* model) override;  // slot 4; v1.6.1 Game::RenderAtHalfFrames @0x001207f0
+    float GetHighResolutionScale() override;                // slot 5; v1.6.1 Game::GetHighResolutionScale @0x0011fbd0 returns 2.0f
     // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetOpenFeintProductKey @ 0x0011fbf4
-    const char* GetOpenFeintSecret() override;              // slot 5; v1.6.1 Game::GetOpenFeintSecret @0x0011fc10
+    const char* GetOpenFeintProductKey() override;          // slot 6; v1.6.1 Game::GetOpenFeintProductKey @0x0011fbf4
     // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetOpenFeintSecret @ 0x0011fc10
-    const char* GetOpenDisplayName() override;              // slot 6; v1.6.1 Game::GetOpenDisplayName @0x0011fc2c
-    // Defunct: Playhaven -- no-op stub; v1.6.1 Game::GetOpenDisplayName @ 0x0011fc2c
-    const char* GetPlayhavenToken() override;               // slot 7; v1.6.1 Game::GetPlayhavenToken @0x0011fc48
-    void CreateFileSystems(const char* a, const char* b) override;  // slot 9; v1.6.1 Game::CreateFileSystems @0x00120704
-    void TellGameToStart(int multiplayer) override;         // slot 10; v1.6.1 Game::TellGameToStart @0x001206c8
-    void Update(float dt) override;                         // slot 11; TODO: re-verify v1.6.1 Game::Update address (no named symbol)
-    void Draw(float dt) override;                           // slot 12; TODO: re-verify v1.6.1 Game::Draw address (no named symbol)
-    void Init(int argc, const char** argv) override;        // slot 13; v1.6.1 Game::Init @0x00120374
-    MortarGame* End() override;                             // slot 14; TODO: re-verify v1.6.1 Game::End address (no named symbol)
-    void Paused() override;                                 // slot 15; v1.6.1 Game::Paused @0x001202ec
-    void UnPaused() override;                               // slot 16; v1.6.1 Game::UnPaused @0x00120270
-    const char* SelfVersion() override;                     // slot 17; v1.6.1 Game::SelfVersion @0x0011fbd8 returns "1.6.1"
-    void SaveOnExit() override;                             // slot 18; v1.6.1 Game::SaveOnExit @0x0012026c
-    void SetAppLicensed(bool licensed) override;            // slot 19; v1.6.1 Game::SetAppLicensed @0x0011fc7c
-    int GetAppLicensedState() override;                     // slot 20; v1.6.1 Game::GetAppLicensedState @0x0011fcbc
+    const char* GetOpenFeintSecret() override;              // slot 7; v1.6.1 Game::GetOpenFeintSecret @0x0011fc10
+    // Defunct: OpenFeint -- no-op stub; v1.6.1 Game::GetOpenDisplayName @ 0x0011fc2c
+    const char* GetOpenDisplayName() override;              // slot 8; v1.6.1 Game::GetOpenDisplayName @0x0011fc2c
+    // Defunct: Playhaven -- no-op stub; v1.6.1 Game::GetPlayhavenToken @ 0x0011fc48
+    const char* GetPlayhavenToken() override;               // slot 9; v1.6.1 Game::GetPlayhavenToken @0x0011fc48
+    void CreateFileSystems(const char* a, const char* b) override;  // slot 12; v1.6.1 Game::CreateFileSystems @0x00120704
+    void TellGameToStart(int multiplayer) override;         // slot 13; v1.6.1 Game::TellGameToStart @0x001206c8
+    void Update(float dt) override;                         // slot 14; TODO: re-verify v1.6.1 Game::Update address (no named symbol)
+    void Draw(float dt) override;                           // slot 15; TODO: re-verify v1.6.1 Game::Draw address (no named symbol)
+    void Init(int argc, const char** argv) override;        // slot 16; v1.6.1 Game::Init @0x00120374
+    MortarGame* End() override;                             // slot 17; TODO: re-verify v1.6.1 Game::End address (no named symbol)
+    void Paused() override;                                 // slot 18; v1.6.1 Game::Paused @0x001202ec
+    void UnPaused() override;                               // slot 19; v1.6.1 Game::UnPaused @0x00120270
+    const char* SelfVersion() override;                     // slot 20; v1.6.1 Game::SelfVersion @0x0011fbd8 returns "1.6.1"
+    void SaveOnExit() override;                             // slot 21; v1.6.1 Game::SaveOnExit @0x0012026c
+    void SetAppLicensed(bool licensed) override;            // slot 22; v1.6.1 Game::SetAppLicensed @0x0011fc7c
+    int GetAppLicensedState() override;                     // slot 23; v1.6.1 Game::GetAppLicensedState @0x0011fcbc
 
-    // Implicit override of virtual MortarGame::SetLanguage (TODO: re-verify v1.6.1 Game::SetLanguage address;
-    // binary's slot 21 still points to MortarGame::SetLanguage base impl).
+    // DIFFERS: the port overrides slot 24; the binary's Game vtable leaves slot 24 pointing at
+    // MortarGame::SetLanguage @0x0022dee4 and reaches Game_SetLanguage non-virtually instead.
     void SetLanguage(const char* lang) override;
 
     // === Methods ===
@@ -176,9 +183,9 @@ struct Game : public Mortar::MortarGame {
 // Only the Game-specific fields that extend MortarGame in the binary are
 // checked here; game_work fields have their own asserts in GameWork.h.
 #ifdef __bada__
-static_assert(offsetof(Game, m_bSlowHardware) == 0xFC, "Game::m_bSlowHardware must be at +0xFC");
-static_assert(offsetof(Game, m_bLanguageSet)  == 0xFD, "Game::m_bLanguageSet must be at +0xFD");
-static_assert(offsetof(Game, m_appState)      == 0x100, "Game::m_appState must be at +0x100");
+static_assert(offsetof(Game, m_bSlowHardware) == 0x100, "Game::m_bSlowHardware must be at +0x100");
+static_assert(offsetof(Game, m_bLanguageSet)  == 0x101, "Game::m_bLanguageSet must be at +0x101");
+static_assert(offsetof(Game, m_Orientation)   == 0x104, "Game::m_Orientation must be at +0x104");
 #endif
 
 // Forward declarations for lifecycle functions (src/game/)
@@ -211,14 +218,12 @@ float GetPauseAmount();
 
 // v1.6.1 GetStartupTexture @0x0011f570: returns the startup splash texture (HB_logo.tex),
 // lazy-loading it on first call. Also clears isStartupTexturePortrait to false on load.
-// DIFFERS: binary dispatches via Game vtable +0x70/+0x74 (SetStartupTexture/GetStartupTexture
-// virtual slots); port accesses pSplashTex directly (vtable slots not yet declared).
-// TODO: extend Game vtable with slots 24-29 (separate task) and move pSplashTex to
-// MortarGame::m_StartupTexture at +0xFC after MortarGame sizeof fix.
+// Dispatches through the vtable exactly as the binary does: byte +0x74 (slot 29,
+// MortarGame::GetStartupTexture) to probe, byte +0x70 (slot 28, SetStartupTexture) to store.
 Mortar::SmartPtr<Mortar::Texture> GetStartupTexture();
 
-// v1.6.1 ReleaseStartupTexture @0x0011f64c: clears the startup texture reference (null SmartPtr).
-// DIFFERS: binary dispatches via Game vtable slot +0x70 (SetStartupTexture); port accesses directly.
+// v1.6.1 ReleaseStartupTexture @0x0011f64c: stores a default-constructed (null) SmartPtr
+// through vtable byte +0x70 (slot 28, MortarGame::SetStartupTexture).
 void ReleaseStartupTexture();
 
 // Device/orientation query stubs (src/game/DeviceQuery.cpp).

@@ -412,8 +412,8 @@ void GameUpdate(float dt, bool active) {
     // LoadingJob::CanBoot gate; port draws game underneath with splash on top.
     GameTaskState* splashTs = GetTaskState();
     if (splashTs->splashFadeTimer > 0.0f) {
-        if (!game->pSplashTex) {
-            game->pSplashTex = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
+        if (!game->m_StartupTexture) {
+            game->m_StartupTexture = Mortar::TextureManager::LoadLocalisedTexture("HB_logo.tex");
         }
         // Port specific: web audio-consent overlay -- freeze the splash timer
         // (and therefore DrawStartFade's visible frame) while the overlay is
@@ -426,7 +426,7 @@ void GameUpdate(float dt, bool active) {
             splashTs->splashFadeTimer -= dt * 2.0f;
             if (splashTs->splashFadeTimer <= 0.0f) {
                 splashTs->splashFadeTimer = 0.0f;
-                game->pSplashTex.SetNull();
+                game->m_StartupTexture.SetNull();
             }
         }
     } else {

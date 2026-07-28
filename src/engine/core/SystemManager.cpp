@@ -9,7 +9,7 @@
 #ifndef __bada__
 #include <chrono>
 #endif
-// Game.h pulled in for LowResBackgrounds() which reads Game::m_appState (+0x100).
+// Game.h pulled in for LowResBackgrounds() which reads Game::m_bSlowHardware (+0x100).
 #include "Game.h"
 
 SystemManager::SystemManager()
@@ -189,11 +189,9 @@ int GetVersionTotal() {
     return Mortar::MortarGame::GetInstance()->m_versionCombined;
 }
 
-// ASM-spec v1.6.1 LowResBackgrounds @0x0011f3c0: reads the slow-hw/low-res byte at Game+0x100.
-// DIFFERS: binary field is the low-res flag at Game+0x100; port reuses m_appState (same offset,
-// misnamed) -- returns 0/false until set.
-// TODO: rename m_appState to m_bLowResBackgrounds after MortarGame struct re-layout
-// (adding m_StartupTexture at MortarGame+0xFC shifts Game-subclass fields to start at +0x100).
+// ASM-spec v1.6.1 LowResBackgrounds @0x0011f3c0: `ldrb r0,[theGame,#0x100]` -- the same byte
+// Game::RenderAtHalfFrames @0x001207f0 sets for old-iOS-class hardware, i.e. m_bSlowHardware.
+// Stays false on Bada ("BADA" never matches the iPhone-1G/3G/iPod-Touch device strings).
 bool LowResBackgrounds() {
-    return (bool)Game::GetInstance()->m_appState;
+    return Game::GetInstance()->m_bSlowHardware != 0;
 }

@@ -68,7 +68,7 @@ void DrawStartFade() {
         alpha_factor = (1.0f - rgb_factor) * (1.0f - rgb_factor) + 1.0f;
     }
 
-    if (!game->pSplashTex.IsValid()) return;
+    if (!game->m_StartupTexture.IsValid()) return;
 
     MatrixManager& mm = MatrixManager::GetInstance();
 
@@ -111,7 +111,7 @@ void DrawStartFade() {
     // a texel that happens to be opaque, so the tint carries full colour) and
     // stay bound for the logo draw that follows -- one Set/UnSet bracket for
     // all quads.
-    game->pSplashTex->Set();
+    game->m_StartupTexture->Set();
 
     if (stripW > 0.0f) {
         const float stripCenter = (240.0f + Layout::HalfWidth()) * 0.5f;
@@ -143,7 +143,7 @@ void DrawStartFade() {
     // UV crop: binary draws logo rect (uMin=0.03125, uMax=0.96875, vMin=0.1875, vMax=0.8125)
     Mortar::Mesh::DrawQuadUnCached(col, 0.03125f, 0.96875f, 0.1875f, 0.8125f, NULL);
 
-    game->pSplashTex->UnSet();
+    game->m_StartupTexture->UnSet();
 
 #if defined(FRUIT_PLATFORM_WII)
     // Port specific: hand off from the embedded boot-splash bridge (see
