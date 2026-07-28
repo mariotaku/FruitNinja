@@ -448,10 +448,13 @@ void PowerUpShop::Update(float dt) {
         float targetZ = (i == m_SelectedIndex) ? 1.25f : 1.0f;
         slot.z += (targetZ - slot.z) * 0.15f;
 
-        // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00156398 (re-analyst)
+        // ASM-spec v1.6.1 PowerUpShop::Update @ 0x001a8b04 (touch block @0x001a8bdc)
+        // TODO: v1.6.1 0x001a8bdc (PowerUpShop::Update) — the GameContext field offsets below
+        // are UNVERIFIED and contradicted by a #104 read of the binary (which names the flag
+        // bM_bTouchC and the position m_WorldPos.x/.y). Re-RE before trusting them.
         // Reads GameContext aliased fields:
-        //   +0x9e  uint8_t  m_bPointerActive -- set by PointerDownCallback @ 0x00168e24,
-        //                                       cleared by PointerUpCallback @ 0x00168e48.
+        //   +0x9e  uint8_t  m_bPointerActive -- set by PointerDownCallback @ 0x001ca2bc,
+        //                                       cleared by PointerUpCallback @ 0x001ca2e4.
         //   +0x90  float    worldPos.x       -- aliased with light direction; PointerMoveCallback
         //                                       action 0x74 writes the centered-ortho X.
         //   +0x94  float    worldPos.y       -- aliased with light direction; action 0x75 writes Y.
@@ -490,7 +493,7 @@ void PowerUpShop::Update(float dt) {
         // Spawn position: origin + Vector3(160.8, -6.0, 0.0).
         _Vector3<float> spawnPos = g_Origin + _Vector3<float>(160.8f, -6.0f, 0.0f);
 
-        // Build slicedCb: binary @ 0x00156398 binds PowerUpShop::ButtonSliced as
+        // Build slicedCb: v1.6.1 PowerUpShop::Update @0x001a8b04 binds PowerUpShop::ButtonSliced as
         // Delegate0<void> via QCallee.
         Mortar::Delegate0<void> slicedCb =
             Mortar::Delegate0<void>::QCallee(this, &PowerUpShop::ButtonSliced);
@@ -507,12 +510,15 @@ void PowerUpShop::Update(float dt) {
         //                                                          deletedCb -> Global no-op @0x19a620
         //   m_BuyButton->Init()          — vtable no-arg Init (calls Reset, no-op)
         //   m_BuyButton->vel.x = 0
-        //   m_BuyButton->m_bAcceptsTouch = 0  (v1.0 field_0x123 -> v1.6.1 m_bAcceptsTouch +0x149)
+        //   m_BuyButton->m_bClearsMenuItems = 0  (+0x13a). NOTE: the old note mapping
+        //     v1.0 field_0x123 -> m_bAcceptsTouch (+0x149) was WRONG -- field_0x123 is the
+        //     clears-menu-items byte. v1.6.1 PowerUpShop::Update stores 0 to +0x13a
+        //     @0x001a9030 and @0x001a8d18, and never writes +0x149 at all.
         //   m_BuyButton->m_RemoveCallback = removeCb   -- Delegate1<void,HUDControl*> @0x1a8ffc,
         //                                                 AFTER ctor/Init (order preserved)
         //   HUD::AddControl(game_work.mHud, m_BuyButton, false)
         //   Rand32(524287); Rand32(2)
-        //   Fruit angular vel *= 0.85 on x and y
+        //   Fruit scale *= 0.85 on x, y and z
         //   Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
         _Vector3<float> restPos = g_Origin;
         m_BuyButton = new MenuButton(Mortar::SmartPtr<Mortar::Texture>(), spawnPos, slicedCb,
@@ -521,8 +527,9 @@ void PowerUpShop::Update(float dt) {
         m_BuyButton->Init();
         m_BuyButton->m_RemoveCallback = removeCb;
         // Binary: m_BuyButton->vel.x = 0 (vel field not mapped; fruit piece vel zeroed below)
-        // Binary: m_BuyButton->m_bEnabled = 0 (field_0x123 in v1.0 comment; v1.6.1 = m_bAcceptsTouch=0)
-        m_BuyButton->m_bAcceptsTouch = 0;
+        // v1.6.1 PowerUpShop::Update @0x001a9030: strb r2,[r3,#0x13a] with r2 = 0 --
+        // m_bClearsMenuItems, NOT m_bAcceptsTouch (+0x149, which this function never writes).
+        m_BuyButton->m_bClearsMenuItems = 0;
 
         if (game_work.mHud) {
             game_work.mHud->AddControl(m_BuyButton, false);
@@ -531,17 +538,30 @@ void PowerUpShop::Update(float dt) {
         Math::g_Random.Rand32(524287);
         Math::g_Random.Rand32(2);
 
+        // ASM-verified: 2026-07-28T00:00Z v1.6.1 PowerUpShop::Update @ 0x001a8b04 (re-analyst)
+        // Block @0x001a9064: r3 = this->m_BuyButton(+0x12c)->m_pTrackedFruit(+0x14c), then
+        //   [r3,#0x28] *= 0.85; [r3,#0x2c] *= 0.85; [r3,#0x30] *= 0.85  -- Entity::scale (+0x28),
+        //   all THREE components. (A prior port read this as m_RotVel1.x/.y, which is Fruit+0x100.)
+        // Then @0x001a909c reloads the same fruit and calls RotateFacingUp(false, (0,1,0)).
+        // DIFFERS: original has no null check on m_pTrackedFruit (`ldr r3,[r3,#0x14c]` is
+        // dereferenced unconditionally), using a guard because MenuButton::CreateFruit can
+        // legitimately leave it null in the port (FruitType lookup miss, ActorManager pool
+        // exhaustion, or a bare unit-test fixture with no ActorManager).
         if (m_BuyButton->m_pTrackedFruit != NULL) {
-            m_BuyButton->m_pTrackedFruit->m_RotVel1.x *= 0.85f;
-            m_BuyButton->m_pTrackedFruit->m_RotVel1.y *= 0.85f;
-            // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00156398 — RotateFacingUp(false, (0,1,0)).
+            m_BuyButton->m_pTrackedFruit->scale.x *= 0.85f;
+            m_BuyButton->m_pTrackedFruit->scale.y *= 0.85f;
+            m_BuyButton->m_pTrackedFruit->scale.z *= 0.85f;
             m_BuyButton->m_pTrackedFruit->RotateFacingUp(false, _Vector3<float>(0.0f, 1.0f, 0.0f));
         }
     } else if (m_BuyButton != NULL) {
         // Step 4: update existing buy button.
 
-        // Binary: move button to fixed position + set fruit vel.x = m_PulseScale.
+        // Binary: move button to fixed position.
         m_BuyButton->pos = g_Origin + _Vector3<float>(160.8f, -6.0f, 0.0f);
+        // TODO: v1.6.1 0x001a8cc8 (PowerUpShop::Update) — the write below has NO counterpart in
+        // the binary's else-branch: @0x001a8cc8 the binary stores 0.0f to m_BuyButton+0x10 (the
+        // z component of the pos vec3 it just stmia'd), never touching the tracked fruit's vel.
+        // m_PulseScale's actual consumer is unidentified. Left in place pending a re-RE pass.
         if (m_BuyButton->m_pTrackedFruit != NULL) {
             m_BuyButton->m_pTrackedFruit->vel.x = m_PulseScale;
         }
@@ -553,9 +573,12 @@ void PowerUpShop::Update(float dt) {
             (m_BuyButton->m_pTrackedFruit != NULL) &&
             !m_BuyButton->m_pTrackedFruit->Sliced()) {
 
-            // Binary: set Fruit vel = pushVec (origin), field_0x123 = 0, m_BuyTriggered = 1.
+            // v1.6.1 PowerUpShop::Update @0x001a8d18: strb r0,[r2,#0x13a] with r0 = 0 --
+            // m_bClearsMenuItems, alongside strb 1,[fruit+0xb8] and m_BuyTriggered = 1.
+            // (field_0x123 in the old v1.0 note is the clears-menu-items byte, not
+            // m_bAcceptsTouch.)
             m_BuyButton->m_pTrackedFruit->vel = g_Origin;
-            m_BuyButton->m_bAcceptsTouch = 0;
+            m_BuyButton->m_bClearsMenuItems = 0;
             m_BuyTriggered = 1;
         }
     }
