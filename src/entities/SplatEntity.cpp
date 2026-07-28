@@ -12,6 +12,7 @@
 #include "hud/HUD.h"
 #include "math/Colour.h"
 #include "math/MathUtil.h"
+#include "math/Random.h"
 #include "audio/GameSound.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
@@ -147,16 +148,15 @@ static QUADCUSTOMVERTEX s_SplatVerts[MAX_SPLATS_PER_FRAME * 6];
 // Helpers
 // ---------------------------------------------------------------------
 
-// Uniform [0, r)
-static float RandRange(float r) {
-    return ((float)rand() / (float)RAND_MAX) * r;
-}
-
-// Uniform integer [0, n)
-static int RandInt(int n) {
-    if (n <= 0) return 0;
-    return rand() % n;
-}
+// Every random draw in this TU comes from the shared seeded stream
+// Math::g_Random -- NOT libc rand(). The binary's SplatEntity TU inlines
+// Math::Random::Rand32 / Math::Random::RandF with `this` hard-wired to
+// Math::g_random (.bss @0x00351db0, reached via GOT 0x002D8670): the
+// file-local outlined copies are T.936 @0x001eb874 (Rand32) and
+// T.937 @0x001eb8d8 (RandF = Rand32(0x7FFFF) / 524287.0f * range).
+// Because the stream is shared game-wide, the NUMBER and ORDER of draws
+// in MakeSplat/UpdateSplat is observable by every other consumer -- do not
+// add, remove, or reorder draws.
 
 static int ClampInt(int v, int lo, int hi) {
     return v < lo ? lo : (v > hi ? hi : v);
@@ -239,9 +239,10 @@ void SplatEntity::DrawUpdate(float /*dt*/) {
     // Defunct: no-op stub; v1.6.1 binary @ 0x0017ee2c
 }
 
-// MakeSplat random-kill denominators (binary @ 0x0017f456-f482).
-// FN_SPLAT_RAND_DENOM=4: main unconditional 25% suppression (RandInt(4)==0).
-// FN_SPLAT_SPRINKLE_RAND_DENOM=3: secondary kill for special/on-side fruit (RandInt(3)==0).
+// MakeSplat suppression denominators (v1.6.1 SplatEntity::MakeSplat @0x001eb910,
+// block @0x001ebae0-0x001ebb38).
+// FN_SPLAT_RAND_DENOM=4: main unconditional 25% suppression (Rand32(4)==0, @0x001ebae4).
+// FN_SPLAT_SPRINKLE_RAND_DENOM=3: secondary kill for on-side fruit (Rand32(3)==0, @0x001ebb28).
 #ifndef FN_SPLAT_RAND_DENOM
 #  define FN_SPLAT_RAND_DENOM 4
 #endif
@@ -249,17 +250,19 @@ void SplatEntity::DrawUpdate(float /*dt*/) {
 #  define FN_SPLAT_SPRINKLE_RAND_DENOM 3
 #endif
 
-// Test seam: s_RandKillEnabled defaults true (binary-faithful RandInt suppression).
+// Test seam: s_RandKillEnabled defaults true (binary-faithful suppression rolls).
 // Tests set false to force deterministic splat spawn. Production never modifies it;
-// default behaviour is byte-identical.
+// default behaviour is byte-identical. NOTE: disabling it also removes the two
+// suppression DRAWS from Math::g_Random, so a test that sets it false diverges
+// from the binary's RNG sequence for everything downstream.
 bool SplatEntity::s_RandKillEnabled = true;
 
 // v1.6.1 SplatEntity::MakeSplat @0x001eb910
 // Initialises a free pool slot. Called from Fruit::Slice (0x00177028) and
 // Fruit::Update juice-trail (0x0017e342).
 //
-// Bugfix #2 (binary @ 0x0017f456-f482): 25% of all splats are suppressed
-// unconditionally (Rand(4)==0). Port previously spawned 100%.
+// Bugfix #2 (@0x001ebae4): 25% of all splats are suppressed unconditionally
+// (Rand32(4)==0).
 //
 // Bugfix #1: m_Life and m_DecayRate are NOT set here -- the binary sets them
 // in Update's landing branch (binary @ 0x0017fa1c). Removed from MakeSplat.
@@ -270,12 +273,21 @@ bool SplatEntity::s_RandKillEnabled = true;
 // 5-param binary signature; always spawns airborne (m_SplatType=-1) with the
 // real launch velocity. There is no immediate-landing branch in the binary --
 // splats land via normal Update physics. mute maps to the binary's 4th bool arg.
+//
+// Draw order off Math::g_Random -- FIXED and observable game-wide (see the
+// helper note at the top of this file). The binary's sequence is:
+//   1. @0x001eb9a0  Rand32(2)    -> m_bFlipV
+//   2. @0x001eb9f0  RandF(10)    -> m_Vel.z bias
+//   3. @0x001eba28  Rand32(360)  -> m_Angle
+//   4. @0x001eba64  RandF(10)    -> scale
+//   5. @0x001ebae4  Rand32(4)    -> suppression roll 1
+//   6. @0x001ebb28  Rand32(3)    -> suppression roll 2 (CONDITIONAL -- only
+//                                   reached for an in-range on-side fruit)
+// Draws 1-4 ALWAYS happen, before any suppression roll: minimum 5 draws per
+// call, 6 on the on-side path. Suppression is a LATE m_bAlive clear, never an
+// early return -- the slot is fully initialised (pos/vel/angle/scale/axes/
+// m_SplatType/Init) even when the splat is killed.
 void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, bool mute, long fruitType) {
-    // Bugfix #2 -- binary @ 0x0017f456-f482: 25% spawn-suppression.
-    // Also suppresses when m_ColA would be 0 (transparent fruit, rare) and
-    // when special-fruit + Rand(3)==0. The dominant effect is the 25% kill.
-    if (s_RandKillEnabled && RandInt(FN_SPLAT_RAND_DENOM) == 0) return;
-
     m_bParam3 = param3 ? 1 : 0;
 
     // m_bMuteSfx = caller mute arg = (FruitInfo::m_bIsSuperFruit @+0x330 != 0).
@@ -309,19 +321,8 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
         m_ColA = BASE_A;
     }
 
-    // Suppression block (binary @ 0x0016f456-f482 tail):
-    //   if (m_ColA == 0) suppress      -- transparent fruit (e.g. banana)
-    //   if (info->m_bSpecial && Rand(3) == 0) suppress
-    if (m_ColA == 0) {
-        m_bAlive = 0;
-        return;
-    }
-    if (info && info->m_bSpecial && s_RandKillEnabled && RandInt(FN_SPLAT_SPRINKLE_RAND_DENOM) == 0) {
-        m_bAlive = 0;
-        return;
-    }
-
-    m_bFlipV    = (RandInt(2) != 0) ? 1 : 0;
+    // Draw 1 @0x001eb9a0.
+    m_bFlipV    = (Math::g_Random.Rand32(2) != 0) ? 1 : 0;
     m_AlphaBase = (float)m_ColA;
 
     // Position -- Z forced to 0.
@@ -332,44 +333,80 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
     //   m_Vel   = vel
     //   speed   = |m_Vel|
     //   m_Vel.y *= 1.5
-    //   m_Vel.z = speed * -0.5 - 150.0 - rand(10)
+    //   m_Vel.z = speed * -0.5 - 150.0 - RandF(10)
     //   m_Vel  *= 6.0
     m_Vel = v;
     const float speed = m_Vel.Magnitude();
     m_Vel.y *= MS_VEL_Y_STRETCH;
-    m_Vel.z = speed * -0.5f - MS_Z_BIAS - RandRange(MS_Z_RAND_RANGE);
+    // Draw 2 @0x001eb9f0.
+    m_Vel.z = speed * -0.5f - MS_Z_BIAS - Math::g_Random.RandF(MS_Z_RAND_RANGE);
     m_Vel   = m_Vel * MS_VEL_FINAL_MULT;
 
-    // Angle: uniform [0, 360).
-    m_Angle = (float)RandInt(360);
+    // Draw 3 @0x001eba28. Angle: uniform [0, 360).
+    m_Angle = (float)Math::g_Random.Rand32(360);
 
-    // bSpecial from FruitInfo.
-    m_bSpecial = info ? info->m_bSpecial : 0;
+    // m_bSpecial source (@0x001eba4c, __aeabi_idivmod): the binary wraps the
+    // raw fruitType into the table with a MODULO, so the out-of-range
+    // critical-splat sentinel (fruitType + MAX_FRUIT_TYPES) still resolves to
+    // its real fruit. Distinct from the suppression lookup below, which uses
+    // the RAW type behind a range guard.
+    {
+        const int fruitCount = FruitInfo_GetCount();
+        const long wrapped = (fruitCount > 0) ? (fruitType % fruitCount) : 0;
+        const FruitInfo* specialInfo = Fruit::FruitInfo(wrapped);
+        m_bSpecial = specialInfo ? specialInfo->m_bSpecial : 0;
+    }
 
     m_FruitType = fruitType;
 
-    // Scale triple: sc random [10, 20), stored as (sc, -sc, sc).
-    const float sc = MS_SCALE_BASE + RandRange(MS_SCALE_RAND);
+    // Draw 4 @0x001eba64. Scale triple: sc random [10, 20), stored as (sc, -sc, sc).
+    const float sc = MS_SCALE_BASE + Math::g_Random.RandF(MS_SCALE_RAND);
     m_Scale = _Vector3<float>(sc, -sc, sc);
 
     // Bugfix #6: snapshot of scale at spawn (binary @ 0x0017f428: stm r3,{r0,r1,r2}).
     m_ScaleSpawn = m_Scale;
 
-    // Axis vectors. Binary @ 0x0017f1cc: axisA = (cos, sin) * 0.5 and
+    // Start airborne -- Update will pick m_SplatType on landing.
+    m_SplatType = -1;
+    // Binary @0x001ebab0 dispatches the slot-2 Init through the vtable
+    // (`blx vptr[+0x8]`) rather than writing m_bAlive inline.
+    Init(0, 0, 0);
+
+    // Defunct: SSMP horizontal-gravity flag -- stubbed to 0; v1.6.1 binary @ 0x0017f438.
+    // Binary: m_bSSMPHorizGravity = IsSameScreenMultiplayer() && game->field_0xc == 0
+    m_bSSMPHorizGravity = 0;
+
+    // Suppression block @0x001ebae0-0x001ebb38. Runs AFTER every field write;
+    // "suppress" clears m_bAlive only -- there is no early return, execution
+    // falls through to the axis build below. The Rand32(3) roll is
+    // short-circuited (NOT drawn) when the fruit type is out of range or the
+    // fruit is not on-side; that short-circuit is part of the draw count.
+    {
+        bool suppress;
+        if (s_RandKillEnabled && Math::g_Random.Rand32(FN_SPLAT_RAND_DENOM) == 0) {
+            suppress = true;                       // draw 5 @0x001ebae4
+        } else if (m_ColA == 0) {
+            suppress = true;                       // transparent fruit (e.g. banana)
+        } else if (m_FruitType >= FruitInfo_GetCount()) {
+            suppress = false;                      // out of range -> no draw 6
+        } else if (Fruit::FruitInfo(m_FruitType)->m_bOnSide == 0) {
+            suppress = false;                      // not on-side -> no draw 6
+        } else if (!s_RandKillEnabled) {
+            suppress = false;
+        } else {
+            suppress = (Math::g_Random.Rand32(FN_SPLAT_SPRINKLE_RAND_DENOM) == 0);
+        }                                          // draw 6 @0x001ebb28
+        if (suppress) m_bAlive = 0;
+    }
+
+    // Axis vectors @0x001ebb3c -- computed even for a suppressed splat.
+    // Binary @ 0x0017f1cc: axisA = (cos, sin) * 0.5 and
     // axisB = perp * 0.5 (local_44 = 0x3f000000 = 0.5f).
     // ASM-verified: 2026-04-29T03:09Z v1.6.1 binary @ 0x0017f1cc (asm-inspector)
     const float angleRad  = m_Angle * (3.1415926f / 180.0f);
     const float axPerpRad = angleRad + 1.5707963f;  // +90 deg
     m_AxisA = _Vector3<float>(cosf(angleRad),  sinf(angleRad),  0.0f) * 0.5f;
     m_AxisB = _Vector3<float>(cosf(axPerpRad), sinf(axPerpRad), 0.0f) * 0.5f;
-
-    // Defunct: SSMP horizontal-gravity flag -- stubbed to 0; v1.6.1 binary @ 0x0017f438.
-    // Binary: m_bSSMPHorizGravity = IsSameScreenMultiplayer() && game->field_0xc == 0
-    m_bSSMPHorizGravity = 0;
-
-    // Start airborne -- Update will pick m_SplatType on landing.
-    m_SplatType = -1;
-    m_bAlive    = 1;
 
     // NOTE: m_Life and m_DecayRate are NOT initialised here.
     // Binary @ 0x0017fa1c sets them in Update's landing branch only.
@@ -419,13 +456,13 @@ void SplatEntity::UpdateSplat(float dt) {
             //     else (3/4)  -> type = (Rand(6)!=0) ? 0 : 1 (small round)
             //   param3 override: 1/2 chance swap to type 4 or 5
             int type;
-            if (RandInt(4) == 0) {
-                type = (RandInt(2) == 0) ? 2 : 3;
+            if (Math::g_Random.Rand32(4) == 0) {
+                type = (Math::g_Random.Rand32(2) == 0) ? 2 : 3;
             } else {
-                type = (RandInt(6) != 0) ? 0 : 1;
+                type = (Math::g_Random.Rand32(6) != 0) ? 0 : 1;
             }
-            if (m_bParam3 && RandInt(2) == 0) {
-                type = (RandInt(2) == 0) ? 4 : 5;
+            if (m_bParam3 && Math::g_Random.Rand32(2) == 0) {
+                type = (Math::g_Random.Rand32(2) == 0) ? 4 : 5;
             }
 
             // Bugfix #5 (binary @ 0x0017f806-f82a): special-fruit (m_bOnSide /
@@ -434,7 +471,7 @@ void SplatEntity::UpdateSplat(float dt) {
             {
                 const FruitInfo* info = FruitInfo_Get(m_FruitType);
                 if (info && info->m_bOnSide != 0) {
-                    type = (RandInt(2) == 0) ? 2 : 3;
+                    type = (Math::g_Random.Rand32(2) == 0) ? 2 : 3;
                 }
             }
 
@@ -453,7 +490,7 @@ void SplatEntity::UpdateSplat(float dt) {
             if (m_SplatType - 4U < 2U) {
                 const uint16_t velIdx = (uint16_t)Math::Atan2Idx(m_Vel.y, m_Vel.x);
                 m_Angle = (float)velIdx / -182.0f;
-                m_Angle += RandRange(45.0f) - 22.0f;
+                m_Angle += Math::g_Random.RandF(45.0f) - 22.0f;
                 const uint16_t iA = (uint16_t)(int32_t)(m_Angle * 182.0f);
                 const uint16_t iB = (uint16_t)(int32_t)((m_Angle + 90.0f) * 182.0f);
                 m_AxisA = _Vector3<float>(CosIdx(iA), SinIdx(iA), 0.0f) * 0.5f;
@@ -479,8 +516,8 @@ void SplatEntity::UpdateSplat(float dt) {
 
             // Bugfix #1 (binary @ 0x0017fa1c-fa36): m_Life and m_DecayRate
             // are initialised HERE (on landing), not in MakeSplat.
-            m_Life      = UP_LIFE_BASE  + RandRange(UP_LIFE_RAND);
-            m_DecayRate = UP_DECAY_BASE + RandRange(UP_DECAY_RAND);
+            m_Life      = UP_LIFE_BASE  + Math::g_Random.RandF(UP_LIFE_RAND);
+            m_DecayRate = UP_DECAY_BASE + Math::g_Random.RandF(UP_DECAY_RAND);
 
             // Bugfix #3 (v1.6.1 SplatEntity::Update @0x001ebee0): PlaySplat size bucket is
             // determined by m_Scale.x (after the landing scale multiply above),
@@ -507,7 +544,7 @@ void SplatEntity::UpdateSplat(float dt) {
             // ASM-verified: 2026-05-06T17:00 v1.6.1 binary @ 0x0017fa56 (asm-inspector)
             // (Earlier port had `>= -0.5f` -- inverted comparator; rearmed
             //  while still in cooldown soak instead of after it.)
-            if (RandInt(10) == 0 && s_PulpDripGate < -0.5f) {
+            if (Math::g_Random.Rand32(10) == 0 && s_PulpDripGate < -0.5f) {
                 s_PulpDripGate = 0.25f;
             }
         }
@@ -581,11 +618,11 @@ void SplatEntity::UpdateSplat(float dt) {
 // Binary: PlaySplat @ 0x0017f5ec
 // Plays one of 6 splat-impact SFX. Caller passes a size index (0..2);
 // PlaySplat clamps to [0,2] then picks one of two pair entries via
-// RandInt(2). Strings (binary capitalisation, no extension):
+// Rand32(2). Strings (binary capitalisation, no extension):
 //   size 0: "Pulp-drip-2",        "Pulp-drip-1"        (pair 0/1)
 //   size 1: "Splatter-Small-2",   "Splatter-Small-1"
 //   size 2: "Splatter-Medium-2",  "Splatter-Medium-1"
-// Note pair order: RandInt(2)==0 selects suffix -2, ==1 selects -1.
+// Note pair order: Rand32(2)==0 selects suffix -2, ==1 selects -1.
 // Per-size cooldown: gate ticks down by dt/frame in Update; when
 // <= 0 here, fires + resets to 0.5. Three independent gates by size.
 // ASM-verified: 2026-04-29 v1.6.1 binary @ 0x0017f5ec..0x0017f74b (asm-inspector)
@@ -602,7 +639,7 @@ void PlaySplat(int splatSize) {
         { "Splatter-Small-2",   "Splatter-Small-1"   },  // size 1
         { "Splatter-Medium-2",  "Splatter-Medium-1"  },  // size 2
     };
-    const char* name = kPairs[sz][RandInt(2)];
+    const char* name = kPairs[sz][Math::g_Random.Rand32(2)];
 
     game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
 
@@ -732,7 +769,7 @@ void SplatEntity::UpdateActiveSplats(float dt) {
     } else {
         s_PulpDripGate -= dt;
         if (s_PulpDripGate <= 0.0f) {
-            const char* name = (RandInt(2) == 0) ? "Pulp-drip-2" : "Pulp-drip-1";
+            const char* name = (Math::g_Random.Rand32(2) == 0) ? "Pulp-drip-2" : "Pulp-drip-1";
             game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
         }
     }

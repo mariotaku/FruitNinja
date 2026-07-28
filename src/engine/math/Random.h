@@ -27,9 +27,17 @@ public:
     float RandF(float range);
 };
 
-// Engine-wide RNG instance (binary @ 0x0026C8B0). Populated with the
-// boot-time clock seed by SystemManager::Init, re-seeded by
-// SeedGlobalRng() at PauseScreen retry/continue/pause boundaries.
+// Engine-wide RNG instance (v1.6.1 Math::g_random @ 0x00351db0, .bss; reached
+// from PIC code via GOT slot 0x002D8670). Populated with the boot-time clock
+// seed by SystemManager::Init, re-seeded by SeedGlobalRng() at PauseScreen
+// retry/continue/pause boundaries.
+//
+// This is the ONE shared stream for all gameplay randomness -- fruit spawns,
+// splats, jiblets, coins, SFX variant picks. Draw count and order are
+// therefore globally observable: adding, removing or reordering a draw in any
+// consumer shifts every later draw in the frame. Callers must reproduce the
+// binary's draw sequence exactly, including draws whose result is discarded
+// and short-circuits that skip a draw.
 extern Random g_Random;
 
 // Re-seed g_Random with `seed` and reset all per-multiplier constants.

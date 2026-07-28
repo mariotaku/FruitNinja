@@ -117,6 +117,18 @@ public:
     //   mute -> m_bMuteSfx (suppress landing SFX). Slash-trail passes the
     //   caller's (FruitInfo::m_bIsSuperFruit @+0x330 != 0); Jiblet::Update and
     //   ExplodeSuperFruit pass a constant 1.
+    //
+    //   CONTRACT -- MakeSplat ALWAYS initialises the slot and ALWAYS consumes
+    //   RNG. It never early-returns. A splat can still be suppressed (25%
+    //   roll, transparent fruit, on-side roll), but suppression only clears
+    //   m_bAlive at the end; pos/vel/angle/scale/axes/m_SplatType and the
+    //   slot-2 Init() call have already run. Callers must therefore check
+    //   m_bAlive after the call rather than assuming a spawn succeeded.
+    //
+    //   Draws off the shared Math::g_Random stream: 5 per call minimum
+    //   (flipV, velZ, angle, scale, suppression roll 1), 6 when the fruit is
+    //   in range and on-side (suppression roll 2). This count is globally
+    //   observable -- see the draw-order table in SplatEntity.cpp.
     void MakeSplat(_Vector3<float> pos, _Vector3<float> vel, bool param3, bool mute, long fruitType);
 
     // --- Pool API ---
@@ -149,9 +161,11 @@ public:
     // via new[] -- pool manages lifetime, direct construction is not part of normal flow.
     SplatEntity();
 
-    // Test seam: s_RandKillEnabled defaults true (binary-faithful RandInt suppression).
+    // Test seam: s_RandKillEnabled defaults true (binary-faithful suppression rolls).
     // Tests set false to force deterministic splat spawn. Production never modifies it;
-    // default behaviour is byte-identical.
+    // default behaviour is byte-identical. Setting it false also SKIPS the two
+    // suppression draws on Math::g_Random, so the stream diverges from the
+    // binary's for everything that draws afterwards.
     static bool s_RandKillEnabled;
 };
 
