@@ -182,7 +182,31 @@ public:
     static void UnLoadContent();
 
 private:
-    // v1.6.1 @0x001d81bc — 5-state machine, called by Update wrapper
+    // v1.6.1 Coin::_Update @0x001d81bc — 5-state machine, called by the Update
+    // wrapper once per 1/60 s substep.
+    //
+    // Contract (see the control-flow map in Coin.cpp above the definition):
+    //  - The collect/sparkle emitter (+0x6C) is torn down at the TOP of EVERY
+    //    call, so it only exists across the gap between two coin updates. Any
+    //    harness that ticks coins must run PSPParticleManager::Update inside
+    //    that gap (i.e. ActorManager::Update then PSPParticleManager::Update,
+    //    the GameUpdate order) or no coin particle is ever spawned.
+    //  - The sparkle is a ONE-SHOT at two sites: the DECEL timer crossing 0.01s,
+    //    and the HOMING arrival branch (dist < 30). It is NOT re-emitted per
+    //    frame. Both sites share the throttle
+    //    `GetNumEntities(2) < 20 || Rand32(3) == 0`; that Rand32 draw is on the
+    //    shared LCG stream, so the short-circuit order is load-bearing.
+    //  - The trail emitter (+0x68) is spawned at ONE shared transition label,
+    //    reachable at most once per coin: on the launch tick for non-silent
+    //    coins (state 0 -> 4) and on the FLYING -> DECEL tick for silent ones.
+    //    It is never cleared inside _Update -- only Arrived / Release /
+    //    Deactivate clear it -- so it persists through HOMING.
+    //  - Neither emitter registers a back-ref (AddEmitter(hash, NULL, false)),
+    //    matching the binary: a naturally-reaped emitter therefore leaves a
+    //    stale pointer, which is safe because emitters are pool slots.
+    //  - `pos += vel * dt` happens at exactly one shared tail site covering
+    //    states 0/2/3/4-homing/default. The ARRIVED state and the HOMING
+    //    arrival branch skip it.
     void _Update(float dt);
 };
 

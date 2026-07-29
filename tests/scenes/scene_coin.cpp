@@ -45,7 +45,8 @@
 // the in-game coin has NO TRAIL -- it is completely invisible during its
 // ballistic FLYING arc. Its only visual is the "coin_collect" burst
 // (5x sparkles_coins_burst on sparkle_32 + 1x coins_shine on coin_shine.tex),
-// re-emitted once per tick from DECEL onward.
+// emitted ONCE when the DECEL timer crosses 0.01s and ONCE more on the HOMING
+// arrival branch -- not per tick.
 //
 // Confidence: binary disassembly + the shipped particle XML. NOT
 // runtime-confirmed -- an HLE session was attempted but peek/screenshot both
@@ -117,12 +118,12 @@ static const int           BG_THRESHOLD = 30;
 // Floor = ONE complete "coin_collect" emission. particles_fast.xml defines
 // coin_collect as two particleSets with init counts 5 (sparkles_coins_burst)
 // and 1 (coins_shine) and perSec=0, so a single emitter instantiation yields
-// exactly 6 particles. Coin::_Update re-adds that emitter every tick from
-// DECEL onward for each of the 5 coins, so the real count at the homing
-// capture is many times this -- but 6 is the smallest value that still means
-// "a whole burst fired", and it is unreachable if the burst stops: nothing
-// else in this scene emits particles, so a regression drops it to 0, never to
-// 1..5.
+// exactly 6 particles. The burst is a ONE-SHOT per coin (DECEL timer crossing
+// 0.01s), fired 1-3 ticks before that coin reaches HOMING, so the homing
+// capture sees the still-live bursts of however many coins have already
+// decelerated -- at minimum the one that triggered the capture. 6 is therefore
+// both the floor and a meaningful one: nothing else in this scene emits
+// particles, so a regression drops it to 0, never to 1..5.
 static const int MIN_HOMING_PARTICLES = 6;
 
 // Minimum non-background pixels in the homing capture. Secondary check: it
@@ -376,10 +377,10 @@ int main(int argc, char* argv[]) {
     int homingPixels = -1;
     int homingParticles = 0;
     if (reachedHoming) {
-        // First frame the "coin_collect" burst exists: Coin::_Update's DECEL
-        // branch added the emitter on the tick that promoted the coin to
-        // HOMING, and TickCoins' PSPParticleManager::Update ran its spawn pass
-        // in the same tick.
+        // The "coin_collect" burst was emitted 1-3 ticks earlier, when this
+        // coin's DECEL timer crossed 0.01s; TickCoins' PSPParticleManager::Update
+        // ran the spawn pass in that same tick and the particles (life 30 / 10)
+        // are still alive here.
         homingPixels = CaptureFrame(h, "coin/homing", &homingParticles);
         printf("[scene_coin] homing: extra_ticks=%d homingCount=%d particles=%d drawnPixels=%d\n",
                ticksToHoming, CountCoinsInState(am, 4), homingParticles, homingPixels);

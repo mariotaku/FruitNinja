@@ -28,6 +28,7 @@ static const float COIN_SPEED_SCALE     = 0.66f;    // launch speed multiplier
 static const float COIN_VEL_DAMP        = 0.7f;     // velocity damping per frame (state 2)
 static const float COIN_VEL_SQ_THRESH   = 900.0f;   // |vel|^2 threshold: state 2->3
 static const float COIN_DECEL_TIME      = 0.05f;    // state 3 hold time (seconds)
+static const float COIN_DECEL_SPARKLE_T = 0.01f;    // state 3 one-shot sparkle crossing
 static const float COIN_HOMING_CLOSE    = 30.0f;    // arrival distance (state 4->1)
 static const float COIN_TURN_RATE       = 0.85f;    // homing steering base rate
 static const float COIN_SPIN_RATE       = 32760.0f * 500.0f; // spin = rate * dt (binary: 32760*dt*500)
@@ -201,150 +202,126 @@ void Coin::InitCoin(_Vector3<float> pos_in, _Vector3<float> target, uint16_t ang
 }
 
 // ---------------------------------------------------------------------------
-// _Update v1.6.1 @0x001d81bc — 5-state machine
-// (header's old "0x00173790" marker was stale v1.5.1 -- no "v1.6.1" tag, see
-// project convention: address-only markers are presumed outdated.)
+// _Update v1.6.1 @0x001d81bc — 5-state machine (ARM mode, jump table @0x001d8200).
 //
-// Five REAL-GAP fixes applied here vs the previous port (batch1-realgap-specs.json,
-// _ZN4Coin7_UpdateEf):
-//   1. Launch velocity (state 0->2) was missing the binary's *1.5 scalar
-//      (local_2c = 0x3fc00000) -- coins launched ~33% slower than the binary.
-//   2. FLYING (state 2) fabricated a "gravity" pull from m_TargetX/Y/Z*dt that
-//      does not exist in the binary -- m_TargetX/Y/Z (+0x5c) is the HOMING
-//      destination, used only in states 3/4, never a per-frame accel term.
-//   3. The spin/wobble accumulator (m_SpinAngle, +0x50) advanced unconditionally
-//      every call at a flat rate; the binary only advances it in HOMING (state 4),
-//      scaled by the same ramp factor that drives homing speed.
-//   4. HOMING (state 4) velocity magnitude used a distance-based blend/normalize
-//      instead of the binary's rampFactor*(m_Speed*2) formula, and direction was
-//      taken from the raw float turn-blend instead of re-quantizing through
-//      SinIdx/CosIdx(m_Angle) after the angle update (matches the binary's
-//      16-bit-angle-only storage).
-//   5. The sparkle/collect emitter (m_pCollectEmitter, +0x6c) is unconditionally
-//      torn down at the TOP of every _Update call in the binary, then
-//      conditionally re-spawned in states 3 and 4 behind a particle-budget
-//      throttle (GetNumEntities(2)<20 || Rand32(3)==0); the port previously
-//      treated it as a single persistent spawn with no reap/re-roll.
-//   Also (part of the shared case 0/2 fallthrough tail): the fly/trail emitter's
-//   m_DirSin/m_DirCos were never written (only m_Pos) -- now set from the current
-//   heading angle every tick, matching the pattern already ported for
-//   SlashEntity/Fruit/Bomb emitters.
+// CONTROL-FLOW SHAPE. The binary is not five self-contained cases: every state
+// funnels through a SHARED state-transition label and a SHARED tail, and the
+// port must keep that shape or the per-case duplication drifts apart again.
+//
+//   jump table @0x001d8200 (pc+8+r3*4):
+//     0 -> 0x001d821c   1 -> 0x001d8780   2 -> 0x001d8358
+//     3 -> 0x001d83d0   4 -> 0x001d84d8   >4 -> TAIL
+//
+//   case 1 @0x001d8780: Arrived(); branch straight to the epilogue -- NO TAIL.
+//   case 0 @0x001d821c: timer countdown; on expiry m_State = 2 and vel is set
+//                       BEFORE the m_Silent test. Silent coins stop there (they
+//                       stay in FLYING and get no trail). Non-silent coins play
+//                       "achievement", reset the timer and fall into
+//                       LAB_TRANSITION with r3 = 4 -- i.e. the trail emitter IS
+//                       spawned on the launch tick.
+//   case 2 @0x001d8358: damp vel by 0.7; bail to TAIL while |vel|^2 >= 900;
+//                       otherwise fall through to LAB_TRANSITION with r3 = 3.
+//                       NOTE: no m_Timer reset here -- state 3 inherits the
+//                       (-dt, 0] residue left by the state-0 countdown.
+//   LAB_TRANSITION @0x001d839c: the ONLY write to m_pFlyEmitter (+0x68) in
+//                       _Update. m_State = r3, then EmitterExists -> AddEmitter.
+//                       Reachable at most once per coin (0->4 or 2->3), which is
+//                       why the binary needs no "already spawned" guard.
+//   TAIL @0x001d878c:   the ONLY `pos += vel * dt` site -- it covers states
+//                       0/2/3/4-homing/default. Then, if a trail emitter exists,
+//                       its m_Pos/m_DirSin/m_DirCos are refreshed.
+//
+// The sparkle/collect emitter (+0x6c) is torn down unconditionally at the TOP of
+// every call and re-spawned at exactly two one-shot sites: the state-3 timer
+// crossing 0.01f, and the state-4 arrival branch. Both share the particle-budget
+// throttle `GetNumEntities(2) <= 0x13 || Rand32(3) == 0`. That Rand32 draw is on
+// the shared LCG stream and is short-circuited by the entity-count test, so the
+// operand order is load-bearing for RNG determinism.
+//
+// Literal pool @0x001d8628: 0.0f timer reset | 0.7f damp | 900.0f speed^2
+// threshold | 0.01f sparkle crossing | 0.05f DECEL hold.
 // ---------------------------------------------------------------------------
 void Coin::_Update(float dt) {
-    // Bug (5): the sparkle/collect emitter is torn down unconditionally at the
-    // TOP of every call (even while WAITING/FLYING, where it's already null) --
-    // NOT just once on a state transition. It's conditionally re-spawned inside
-    // cases 3/4 below, behind a particle-budget throttle.
+    // The sparkle/collect emitter is torn down unconditionally at the TOP of
+    // every call (even while WAITING/FLYING, where it's already null) -- NOT just
+    // on a state transition. It is re-spawned at the two one-shot sites below.
     if (m_pCollectEmitter) {
         PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
         m_pCollectEmitter = nullptr;
     }
 
+    // r3 at LAB_001d839c: the state the shared transition label commits to.
+    int transitionState = 0;
+
     switch (m_State) {
+    case 1: // ARRIVED — Arrived() then straight to the epilogue; skips the TAIL.
+        Arrived();
+        return;
+
     case 0: // WAITING — timer countdown
-        // ASM-verified: v1.6.1 Coin::_Update @0x001d81bc case 0:
-        //   m_Timer -= dt; if (m_Timer > 0.0f) return;  // still WAITING
         // Sign is call-site dependent (NOT always negative):
         //   - BonusScreen (-0.05f) -> m_Timer starts positive -> real multi-frame stagger.
         //   - Fruit/SlashEntity combo-coin (+0.02f) -> m_Timer starts negative -> WAITING
         //     never holds -> launches on frame 1 (binary-faithful instant burst).
-        // The port previously had += dt / <0 (inverted): the -0.05 bonus count-up
-        // coins then launched all on frame 1, bursting ~11 overlapping "achievement" SFX.
         m_Timer -= dt;
-        if (m_Timer > 0.0f) {
-            // Still in delay period
-            return;
-        }
-        // Timer expired: play "achievement" SFX if not silent
-        if (m_Silent == 0) {
-            Game* game = Game::GetInstance();
-            if (game && game_work.mGameSound) {
-                game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
-            }
-        }
-        // Bug (1): binary applies a missing *1.5 scalar to the launch velocity
-        // (v1.6.1 Coin::_Update @0x001d81bc, local_2c=0x3fc00000).
+        if (m_Timer > 0.0f) goto TAIL;   // still WAITING -- the binary still runs the TAIL
+        // m_State is committed to FLYING BEFORE the silent test: a silent coin
+        // stays in FLYING, a non-silent one is immediately overwritten with 4 at
+        // LAB_TRANSITION below.
+        m_State = 2;
         vel.x = SinIdx(m_Angle) * m_Speed * 1.5f;
         vel.y = CosIdx(m_Angle) * m_Speed * 1.5f;
         vel.z = 0.0f;
-        // ASM-spec v1.6.1 Coin::_Update @0x001d81bc: non-silent launch (m_Silent==0) plays the
-        // "achievement" SFX and jumps straight to HOMING (state 4), resetting m_Timer=0; only silent
-        // launches (m_Silent!=0) pass through FLYING (state 2).
-        if (m_Silent == 0) {
-            m_Timer = 0.0f;
-            m_State = 4;
-            return; // skip FLYING processing this tick -- binary jumps straight to HOMING
+        if (m_Silent != 0) goto TAIL;
+        if (game_work.mGameSound) {
+            game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
         }
-        m_State = 2; // immediate transition to FLYING
-        // fall through to process FLYING on same tick
-        /* FALLTHROUGH */
+        m_Timer = 0.0f;
+        transitionState = 4;   // non-silent launches go straight to HOMING...
+        goto TRANSITION;       // ...via the trail-emitter spawn.
 
     case 2: // FLYING — damp velocity; wait for speed drop
-        // Bug (2): binary case 2 is pure damping, no gravity term -- the previous
-        // `vel += m_TargetX/Y/Z*dt` "gravity" block here was fabricated and has
-        // been removed. m_TargetX/Y/Z is the homing destination (states 3/4 only).
+        // Pure damping: m_TargetX/Y/Z is the homing destination (states 3/4),
+        // never a per-frame accel term.
         vel.x *= COIN_VEL_DAMP;
         vel.y *= COIN_VEL_DAMP;
         vel.z *= COIN_VEL_DAMP;
-        // Advance position
-        pos.x += vel.x * dt;
-        pos.y += vel.y * dt;
-        pos.z += vel.z * dt;
-        // TODO: v1.6.1 Coin::_Update @0x001d81bc LAB_001d839c -- trail-emitter respawn guard
-        // differs from binary; needs RE.
-        // Spawn/refresh fly (trail) emitter -- shared case 0/2 fallthrough tail.
-        if (m_FlyFXHash != 0 && !m_pFlyEmitter &&
-            PSPParticleManager::GetInstance().EmitterExists(m_FlyFXHash)) {
-            m_pFlyEmitter = PSPParticleManager::GetInstance().AddEmitter(m_FlyFXHash, &m_pFlyEmitter);
-        }
-        if (m_pFlyEmitter) {
-            m_pFlyEmitter->m_Pos    = pos;
-            m_pFlyEmitter->m_DirSin = SinIdx(m_Angle);
-            m_pFlyEmitter->m_DirCos = CosIdx(m_Angle);
-        }
-        {
-            float velSq = vel.x*vel.x + vel.y*vel.y + vel.z*vel.z;
-            if (velSq < COIN_VEL_SQ_THRESH) {
-                m_Timer = 0.0f;
-                m_State = 3; // transition to DECEL
-            }
-        }
-        break;
+        if (vel.x*vel.x + vel.y*vel.y + vel.z*vel.z >= COIN_VEL_SQ_THRESH) goto TAIL;
+        // No m_Timer reset here -- DECEL inherits the (-dt, 0] residue the
+        // state-0 countdown left behind.
+        transitionState = 3;
+        goto TRANSITION;
 
-    case 3: // DECEL — wait 0.05s, spawn sparkle, compute homing angle
-        m_Timer += dt;
-        if (m_Timer >= COIN_DECEL_TIME) {
-            // Bug (5): sparkle/collect emitter re-spawn behind a particle-budget
-            // throttle (GetNumEntities(2)<20 || Rand32(3)==0), gated on EmitterExists.
-            if (m_CollectFXHash != 0 &&
-                (Mortar::ActorManager::GetInstance()->GetNumEntities(2) < 20 ||
-                 Math::g_Random.Rand32(3) == 0) &&
-                PSPParticleManager::GetInstance().EmitterExists(m_CollectFXHash)) {
-                m_pCollectEmitter = PSPParticleManager::GetInstance().AddEmitter(m_CollectFXHash, &m_pCollectEmitter);
-                if (m_pCollectEmitter) {
-                    m_pCollectEmitter->m_Pos = pos;
+    case 3: // DECEL — one-shot sparkle at the 0.01f crossing, hold 0.05s, then aim
+    {
+        const float preTimer  = m_Timer;
+        const float postTimer = preTimer + dt;
+        m_Timer = postTimer;
+        // Fires exactly once, on the tick where the timer crosses 0.01f.
+        if (preTimer <= COIN_DECEL_SPARKLE_T && postTimer > COIN_DECEL_SPARKLE_T) {
+            if (Mortar::ActorManager::GetInstance()->GetNumEntities(2) < 20 ||
+                Math::g_Random.Rand32(3) == 0) {
+                PSPParticleManager& pm = PSPParticleManager::GetInstance();
+                if (pm.EmitterExists(m_CollectFXHash)) {
+                    m_pCollectEmitter = pm.AddEmitter(m_CollectFXHash, 0, false);
+                    if (m_pCollectEmitter) {
+                        m_pCollectEmitter->m_Pos = pos;
+                    }
                 }
             }
-            // Clear fly emitter on transition to homing
-            if (m_pFlyEmitter) {
-                PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
-                m_pFlyEmitter = nullptr;
-            }
-            // Compute homing angle from current pos toward target
-            float dx = m_TargetX - pos.x;
-            float dy = m_TargetY - pos.y;
-            float len = sqrtf(dx*dx + dy*dy);
-            if (len > 0.0f) {
-                // Convert direction to 16-bit angle index via atan2
-                // SinIdx/CosIdx use (idx/65536)*2pi, so angle = atan2(dx,dy)/(2pi) * 65536
-                float a = atan2f(dx, dy);
-                if (a < 0.0f) a += 6.2831853f;
-                m_Angle = (uint16_t)(int)(a / 6.2831853f * 65536.0f);
-            }
-            m_Timer = 0.0f;
-            m_State = 4; // transition to HOMING
         }
-        break;
+        if (m_Timer < COIN_DECEL_TIME) goto TAIL;
+        m_State = 4;
+        m_Timer = 0.0f;
+        // TODO: v1.6.1 0x001d81bc (Coin::_Update) case 3 aim step -- the binary
+        // BLENDS 25% of the way to the target heading:
+        //   d = Atan2Idx(m_TargetX - pos.x, m_TargetY - pos.y);
+        //   m_Angle += (short)(GetSmallestDeltaIdx(d, m_Angle) * 0.25f);
+        // GetSmallestDeltaIdx (v1.6.1 @0x001d8d74) is not RE'd yet, so this
+        // snaps straight to d instead of blending.
+        m_Angle = (uint16_t)Math::Atan2Idx(m_TargetX - pos.x, m_TargetY - pos.y);
+        goto TAIL;
+    }
 
     case 4: // HOMING — steer toward target, arrive when close
     {
@@ -353,8 +330,20 @@ void Coin::_Update(float dt) {
         float dist = sqrtf(dx*dx + dy*dy);
 
         if (dist < COIN_HOMING_CLOSE) {
-            m_State = 1; // ARRIVED — handled next tick
-            break;
+            // Arrival sparkle fires BEFORE the state write, and the arrival
+            // branch returns via the epilogue -- it never runs the TAIL.
+            if (Mortar::ActorManager::GetInstance()->GetNumEntities(2) < 20 ||
+                Math::g_Random.Rand32(3) == 0) {
+                PSPParticleManager& pm = PSPParticleManager::GetInstance();
+                if (pm.EmitterExists(m_CollectFXHash)) {
+                    m_pCollectEmitter = pm.AddEmitter(m_CollectFXHash, 0, false);
+                    if (m_pCollectEmitter) {
+                        m_pCollectEmitter->m_Pos = pos;
+                    }
+                }
+            }
+            m_State = 1; // ARRIVED — Arrived() runs next tick
+            return;
         }
 
         // Bug (4): rampFactor curve driven by m_Timer (state-entry elapsed time),
@@ -412,39 +401,37 @@ void Coin::_Update(float dt) {
         vel.y = CosIdx(m_Angle) * speedMag;
         vel.z = 0.0f;
 
-        pos.x += vel.x * dt;
-        pos.y += vel.y * dt;
-        pos.z += vel.z * dt;
-
         // Bug (3): spin/wobble accumulator only advances in HOMING, scaled by
         // rampFactor (previous port advanced it unconditionally every _Update
         // call at a flat rate). spin rate = 32760*500 (COIN_SPIN_RATE).
         float spinInc = rampFactor * dt * COIN_SPIN_RATE;
         if (spinInc < 0.0f) spinInc = 0.0f;
         m_SpinAngle = (uint16_t)(m_SpinAngle + (uint16_t)(int)spinInc);
-
-        // Bug (5): sparkle/collect emitter re-spawn behind the same particle-budget
-        // throttle as case 3 (it was torn down unconditionally at the top of
-        // this call).
-        if (m_CollectFXHash != 0 &&
-            (Mortar::ActorManager::GetInstance()->GetNumEntities(2) < 20 ||
-             Math::g_Random.Rand32(3) == 0) &&
-            PSPParticleManager::GetInstance().EmitterExists(m_CollectFXHash)) {
-            m_pCollectEmitter = PSPParticleManager::GetInstance().AddEmitter(m_CollectFXHash, &m_pCollectEmitter);
-        }
-        if (m_pCollectEmitter) {
-            m_pCollectEmitter->m_Pos = pos;
-        }
-        break;
+        goto TAIL;
     }
-
-    case 1: // ARRIVED — call Arrived() and retire
-        Arrived();
-        break;
 
     default:
-        break;
+        goto TAIL;
     }
+
+TRANSITION:
+    // LAB_001d839c — the only m_pFlyEmitter (+0x68) write in _Update. Reachable
+    // at most once per coin (0->4 or 2->3), hence no "already spawned" guard:
+    // EmitterExists alone is the binary's whole gate.
+    m_State = transitionState;
+    if (!PSPParticleManager::GetInstance().EmitterExists(m_FlyFXHash)) goto TAIL;
+    m_pFlyEmitter = PSPParticleManager::GetInstance().AddEmitter(m_FlyFXHash, 0, false);
+
+TAIL:
+    // 0x001d878c — the single integration site, shared by states 0/2/3/4-homing
+    // and the out-of-range default.
+    pos.x += vel.x * dt;
+    pos.y += vel.y * dt;
+    pos.z += vel.z * dt;
+    if (!m_pFlyEmitter) return;
+    m_pFlyEmitter->m_Pos    = pos;
+    m_pFlyEmitter->m_DirSin = SinIdx(m_Angle);
+    m_pFlyEmitter->m_DirCos = CosIdx(m_Angle);
 }
 
 // ---------------------------------------------------------------------------
