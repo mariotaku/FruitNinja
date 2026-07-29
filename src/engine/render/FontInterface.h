@@ -168,11 +168,6 @@ public:
     void EndGlyphRun();
 #endif
 
-    // Legacy wrapper over PackGlyphCell: packs and fills out's legacy fields
-    // (tight-rect UVs u0..v1 spanning exactly width x height texels, plus
-    // pageTextureID and page). Retained for old single-entry callers/tests.
-    bool PackGlyph(int width, int height, const uint8_t* bitmap, GlyphAtlasEntry* out);
-
     // Upload dirty regions on ALL pages to their GL textures. Idempotent /
     // safe to call every frame: a page's m_Dirty is cleared ONLY once its
     // sub-upload is confirmed to have reached the GPU. On Wii, a bailed

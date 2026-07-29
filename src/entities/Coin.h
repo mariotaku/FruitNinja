@@ -88,9 +88,6 @@ public:
     // v1.6.1 Coin::Draw @0x001d8810 — scale × RotY(spin) × RotZ(heading) × Translate
     void Draw(Renderer& r) override;
 
-    // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
-    void Deactivate();
-
     // --- Public API ------------------------------------------------------
 
     // v1.6.1 Coin::InitCoin @0x001d7d84 — set up all coin fields for a launch.

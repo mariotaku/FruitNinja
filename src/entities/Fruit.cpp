@@ -980,12 +980,6 @@ void Fruit::Draw(Renderer& r) {
     }
 }
 
-// Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
-void Fruit::Deactivate() {
-    // No Fruit-specific emitter cleanup needed here; emitters are cleared
-    // by KillFruit before the entity is deactivated.
-}
-
 // Matches v1.6.1 Fruit::KillFruit @0x001deba8.
 void Fruit::KillFruit(bool doMissPenalty) {
     RemoveTrailParticles();

@@ -5,7 +5,8 @@
 //
 // API conventions verified from source:
 //   ColSphere::Intersects        -- uses <= (touching at boundary -> true)
-//   ColSphere::IntersectsLine    -- uses <= (touching at boundary -> true; INFINITE-line via Math::ClosestPointOnLine @ 0x0027542c)
+//   ColSphereLine(self,line,out) -- INFINITE-line via Math::ClosestPointOnLine @ 0x0027542c;
+//                                    uses < (touching at boundary -> NOT a hit via this path)
 //   ColSphereSphere(self,other,out):
 //       delta = self.center - other.center  (self-to-other direction REVERSED)
 //       push = d - radSum  (negative when overlapping)
@@ -151,34 +152,45 @@ static void test_colspheresphere_coincident_no_overlap()
 }
 
 // ---------------------------------------------------------------------------
-// ColSphere::IntersectsLine  (predicate, infinite-line, uses <=)
+// ColSphereLine  (static helper, infinite-line, uses strictly-less-than)
+//
+// task #134: ColSphere::IntersectsLine (a port-only predicate wrapper with no
+// binary symbol) was deleted -- ColSphereLine @0x0025d114 is the real, ported
+// primitive. These three cases previously exercised IntersectsLine's <=
+// boundary rule; rewritten against ColSphereLine's < rule (see the tangent
+// case below, whose expected result flips accordingly).
 // ---------------------------------------------------------------------------
 
 static void test_sphere_line_through_centre()
 {
     // Sphere (0,0,0) r=1; segment (-2,0,0)->(2,0,0) passes through centre.
-    // Closest point = (0,0,0); distSq = 0 <= 1 -> true.
+    // Closest point = (0,0,0); distSq = 0 < 1 -> hit.
     ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
     ColLine   line(_Vector3<float>(-2.0f, 0.0f, 0.0f), _Vector3<float>(2.0f, 0.0f, 0.0f));
-    CHECK(s.IntersectsLine(line));
+    _Vector3<float> out;
+    CHECK(ColSphere::ColSphereLine(&s, &line, &out) == 1);
 }
 
 static void test_sphere_line_far()
 {
     // Sphere (0,0,0) r=1; horizontal segment (-2,2,0)->(2,2,0): infinite line is y=2.
-    // Closest on infinite line to origin = (0,2,0); distSq=4 > r^2=1 -> false.
+    // Closest on infinite line to origin = (0,2,0); distSq=4 >= r^2=1 -> no hit.
     ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
     ColLine   line(_Vector3<float>(-2.0f, 2.0f, 0.0f), _Vector3<float>(2.0f, 2.0f, 0.0f));
-    CHECK(!s.IntersectsLine(line));
+    _Vector3<float> out;
+    CHECK(ColSphere::ColSphereLine(&s, &line, &out) == 0);
 }
 
 static void test_sphere_line_tangent()
 {
     // Sphere (0,0,0) r=1; horizontal segment at y=1 from x=-2 to x=2.
-    // Closest point = (0,1,0); distSq=1 == r^2=1 -> IntersectsLine uses <=: true.
+    // Closest point = (0,1,0); distSq=1 == r^2=1 -> ColSphereLine uses strictly-less-than,
+    // so the boundary-touching case is NOT a hit (differs from the deleted IntersectsLine's
+    // <=, which called this true).
     ColSphere s(_Vector3<float>(0.0f, 0.0f, 0.0f), 1.0f);
     ColLine   line(_Vector3<float>(-2.0f, 1.0f, 0.0f), _Vector3<float>(2.0f, 1.0f, 0.0f));
-    CHECK(s.IntersectsLine(line));
+    _Vector3<float> out;
+    CHECK(ColSphere::ColSphereLine(&s, &line, &out) == 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -329,15 +341,15 @@ int main()
     test_colspheresphere_coincident_no_overlap();
     std::printf("  ColSphereSphere two zero-radius coincident: OK\n");
 
-    // ColSphere::IntersectsLine (predicate, infinite-line, <= boundary)
+    // ColSphereLine (static, infinite-line, strictly-less-than boundary)
     test_sphere_line_through_centre();
-    std::printf("  sphere_line_through_centre (IntersectsLine): OK\n");
+    std::printf("  sphere_line_through_centre (ColSphereLine): OK\n");
 
     test_sphere_line_far();
-    std::printf("  sphere_line_far (IntersectsLine infinite-line no-hit): OK\n");
+    std::printf("  sphere_line_far (ColSphereLine infinite-line no-hit): OK\n");
 
     test_sphere_line_tangent();
-    std::printf("  sphere_line_tangent (IntersectsLine boundary=true): OK\n");
+    std::printf("  sphere_line_tangent (ColSphereLine boundary=no-hit): OK\n");
 
     // ColSphereLine static helper (strictly-less-than, penetration vector)
     test_colsphereline_through_centre();

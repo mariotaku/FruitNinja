@@ -323,12 +323,6 @@ private:
     // Called by RebuildMeshes() (before rebuilding) and ~BakedStringBox().
     void DeleteStrings();
 
-    // Measure total ink height of currently laid-out lines:
-    //   maxBearingY(line0) + (N-1)*step + (-minBottom(lineN-1))
-    // Re-measures via the FitStrings wrap pass (no per-line ink-extent cache is kept on
-    // FancyBakedString lines -- sizeof(BakedStringBox) is pinned at 200B).
-    float TotalHeight() const;
-
 #ifdef __bada__
     // GCC 4.4 rejects offsetof on private members from namespace scope -- use the
     // canonical friend-struct layout-assert pattern (as BakedStringTTF).

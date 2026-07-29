@@ -182,10 +182,6 @@ void FontInterface::InitialiseData(float fs, float gs) {
     m_InvFontScale = (fs > 0.0f ? 1.0f / fs : 1.0f);
     m_GlobalSizeScale = gs;
 }
-bool FontInterface::PackGlyph(int, int, const uint8_t*, GlyphAtlasEntry* out) {
-    if (out) out->pageTextureID = 0;
-    return true;
-}
 void FontInterface::BuildPendingTextures() {}
 void FontInterface::Clear() {}
 GLuint FontInterface::GetPageTextureID(int) const { return 0; }

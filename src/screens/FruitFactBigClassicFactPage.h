@@ -28,14 +28,6 @@ public:
     FruitFactBigClassicFactPage(FruitFactControl* pCtrl, int factIndex, int pageIndex);
     ~FruitFactBigClassicFactPage() override;
 
-    // DIFFERS: original = no Init() at all (v1.6.1 FruitFactBigClassicFactPage @0x00172884
-    // is the CTOR; the class has only ctor x2 / dtor x2 / dtor_deleting / DrawOrder). The
-    // icon-layout GenericHUDControls are built inline in the binary's ctor; the port hoisted
-    // them into this port-only Init(). Consequence: Init() has no binary counterpart, so
-    // asm-verify never pairs it and its body is never diffed -- see the port-only-helper
-    // blind spot. Harmless today only because this class is DEAD (see the class comment).
-    void Init() override;
-
 private:
     int m_factIndex;
     int m_pageIndex;

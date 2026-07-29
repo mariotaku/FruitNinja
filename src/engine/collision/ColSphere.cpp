@@ -74,19 +74,6 @@ bool ColSphere::Intersects(const ColSphere& other) const {
     return distSq <= radSum * radSum;
 }
 
-bool ColSphere::IntersectsLine(const ColLine& line) const {
-    // Math::ClosestPointOnLine takes non-const refs (matches binary ABI) but never
-    // writes through A/B/P, so local mutable copies are safe here.
-    _Vector3<float> a = line.a();
-    _Vector3<float> b = line.b;
-    _Vector3<float> c = center();
-    _Vector3<float> closest;
-    Math::ClosestPointOnLine(a, b, c, closest);
-    _Vector3<float> d(closest.x - center().x, closest.y - center().y, closest.z - center().z);
-    float distSq = d.x*d.x + d.y*d.y + d.z*d.z;
-    return distSq <= radius * radius;
-}
-
 bool ColSphere::Contains(const _Vector3<float>& p) const {
     _Vector3<float> d(p.x - center().x, p.y - center().y, p.z - center().z);
     return (d.x*d.x + d.y*d.y + d.z*d.z) <= radius * radius;

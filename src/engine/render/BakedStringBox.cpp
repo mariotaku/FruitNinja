@@ -52,7 +52,7 @@ struct MeasureResult {
 // substring of the original m_Text, preserving original inter-word spacing) plus
 // the ink-extent metrics ComputeBaselineY needs. File-scope (not a class member)
 // because sizeof(BakedStringBox) is pinned at 200B -- these are always recomputed
-// on demand (RebuildMeshes / FitIntoVerticalBounds / TotalHeight / GetTextWidth),
+// on demand (RebuildMeshes / FitIntoVerticalBounds / GetTextWidth),
 // never cached on the box itself.
 struct WrappedLineInfo {
     std::string text;
@@ -316,7 +316,7 @@ static MeasureResult MeasureWrap(FontCacheObjectTTF* font, const char* text,
 // reconstructed line text (raw substring of `text`, preserving original inter-word
 // spacing) + vertical ink-extent metrics (maxBearingY/minBottom) + raw advance width.
 // No FancyBakedString/vertex data is produced -- callers decide whether to build line
-// objects (RebuildMeshes) or just measure (FitIntoVerticalBounds, TotalHeight, GetTextWidth).
+// objects (RebuildMeshes) or just measure (FitIntoVerticalBounds, GetTextWidth).
 // Does NOT compute the horizontal align offset -- ASM-spec v1.6.1 BakedStringBox::
 // RebuildAlignments @0x00245c78 reads that off the ALREADY-BUILT line's rendered mesh
 // bounds (FancyBakedString::GetBounds), so RebuildMeshes computes it after constructing
@@ -523,21 +523,6 @@ void BakedStringBox::FitIntoVerticalBounds() {
         if (nextSize < 6.0f) return;
         SetFontSize(nextSize);
     }
-}
-
-float BakedStringBox::TotalHeight() const {
-    // Binary FitIntoVerticalBounds @ 0x00246fbc: totalInkHeight = maxBearingY(line0)
-    // + (N-1)*step + (-minBottom(lineN-1)). step is already the full baseline pitch
-    // (= (int)(fontSize + m_LineSpacing)); no separate inter-line spacing term.
-    std::vector<WrappedLineInfo> wl;
-    FitStrings(m_Font, m_Text, m_FontSize, m_BoxWidth, wl);
-    int N = (int)wl.size();
-    if (N == 0) return 0.0f;
-    float diffShrink = m_BaseFontSize - m_FontSize;
-    float step = (float)(int)(m_FontSize + ((float)m_LineSpacing - diffShrink * 0.5f));
-    return wl[0].maxBearingY
-         + (float)(N - 1) * step
-         + (-wl[N - 1].minBottom);
 }
 
 // RebuildMeshes -- thin per-line FancyBakedString dispatcher build path.

@@ -355,6 +355,9 @@ public:
     bool TouchReleased();
 
     // v1.6.1 MenuButton::AddPeice @0x00150240: spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
+    // Port-dead only: the binary AddPeice IS live (.plt thunk @0x00110178), but its
+    // caller is the unported 6-arg MenuButton ctor (tracked as #130). Kept (not deleted)
+    // so that gap stays visible -- deleting this would erase the evidence.
     void AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>* uvOverride,
                   float rotSpeed, float initialTimer,
                   _Vector3<float> offset, _Vector3<float> sizeScale,

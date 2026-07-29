@@ -186,9 +186,6 @@ public:
     int CollisionResponse(Mortar::Entity* hitter, unsigned long flagsA, unsigned long flagsB,
                           _Vector3<float>* bladeVelocity) override;
 
-    // Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
-    void Deactivate();
-
     // Matches Fruit::Slice (0x176d58, simplified). Flips m_bSliced,
     // computes halfVel/halfVelB from m_SliceArcAngle, blends with old vel,
     // marks the fruit as two-body. Called from Update when m_SliceTimer

@@ -39,7 +39,6 @@ public:
 
     // Port-side intersection helpers (pre-hierarchy port, kept for call sites)
     bool Intersects(const ColSphere& other) const;
-    bool IntersectsLine(const ColLine& line) const;
     bool Contains(const _Vector3<float>& p) const;
 
     // ASM-verified: 2026-06-26 v1.6.1 ColSphere::ColSphereLine @ 0x0025d114 (asm-inspector) -- sphere-vs-line penetration; returns 1 on hit.

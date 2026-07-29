@@ -672,14 +672,6 @@ void SplatEntity::CreatePool(int capacity) {
 // bool flag matching BSS+0x24 in the SplatEntity global block (v1.6.1 CleanUpSplat @0x001ec88c).
 static bool s_loadedSplat = false;
 
-void SplatEntity::DestroyPool() {
-    delete[] s_PoolBase;
-    s_PoolBase = nullptr;
-    s_PoolCount = 0;
-    s_CurrentFree = 0;
-    s_SplatTex.SetNull();
-}
-
 void SplatEntity::LoadContent() {
     if (!s_SplatTex.IsValid()) {
         s_SplatTex = Mortar::TextureManager::LoadLocalisedTexture("white_splash.tex");

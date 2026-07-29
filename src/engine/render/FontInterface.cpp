@@ -50,7 +50,7 @@ FontInterface::FontInterface()
     , m_RunPage(nullptr)
 #endif
 {
-    // Port specific: pages are allocated lazily on first PackGlyph (binary
+    // Port specific: pages are allocated lazily on first PackGlyphCell (binary
     // TextureAtlas @0x00269c9c starts empty; port follows the same model).
 }
 
@@ -264,23 +264,6 @@ FontAtlasPage* FontInterface::PackGlyphCell(int width, int height,
     if (height > page->m_RowHeight) page->m_RowHeight = height;
 
     return page;
-}
-
-bool FontInterface::PackGlyph(int width, int height, const uint8_t* bitmap,
-                               GlyphAtlasEntry* out) {
-    int x = 0, y = 0;
-    FontAtlasPage* page = PackGlyphCell(width, height, bitmap, &x, &y);
-    if (!page) return false;
-
-    const float invS = 1.0f / (float)m_Size;
-    out->u0 = (float)x            * invS;
-    out->v0 = (float)y            * invS;
-    out->u1 = (float)(x + width)  * invS;
-    out->v1 = (float)(y + height) * invS;
-    out->pageTextureID = page->m_TextureID;
-    out->page          = page;
-
-    return true;
 }
 
 void FontInterface::BuildPendingTextures() {

@@ -135,7 +135,6 @@ public:
     // Binary: SplatEntity::CreatePool @ 0x001eb490 -- flat round-robin pool
     // (s_PoolBase/s_PoolCount/s_CurrentFree), NOT Mortar::MemoryPool<T>.
     static void CreatePool(int capacity);
-    static void DestroyPool();
     // Binary: SplatEntity::GetFree @ 0x001eb318. Round-robin scan for a dead
     // slot starting at s_CurrentFree; NEVER returns null once a pool exists --
     // when every slot is alive it steals (overwrites) the slot at the cursor.

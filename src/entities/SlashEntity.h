@@ -441,11 +441,6 @@ public:
 
     static void InitModColours();
 
-    // ResetModScales -- port convenience: folds SetModScales(NULL,1,1,0,1,false,0,0)
-    // from ItemManager::SetEquippedItem @0x00139ba0 v1.6.1.
-    // No binary SlashEntity::ResetModScales symbol (prior marker was a mis-RE).
-    static void ResetModScales();
-
     // Binary param order @0x1e60a8: (length, thickness, endThickness, pointScale, flipUD, loop, uvNormalLen)
     static void SetModScales(
         float length,

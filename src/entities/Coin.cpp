@@ -136,20 +136,6 @@ void Coin::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {}
 void Coin::PostUpdate(float /*dt*/) {}
 
 // ---------------------------------------------------------------------------
-// Non-virtual cleanup helper called by Mortar::ActorManager::Deactivate.
-// ---------------------------------------------------------------------------
-void Coin::Deactivate() {
-    if (m_pFlyEmitter) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_pFlyEmitter);
-        m_pFlyEmitter = nullptr;
-    }
-    if (m_pCollectEmitter) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_pCollectEmitter);
-        m_pCollectEmitter = nullptr;
-    }
-}
-
-// ---------------------------------------------------------------------------
 // ASM-verified: 2026-07-04T00:00:00Z v1.6.1 Coin::Arrived @ 0x001d79bc
 // Only m_pFlyEmitter is torn down here; m_pCollectEmitter is left running so
 // the collect/sparkle burst plays to completion (InitCoin re-nulls it on

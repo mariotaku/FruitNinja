@@ -7,6 +7,16 @@
 // Binary refs (v1.6.1):
 //   ctor  0x0017e4d8
 //
+// DEAD in v1.6.1 -- linked-but-unreferenced relic, NOT in-game UI.
+// Evidence: the ctor @0x0017e4d8 has NO .plt thunk (.plt = 0x00102964-0x00116d13),
+// its only xref is Ghidra's synthetic Entry Point [EXTERNAL]. GameOverScreen::Update
+// @0x00187220, the sole FruitFactControl::RegisterPage call site, registers exactly
+// three pages -- FruitFactZenPage, FruitFactBonusFactPage, FruitFactClassicFactPage.
+// This class never appears. (Contrast the live sibling FruitFactBonusFactPage: ctor
+// 0x00173d90, .plt thunk 0x0010c77c, called from 0x00187340.)
+// Do NOT instantiate to force visuals -- that would ADD divergence, per the game-over
+// nav-arrows precedent. Zero instantiation sites is CORRECT.
+//
 // Layout (FruitFactPage base = BaseScreen(0x94) + m_pController(4) = 0x98 bytes):
 //   Derived own-fields (absolute from object start, confirmed from disassembly):
 //     +0x98 : int (zero-init first own slot)
@@ -43,8 +53,6 @@ public:
     // Binary @ 0x0017e4d8
     explicit FruitFactRewardsPage(FruitFactControl* pCtrl);
     ~FruitFactRewardsPage() override;
-
-    void Init() override;  // Binary @ 0x0017e4d8 -- state init + CreateSenseisHead + title box
 
 private:
     // +0x98: lazily-created "Progress" reward button (Ghidra BSButton* pM_pButton).
