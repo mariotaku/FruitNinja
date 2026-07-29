@@ -30,7 +30,7 @@
 //            then create a GameOverScreen in STATE_QUIT_WAIT. On the next frame, entity
 //            count drops to 0, STATE_QUIT_WAIT fires DoQuitToMenu(), which sets:
 //              WaveManager::ResetGlobalDt(1.0), bM_bPaused=1,
-//              MainScreen->STATE_CAMERA_ZOOM, MainScreen->SetMoreGamesTimer(0.5f).
+//              MainScreen->STATE_CAMERA_ZOOM, MainScreen->SetIntroHoldTimer(0.5f).
 //            Binary persisting model: DoQuitToMenu does NOT set taskStateIndex or
 //            rebuild the HUD/MainScreen. Same MainScreen pointer, buttons stay alive.
 //            A pointer-change check is still done below (prints diagnostic if pointer

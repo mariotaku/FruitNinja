@@ -8,7 +8,7 @@
 // THEORY (from RE):
 //   QuitCallback -> HitMenuBomb (sets m_BombHitTimer ~2.0) -> STATE_QUIT_WAIT (9).
 //   STATE_QUIT_WAIT gates on GetNumEntities(0)==0 -> DoQuitToMenu() ->
-//     bM_bPaused=1, SetMoreGamesTimer(0.5f), MainScreen->STATE_CAMERA_ZOOM.
+//     bM_bPaused=1, SetIntroHoldTimer(0.5f), MainScreen->STATE_CAMERA_ZOOM.
 //   STATE_FINAL_FADE (11): if(m_PauseAmount < 0.0f) SetTerminate().
 //   m_PauseAmount goes negative only when MainScreen::STATE_CAMERA_ZOOM SETTLE branch
 //   runs: HOLD branch fires while f0>0 OR m_BombHitTimer>1.45.
@@ -492,7 +492,7 @@ int main(int argc, char* argv[]) {
             "  Stuck gates to check:\n"
             "    -> m_BombHitTimer not decaying: bM_Mode must be 0 for ACTIVE branch\n"
             "    -> m_PauseAmount never < 0: MainScreen STATE_CAMERA_ZOOM SETTLE branch requires\n"
-            "       m_BombHitTimer <= 1.45 AND TexMoreGamesF0() <= 0\n"
+            "       m_BombHitTimer <= 1.45 AND m_IntroHoldTimer <= 0\n"
             "    -> GOS STATE_FINAL_FADE (11) requires m_PauseAmount < 0 to call SetTerminate\n");
         h.Shutdown();
         return 1;

@@ -201,7 +201,7 @@ void GameInit(unsigned long) {
         // are labelled MENU instead of NONE.
         fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_MENU);
 #endif
-        MainScreen* mainScreen = new MainScreen(*game);
+        MainScreen* mainScreen = new MainScreen();
         // DIFFERS: binary stores s_mainScreen file-static; port uses
         // game_work.mMainScreen exclusively.
         mainScreen->Init();    // vtable slot 2

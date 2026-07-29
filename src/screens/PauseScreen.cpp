@@ -223,7 +223,7 @@ void QuitToMenu() {
 
     if (game_work.mMainScreen) {
         game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);    // v1.6.1 QuitToMenu @0x001cb6e4: m_State (+0x118) = 0
-        game_work.mMainScreen->SetMoreGamesTimer(0.5f);        // v1.6.1 QuitToMenu @0x001cb6e4: vstr s15,[r1,#0x11c]
+        game_work.mMainScreen->SetIntroHoldTimer(0.5f);        // v1.6.1 QuitToMenu @0x001cb6e4: vstr s15,[r1,#0x11c]
         // Binary keeps menu buttons and fruit alive on quit; ResetGameEntities flings in-game
         // fruit/bombs during the bomb-flash phase (Bomb::HitMenuBomb -> UpdateBombHit
         // crosses 1.5s -> ResetGameEntities(false)). No DeleteMenuButtons here.

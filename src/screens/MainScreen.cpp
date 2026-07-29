@@ -4,7 +4,7 @@
 //   ctor @0x0019811c, Update @0x00196e1c, Draw @0x001993ac,
 //   UpdateScreenElements @0x00195a58, CreateButtons @0x001961f8
 // v1.6.1 struct layout: m_StateTimer=bounce velocity (+0x110), m_Timer2=transition timer (+0x124),
-//   m_ButtonsCreatedFlag(+0x7c), f0-countdown via SetMoreGamesTimer (+0x11c).
+//   m_ButtonsCreatedFlag(+0x7c), intro-hold countdown via SetIntroHoldTimer (+0x11c).
 //
 
 #include "MainScreen.h"
@@ -130,68 +130,70 @@ void MainScreen::SetState(MainScreenState s) {
     m_State = s;
 }
 
-// ASM-spec v1.6.1 MainScreen ctor @0x0019811c
-MainScreen::MainScreen(Game& g)
+// ASM-spec v1.6.1 MainScreen::MainScreen @0x0019811c
+// Zero-arg in the binary (prologue reads only r0). The LoadLocalisedTexture
+// sequence below is in the binary's exact call order; slot offsets are the
+// binary's, not a guess. Several of the loaded textures are never read again by
+// MainScreen -- see the per-slot notes in MainScreen.h.
+MainScreen::MainScreen()
     : m_ButtonsCreatedFlag(false),
       m_pGameModeButton(nullptr), m_pStoreButton(nullptr),
       m_pQuitButton(nullptr), m_pMoreGamesBtn(nullptr),
-      pToggleA(nullptr), pToggleB(nullptr),
-      pMusicToggle(nullptr), pSoundToggle(nullptr),
-      _pad_c4(0), _pad_c8(0),
+      pToggleA(nullptr), pSoundToggle(nullptr),
+      pMusicToggle(nullptr),
+      _pad_c0(0), _pad_c4(0), _pad_c8(0),
+      m_pSliceInstrBox(nullptr),
       m_Lean(1.0f),
       m_NinjaTextX(0.0f), m_NinjaTextY(0.0f), m_NinjaTextZ(0.0f),
       m_BounceVel(0.0f), m_BounceY(0.0f), m_BounceZ(0.0f),
       m_StateTimer(0.0f),
       m_Field114(0.0f),
       m_State(STATE_CAMERA_ZOOM),
-      m_Timer2(0.0f),
-      m_pSliceInstrBox(nullptr)
+      m_IntroHoldTimer(0.0f),
+      m_Timer2(0.0f)
 #ifndef __bada__
-      , m_MoreGamesF0(0.0f)
-      , m_TimeRemainingDisplay(-1.0f)
       , m_Time(0.0f)
       , m_bGameStartReset(false)
       , m_pSettingsButton(nullptr)
+      , m_TimeRemainingDisplay(-1.0f)
 #endif
 {
-    // Port specific: the binary ctor (v1.6.1 MainScreen::MainScreen @0x0019811c)
-    // takes no arguments; Game is reached through Game::GetInstance() where needed.
-    (void)g;
-
     // Load global textures (assigned to file-scope globals mirroring binary GOT globals).
     s_blurTex  = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");
     m_fruitTex = Mortar::TextureManager::LoadLocalisedTexture("fruit_text.tex");
     m_ninjaTex = Mortar::TextureManager::LoadLocalisedTexture("ninja_text.tex");
 
-    // m_TexFruitText mirrors m_fruitTex (fruit_text.tex at binary +0xE4)
-    m_TexFruitText = m_fruitTex;
-
-    // Load slice_fruit parchment frame
+    // +0xe4: the binary loads its OWN slice_fruit copy here (it is not an alias
+    // of the fruit_text global). Draw renders it as the parchment frame.
     m_TexSliceFruit = Mortar::TextureManager::LoadLocalisedTexture("slice_fruit.tex");
 
-    // v1.6.1: button textures come from game_work.pM_Textures[n] in CreateButtons.
-    // The ctor no longer loads m_TexNewGame / m_TexDojoIcon / m_TexQuit etc. as struct members.
-    // Load sound/music toggle textures into the binary-faithful slots.
-    m_Tex3    = Mortar::TextureManager::LoadLocalisedTexture("sound.tex");
-    m_Tex4    = Mortar::TextureManager::LoadLocalisedTexture("sound_cross.tex");
-    m_Tex120  = Mortar::TextureManager::LoadLocalisedTexture("music.tex");
-    // m_TexSoundOn/Off/MusicOn/Off also loaded into their own slots (binary-faithful)
-    m_TexSoundOn  = Mortar::TextureManager::LoadLocalisedTexture("sound.tex");
-    m_TexSoundOff = Mortar::TextureManager::LoadLocalisedTexture("sound_cross.tex");
-    m_TexMusicOn  = Mortar::TextureManager::LoadLocalisedTexture("music.tex");
-    m_TexMusicOff = Mortar::TextureManager::LoadLocalisedTexture("music_cross.tex");
-
-    // m_TexBc (was m_TexCommingSoon)
-    m_TexBc = Mortar::TextureManager::LoadLocalisedTexture("comming_soon.tex");
-
-    // m_TexMoreGames: texture slot (defunct in binary; port loads it as a normal SmartPtr).
-    // The intro-slide f0 countdown is stored in m_MoreGamesF0 (initialized above).
+    // +0x8c/+0x90/+0x120/+0x9c: ring-button + more-games art. Loaded here, but
+    // CreateButtons @0x001961f8 takes its MenuButton textures from
+    // game_work.pM_Textures[], so nothing in MainScreen reads these back.
+    m_TexNewGame  = Mortar::TextureManager::LoadLocalisedTexture("newgame.tex");
+    m_TexDojoIcon = Mortar::TextureManager::LoadLocalisedTexture("dojo_icon.tex");
     m_TexMoreGames = Mortar::TextureManager::LoadLocalisedTexture("more_games.tex");
+    m_TexQuit     = Mortar::TextureManager::LoadLocalisedTexture("quit.tex");
 
-    // Load verdana.fnt into m_pFont (+0x110 port, binary +0x128).
+    // Defunct: OpenFeint / GameCenter menu art — loaded, never drawn; v1.6.1 MainScreen::MainScreen @ 0x0019811c
+    // Do NOT "fix" the absent draw: Draw @0x001993ac, Update @0x00196e1c and
+    // CreateButtons @0x001961f8 have no reference to +0x94 / +0x98 in v1.6.1.
+    m_TexOpenFeint      = Mortar::TextureManager::LoadLocalisedTexture("openfeint.tex");
+    m_TexGCAchievements = Mortar::TextureManager::LoadLocalisedTexture("gc_achievements.tex");
+
+    // Load verdana.fnt into m_pFont (+0x128).
     {
         m_pFont = Mortar::Font::Create("fonts/verdana.fnt");
     }
+
+    // +0xd4/+0xd8: the sound toggle's on/off pair, indexed by bSoundOn^1 in Update.
+    m_TexSoundOn  = Mortar::TextureManager::LoadLocalisedTexture("sound.tex");
+    m_TexSoundOff = Mortar::TextureManager::LoadLocalisedTexture("sound_cross.tex");
+    // +0xcc/+0xd0: the music toggle's on/off pair, indexed by bMusicOn^1.
+    m_TexMusicOn  = Mortar::TextureManager::LoadLocalisedTexture("music.tex");
+    m_TexMusicOff = Mortar::TextureManager::LoadLocalisedTexture("music_cross.tex");
+
+    m_TexCommingSoon = Mortar::TextureManager::LoadLocalisedTexture("comming_soon.tex");
 
     // v1.6.1 MainScreen ctor @0x0019811c: BakedStringBox(..., game_work.m_pTTFFontMain, ...)
     // for the "SLICE FRUIT TO BEGIN" plate -- reads the shared locale TTF face (GameWork+0x614,
@@ -264,9 +266,8 @@ void MainScreen::Release() {
     m_pQuitButton = nullptr;
     m_pMoreGamesBtn  = nullptr;
     pToggleA       = nullptr;
-    pToggleB       = nullptr;
-    pMusicToggle   = nullptr;
     pSoundToggle   = nullptr;
+    pMusicToggle   = nullptr;
 #ifndef __bada__
     m_pSettingsButton = nullptr;
 #endif // !defined(__bada__)
@@ -290,9 +291,11 @@ void MainScreen::Update(float dt) {
 #endif
 
     // Binary builds BOTH toggles inline at the top of Update, each under its OWN
-    // null guard (binary sound-toggle field is m_pToggleB), so a destroyed toggle
-    // is recreated in any state. Per toggle: new MenuButton (0x178), Init with
-    // Delegate0, HUD::AddControl, layer=8 (HUD_LAYER_BUTTONS), SetSingular.
+    // null guard, so a destroyed toggle is recreated in any state. Per toggle:
+    // new MenuButton (0x178), Init with Delegate0, HUD::AddControl,
+    // layer=8 (HUD_LAYER_BUTTONS), SetSingular.
+    // v1.6.1 @0x00197188-0x001971c4: sound toggle -> +0xb4 (pSoundToggle),
+    // music toggle -> +0xb8 (pMusicToggle).
     if (pSoundToggle == nullptr && game_work.mHud) {
         pSoundToggle = new MenuButton();
         // DIFFERS: opt-in widescreen -- MapX the initial-creation X; Update()'s
@@ -380,16 +383,14 @@ void MainScreen::Update(float dt) {
     case STATE_CAMERA_ZOOM: {
         // ASM-spec v1.6.1 MainScreen::Update @0x00197430: f0-countdown gates the intro slide.
         // Binary case-0 order: CreateButtons(this) first, then gameMode=0 if !IsMultiplayer(),
-        // then the f0 sub-block: read m_TexMoreGames.f0; if f0>0 OR bombHitTimer>1.45,
+        // then the f0 sub-block: read +0x11c; if f0>0 OR bombHitTimer>1.45,
         // tick the countdown and hold the camera; otherwise settle branch:
         // m_Timer2 += dt, ramp m_PauseAmount toward -1. Advance to state 1 when camera
         // settled (m_PauseAmount < threshold) AND m_Timer2 > 0.15f.
         // m_StateTimer is the BOUNCE VELOCITY (set to 0.5f by QuitToMenu to seed
         // logo bounce on menu return). NOT a flash countdown in v1.6.1.
-        // Cross: binary case-0 reads m_TexMoreGames.f0 (exists on bada); the port routes
-        // both builds through TexMoreGamesF0() -- bada aliases the +0x11c slot exactly as
-        // the binary does, host uses the dedicated m_MoreGamesF0 (DIFFERS, x64 SmartPtr is
-        // 8 bytes). Both arms of the branch are therefore compiled on both builds.
+        // The countdown lives at +0x11c (m_IntroHoldTimer), a plain float in the
+        // binary -- no texture is loaded into that slot.
 
         // v1.6.1 @0x00197430: CreateButtons called FIRST, unconditionally every frame;
         // internal gate on flM_BombHitTimer<1.45 + per-button null guards.
@@ -400,10 +401,10 @@ void MainScreen::Update(float dt) {
             game_work.gameMode = 0;
         }
 
-        float f0 = TexMoreGamesF0();
+        float f0 = m_IntroHoldTimer;
         if (f0 > 0.0f || game_work.m_BombHitTimer > 1.45f) {
             // Hold/flash branch: tick countdown, ramp camera but clamp to >=0 (off-screen).
-            TexMoreGamesF0() = f0 - dt;
+            m_IntroHoldTimer = f0 - dt;
             // Port specific: dt-normalize the per-frame ease (dtN = dt*60) so the menu camera
             //   zoom plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
             game_work.m_PauseAmount = -1.0f - (-1.0f - game_work.m_PauseAmount) * powf(1.0f - CAMERA_LERP_RATE, dtN);
@@ -545,12 +546,12 @@ void MainScreen::Update(float dt) {
 
             if (m_Timer2 > STATE_8_DURATION) {
                 // ASM-spec v1.6.1 MainScreen::Update @0x00196e1c case-8 exit:
-                // binary sets m_Timer2=0.15f, m_TexMoreGames.f0=0.0f, m_State=STATE_CAMERA_ZOOM.
+                // binary sets m_Timer2=0.15f, +0x11c=0.0f, m_State=STATE_CAMERA_ZOOM.
                 // Does NOT touch m_PauseAmount/flM_PauseAmount on this path.
                 // f0=0.0f means case-0's hold branch is skipped immediately on the next tick,
                 // so the slide-in animation starts right away on return.
                 m_Timer2 = STATE_8_RESET_TIMER;
-                TexMoreGamesF0() = 0.0f;
+                m_IntroHoldTimer = 0.0f;
                 LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/SLIDE_IN hold expired");
                 m_State = STATE_CAMERA_ZOOM;
             }
@@ -579,7 +580,7 @@ void MainScreen::Update(float dt) {
             game_work.m_bUpdatesSuspended = 1;
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/defunct-network state");
             m_State = STATE_CAMERA_ZOOM;
-            SetMoreGamesTimer(0.0f);
+            SetIntroHoldTimer(0.0f);
             m_Timer2 = -0.85f;
         }
         break;
@@ -614,7 +615,7 @@ void MainScreen::Update(float dt) {
         }
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CREATE_BUTTONS), "Update/defunct-news state");
         m_State = STATE_CREATE_BUTTONS;
-        SetMoreGamesTimer(0.0f);
+        SetIntroHoldTimer(0.0f);
         m_Timer2 = -0.85f;
         break;
 
@@ -664,7 +665,7 @@ void MainScreen::Update(float dt) {
         }
         LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/LOADING");
         m_State = STATE_CAMERA_ZOOM;
-        SetMoreGamesTimer(0.0f);
+        SetIntroHoldTimer(0.0f);
         m_Timer2 = -0.85f;
         break;
 
@@ -689,7 +690,7 @@ void MainScreen::Update(float dt) {
         } else if (qs == 3) {
             LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_ZOOM), "Update/QUIT_WAIT qs==3 cancelled");
             m_State = STATE_CAMERA_ZOOM;
-            SetMoreGamesTimer(0.0f);
+            SetIntroHoldTimer(0.0f);
             m_Timer2 = 0.15f;
         }
         break;
@@ -951,8 +952,9 @@ void MainScreen::Draw(float* hudScaleRaw) {
     }
 #endif // !defined(__bada__)
 
-    // 1+2. fruit_text guard (GOT+0x6FCC, binary: gate on m_TexFruitText/global s_fruitTex)
-    if (m_TexFruitText.IsValid()) {
+    // 1+2. fruit_text guard (GOT+0x6FCC, binary: gate on the fruit_text GLOBAL --
+    // there is no fruit_text member; +0xe4 holds slice_fruit, drawn at site 4).
+    if (m_fruitTex.IsValid()) {
         // 1a. Background shade (blurry_backing.tex) — angled triangle
         if (s_blurTex.IsValid()) {
             s_blurTex->Set();
@@ -969,20 +971,19 @@ void MainScreen::Draw(float* hudScaleRaw) {
             s_blurTex->UnSet();
         }
 
-        // 1b. fruit_text logo (m_TexFruitText) drawn at {m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ}
-        // Binary: TranslateMatrix(&this+0xF8) reads 3 consecutive floats at binary +0xF8..+0x100
-        // (port +0xE0..+0xE8 = m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ).
+        // 1b. fruit_text logo drawn at {m_NinjaTextX, m_NinjaTextY, m_NinjaTextZ}
+        // Binary: TranslateMatrix(&this+0xF8) reads 3 consecutive floats at binary +0xF8..+0x100.
         // Every quad in this function draws with Colour::White (GOT @0x199804)
         // in the binary — never m_DrawColour.
         static const float FRUIT_TEXT_SCALE = 0.85f;  // DAT_0014d838
-        m_TexFruitText->Set();
+        m_fruitTex->Set();
         _Vector3<float> fruitTextDrawPos(m_NinjaTextX + dxLogo, m_NinjaTextY + dyLogo, m_NinjaTextZ);
         SetupQuadMatrix(mm, hudScale,
-            (float)m_TexFruitText->GetWidth() * FRUIT_TEXT_SCALE,
-            (float)m_TexFruitText->GetHeight() * FRUIT_TEXT_SCALE,
+            (float)m_fruitTex->GetWidth() * FRUIT_TEXT_SCALE,
+            (float)m_fruitTex->GetHeight() * FRUIT_TEXT_SCALE,
             fruitTextDrawPos);
         if (game) game->renderer.DrawQuad(Colour::White);
-        m_TexFruitText->UnSet();
+        m_fruitTex->UnSet();
     }
 
     // 3. ninja_text drawn at {m_BounceVel, m_BounceY, m_BounceZ} (+0x104..+0x10C binary)
@@ -1030,21 +1031,21 @@ void MainScreen::Draw(float* hudScaleRaw) {
         DrawLoadingSymbol(const_cast<float*>(&hudScale.x));
     }
 
-    // 6. m_TexBc (comming_soon overlay) — drawn when valid AND m_pGameModeButton exists.
+    // 6. m_TexCommingSoon (comming_soon overlay) — drawn when valid AND m_pGameModeButton exists.
     // Scale scalar @0x001999a0 is m_pGameModeButton->size.x ([r6,#0xa0] + 0x20),
     // so the overlay tracks the button's animated size; translate = (148, 7, 0)
     // (@0x001999c0, pool 0x199808).
-    if (m_TexBc.IsValid() && m_pGameModeButton != NULL) {
-        float csW = (float)m_TexBc->GetWidth();
-        float csH = (float)m_TexBc->GetHeight();
+    if (m_TexCommingSoon.IsValid() && m_pGameModeButton != NULL) {
+        float csW = (float)m_TexCommingSoon->GetWidth();
+        float csH = (float)m_TexCommingSoon->GetHeight();
         float btnSize = m_pGameModeButton->size.x;
         float scaleX = btnSize * 0.5f;
         float scaleY = btnSize * 0.5f * (csH / csW);
         _Vector3<float> csPos(148.0f, 7.0f, 0.0f);
-        m_TexBc->Set();
+        m_TexCommingSoon->Set();
         SetupQuadMatrix(mm, hudScale, scaleX, scaleY, csPos);
         if (game) game->renderer.DrawQuad(Colour::White);
-        m_TexBc->UnSet();
+        m_TexCommingSoon->UnSet();
     }
 }
 

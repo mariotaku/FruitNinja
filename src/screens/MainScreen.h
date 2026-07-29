@@ -50,9 +50,10 @@ enum MainScreenState {
 
 class MainScreen : public HUDControl3d {
 public:
-    // Port-specific: binary ctor takes no args (_ZN10MainScreenC1Ev @ 0x0019811c);
-    //   port takes Game& because Game is reachable via *GOT[0x7990] in binary.
-    MainScreen(Game& g);
+    // Zero-arg, matching the binary (_ZN10MainScreenC1Ev @ 0x0019811c): the
+    // prologue only ever reads r0 (this), r1 is never touched, so there is no
+    // second parameter. Game is reached through Game::GetInstance() where needed.
+    MainScreen();
     ~MainScreen();
 
     // HUDControl overrides (vtable order from R4 W2 RE section 2)
@@ -76,23 +77,16 @@ public:
 
     // SetStateTimer: sets m_StateTimer (+0x110) = bounce velocity accumulator.
     // NOT written by QuitToMenu @0x001cb6e4 (v1.6.1). The real quit write is +0x11c
-    // via SetMoreGamesTimer. Used internally by UpdateScreenElements physics.
+    // via SetIntroHoldTimer. Used internally by UpdateScreenElements physics.
     void SetStateTimer(float t) { m_StateTimer = t; }
 
-    // SetMoreGamesTimer: seeds the intro-slide hold countdown at +0x11c.
+    // SetIntroHoldTimer: seeds the intro-slide hold countdown at +0x11c.
     // Binary QuitToMenu @0x001cb6e4 writes 0.5f to +0x11c (vstr s15,[r1,#0x11c])
     // to hold the slide off-screen for ~0.5s before the intro plays on gameplay->menu return.
-    // Under __bada__: +0x11c is the raw-pointer slot of m_TexMoreGames (4 bytes, ARM32);
-    // the binary writes a float there directly (MoreGames texture is defunct/null).
-    // Under host: m_MoreGamesF0 is a dedicated float (SmartPtr at +0x11c is 8 bytes on x64).
-    void SetMoreGamesTimer(float t) {
-#ifdef __bada__
-        // Binary faithful: vstr s15,[r1,#0x11c] — write float into the raw-pointer slot.
-        *reinterpret_cast<float*>(&m_TexMoreGames) = t;
-#else
-        m_MoreGamesF0 = t;
-#endif
-    }
+    // +0x11c is a plain float in the binary -- the ctor stores 0.0f there
+    // (v1.6.1 MainScreen::MainScreen @0x001987ec) and no texture is ever loaded
+    // into it; more_games.tex lives at +0x120.
+    void SetIntroHoldTimer(float t) { m_IntroHoldTimer = t; }
 
     // Used by EndRetryLevel to emulate GameInit step 11 (fresh MainScreen ctor).
     void ResetTimers() { m_StateTimer = 0.0f; m_Timer2 = 0.0f; }
@@ -128,43 +122,50 @@ public:
     // +0x80  float[3] m_Field80 (12 bytes; ctor writes here; role unclear)
     float m_Field80[3];                                // +0x80 .. +0x8b
 
-    // +0x8c  SmartPtr<Texture> m_TexSoundOn (sound.tex)
-    // +0x90  SmartPtr<Texture> m_TexSoundOff (sound_cross.tex)
-    Mortar::SmartPtr<Mortar::Texture> m_TexSoundOn;   // +0x8c
-    Mortar::SmartPtr<Mortar::Texture> m_TexSoundOff;  // +0x90
+    // +0x8c / +0x90: ring-button art. Loaded by the ctor but never read by
+    // MainScreen -- CreateButtons @0x001961f8 sources every MenuButton texture
+    // from game_work.pM_Textures[]. Kept because the ctor loads them.
+    Mortar::SmartPtr<Mortar::Texture> m_TexNewGame;   // +0x8c  newgame.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexDojoIcon;  // +0x90  dojo_icon.tex
 
-    // +0x94  SmartPtr<Texture> m_Tex3 (sound.tex duplicate slot)
-    // +0x98  SmartPtr<Texture> m_Tex4 (sound_cross.tex duplicate slot)
-    // +0x9c  SmartPtr<Texture> (third SmartPtr slot; role unclear from ctor)
-    Mortar::SmartPtr<Mortar::Texture> m_Tex3;         // +0x94
-    Mortar::SmartPtr<Mortar::Texture> m_Tex4;         // +0x98
-    Mortar::SmartPtr<Mortar::Texture> m_Tex9c;        // +0x9c
+    // Defunct: OpenFeint / GameCenter menu art — loaded, never drawn; v1.6.1 MainScreen::MainScreen @ 0x0019811c
+    // Draw @0x001993ac, Update @0x00196e1c and CreateButtons @0x001961f8 were
+    // traced exhaustively and none of them reference +0x94 / +0x98. The load is
+    // part of the ctor's shape (stub-don't-skip); there is no missing draw call
+    // to "fix" here.
+    Mortar::SmartPtr<Mortar::Texture> m_TexOpenFeint;      // +0x94  openfeint.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexGCAchievements; // +0x98  gc_achievements.tex
 
-    // +0xa0..+0xb8: 7x MenuButton* (m_pGameModeButton..pMusicToggle)
+    // +0x9c  quit.tex — same story as +0x8c/+0x90 (loaded, never read here).
+    Mortar::SmartPtr<Mortar::Texture> m_TexQuit;      // +0x9c
+
+    // +0xa0..+0xb8: 7x MenuButton*
     MenuButton* m_pGameModeButton;                     // +0xa0 (GameModeCallback)
     MenuButton* m_pStoreButton;                        // +0xa4 (AboutCallback->DojoScreen, AreNewItems badge)
     MenuButton* m_pQuitButton;                         // +0xa8 (QuitGamesCallback)
     MenuButton* m_pMoreGamesBtn;                       // +0xac
-    MenuButton* pToggleA;                              // +0xb0  (NEW in v1.6.1)
-    MenuButton* pToggleB;                              // +0xb4  (NEW in v1.6.1)
-    MenuButton* pMusicToggle;                          // +0xb8
+    MenuButton* pToggleA;                              // +0xb0  (NEW in v1.6.1; role unresolved)
+    // +0xb4 IS the sound toggle: v1.6.1 MainScreen::Update @0x00197188-0x001971c4
+    // builds it with SoundCallback at (216, 135.5) and swaps its m_Texture (+0x74)
+    // between +0xd4 / +0xd8 indexed by bSoundOn^1.
+    MenuButton* pSoundToggle;                          // +0xb4
+    MenuButton* pMusicToggle;                          // +0xb8 (MusicCallback, (176, 135.5), pair +0xcc/+0xd0)
 
-    // +0xbc  SmartPtr<Texture> m_TexBc (comming_soon / bottom credit)
-    Mortar::SmartPtr<Mortar::Texture> m_TexBc;        // +0xbc
+    // +0xbc  comming_soon overlay (binary spelling); drawn by Draw @0x001993ac
+    // gated on m_pGameModeButton.
+    Mortar::SmartPtr<Mortar::Texture> m_TexCommingSoon; // +0xbc
 
-    // +0xc0  MenuButton* pSoundToggle
-    MenuButton* pSoundToggle;                          // +0xc0
-
-    // +0xc4, +0xc8: two 4-byte slots — no ctor store; role unresolved.
-    // TODO: v1.6.1 0x0019811c — confirm +0xc4/+0xc8 role (no ctor store observed)
+    // +0xc0, +0xc4, +0xc8: three 4-byte slots — no ctor store; role unresolved.
+    // TODO: v1.6.1 0x0019811c (MainScreen::MainScreen) — confirm +0xc0/+0xc4/+0xc8 role (no ctor store observed)
+    uint32_t _pad_c0;                                  // +0xc0
     uint32_t _pad_c4;                                  // +0xc4
     uint32_t _pad_c8;                                  // +0xc8
 
-    // +0xcc..+0xd8: 4x SmartPtr<Texture>
-    Mortar::SmartPtr<Mortar::Texture> m_TexMusicOn;   // +0xcc
-    Mortar::SmartPtr<Mortar::Texture> m_TexMusicOff;  // +0xd0
-    Mortar::SmartPtr<Mortar::Texture> m_TexSliceFruit;// +0xd4
-    Mortar::SmartPtr<Mortar::Texture> m_TexD;         // +0xd8
+    // +0xcc..+0xd8: the two toggle texture pairs, music first then sound.
+    Mortar::SmartPtr<Mortar::Texture> m_TexMusicOn;   // +0xcc  music.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexMusicOff;  // +0xd0  music_cross.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexSoundOn;   // +0xd4  sound.tex
+    Mortar::SmartPtr<Mortar::Texture> m_TexSoundOff;  // +0xd8  sound_cross.tex
 
     // +0xdc  SmartPtr<Model> m_Model (only Model SmartPtr ctor in binary @ 0x001158c4)
     Mortar::SmartPtr<Mortar::Model> m_Model;          // +0xdc
@@ -172,8 +173,10 @@ public:
     // +0xe0  BakedStringBox* m_pSliceInstrBox (new(0xc8))
     Mortar::BakedStringBox* m_pSliceInstrBox;         // +0xe0
 
-    // +0xe4  SmartPtr<Texture> m_TexFruitText (fruit_text.tex)
-    Mortar::SmartPtr<Mortar::Texture> m_TexFruitText; // +0xe4
+    // +0xe4  slice_fruit.tex — the parchment frame Draw @0x001993ac renders at
+    // m_LogoPos with the instruction string on top. The binary loads its own
+    // copy here; it is NOT an alias of the fruit_text global.
+    Mortar::SmartPtr<Mortar::Texture> m_TexSliceFruit; // +0xe4
 
     // +0xe8  Vec3 m_LogoPos (fruit_text + sliceInstrBox draw pos; 12 bytes)
     _Vector3<float> m_LogoPos;                                   // +0xe8
@@ -203,15 +206,16 @@ public:
     // +0x118  int m_State — state machine
     int m_State;          // +0x118
 
-    // +0x11c  SmartPtr<Texture> m_TexMoreGames
-    // In binary (ARM32) this slot is overloaded as the intro-slide f0 countdown
-    // (MoreGames texture defunct -- always null). Port keeps this as SmartPtr and
-    // stores f0 in the dedicated m_MoreGamesF0 below.
-    // ASM-spec v1.6.1 MainScreen::Update @0x00197430: f0-countdown gates the intro slide.
-    Mortar::SmartPtr<Mortar::Texture> m_TexMoreGames; // +0x11c
+    // +0x11c  float m_IntroHoldTimer — intro-slide hold countdown. Plain float in
+    // the binary: the ctor stores 0.0f (v1.6.1 MainScreen::MainScreen @0x001987ec),
+    // QuitToMenu @0x001cb6e4 stores 0.5f, and MainScreen::Update @0x00197430 reads
+    // it to gate the intro slide. No texture is ever loaded into this slot.
+    float m_IntroHoldTimer;                           // +0x11c
 
-    // +0x120  SmartPtr<Texture> m_Tex120 (music.tex)
-    Mortar::SmartPtr<Mortar::Texture> m_Tex120;       // +0x120
+    // Defunct: more-games menu art — loaded, never drawn; v1.6.1 MainScreen::MainScreen @ 0x0019811c
+    // Same as +0x94/+0x98: no Draw/Update/CreateButtons reference exists, so the
+    // absent draw call is correct, not a gap.
+    Mortar::SmartPtr<Mortar::Texture> m_TexMoreGames; // +0x120  more_games.tex
 
     // +0x124  float m_Timer2 — state-machine transition timer.
     float m_Timer2;       // +0x124
@@ -227,13 +231,6 @@ private:
     // Excluded on __bada__ so sizeof stays at 0x12c.
     // -----------------------------------------------------------------------
 #ifndef __bada__
-    // DIFFERS: binary overloads m_TexMoreGames's 4-byte slot (+0x11c) as the intro f0 countdown
-    // (ARM32 4-byte ptr, MoreGames texture defunct -- v1.6.1 MainScreen::Update @0x00197430).
-    // The x64 port's SmartPtr is 8 bytes and m_TexMoreGames is a live pointer, so aliasing a
-    // float onto it corrupts the pointer and crashes ~SmartPtr at shutdown -- use a dedicated
-    // float field instead. Functional behaviour of the f0 hold/settle/exit logic is identical.
-    float m_MoreGamesF0;
-
     // Lazy fallback font for the plate BakedStringBox, used only if game_work.m_pTTFFontMain
     // is still null when this ctor runs (PreloadFontsTTF hasn't populated it yet).
     Mortar::SmartPtr<Mortar::Font> m_BakedStrSmart;
@@ -263,25 +260,6 @@ private:
     // button in lockstep with the rings every frame.
     MenuButton* m_pSettingsButton;
 #endif // !defined(__bada__)
-
-    // Intro-slide hold countdown, defined on BOTH builds so MainScreen::Update's
-    // case-0 two-way branch and the case-8 exit compile unconditionally (see
-    // SetMoreGamesTimer above for why the storage differs per build).
-    float& TexMoreGamesF0() {
-#ifdef __bada__
-        return *reinterpret_cast<float*>(&m_TexMoreGames);
-#else
-        return m_MoreGamesF0;
-#endif
-    }
-    float TexMoreGamesF0() const {
-#ifdef __bada__
-        return *reinterpret_cast<const float*>(&m_TexMoreGames);
-#else
-        return m_MoreGamesF0;
-#endif
-    }
-
 
     // --- Internal helpers ---
     // NOTE: no CreateToggles helper — the binary builds both sound/music toggles
@@ -381,27 +359,26 @@ private:
 // Binary offsets (ARM32, SmartPtr=4 bytes, sizeof(MainScreen)==0x12c)
 static_assert(__builtin_offsetof(MainScreen, m_ButtonsCreatedFlag) == 0x7c,  "m_ButtonsCreatedFlag offset");
 static_assert(__builtin_offsetof(MainScreen, m_Field80)        == 0x80,  "m_Field80 offset");
-static_assert(__builtin_offsetof(MainScreen, m_TexSoundOn)     == 0x8c,  "m_TexSoundOn offset");
-static_assert(__builtin_offsetof(MainScreen, m_TexSoundOff)    == 0x90,  "m_TexSoundOff offset");
-static_assert(__builtin_offsetof(MainScreen, m_Tex3)           == 0x94,  "m_Tex3 offset");
-static_assert(__builtin_offsetof(MainScreen, m_Tex4)           == 0x98,  "m_Tex4 offset");
-static_assert(__builtin_offsetof(MainScreen, m_Tex9c)          == 0x9c,  "m_Tex9c offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexNewGame)     == 0x8c,  "m_TexNewGame offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexDojoIcon)    == 0x90,  "m_TexDojoIcon offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexOpenFeint)      == 0x94, "m_TexOpenFeint offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexGCAchievements) == 0x98, "m_TexGCAchievements offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexQuit)        == 0x9c,  "m_TexQuit offset");
 static_assert(__builtin_offsetof(MainScreen, m_pGameModeButton) == 0xa0, "m_pGameModeButton offset");
 static_assert(__builtin_offsetof(MainScreen, m_pStoreButton)    == 0xa4, "m_pStoreButton offset");
 static_assert(__builtin_offsetof(MainScreen, m_pQuitButton)     == 0xa8, "m_pQuitButton offset");
 static_assert(__builtin_offsetof(MainScreen, m_pMoreGamesBtn)   == 0xac, "m_pMoreGamesBtn offset");
 static_assert(__builtin_offsetof(MainScreen, pToggleA)         == 0xb0,  "pToggleA offset");
-static_assert(__builtin_offsetof(MainScreen, pToggleB)         == 0xb4,  "pToggleB offset");
+static_assert(__builtin_offsetof(MainScreen, pSoundToggle)     == 0xb4,  "pSoundToggle offset");
 static_assert(__builtin_offsetof(MainScreen, pMusicToggle)     == 0xb8,  "pMusicToggle offset");
-static_assert(__builtin_offsetof(MainScreen, m_TexBc)          == 0xbc,  "m_TexBc offset");
-static_assert(__builtin_offsetof(MainScreen, pSoundToggle)     == 0xc0,  "pSoundToggle offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexCommingSoon) == 0xbc,  "m_TexCommingSoon offset");
 static_assert(__builtin_offsetof(MainScreen, m_TexMusicOn)     == 0xcc,  "m_TexMusicOn offset");
 static_assert(__builtin_offsetof(MainScreen, m_TexMusicOff)    == 0xd0,  "m_TexMusicOff offset");
-static_assert(__builtin_offsetof(MainScreen, m_TexSliceFruit)  == 0xd4,  "m_TexSliceFruit offset");
-static_assert(__builtin_offsetof(MainScreen, m_TexD)           == 0xd8,  "m_TexD offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexSoundOn)     == 0xd4,  "m_TexSoundOn offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexSoundOff)    == 0xd8,  "m_TexSoundOff offset");
 static_assert(__builtin_offsetof(MainScreen, m_Model)          == 0xdc,  "m_Model offset");
 static_assert(__builtin_offsetof(MainScreen, m_pSliceInstrBox) == 0xe0,  "m_pSliceInstrBox offset");
-static_assert(__builtin_offsetof(MainScreen, m_TexFruitText)   == 0xe4,  "m_TexFruitText offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexSliceFruit)  == 0xe4,  "m_TexSliceFruit offset");
 static_assert(__builtin_offsetof(MainScreen, m_LogoPos)        == 0xe8,  "m_LogoPos offset");
 static_assert(__builtin_offsetof(MainScreen, m_Lean)           == 0xf4,  "m_Lean offset");
 static_assert(__builtin_offsetof(MainScreen, m_NinjaTextX)     == 0xf8,  "m_NinjaTextX offset");
@@ -410,8 +387,8 @@ static_assert(__builtin_offsetof(MainScreen, m_BounceY)        == 0x108, "m_Boun
 static_assert(__builtin_offsetof(MainScreen, m_StateTimer)     == 0x110, "m_StateTimer offset");
 static_assert(__builtin_offsetof(MainScreen, m_Field114)       == 0x114, "m_Field114 offset");
 static_assert(__builtin_offsetof(MainScreen, m_State)          == 0x118, "m_State offset");
-static_assert(__builtin_offsetof(MainScreen, m_TexMoreGames)   == 0x11c, "m_TexMoreGames offset");
-static_assert(__builtin_offsetof(MainScreen, m_Tex120)         == 0x120, "m_Tex120 offset");
+static_assert(__builtin_offsetof(MainScreen, m_IntroHoldTimer) == 0x11c, "m_IntroHoldTimer offset");
+static_assert(__builtin_offsetof(MainScreen, m_TexMoreGames)   == 0x120, "m_TexMoreGames offset");
 static_assert(__builtin_offsetof(MainScreen, m_Timer2)         == 0x124, "m_Timer2 offset");
 static_assert(__builtin_offsetof(MainScreen, m_pFont)          == 0x128, "m_pFont offset");
 static_assert(sizeof(MainScreen)                               == 0x12c, "MainScreen size");
