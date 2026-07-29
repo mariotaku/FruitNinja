@@ -3,6 +3,7 @@
 
 #include "_Vector3.h"
 #include "Matrix44.h"
+#include "MathUtil.h"
 #include <cmath>
 #include <cstdint>
 
@@ -83,19 +84,24 @@ struct _Quaternion {
 
     static _Quaternion Identity() { return _Quaternion(0, 0, 0, 1); }
 
-    // ASM-verified: 2026-05-06T00:00 v1.6.1 binary @ 0x0017ac68 (asm-inspector)
-    // 16-bit angle encoding (0x10000 = 2pi). The axis is NOT normalized by
-    // this function -- binary does not normalize, caller is responsible for
-    // unit-length axes. Calls SinIdx 3x (one per component) + CosIdx 1x;
-    // tail-calls Quaternion_Identity if cos(half)==0 (degenerate angle).
+    // ASM-spec v1.6.1 _Quaternion<float>::CreateFromAxisAngle @0x001bfe88:
+    // half = angle16 >> 1 is a 16-bit LUT INDEX, not a radian value -- no
+    // libm sin/cos call in the binary, pure SinIdx/CosIdx table lookup at
+    // single precision. The axis is NOT normalized by this function --
+    // binary does not normalize, caller is responsible for unit-length
+    // axes. w = CosIdx(half); x/y/z = axis * SinIdx(half); if w == 0
+    // (degenerate angle) the binary tail-calls Quaternion_Identity.
     void CreateFromAxisAngle(T ax, T ay, T az, uint32_t angle16) {
-        const T rad  = (T)(int32_t)angle16 * (T)(6.2831853f / 65536.0f);
-        const T half = rad * T(0.5);
-        const T s    = T(std::sin((double)half));
+        const uint16_t half = (uint16_t)(angle16 >> 1);
+        const T s = T(SinIdx(half));
+        const T c = T(CosIdx(half));
         x = ax * s;
         y = ay * s;
         z = az * s;
-        w = T(std::cos((double)half));
+        w = c;
+        if (w == T(0)) {
+            *this = Identity();
+        }
     }
 };
 
