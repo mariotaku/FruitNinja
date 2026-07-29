@@ -181,6 +181,23 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, _Vector3<float> sp
     Init(spawnPos, clickCb, fruitType, hitBounds, deletedCb);
 }
 
+// v1.6.1 MenuButton::MenuButton C1 @0x0019be50 / C2 @0x0019bff8. Body is
+// LoadLocalisedTexture(tmp, textureName); m_Texture = tmp; then the same
+// Init() tail as the SmartPtr<Texture> overload. textureName is a texture
+// filename (e.g. "openfeint_gamecenter.tex"), not label text.
+MenuButton::MenuButton(const char* textureName, _Vector3<float> spawnPos,
+                       Mortar::Delegate0<void> clickCb,
+                       int fruitType, _Vector3<float> hitBounds,
+                       Mortar::Delegate0<void> deletedCb)
+    // Port specific: see the SmartPtr<Texture> ctor above for why label
+    // pointers are explicitly nulled here.
+    : m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr)
+{
+    Mortar::SmartPtr<Mortar::Texture> tmp = Mortar::TextureManager::LoadLocalisedTexture(textureName);
+    m_Texture = tmp;
+    Init(spawnPos, clickCb, fruitType, hitBounds, deletedCb);
+}
+
 // ASM-spec v1.6.1 MenuButton::~MenuButton D0 @0x0019d130 / D1 @0x0019d1dc: both
 // call Release() FIRST (then ~list(m_AddOns)/~Delegate/~HUDControl3d). Release()
 // @0x0019d064 clears the tracked fruit's m_pOwner back-pointer (+0x160) / the
@@ -361,7 +378,7 @@ void MenuButton::CreateFruit() {
 }
 
 // v1.6.1 MenuButton::Release @0x0019d064 -- clears the tracked entity's owner backref (leaves the
-// entity ALIVE), deletes the 3 labels, DeletePeices, releases m_Texture.
+// entity ALIVE), deletes the 3 labels, DeletePieces, releases m_Texture.
 // ASM-verified: 2026-07-03T00:00Z v1.6.1 MenuButton::Release @ 0x0019d064 (re-analyst disasm):
 //   ldr m_pTrackedFruit(+0x14C); if non-null: if m_FruitType(+0x84) < MAX_FRUIT_TYPES ->
 //   fruit->m_pOwner(+0x160)=0 else if == -> bomb->m_pOwnerButton(+0x84)=0. Does NOT kill the fruit.
@@ -380,7 +397,7 @@ void MenuButton::Release() {
     delete m_pLabelFg;     m_pLabelFg     = nullptr;
     delete m_pLabelShadow; m_pLabelShadow = nullptr;
     delete m_pLabelGlow;   m_pLabelGlow   = nullptr;
-    DeletePeices();
+    DeletePieces();
     m_Texture.SetNull();
     m_pEntity = nullptr;
     m_pTrackedFruit = nullptr;
@@ -638,7 +655,7 @@ void MenuButton::Update(float dt) {
     // reads them -- only Draw() does).
 #endif
 
-    UpdatePeices(dt);
+    UpdatePieces(dt);
 
     if (m_FruitType >= 0) {
         // spin the quad via m_Timer (+0x2c base field)
@@ -1167,14 +1184,14 @@ Mortar::SmartPtr<Mortar::Texture>& MenuButton::GetSparkleRingTex() {
     return s_TexBlurryBacking;
 }
 
-// v1.6.1 MenuButton::AddPeice @0x00150240
-void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>* uvOverride,
+// v1.6.1 MenuButton::AddPiece @0x0019cd34 (thunk 0x00105524)
+void MenuButton::AddPiece(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>* uvOverride,
                           float rotSpeed, float initialTimer,
                           _Vector3<float> offset, _Vector3<float> sizeScale,
                           Colour tint, int layerFlags) {
     HUDControl3d* c = new HUDControl3d();
     c->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(
-        this, &MenuButton::DeletedPeice);
+        this, &MenuButton::DeletedPiece);
     c->m_LayerFlags  = layerFlags;
     c->m_DrawColour  = tint;
     if (uvOverride) {
@@ -1204,34 +1221,32 @@ void MenuButton::AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>
     }
 
     MenuButtonAddOn addOn;
-    addOn.control   = c;
-    addOn.texCoord  = uvOverride;
-    addOn.offset    = offset;
-    addOn.sizeScale = sizeScale;
-    (void)rotSpeed;
-    (void)tex;
+    addOn.m_pControl      = c;
+    addOn.m_RotationSpeed = rotSpeed;
+    addOn.m_Scale         = sizeScale;
+    addOn.m_Offset        = offset;
     m_AddOns.push_back(addOn);
 }
 
-// v1.6.1 MenuButton::UpdatePeices @0x0019a630
-void MenuButton::UpdatePeices(float dt) {
+// v1.6.1 MenuButton::UpdatePieces @0x0019a630
+void MenuButton::UpdatePieces(float dt) {
     float restY = m_RestScale.y;
     float ratio = (restY > 0.0f && size.y > 0.0f) ? (size.y / restY) : 1.0f;
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {
-        HUDControl3d* c = it->control;
+        HUDControl3d* c = it->m_pControl;
         if (!c) continue;
-        c->m_Timer += dt * it->offset.y;
-        c->pos = pos + it->offset * ratio;
-        c->size = it->sizeScale * ratio;
+        c->m_Timer += dt * it->m_RotationSpeed;
+        c->pos = pos + it->m_Offset * ratio;
+        c->size = it->m_Scale * ratio;
     }
 }
 
-// v1.6.1 MenuButton::DeletePeices @0x0019d1b0
-void MenuButton::DeletePeices() {
+// v1.6.1 MenuButton::DeletePieces @0x0019cf84
+void MenuButton::DeletePieces() {
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {
-        HUDControl3d* c = it->control;
+        HUDControl3d* c = it->m_pControl;
         if (c) {
             c->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>();
             c->m_bPendingRemoval = 1;
@@ -1240,11 +1255,11 @@ void MenuButton::DeletePeices() {
     m_AddOns.clear();
 }
 
-// v1.6.1 MenuButton::DeletedPeice @0x0019a69c
-void MenuButton::DeletedPeice(HUDControl* hudControl) {
+// v1.6.1 MenuButton::DeletedPiece @0x0019a728
+void MenuButton::DeletedPiece(HUDControl* hudControl) {
     for (std::list<MenuButtonAddOn>::iterator it = m_AddOns.begin();
          it != m_AddOns.end(); ++it) {
-        if (it->control == hudControl) {
+        if (it->m_pControl == hudControl) {
             m_AddOns.erase(it);
             return;
         }

@@ -57,16 +57,22 @@
 namespace Mortar { class Entity; class BakedStringTTF; }
 class Fruit;
 
-// MenuButtonAddOn -- child sprite metadata for AddPeice/UpdatePeices.
+// MenuButtonAddOn -- child sprite metadata for AddPiece/UpdatePieces.
 // Stored in std::list<MenuButtonAddOn> m_AddOns at MenuButton +0x10C.
-// Binary @ 0x00150240 (AddPeice)
+// v1.6.1 MenuButton::AddPiece @0x0019cd34 (thunk 0x00105524)
 struct MenuButtonAddOn {
-    HUDControl3d* control;   // +0x00
-    _Vector2<float>* texCoord;  // +0x04 (param_5 from AddPeice; usually NULL)
-    _Vector3<float> offset;    // +0x08 local position relative to parent
-    _Vector3<float> sizeScale; // +0x14 local size multiplier
-    // NOTE: offset.y is reused as per-frame angular velocity by UpdatePeices
+    HUDControl3d*   m_pControl;      // +0x00
+    float           m_RotationSpeed; // +0x04
+    _Vector3<float> m_Scale;         // +0x08 local size multiplier
+    _Vector3<float> m_Offset;        // +0x14 local position relative to parent
 };
+
+#if defined(__bada__)
+static_assert(__builtin_offsetof(MenuButtonAddOn, m_RotationSpeed) == 0x04, "MenuButtonAddOn m_RotationSpeed offset");
+static_assert(__builtin_offsetof(MenuButtonAddOn, m_Scale)         == 0x08, "MenuButtonAddOn m_Scale offset");
+static_assert(__builtin_offsetof(MenuButtonAddOn, m_Offset)        == 0x14, "MenuButtonAddOn m_Offset offset");
+static_assert(sizeof(MenuButtonAddOn) == 0x20, "MenuButtonAddOn sizeof mismatch");
+#endif
 
 // Matches ClearMenuItems @ 0x0016ac7c. Cascades release on every active
 // menu fruit/bomb: sets m_bSliced + outward random velocity on fruits,
@@ -153,7 +159,7 @@ public:
     // +0x100: entity base scale captured on first frame. Init = Vec3(0,0,0).
     _Vector3<float> m_BaseScale;           // +0x100..+0x10B
 
-    // +0x10C: child sprite list for AddPeice/UpdatePeices/DeletePeices.
+    // +0x10C: child sprite list for AddPiece/UpdatePieces/DeletePieces.
     // std::list<MenuButtonAddOn> = 8 bytes (Sourcery 2010q1 pre-C++11 sentinel-only).
     std::list<MenuButtonAddOn> m_AddOns;   // +0x10C..+0x113 (ARM32)
 
@@ -270,11 +276,23 @@ public:
     // each replicates the value-ctor's field defaults via the member init-list below.
     MenuButton();
 
-    // v1.6.1 MenuButton::MenuButton C1 @0x0019bb08 / C2 @0x0019bcac (also
-    // 0x0019be50 / 0x0019bff8 char*-text variants -- not yet ported). ALL params
+    // v1.6.1 MenuButton::MenuButton C1 @0x0019bb08 / C2 @0x0019bcac. ALL params
     // by value. param6 is Delegate0<void> -> forwarded to Init as deletedCb
     // (m_DeletedCallback +0xAC); the binary ctor never touches m_RemoveCallback (+0x38).
     MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, _Vector3<float> spawnPos,
+               Mortar::Delegate0<void> clickCb,
+               int fruitType, _Vector3<float> hitBounds,
+               Mortar::Delegate0<void> deletedCb);
+
+    // v1.6.1 MenuButton::MenuButton C1 @0x0019be50 / C2 @0x0019bff8. `textureName`
+    // is a texture FILENAME (e.g. "openfeint_gamecenter.tex", "upsell_continue.tex"),
+    // NOT label text -- both binary call sites (KeyboardControl::Update,
+    // UpsellScreen::CreateBuyNowRing/TurnIntoBuyNowRing) pass literal .tex names.
+    // Body is LoadLocalisedTexture(textureName) into m_Texture, then the same
+    // Init() tail as the SmartPtr<Texture> overload above. Callers are stubbed in
+    // the port (KeyboardControl bypassed for SDL text input; UpsellScreen defunct)
+    // so this overload has no live call site -- kept for public-API shape parity.
+    MenuButton(const char* textureName, _Vector3<float> spawnPos,
                Mortar::Delegate0<void> clickCb,
                int fruitType, _Vector3<float> hitBounds,
                Mortar::Delegate0<void> deletedCb);
@@ -354,23 +372,26 @@ public:
     // v1.6.1 MenuButton::TouchReleased @0x0019a7f8: fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
     bool TouchReleased();
 
-    // v1.6.1 MenuButton::AddPeice @0x00150240: spawn child HUDControl3d sprite, attach to HUD + m_AddOns list
-    // Port-dead only: the binary AddPeice IS live (.plt thunk @0x00110178), but its
-    // caller is the unported 6-arg MenuButton ctor (tracked as #130). Kept (not deleted)
-    // so that gap stays visible -- deleting this would erase the evidence.
-    void AddPeice(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>* uvOverride,
+    // v1.6.1 MenuButton::AddPiece @0x0019cd34 (thunk 0x00105524): spawn child
+    // HUDControl3d sprite, attach to HUD + m_AddOns list.
+    // Real callers are KeyboardControl::Update and UpsellScreen::CreateBuyNowRing/
+    // TurnIntoBuyNowRing -- both intentionally bypassed/stubbed in this port
+    // (KeyboardControl uses native SDL text input; UpsellScreen is defunct), so
+    // this method has no live call site. That is policy-correct, not a gap --
+    // do NOT wire callers in to force a call site.
+    void AddPiece(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>* uvOverride,
                   float rotSpeed, float initialTimer,
                   _Vector3<float> offset, _Vector3<float> sizeScale,
                   Colour tint, int layerFlags);
 
-    // v1.6.1 MenuButton::UpdatePeices @0x0019a630: per-addon position/size update
-    void UpdatePeices(float dt);
+    // v1.6.1 MenuButton::UpdatePieces @0x0019a630: per-addon position/size update
+    void UpdatePieces(float dt);
 
-    // v1.6.1 MenuButton::DeletePeices @0x0019d1b0: detach and mark addons for HUD removal
-    void DeletePeices();
+    // v1.6.1 MenuButton::DeletePieces @0x0019cf84: detach and mark addons for HUD removal
+    void DeletePieces();
 
-    // v1.6.1 MenuButton::DeletedPeice @0x0019a69c: addon's HUD-side removal callback
-    void DeletedPeice(HUDControl* hudControl);
+    // v1.6.1 MenuButton::DeletedPiece @0x0019a728: addon's HUD-side removal callback
+    void DeletedPiece(HUDControl* hudControl);
 
     // Binary @ 0x0019d870: Clicked -- no-op override
     virtual void Clicked() {}
