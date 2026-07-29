@@ -73,13 +73,23 @@ void SeedGlobalRng(uint32_t seed) {
 
 } // namespace Math
 
-// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00..0x001e2f74 (global scope,
-// mangles to _Z14GetRandBetweenIfET_S0_S0_f). Explicit specialization (not a
-// bare template definition) so the out-of-line symbol is emitted and pairs
-// with the binary in symbol-diff.
+// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00: global scope (not under
+// Math::), 3 params only -- s0=lo, s1=hi, s2=signFlipProb; no instruction
+// reads s3. Explicit specialization (not a bare template definition) so the
+// out-of-line symbol is emitted and pairs with the binary in symbol-diff.
+// Draw #1 (the lo+RandF(hi-lo) term) is gated behind an exact `lo != hi`
+// check -- the binary's `vcmp.f32 s0,s1; beq skip` takes NO draw when
+// lo==hi. Draw #2 (sign flip) is gated independently on signFlipProb > 0
+// and still fires even when lo==hi. Keeping RandF(hi-lo) instead of the
+// binary's literal lo + (hi-lo)*RandF(1.0f) is fine: RandF(scale) is
+// (r/524287)*scale, so multiplication commutativity makes the two forms
+// IEEE-identical and both take exactly one draw.
 // ASM-verified: 2026-07-15T00:00Z v1.6.1 GetRandBetween<float> @ 0x001e2f00..0x001e2f74 (asm-inspector)
-template<> float GetRandBetween<float>(float lo, float hi, float signFlipProb, float /*unused*/) {
-    float res = lo + Math::g_Random.RandF(hi - lo);
+template<> float GetRandBetween<float>(float lo, float hi, float signFlipProb) {
+    float res = lo;
+    if (lo != hi) {
+        res = lo + Math::g_Random.RandF(hi - lo);
+    }
     if (signFlipProb > 0.0f) {
         if (Math::g_Random.RandF(1.0f) <= signFlipProb) res = -res;
     }

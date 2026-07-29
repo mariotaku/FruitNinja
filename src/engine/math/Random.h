@@ -53,15 +53,17 @@ void SeedGlobalRng(uint32_t seed);
 
 } // namespace Math
 
-// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00..0x001e2f74: global-scope
-// template (NOT under namespace Math), mangles to _Z14GetRandBetweenIfET_S0_S0_f.
-// Reads Math::g_Random internally (no Random& param). Uniform draw in [lo, hi)
-// via g_Random.RandF(hi-lo); if signFlipProb > 0, a SECOND g_Random.RandF(1.0f)
-// draw decides sign (<=signFlipProb flips negative). signFlipProb == 0 skips the
-// second draw entirely (draw count matters for RNG-sequence fidelity).
-// The trailing `unused` float is a mangling-fidelity param only: the binary's
-// template declares 4 params (T_,S0_,S0_,f) but the <float> instantiation's
-// prologue never reads the 4th (s3) register.
-template<typename T> T GetRandBetween(T lo, T hi, T signFlipProb, float unused);
+// ASM-spec v1.6.1 GetRandBetween<float> @0x001e2f00: global-scope template
+// (NOT under namespace Math), 3 params (lo, hi, signFlipProb), hard-float
+// s0/s1/s2 -- no instruction reads s3. Reads Math::g_Random internally (no
+// Random& param).
+//   vcmp.f32 s0,s1; beq skip          // exact IEEE equality, no epsilon
+//     res = lo + (hi-lo) * RandF(g_Random, 1.0f)   // DRAW #1, skipped when lo==hi
+//   skip:
+//   if (signFlipProb > 0.0f) {
+//     if (RandF(g_Random, 1.0f) <= signFlipProb) res = -res;  // DRAW #2, gated independently
+//   }
+//   return res;                        // lo==hi: res is lo unmodified, draw #2 still fires
+template<typename T> T GetRandBetween(T lo, T hi, T signFlipProb);
 
 #endif

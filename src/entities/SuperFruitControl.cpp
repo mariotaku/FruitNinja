@@ -1613,9 +1613,9 @@ void SuperFruitControl::SpawnRay()
     if (i < 4) { yLo = -35.0f; yHi = -5.0f; }
 
     int q = i & 3;
-    float zDeg = GetRandBetween(0.0f, 180.0f, 0.0f, 0.0f);
-    float yDeg = GetRandBetween(yLo, yHi, 0.0f, 0.0f);
-    float xDeg = GetRandBetween((float)(q * 90), (float)(q * 90 + 80), 0.0f, 0.0f);
+    float zDeg = GetRandBetween(0.0f, 180.0f, 0.0f);
+    float yDeg = GetRandBetween(yLo, yHi, 0.0f);
+    float xDeg = GetRandBetween((float)(q * 90), (float)(q * 90 + 80), 0.0f);
 
     Quaternion qz; qz.CreateFromAxisAngle(0.0f, 0.0f, 1.0f, (uint16_t)(int)(zDeg * 182.0f));
     Quaternion qy; qy.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, (uint16_t)(int)(yDeg * 182.0f));
