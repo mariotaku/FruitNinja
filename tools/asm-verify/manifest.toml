@@ -860,9 +860,12 @@ mangled      = "_ZN12GameModifier13ApplyModifierEbPf"
 port_mangled = "_ZN12GameModifier15OnDeferCompleteEbPf"
 notes        = "port ApplyModifier is a 20-byte forwarder; the binary body is ported as OnDeferComplete (see GameModifier.h)"
 
-# WaveModifier::ApplyModifier(bool, float*) @0x0015068c (220 B)
-#   port: WaveModifier::OnDeferComplete(bool, float*)
-[[symbol]]
-mangled      = "_ZN12WaveModifier13ApplyModifierEbPf"
-port_mangled = "_ZN12WaveModifier15OnDeferCompleteEbPf"
-notes        = "port ApplyModifier is a forwarder; the binary body is ported as OnDeferComplete"
+# WaveModifier::ApplyModifier @0x0015068c -- NO ALIAS ON PURPOSE.
+# An alias pointing this at the port's OnDeferComplete was added and then removed:
+# WaveModifier is INVERTED relative to GameModifier. Here OnDeferComplete is the
+# 3-line forwarder (WaveModifier.cpp:342) and ApplyModifier holds the real body
+# (:360), so that alias diffed a forwarder against 220 B of binary -- it CREATED
+# an inverted pairing rather than fixing one. The two mangled names already match,
+# so the natural pairing is correct and no entry is needed.
+# Do not "restore symmetry" with GameModifier's alias above: there, ApplyModifier
+# genuinely is the forwarder. Check which side holds the body before aliasing.

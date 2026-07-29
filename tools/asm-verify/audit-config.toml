@@ -1,0 +1,108 @@
+# asm-verify AUDIT configuration -- the target-specific knobs for the two
+# "looks-verified-but-isn't" audits:
+#
+#   [forwarder]    -- detect-forwarders.py / asm-verify.py SUSPICIOUS-FORWARDER
+#                     (task #133: inverted pairing -- the binary's mangled name
+#                     landed on a port FORWARDER, so the sweep diffs a tiny
+#                     forwarder against a large binary body AND STILL SCORES).
+#   [sweep_audit]  -- stale-marker-lint.py Check D
+#                     (task #135: an `ASM-verified` marker must be corroborated
+#                     by the sweep -- PAIRED, and not DIVERGE).
+#
+# Everything here is TARGET-SPECIFIC (ARM/GCC instruction idioms, the port's
+# platform-file naming convention, the marker vocabulary, the verdict
+# vocabulary). Scripts read it; they do not hardcode it. Retargeting the
+# pipeline to another binary/toolchain should only need this file changed.
+#
+# Every key has a documented default in the consuming script, so a missing
+# file degrades to "same behaviour as before this config existed" rather than
+# a crash -- but a PRESENT-and-malformed file is a hard error (fail loudly).
+
+# ---------------------------------------------------------------------------
+[forwarder]
+# ---------------------------------------------------------------------------
+# The core size rule. Instruction counts, not bytes: report.json carries the
+# NORMALIZED instruction streams (via the diff), and one ARM instruction is
+# 4 bytes, so the floor below is expressed in the unit the data actually has.
+#
+# TUNING (against tmp/asm-verify/report.json, 2519 paired symbols):
+#   floor 25 (=100 B, the first guess) -> 10 FORWARDER, but MISSES
+#     ActorManager::GetEntityFirst (20 instr / 80 B) and GetEntityNext
+#     (18 instr / 72 B) -- two of the four proven cases. Too coarse.
+#   floor 15 (= 60 B) -> 19 FORWARDER, catches all of them.
+# The FORWARDER sub-class is self-evidencing (a tail-call-only port body is
+# structurally wrong however you score it), so the floor only has to exclude
+# binary functions small enough that a 1-instruction port body could plausibly
+# BE the whole implementation. 15 instructions is comfortably past that.
+max_port_ratio    = 0.25   # port_instrs / binary_instrs below this is suspect
+min_binary_instrs = 15     # ~60 B of ARM; below this the ratio is meaningless
+
+# A port body of at most this many instructions that ENDS in an unconditional
+# branch is a tail-call forwarder, not an implementation. Four leaves room for
+# the argument-narrowing movs an int-vs-long forwarder emits before the tail
+# `b` (proven shape: ActorManager::GetEntityFirst(long,&) -> (int,&)).
+max_forwarder_instrs = 4
+
+# Post-normalizer instruction idioms (see asm-verify.py `normalize`):
+#   bl/blx        -> "CALL <SYM>"
+#   any <target>  -> "<SYM>"
+# so an unconditional tail call normalizes to exactly "b <SYM>" (or
+# "b <realname>" when --resolve-operands is on). Conditional branches keep
+# their cc suffix (bne/bls/...) and must NOT match.
+tail_call_re   = "^b(?:\\.w|\\.n)?\\s+<"
+call_re        = "^(?:CALL|bl|blx)\\b"
+# Instructions that are pure function-return / no-op scaffolding. A port body
+# made only of these is an EMPTY STUB (a different disease -- see
+# detect-gutted-bada.py), not a forwarder, and is reported separately.
+return_only_re = "^(?:bx\\s+lr|pop\\s+\\{[^}]*pc[^}]*\\}|nop|mov\\s+pc,\\s*lr)$"
+
+# Symbols whose port side is EXPECTED to be smaller and whose shrinkage says
+# nothing about pairing. `_GLOBAL__I_<tu>.cpp` is GCC's per-TU static-init
+# blob: it is proportional to how many file-scope objects the TU declares, so
+# a port TU with fewer globals is legitimately (and uninterestingly) shorter.
+skip_name_res = [
+    "^_GLOBAL__I_",
+    "^_GLOBAL__D_",
+]
+
+# ---------------------------------------------------------------------------
+[sweep_audit]
+# ---------------------------------------------------------------------------
+# Where the sweep's machine-readable output lives (relative to project root).
+report_path = "tmp/asm-verify/report.json"
+
+# Which source-side marker kinds assert "this was checked against the binary"
+# and therefore MUST be corroborated by the sweep. `ASM-spec` deliberately does
+# NOT claim verification (it is a pasted RE spec), so it is not audited here.
+audited_marker_kinds = ["ASM-verified"]
+
+# report.json verdict vocabulary, partitioned by what it means for a marker
+# that claims "ASM-verified".
+#   confirming    -- the sweep agrees; the marker is corroborated.
+#   contradicting -- the sweep disagrees; ERROR (this is the fabricated-stamp
+#                    shape (a): a stamp on a symbol the sweep says DIVERGEs).
+#   weak          -- the sweep neither confirms nor refutes (a human deferred
+#                    or half-accepted it). Reported, but not an ERROR.
+confirming_verdicts    = ["MATCH", "COSMETIC", "ACCEPT-cosmetic", "ACCEPT-defunct"]
+contradicting_verdicts = ["DIVERGE", "FIX-NEEDED", "UNPAIRED", "SUSPICIOUS-FORWARDER"]
+weak_verdicts          = ["SUSPICIOUS", "ACCEPT-deferred"]
+
+# The cross-build's source list. A marker in a TU that is not compiled by the
+# sweep can never be corroborated by it -- that is "cannot verify", not an
+# error. Parsed for `${_PROJECT_ROOT}/src/...` paths.
+verify_sources_cmake = "tools/asm-verify/verify-sources.cmake"
+
+# Platform-bound port files have no binary counterpart at all (project
+# convention: *SDL.cpp / *Posix.cpp / *Win32.cpp suffixes + src/platform/).
+# Markers in them are "cannot verify" by construction.
+platform_file_res = [
+    "SDL\\.(?:cpp|h)$",
+    "Posix\\.(?:cpp|h)$",
+    "Win32\\.(?:cpp|h)$",
+    "^src/platform/",
+]
+
+# Freshness guard. report.json older than the newest commit touching src/ is
+# reported PROMINENTLY -- an unattended run has nobody to notice a thin report.
+# Set to false only if you deliberately want a historical report audited.
+warn_if_report_older_than_src = true

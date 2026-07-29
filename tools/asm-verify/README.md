@@ -97,6 +97,10 @@ asm-verify.py             -- operand-level diff + classify + report writer
 operand_resolve.py        -- --resolve-operands: CALL-target / data-symbol identity (see below)
 resolve-eval.py           -- quantify what --resolve-operands adds and costs (JSON -> tmp/asm-verify/resolve-eval/)
 classify-divergences.py   -- rank divergences (HIGH/MED/LOW); enrich report.json cause/likelihood + suggested-triage.json (ranked shortlist -> stdout)
+audit-config.toml         -- target-specific knobs for the two "looks-verified-but-isn't" audits (thresholds, instruction idioms, marker/verdict vocabularies, exclusion globs)
+audit_config.py           -- loader for the above (missing file -> built-in defaults; malformed file -> hard error)
+forwarder_rule.py         -- shared INVERTED-PAIRING rule (see below); used by asm-verify.py and detect-forwarders.py
+detect-forwarders.py      -- post-hoc inverted-pairing scan over an existing report.json; JSON -> tmp/asm-verify/forwarders.json
 signature-mismatch.py     -- PAIRING-GAP guard: same qualified name, different signature => never paired, never diffed (see below); JSON -> tmp/asm-verify/
 detect-gutted-bada.py     -- find bodies the -D__bada__ cross-build silently guts (see below); JSON -> tmp/gutted-bada/
 triage.sh / triage.json   -- sticky per-asm_hash verdicts
@@ -125,6 +129,7 @@ run-with-powerup-shim.sh  -- asm-verify wrapper that patches PowerUp.h cross-bui
 | SUSPICIOUS | major opcode delta (added/removed `bl`, `cbz`, `vcmp`...) | escalate to triage |
 | DIVERGE | structural mismatch | block |
 | UNPAIRED | port symbol not found, or binary symbol missing | manual fix |
+| SUSPICIOUS-FORWARDER | the port side is a tail-call forwarder, so this row diffs a forwarder against a real body -- the score is meaningless | fix the PAIRING (manifest alias), then re-triage |
 
 Each verdict is sticky per `asm_hash` in `triage.json`; SUSPICIOUS/DIVERGE rows
 go to the `asm-triager` agent (ACCEPT-cosmetic / ACCEPT-deferred / FIX-NEEDED).
@@ -143,6 +148,70 @@ merely its largest part. A systemic rationale on a large-body,
 high-unmatched-ratio symbol is exactly the shape that hides real bugs
 (calibration case: `ScrollingMenu::Update`, accepted at 65% unmatched, concealed
 a missing `m_SnapDist` store).
+
+## Inverted pairing (`SUSPICIOUS-FORWARDER`)
+
+Worse than an UNPAIRED row, because the row LOOKS handled: the binary's mangled
+name lands on a port FORWARDER instead of the port's real body, so the sweep
+diffs a 1-instruction tail call against a 140-instruction binary body **and
+still produces a score**. Nothing about the row says the comparison is
+meaningless -- it reads as a big DIVERGE and gets triaged as one.
+
+Rule (`forwarder_rule.py`, thresholds in `audit-config.toml`): a PAIRED symbol
+whose port side is under `max_port_ratio` of its binary side, with the binary
+side at least `min_binary_instrs`, is size-suspect; the port body's SHAPE then
+splits it three ways --
+
+| Shape | Meaning | Handling |
+|---|---|---|
+| `FORWARDER` | <= `max_forwarder_instrs`, last instruction an unconditional branch, no call | verdict becomes `SUSPICIOUS-FORWARDER`; `triage.json` can NOT clear it |
+| `EMPTY-STUB` | body is only return scaffolding | annotated only -- unported/defunct, a different disease (`detect-gutted-bada.py`) |
+| `SMALLER` | a real but shorter port body | annotated only -- inlining / container swap / terser code all do this honestly |
+
+Nothing is auto-suppressed or auto-aliased: a wrong auto-fix would recreate the
+exact problem. Fix a `FORWARDER` row by adding a `port_mangled` alias in
+`manifest.toml` pointing at the port's REAL body -- **after reading both sides**
+(the direction is not always the obvious one: `GameModifier::ApplyModifier`
+forwards to `OnDeferComplete`, while `WaveModifier` has it the other way round).
+
+```
+python tools/asm-verify/detect-forwarders.py           # ranked summary
+python tools/asm-verify/detect-forwarders.py --all     # incl. EMPTY-STUB / SMALLER
+python tools/asm-verify/detect-forwarders.py --check   # exit 1 on any FORWARDER
+```
+
+Runs from the stored `report.json` (the diff hunks reconstruct both normalized
+streams exactly), so it needs no re-sweep; it enriches each row with
+`pairing_suspect` while preserving the report's mtime, which is the freshness
+signal the other audits compare against `git log -1 -- src`.
+
+## ASM-verified marker corroboration (`stale-marker-lint.py` Check D)
+
+A `// ASM-verified:` marker is written by the same agent that benefits from it
+and **nothing recomputes it**. Check D makes the sweep recompute it: every
+`ASM-verified` marker must be PAIRED in `report.json` and must not carry a
+contradicting verdict, otherwise it is an ERROR (not a note) and gates
+`--check`.
+
+| Outcome | Meaning |
+|---|---|
+| `CONFIRMED` | paired, verdict in `confirming_verdicts` |
+| `SWEEP-CONTRADICTED` | **ERROR** -- the sweep says DIVERGE / FIX-NEEDED / UNPAIRED / SUSPICIOUS-FORWARDER |
+| `NAME-NOT-IN-BINARY` | **ERROR** -- the cited symbol resolves to no binary address at all; the marker cites some other function's address |
+| `SWEEP-WEAK` | paired, but SUSPICIOUS / ACCEPT-deferred neither confirms nor refutes |
+| `SWEEP-CANNOT-VERIFY` | structurally outside the sweep (platform file, TU absent from `verify-sources.cmake`, symbol not in the manifest) -- **its own quiet category, never a silent skip**, because "cannot verify" is exactly the state that has been passing for verified |
+
+Every run prints the coverage line
+
+```
+  N markers claim ASM-verified, M confirmed by this run, K cannot be checked
+```
+
+so unverified is a number that moves rather than something to hunt for. A
+`report.json` older than the newest commit touching `src/` is called out
+prominently; a missing one prints "Check D DID NOT RUN -- 0 of the ASM-verified
+markers are corroborated". Skip with `--no-sweep-check`, point elsewhere with
+`--sweep-report`.
 
 ## Operand resolution (`--resolve-operands`, default OFF)
 

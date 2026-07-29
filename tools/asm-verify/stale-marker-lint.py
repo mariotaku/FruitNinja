@@ -142,6 +142,44 @@ Additional audit checks (informational; do not gate --check by default):
       entry deferred on it can be swept for re-triage together.
       report.json['deferred_no_blocker'] carries the full list.
 
+  SWEEP-CONTRADICTION (Check D) -- cross-checks every `// ASM-verified:`
+      marker against the asm-verify sweep (tmp/asm-verify/report.json). The
+      marker is authored by the same agent that benefits from it and NOTHING
+      recomputed it, so fabricated and stale stamps have repeatedly misled
+      this project. Rules cannot fix that; only mechanism can.
+
+      A stamp is only corroborated when the cited symbol is PAIRED in the
+      sweep AND the sweep's verdict is not a contradiction. Outcomes:
+
+        CONFIRMED           -- paired, verdict in [sweep_audit].confirming_verdicts.
+        CONTRADICTED        -- ERROR. Paired, but the sweep says DIVERGE /
+                               FIX-NEEDED / UNPAIRED / SUSPICIOUS-FORWARDER.
+                               This is shape (a), the fabricated-stamp case:
+                               a stamp on a symbol the sweep says diverges.
+        NAME-NOT-IN-BINARY  -- ERROR. The cited symbol resolves to ZERO binary
+                               addresses; the tool cannot even pair it. This is
+                               shape (b) -- e.g. FruitFactBigClassicFactPage::Init,
+                               a port-only method with no binary counterpart,
+                               whose marker cited the CTOR's address.
+        WEAK                -- paired but the verdict neither confirms nor
+                               refutes (SUSPICIOUS / ACCEPT-deferred). Warned,
+                               not failed.
+        CANNOT-VERIFY       -- the symbol is legitimately outside the sweep:
+                               a platform file (*SDL.cpp / *Posix.cpp /
+                               *Win32.cpp / src/platform/), a TU absent from
+                               verify-sources.cmake, or a symbol the manifest
+                               never picked up. Reported as its own QUIET
+                               category -- never silently skipped, because
+                               "cannot verify" is exactly the state that has
+                               been passing for verified.
+
+      The run always prints the coverage line
+        "N markers claim ASM-verified, M confirmed by this run, K cannot be
+         checked"
+      so unverified is a number that MOVES rather than something to hunt for.
+      report.json['sweep_audit'] carries the full per-marker detail.
+      Verdict vocabularies / exclusion globs live in audit-config.toml.
+
   DEFERRED-HIGH-RATIO (Check C, secondary signal) -- reads
       tools/asm-verify/triage.json and flags ACCEPT-deferred entries whose
       score/max_score ratio exceeds DEFERRED_RATIO_THRESHOLD. A high ratio on
@@ -153,11 +191,16 @@ Additional audit checks (informational; do not gate --check by default):
       report.json['deferred_high_ratio'] carries the full list.
 """
 import argparse
+import datetime
 import json
 import pathlib
 import re
 import struct
+import subprocess
 import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import audit_config    # noqa: E402  (target-specific knobs; see audit-config.toml)
 
 try:
     import lief
@@ -1566,6 +1609,234 @@ def check_deferred_high_ratio(triage: dict) -> list:
     return results
 
 
+# ---------------------------------------------------------------------------
+# Check D (SWEEP-CONTRADICTION) -- corroborate ASM-verified markers against
+# the asm-verify sweep. See module docstring.
+# ---------------------------------------------------------------------------
+_VERIFY_SRC_RE = re.compile(r'\$\{_PROJECT_ROOT\}/(src/[^"\s]+)')
+
+
+def _ctor_matches(cited_sym: str, demangled: str) -> bool:
+    """True when a marker spells a constructor `X::X` and the demangled name is
+    the itanium `X::{ctor}` / `X::{base ctor}` form.
+
+    Deliberately NOT folded into _symbol_matches_strict: that matcher drives the
+    --fix auto-rewriter, and widening it would change which addresses the fixer
+    considers 'the one candidate'. Check D only needs the recognition, not the
+    rewrite. (Without this, every ctor marker -- HUD::HUD, WaveInfo::WaveInfo --
+    reads as 'cited symbol not in the binary', a pure false positive.)
+    """
+    if not cited_sym or not demangled:
+        return False
+    cited_base = re.sub(r'\(.*', '', cited_sym).strip()
+    dem_base   = re.sub(r'\(.*', '', demangled).strip()
+    if 'ctor' not in dem_base:
+        return False
+    strip_t = lambda s: re.sub(r'<[^>]*>', '', s)
+    cited_parts = strip_t(cited_base).split('::')
+    dem_parts   = strip_t(dem_base).split('::')
+    if len(cited_parts) < 2 or len(dem_parts) < 2:
+        return False
+    if cited_parts[-1] != cited_parts[-2]:
+        return False                      # not spelled X::X
+    return dem_parts[-2].strip() == cited_parts[-2].strip()
+
+
+def _cited_matches(cited_sym: str, mangled: str, demangled: str) -> bool:
+    """Union of every name-equivalence Check D accepts: strict, loose, ctor."""
+    if not cited_sym:
+        return False
+    dem = demangled or ''
+    return (_symbol_matches_strict(cited_sym, mangled or '', dem)
+            or _symbol_matches(cited_sym, mangled or '', dem)
+            or _ctor_matches(cited_sym, dem))
+
+
+def load_verify_sources(cmake_path: pathlib.Path):
+    """Set of project-relative source paths the cross-build actually compiles.
+
+    A marker in a TU that the sweep never compiles can NEVER be corroborated by
+    it -- that is 'cannot verify', not an error. Returns None when the file is
+    missing (freshness/tooling problem; the caller reports it loudly rather
+    than silently treating every TU as compiled)."""
+    if not cmake_path.exists():
+        return None
+    text = cmake_path.read_text(encoding='utf-8', errors='replace')
+    return set(m.group(1) for m in _VERIFY_SRC_RE.finditer(text))
+
+
+def _report_freshness(report_path: pathlib.Path, project_root: pathlib.Path):
+    """(is_stale, message) -- report.json vs the newest commit touching src/."""
+    if not report_path.exists():
+        return True, "sweep report not found: %s" % report_path
+    r_mtime = report_path.stat().st_mtime
+    try:
+        out = subprocess.run(["git", "log", "-1", "--format=%ct", "--", "src"],
+                             cwd=str(project_root), capture_output=True,
+                             text=True, check=True)
+        src_ct = int(out.stdout.strip())
+    except Exception as e:
+        return False, "git log for src/ unavailable (%s); freshness unknown" % e
+    if r_mtime < src_ct:
+        f = lambda t: datetime.datetime.fromtimestamp(t).strftime('%Y-%m-%d %H:%M')
+        return True, ("sweep report (%s) is OLDER than the newest commit touching "
+                      "src/ (%s) -- Check D below may be corroborating code that "
+                      "no longer exists. Re-run tools/asm-verify/run.sh."
+                      % (f(r_mtime), f(src_ct)))
+    return False, "sweep report is newer than the last src/ commit"
+
+
+def check_sweep_contradictions(markers: list,
+                               sweep_rows: list,
+                               verify_sources,
+                               addr_to_mangled: dict,
+                               addr_to_demangled: dict,
+                               cfg) -> dict:
+    """Check D: every ASM-verified marker must be PAIRED in the sweep and must
+    not carry a contradicting verdict. Returns a dict with per-outcome lists
+    plus the coverage counts.
+
+    Join order (most specific first):
+      1. the sweep row whose binary address IS the cited address;
+      2. the sweep row for the mangled symbol that lives at the cited address;
+      3. the sweep row for the cited SYMBOL NAME's real address(es), found by
+         the strict forward lookup (covers a marker whose address drifted but
+         whose name is right).
+    """
+    sa = cfg.sweep_audit
+    audited_kinds = set(sa.audited_marker_kinds)
+    confirming    = set(sa.confirming_verdicts)
+    contradicting = set(sa.contradicting_verdicts)
+    weak          = set(sa.weak_verdicts)
+    platform_res  = sa.regexes('platform_file_res')
+
+    by_addr, by_mangled = {}, {}
+    for row in sweep_rows:
+        try:
+            by_addr[int(row['addr'], 16)] = row
+        except (KeyError, TypeError, ValueError):
+            pass
+        if row.get('mangled'):
+            by_mangled.setdefault(row['mangled'], row)
+
+    # .h markers inherit the compiled-ness of their same-stem .cpp.
+    stem_to_src = {}
+    if verify_sources is not None:
+        for p in verify_sources:
+            stem_to_src.setdefault(pathlib.PurePosixPath(p).stem, p)
+
+    out = {'confirmed': [], 'contradicted': [], 'name_not_in_binary': [],
+           'weak': [], 'cannot_verify': [], 'total': 0}
+
+    for m in markers:
+        if m['kind'] not in audited_kinds:
+            continue
+        out['total'] += 1
+        f_rel = m['file'].replace('\\', '/')
+        cited = m.get('cited_sym')
+        rec = {
+            'file': m['file'], 'line': m['line'], 'cited_sym': cited,
+            'addr_str': m['addr_str'], 'lint_verdict': m['verdict'],
+        }
+
+        # --- exclusions that make corroboration structurally impossible -----
+        if any(r.search(f_rel) for r in platform_res):
+            rec['reason'] = 'platform file (no binary counterpart)'
+            out['cannot_verify'].append(rec)
+            continue
+        if verify_sources is not None:
+            src_key = f_rel if f_rel in verify_sources else \
+                stem_to_src.get(pathlib.PurePosixPath(f_rel).stem)
+            if src_key is None:
+                rec['reason'] = 'TU not in verify-sources.cmake (sweep never compiles it)'
+                out['cannot_verify'].append(rec)
+                continue
+
+        # --- join to a sweep row -------------------------------------------
+        row = by_addr.get(m['cited_addr'])
+        if row is None and m.get('binary_sym'):
+            row = by_mangled.get(m['binary_sym'])
+        strict = _forward_lookup_strict(cited, addr_to_mangled,
+                                        addr_to_demangled) if cited else []
+        if row is None:
+            for (a, _d) in strict:
+                if a in by_addr:
+                    row = by_addr[a]
+                    rec['joined_via'] = 'cited symbol name @ 0x%08x' % a
+                    break
+
+        if row is None:
+            # Nothing to diff against. Is that because the NAME does not exist
+            # in the binary at all (shape (b), an ERROR), or because the sweep
+            # manifest simply never picked the symbol up (cannot verify)?
+            name_here_matches = bool(
+                cited and (
+                    _cited_matches(cited, m.get('binary_sym'),
+                                   m.get('binary_demangled'))
+                    or _cited_matches(cited, m.get('containing_sym'),
+                                      m.get('containing_dem'))
+                    or _cited_matches(cited, m.get('plt_target_sym'),
+                                      m.get('plt_target_dem'))))
+            if cited and not strict and not name_here_matches:
+                rec['reason'] = ('cited symbol resolves to NO binary address -- '
+                                 'port-only method; the marker cites some other '
+                                 'function\'s address')
+                if m.get('binary_demangled'):
+                    rec['addr_actually_is'] = m['binary_demangled']
+                elif m.get('containing_dem'):
+                    rec['addr_actually_is'] = m['containing_dem'] + ' (containing)'
+                out['name_not_in_binary'].append(rec)
+            else:
+                rec['reason'] = ('symbol not in the sweep manifest '
+                                 '(never diffed this run)')
+                out['cannot_verify'].append(rec)
+            continue
+
+        rec['sweep_symbol'] = row.get('mangled')
+        rec['sweep_verdict'] = row.get('verdict')
+        rec['sweep_reason'] = row.get('reason')
+        rec['score'] = row.get('score')
+        rec['max_score'] = row.get('max_score')
+        if row.get('port_mangled'):
+            rec['sweep_port_symbol'] = row['port_mangled']
+        if row.get('pairing_suspect'):
+            rec['pairing_suspect'] = row['pairing_suspect']
+
+        # A stamp that cites a DIFFERENT function than the one the sweep diffed
+        # at this address is shape (b) even though a row exists.
+        if cited and row.get('mangled'):
+            dem = _demangle(row['mangled'])
+            # An aliased row diffs the port symbol named by `port_mangled`, so a
+            # marker spelling the PORT's name for it is correct, not a mis-stamp.
+            alias_dem = _demangle(row['port_mangled']) if row.get('port_mangled') else ''
+            if not (_cited_matches(cited, row['mangled'], dem)
+                    or (alias_dem and _cited_matches(cited, row['port_mangled'],
+                                                     alias_dem))):
+                if not strict:
+                    rec['reason'] = ('cited symbol resolves to NO binary address; '
+                                     'the cited addr belongs to %s' % dem)
+                    rec['addr_actually_is'] = dem
+                    out['name_not_in_binary'].append(rec)
+                    continue
+
+        v = row.get('verdict')
+        if v in contradicting:
+            rec['reason'] = 'sweep verdict %s contradicts the ASM-verified stamp' % v
+            out['contradicted'].append(rec)
+        elif v in confirming:
+            out['confirmed'].append(rec)
+        elif v in weak:
+            rec['reason'] = 'sweep verdict %s neither confirms nor refutes' % v
+            out['weak'].append(rec)
+        else:
+            rec['reason'] = 'sweep verdict %r is not in any configured set' % v
+            out['weak'].append(rec)
+
+    for key in ('contradicted', 'name_not_in_binary', 'weak', 'cannot_verify'):
+        out[key].sort(key=lambda r: (r['file'], r['line']))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                   formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1577,6 +1848,11 @@ def main():
                     help='Output JSON path')
     ap.add_argument('--triage', default=str(TRIAGE_DEFAULT),
                     help='Path to triage.json (for the DEFERRED-HIGH-RATIO check)')
+    ap.add_argument('--sweep-report', default=None,
+                    help='Path to the asm-verify report.json for Check D '
+                         '(default: [sweep_audit].report_path in audit-config.toml)')
+    ap.add_argument('--no-sweep-check', action='store_true',
+                    help='skip Check D (SWEEP-CONTRADICTION)')
     ap.add_argument('--fix',    action='store_true',
                     help='auto-correct safely-resolvable mis-stamps in place '
                          '(comment-only address rewrites)')
@@ -1675,6 +1951,59 @@ def main():
     deferred_high_ratio = check_deferred_high_ratio(triage)
     print(f"  {len(deferred_high_ratio)} high-ratio ACCEPT-deferred entr(y/ies) found.")
 
+    # -----------------------------------------------------------------------
+    # Check D: SWEEP-CONTRADICTION -- corroborate every ASM-verified marker
+    # against the asm-verify sweep. Nothing else in this project recomputes an
+    # ASM-verified stamp, so this is the ONLY mechanism behind it.
+    # -----------------------------------------------------------------------
+    cfg = audit_config.load()
+    # Config paths are project-relative and anchored on the REPO, not on --src:
+    # pointing --src at a scratch tree must still read the real sweep report and
+    # the real verify-sources.cmake.
+    project_root = PROJECT_ROOT
+    sweep = None
+    sweep_stale = False
+    sweep_msg = 'skipped (--no-sweep-check)'
+    if not args.no_sweep_check:
+        report_path = pathlib.Path(args.sweep_report) if args.sweep_report else \
+            project_root / cfg.sweep_audit.report_path
+        sweep_stale, sweep_msg = _report_freshness(report_path, project_root)
+        print(f"Cross-checking ASM-verified markers against the sweep (Check D) ...",
+              flush=True)
+        if not report_path.exists():
+            print(f"  ERROR: {sweep_msg}")
+            print(f"  Check D CANNOT RUN -- every ASM-verified marker is unverified.")
+        else:
+            if sweep_stale and cfg.sweep_audit.warn_if_report_older_than_src:
+                print("  " + "!" * 68)
+                print("  !! STALE INPUT: " + sweep_msg)
+                print("  " + "!" * 68)
+            try:
+                sweep_data = json.loads(report_path.read_text(encoding='utf-8'))
+            except Exception as e:
+                sys.exit(f"ERROR: cannot parse sweep report {report_path}: {e}")
+            sweep_rows = sweep_data.get('symbols') or []
+            if not sweep_rows:
+                sys.exit(f"ERROR: {report_path} has no 'symbols' array -- "
+                         f"truncated or wrong file")
+            vs_path = project_root / cfg.sweep_audit.verify_sources_cmake
+            verify_sources = load_verify_sources(vs_path)
+            if verify_sources is None:
+                print(f"  WARNING: {vs_path} not found -- cannot tell a "
+                      f"non-compiled TU from a genuinely unpaired symbol.")
+            sweep = check_sweep_contradictions(markers, sweep_rows, verify_sources,
+                                               addr_to_mangled, addr_to_demangled,
+                                               cfg)
+            sweep['report_path']  = str(report_path)
+            sweep['report_stale'] = sweep_stale
+            sweep['paired_symbols_in_sweep'] = len(sweep_rows)
+            print(f"  {sweep['total']} ASM-verified marker(s): "
+                  f"{len(sweep['confirmed'])} confirmed, "
+                  f"{len(sweep['contradicted'])} CONTRADICTED, "
+                  f"{len(sweep['name_not_in_binary'])} NAME-NOT-IN-BINARY, "
+                  f"{len(sweep['weak'])} weak, "
+                  f"{len(sweep['cannot_verify'])} cannot-verify.")
+
     # Write JSON report
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open('w', encoding='utf-8') as f:
@@ -1684,6 +2013,7 @@ def main():
             'symbol_less_markers': symbol_less_markers,
             'deferred_no_blocker': deferred_no_blocker,
             'deferred_high_ratio': deferred_high_ratio,
+            'sweep_audit':         sweep,
         }, f, indent=2)
     print(f"\nFull report: {out_path}")
 
@@ -1706,7 +2036,82 @@ def main():
           f"({_nosym_high} HIGH)")
     print(f"  {'DEFER-NO-BLOCKER':<32}: {len(deferred_no_blocker)}")
     print(f"  {'DEFERRED-HIGH-RATIO':<32}: {len(deferred_high_ratio)}")
+    if sweep is not None:
+        print(f"  {'SWEEP-CONTRADICTED':<32}: {len(sweep['contradicted'])}")
+        print(f"  {'NAME-NOT-IN-BINARY':<32}: {len(sweep['name_not_in_binary'])}")
+        print(f"  {'SWEEP-CANNOT-VERIFY':<32}: {len(sweep['cannot_verify'])}")
     print()
+
+    # --- Check D coverage line. The whole point: unverified is a NUMBER that
+    # moves, not something to hunt for.
+    if sweep is not None:
+        n = sweep['total']
+        m_ok = len(sweep['confirmed'])
+        k = (len(sweep['cannot_verify']) + len(sweep['weak'])
+             + len(sweep['contradicted']) + len(sweep['name_not_in_binary']))
+        print("=" * 70)
+        print(f"  {n} markers claim ASM-verified, {m_ok} confirmed by this run, "
+              f"{k} cannot be checked")
+        print(f"  (of the {k}: {len(sweep['contradicted'])} CONTRADICTED, "
+              f"{len(sweep['name_not_in_binary'])} NAME-NOT-IN-BINARY, "
+              f"{len(sweep['weak'])} weak verdict, "
+              f"{len(sweep['cannot_verify'])} outside the sweep)")
+        if sweep.get('report_stale'):
+            print(f"  WARNING: {sweep_msg}")
+        print("=" * 70)
+        print()
+    elif not args.no_sweep_check:
+        print("=" * 70)
+        print("  Check D DID NOT RUN -- 0 of the ASM-verified markers are "
+              "corroborated.")
+        print(f"  {sweep_msg}")
+        print("=" * 70)
+        print()
+
+    # --- Check D detail: the two ERROR shapes first, then the quiet class.
+    if sweep is not None:
+        if sweep['contradicted']:
+            print(f"--- SWEEP-CONTRADICTED ({len(sweep['contradicted'])}) -- ERROR: marker "
+                  f"claims ASM-verified but the sweep disagrees [shape (a)] ---")
+            for r in sweep['contradicted']:
+                print(f"  {r['file']}:{r['line']}  {r['cited_sym'] or '(none)'} "
+                      f"@ {r['addr_str']}")
+                print(f"    sweep: {r['sweep_verdict']}  "
+                      f"{_ascii_safe(str(r.get('sweep_reason')))[:70]}  "
+                      f"score={r.get('score')}/{r.get('max_score')}")
+                if r.get('pairing_suspect'):
+                    print(f"    NOTE: pairing itself is suspect "
+                          f"({r['pairing_suspect'].get('shape')}) -- see detect-forwarders.py")
+            print()
+        if sweep['name_not_in_binary']:
+            print(f"--- NAME-NOT-IN-BINARY ({len(sweep['name_not_in_binary'])}) -- ERROR: the "
+                  f"tool cannot even pair the cited symbol [shape (b)] ---")
+            for r in sweep['name_not_in_binary']:
+                print(f"  {r['file']}:{r['line']}  {r['cited_sym'] or '(none)'} "
+                      f"@ {r['addr_str']}")
+                print(f"    {_ascii_safe(r['reason'])}")
+                if r.get('addr_actually_is'):
+                    print(f"    addr actually is: "
+                          f"{_ascii_safe(r['addr_actually_is'])[:70]}")
+            print()
+        if sweep['weak']:
+            print(f"--- SWEEP-WEAK ({len(sweep['weak'])}) -- paired, but the verdict neither "
+                  f"confirms nor refutes ---")
+            for r in sweep['weak'][:20]:
+                print(f"  {r['file']}:{r['line']}  {r['cited_sym'] or '(none)'} "
+                      f"@ {r['addr_str']}  -> {r['sweep_verdict']}")
+            if len(sweep['weak']) > 20:
+                print(f"  ... and {len(sweep['weak']) - 20} more")
+            print()
+        if sweep['cannot_verify']:
+            from collections import Counter as _C
+            reasons = _C(r['reason'] for r in sweep['cannot_verify'])
+            print(f"--- SWEEP-CANNOT-VERIFY ({len(sweep['cannot_verify'])}) -- outside the "
+                  f"sweep; NOT an error, but NOT verified either ---")
+            for why, cnt in reasons.most_common():
+                print(f"  {cnt:>4}  {_ascii_safe(why)}")
+            print(f"  (per-marker list in report.json['sweep_audit']['cannot_verify'])")
+            print()
 
     # --- Check A: HOLLOW-MARKER -- trivial port body, non-trivial binary fn.
     if hollow_markers:
@@ -1954,11 +2359,20 @@ def main():
             fail_verdicts |= _CHECK_STRICT_EXTRA
         failing = [m for m in markers if m['verdict'] in fail_verdicts]
         fail_counts = Counter(m['verdict'] for m in failing)
+        # Check D errors gate --check too: a contradicted or unpairable
+        # ASM-verified stamp is an actionable bug, not a note.
+        n_sweep_err = 0
+        if sweep is not None:
+            n_sweep_err = len(sweep['contradicted']) + len(sweep['name_not_in_binary'])
+            if n_sweep_err:
+                fail_counts['SWEEP-CONTRADICTED'] = len(sweep['contradicted'])
+                fail_counts['NAME-NOT-IN-BINARY'] = len(sweep['name_not_in_binary'])
         print("\n" + "=" * 70)
-        if failing:
+        if failing or n_sweep_err:
             detail = ', '.join(f"{v}={fail_counts[v]}"
-                               for v in sorted(fail_counts))
-            print(f"CHECK: FAIL -- {len(failing)} actionable marker(s): {detail}")
+                               for v in sorted(fail_counts) if fail_counts[v])
+            print(f"CHECK: FAIL -- {len(failing) + n_sweep_err} actionable "
+                  f"marker(s): {detail}")
             print("=" * 70)
             return 1
         scope = "actionable + NO-VERSION" if args.strict else "actionable"

@@ -34,6 +34,22 @@ except ImportError:
 
 ASM_VERIFY_DIR = pathlib.Path(__file__).resolve().parent
 PROJECT_ROOT   = ASM_VERIFY_DIR.parent.parent
+
+sys.path.insert(0, str(ASM_VERIFY_DIR))
+import forwarder_rule  # noqa: E402  (inverted-pairing guard; see task #133)
+
+_FORWARDER_RULE = None
+
+
+def _forwarder_rule():
+    """Lazily built (and per-process cached) so the parallel workers each pay
+    the config read once, not once per symbol."""
+    global _FORWARDER_RULE
+    if _FORWARDER_RULE is None:
+        _FORWARDER_RULE = forwarder_rule.ForwarderRule()
+    return _FORWARDER_RULE
+
+
 OBJDUMP = pathlib.Path(os.environ.get(
     "ASM_VERIFY_OBJDUMP",
     PROJECT_ROOT / "tools" / "toolchain" / "sourcery-2010q1" / "bin" / "arm-none-eabi-objdump"))
@@ -519,6 +535,19 @@ def verify_one(s: dict) -> dict:
     port_lines = normalize(port_text, port_annot)
 
     verdict, reason, score, max_score, diff = classify_lcs(port_lines, bin_lines)
+
+    # INVERTED-PAIRING guard (task #133). A port side dramatically smaller than
+    # the binary side can mean the binary's mangled name landed on a port
+    # FORWARDER, so this diff compares a tail call against a real body -- and
+    # still produces a plausible-looking score. Replace the score-based verdict
+    # with SUSPICIOUS-FORWARDER so the row reads as "the PAIRING is wrong",
+    # not "the port diverges". EMPTY-STUB / SMALLER shapes keep their verdict
+    # and are only annotated; see forwarder_rule.py.
+    pairing_suspect = _forwarder_rule().classify(name, port_lines, bin_lines)
+    if pairing_suspect and pairing_suspect["shape"] == forwarder_rule.FORWARDER:
+        verdict = forwarder_rule.VERDICT
+        reason  = pairing_suspect["reason"]
+
     # Content hash of the NORMALIZED asm -- the triage staleness key. Keying on
     # this (not the score) means a cosmetic scorer/threshold tweak that leaves
     # the normalized instruction streams unchanged preserves human triage; only
@@ -528,6 +557,7 @@ def verify_one(s: dict) -> dict:
     ).hexdigest()[:16]
     return {**s, "addr": addr, "raw_addr": raw_addr, "verdict": verdict, "reason": reason,
             "diff": diff, "score": score, "max_score": max_score, "asm_hash": asm_hash,
+            "pairing_suspect": pairing_suspect,
             "port_norm": port_lines, "bin_norm": bin_lines}
 
 
@@ -550,6 +580,15 @@ def apply_triage(results: list[dict], triage: dict) -> list[dict]:
         name = r.get("mangled")
         entry = triage.get(name)
         if not entry:
+            continue
+        # An inverted pairing must NEVER be cleared by a sticky verdict: the
+        # triage decision was made about a diff that compares a forwarder to a
+        # real body, i.e. about nothing. Fix the pairing (manifest alias), then
+        # re-triage. Without this, one ACCEPT-cosmetic permanently hides the
+        # very row this check exists to surface.
+        susp = r.get("pairing_suspect")
+        if susp and susp.get("shape") == forwarder_rule.FORWARDER:
+            r["triage_suppressed_by_pairing"] = True
             continue
         # Invalidate if the normalized-asm hash has drifted from the triage
         # record. Entries written before asm_hash existed (only score/max_score)
@@ -575,7 +614,8 @@ def write_report(results: list[dict]) -> pathlib.Path:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     lines.append("## Summary")
     for v in ("MATCH", "COSMETIC", "ACCEPT-cosmetic", "ACCEPT-deferred",
-              "ACCEPT-defunct", "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
+              "ACCEPT-defunct", "SUSPICIOUS", "FIX-NEEDED", "DIVERGE",
+              forwarder_rule.VERDICT, "UNPAIRED"):
         if v in counts:
             lines.append(f"- {v}: {counts[v]}")
     lines.append("")
@@ -588,7 +628,8 @@ def write_report(results: list[dict]) -> pathlib.Path:
     lines.append("")
     # Diff bodies for SUSPICIOUS/DIVERGE/FIX-NEEDED only -- cuts noise.
     escalations = [r for r in results
-                   if r["verdict"] in ("SUSPICIOUS", "DIVERGE", "FIX-NEEDED")]
+                   if r["verdict"] in ("SUSPICIOUS", "DIVERGE", "FIX-NEEDED",
+                                       forwarder_rule.VERDICT)]
     if escalations:
         lines.append("## Escalations (need triage)")
         for r in escalations:
@@ -625,6 +666,7 @@ def write_report(results: list[dict]) -> pathlib.Path:
             "asm_hash": r.get("asm_hash"),
             "diff":    r.get("diff", []),
             "triage_stale": r.get("triage_stale", False),
+            "pairing_suspect": r.get("pairing_suspect"),  # task #133 inverted-pairing guard
         })
     json_out.write_text(json.dumps({
         "resolve_operands": _resolve_enabled(),
@@ -757,7 +799,8 @@ def main():
     for r in results:
         counts[r["verdict"]] = counts.get(r["verdict"], 0) + 1
     for v in ("MATCH", "COSMETIC", "ACCEPT-cosmetic", "ACCEPT-deferred",
-              "ACCEPT-defunct", "SUSPICIOUS", "FIX-NEEDED", "DIVERGE", "UNPAIRED"):
+              "ACCEPT-defunct", "SUSPICIOUS", "FIX-NEEDED", "DIVERGE",
+              forwarder_rule.VERDICT, "UNPAIRED"):
         if v in counts:
             print(f"  {v:16} {counts[v]}")
     # FIX-NEEDED is "user said this is genuinely broken"; treat as failure.
