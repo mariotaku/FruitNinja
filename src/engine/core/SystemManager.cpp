@@ -38,6 +38,18 @@ void SystemManager::Init() {
 #ifdef __bada__
     uint32_t seed = (uint32_t)clock();   // v1.6.1 faithful: Bada clock() = device uptime, varies per boot
 #else
+    uint32_t seed;
+    // Port specific: test-only override. With no override, production/dev
+    // builds fall through to the wall-clock-derived seed below exactly as
+    // before -- this branch changes nothing for a normal launch. TestHarness
+    // (tests/test_harness.h) sets FN_RNG_SEED before game.init() so every
+    // TestHarness-based test gets a reproducible Math::g_Random stream
+    // instead of asserting on a wall-clock-seeded one. Same shape as
+    // FN_SAVE_DIR_OVERRIDE in src/platform/SaveDirSDL.cpp.
+    const char* seed_override = std::getenv("FN_RNG_SEED");
+    if (seed_override && seed_override[0] != '\0') {
+        seed = (uint32_t)std::strtoul(seed_override, NULL, 10);
+    } else {
     // DIFFERS: original = clock() (v1.6.1 SystemManager::Init @0x0022e544); Bada clock() is
     // device-uptime and varies per boot, but on Windows/glibc clock() measures CPU time since
     // process start, which is a near-constant few ms at this early init call -> the port got the
@@ -47,21 +59,23 @@ void SystemManager::Init() {
     // separate-second launches (1s resolution from time()) and rapid successive launches within
     // the same second (chrono's higher-resolution counter) so the global RNG varies per launch as
     // the binary intends. Portable to Windows/Linux/emscripten (no SDL/windows.h needed).
-    uint32_t seed = (uint32_t)(std::time(0) ^
+    seed = (uint32_t)(std::time(0) ^
         (uint32_t)std::chrono::high_resolution_clock::now().time_since_epoch().count());
+    }
 #endif
-    // Consequence of the above (both arms): the global stream Math::g_Random is
-    // seeded from a per-launch-varying value, so NO test can assert on a
-    // g_Random-derived value and stay green -- not on a spawn sequence, a draw
-    // count, a coin flip, or any subsystem RNG reseeded from it (e.g.
+    // Consequence of the above: without FN_RNG_SEED the global stream
+    // Math::g_Random is seeded from a per-launch-varying value, so a test that
+    // boots the real engine (not via TestHarness / FN_RNG_SEED) cannot assert
+    // on a g_Random-derived value and stay green -- not on a spawn sequence, a
+    // draw count, a coin flip, or any subsystem RNG reseeded from it (e.g.
     // WaveManager::Reset does m_Random.Seed(Math::g_Random.Rand32(0)), which
-    // overrides any seed a test set beforehand). That is deliberate: the binary
-    // varies per launch too, and making the port reproducible would itself be a
-    // divergence. So RNG fidelity in this port is established by STATIC RE
-    // against the binary -- matching draw counts, argument ranges, and call
-    // order at each Rand call site -- and NOT by tests. Any test that appears to
-    // pin RNG behaviour is either pinning a value it forced by hand, or is not
-    // actually asserting on the random result.
+    // just chains from whatever g_Random itself was seeded with). That
+    // wall-clock variance is deliberate and matches the binary -- RNG fidelity
+    // in this port is established by STATIC RE against the binary -- matching
+    // draw counts, argument ranges, and call order at each Rand call site --
+    // NOT by asserting on drawn values. FN_RNG_SEED (TestHarness::Init())
+    // exists only to make repeated test RUNS reproducible with each other, not
+    // to assert a specific value is "correct".
     Math::SeedGlobalRng(seed);
     // Defunct/no-op: _RetrieveDeviceID (v1.6.1 @0x0022e3be) confirmed `return 0;` in binary -- correctly omitted.
 }

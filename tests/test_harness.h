@@ -363,6 +363,26 @@ struct TestHarness {
         // starts from a known state even if a prior run left files behind.
         SetupHermeticSaveDir_();
 
+        // Port specific: pin Math::g_Random's boot seed so every TestHarness
+        // run is reproducible instead of wall-clock-seeded (see FN_RNG_SEED in
+        // src/engine/core/SystemManager.cpp). Must be set before game.init(),
+        // which calls SystemManager::Init() (GameInitialise.cpp) that reads it.
+        // A fixed value only makes a run's outcome REPEATABLE, not "correct" --
+        // it does not change what the binary's RNG algorithm computes.
+        //
+        // MUST be set through the C RUNTIME, not SDL_setenv: the reader in
+        // SystemManager.cpp is std::getenv, and on Windows SDL_setenv writes the
+        // Win32 environment block while the MSVC CRT's getenv reads its OWN cached
+        // copy -- so an SDL_setenv here is silently invisible to std::getenv and the
+        // seed stays wall-clock. (SetupHermeticSaveDir_ above may use SDL_setenv
+        // because SaveDirSDL.cpp reads it with SDL_getenv; that pair is consistent.
+        // Do not "unify" these two on SDL_* without moving the reader too.)
+#if defined(_WIN32)
+        _putenv_s("FN_RNG_SEED", "1");
+#else
+        setenv("FN_RNG_SEED", "1", 1);
+#endif
+
         if (!game.init(window, gl)) {
             std::fprintf(stderr, "game.init failed\n");
             return false;
