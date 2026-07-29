@@ -37,12 +37,12 @@ struct _Quaternion {
         return _Quaternion(x * inv, y * inv, z * inv, w * inv);
     }
 
-    // Matches QuatFromAxisAngle used in Fruit::Update
-    static _Quaternion FromAxisAngle(const _Vector3<T>& axis, T angleRad) {
-        T half = angleRad * T(0.5);
-        T s = T(std::sin((double)half));
-        return _Quaternion(axis.x * s, axis.y * s, axis.z * s, T(std::cos((double)half)));
-    }
+    // NOTE: a radians-taking FromAxisAngle(axis, angleRad) used to live here. It was a
+    // port invention -- v1.6.1 has NO radians axis-angle builder at all. The only
+    // AxisAngle symbols in the binary are CreateFromAxisAngle @0x001bfe88 and a linker
+    // veneer @0x00106e58 that thunks into it. Its comment even claimed to match
+    // "QuatFromAxisAngle used in Fruit::Update", which Fruit::Update never called.
+    // Removed; use CreateFromAxisAngle with a 16-bit angle index instead.
 
     // ASM-verified: 2026-05-06T00:00 v1.6.1 Matrix33Unit @0x001e3064 / Matrix44Unit @0x001e32cc / Copy33To44 @0x001bf3b8 (asm-inspector)
     // (Matrix33Unit + Copy33To44 pipeline collapsed into a single column-major write;

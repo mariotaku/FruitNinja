@@ -783,7 +783,12 @@ static int RunMesh(fn::TestHarness& h) {
     const float kAppleScale = 0.60f;
 
     // 45-degree Y-axis tilt so the 3D form is visible rather than a flat disc.
-    Quaternion rot = Quaternion::FromAxisAngle(_Vector3<float>(0.0f, 1.0f, 0.0f), 0.7854f /* pi/4 */);
+    // 45 deg == 65536/8 == 0x2000 in the binary's 16-bit angle index. Same rotation
+    // as the old radians helper (which was a port invention with no binary
+    // counterpart and has been removed): its half-angle pi/8 and this one's
+    // half-index 0x1000 both land on sin 0.38268 / cos 0.92388.
+    Quaternion rot;
+    rot.CreateFromAxisAngle(0.0f, 1.0f, 0.0f, 0x2000u);
 
     // Replicate DrawOneModel (Fruit.cpp @0x00179216):
     //   mat = MakeScale(s,s,s)
