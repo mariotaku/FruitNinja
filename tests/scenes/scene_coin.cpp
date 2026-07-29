@@ -110,7 +110,18 @@
 static const unsigned char BG_R         = 33;
 static const unsigned char BG_G         = 26;
 static const unsigned char BG_B         = 20;
-static const int           BG_THRESHOLD = 30;
+
+// A pixel counts as non-background if it differs from BG_* by more than
+// BG_TOLERANCE in ANY single channel (max, not summed, across R/G/B). This
+// harness reads glReadPixels' raw bytes -- no PNG/JPEG requantisation -- so
+// the only noise is float->8-bit blend rounding (a couple of LSBs). The
+// previous per-file convention summed the abs diff over 3 channels and
+// required the total to exceed 30, which let a real but faint particle tint
+// sit under the combined threshold even though every channel had visibly
+// shifted (see scene_fruit_splat.cpp for the concrete case: a well-formed
+// splat blob undercounted to 31 px). Per-channel max with a small tolerance
+// catches any real shift while still absorbing blend rounding.
+static const int BG_TOLERANCE = 8;
 
 // Minimum particles the homing capture must draw, summed over the three
 // GameDraw depth layers.
@@ -147,8 +158,12 @@ static const float TICK_DT = 1.0f / 60.0f;
 static const int MAX_TICKS = 600; // 10s
 
 static bool IsBackground(unsigned char r, unsigned char g, unsigned char b) {
-    int d = abs((int)r - (int)BG_R) + abs((int)g - (int)BG_G) + abs((int)b - (int)BG_B);
-    return d <= BG_THRESHOLD;
+    int dr = abs((int)r - (int)BG_R);
+    int dg = abs((int)g - (int)BG_G);
+    int db = abs((int)b - (int)BG_B);
+    int maxDiff = dr > dg ? dr : dg;
+    if (db > maxDiff) maxDiff = db;
+    return maxDiff <= BG_TOLERANCE;
 }
 
 static int CountNonBackground(const unsigned char* pixels, int w, int h) {

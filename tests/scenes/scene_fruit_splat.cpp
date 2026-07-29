@@ -56,10 +56,29 @@
 static const unsigned char BG_R = 128;
 static const unsigned char BG_G = 128;
 static const unsigned char BG_B = 128;
-static const int BG_THRESHOLD   = 30;
 
-// Minimum non-background pixels to consider the splat "drawn".
-static const int MIN_DRAWN_PIXELS = 50;
+// A pixel counts as "drawn" if it differs from BG_* by more than BG_TOLERANCE
+// in ANY single channel. glReadPixels reads the raw framebuffer bytes here (no
+// PNG/JPEG requantisation in this path), so the only real noise source is the
+// float->8-bit rounding of the alpha-blended splat colour -- a couple of LSBs,
+// not tens. The old metric summed the abs diff over all 3 channels and required
+// the TOTAL to exceed 30; a real, visible low-alpha splat blend (e.g. a faint
+// reddish tint on this grey background) routinely sits at combined diffs in the
+// 15-25 range, which is under 30 in aggregate even though every channel moved.
+// That silently undercounted a well-formed splat blob down to a handful of
+// pixels (observed: 31 of what should be hundreds+). Per-channel max with a
+// small tolerance catches any real shift while still absorbing blend rounding.
+static const int BG_TOLERANCE = 8;
+
+// Minimum non-background pixels to consider the splat "drawn". Landed splat
+// scale is (10..20) * kLandScale[type]*2.5 (SplatEntity.cpp MS_SCALE_BASE/
+// MS_SCALE_RAND, kLandScale -- 1.6 for the 4 juice types) = ~40-80 world units
+// per axis, i.e. a >100px-wide quad at this harness's world-to-pixel mapping --
+// tens of thousands of raster pixels before even counting alpha falloff at the
+// blob edge. 300 is a small fraction of that floor: comfortably below any real
+// render, but ~6x the old MIN_DRAWN_PIXELS=50 that the broken metric had made
+// meaningless.
+static const int MIN_DRAWN_PIXELS = 300;
 
 // Fixed dt (1/60 s = one simulation frame).
 static const float TICK_DT = 1.0f / 60.0f;
@@ -71,10 +90,12 @@ static const int SLICE_TICKS = 10;
 static const int LAND_TICKS  = 120;
 
 static bool IsBackground(unsigned char r, unsigned char g, unsigned char b) {
-    int diff = abs((int)r - (int)BG_R)
-             + abs((int)g - (int)BG_G)
-             + abs((int)b - (int)BG_B);
-    return diff <= BG_THRESHOLD;
+    int dr = abs((int)r - (int)BG_R);
+    int dg = abs((int)g - (int)BG_G);
+    int db = abs((int)b - (int)BG_B);
+    int maxDiff = dr > dg ? dr : dg;
+    if (db > maxDiff) maxDiff = db;
+    return maxDiff <= BG_TOLERANCE;
 }
 
 static int CountNonBackground(const unsigned char* pixels, int w, int h) {

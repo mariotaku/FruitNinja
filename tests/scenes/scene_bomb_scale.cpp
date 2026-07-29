@@ -62,12 +62,19 @@ static const float BOMB_POS_Y   =    0.0f;
 static const float BOMB_Z_POS   =  150.0f;
 
 // Background colour: bright green (R=0, G=255, B=0).
-// A pixel is considered "background" if it is within a threshold of this.
+// A pixel is considered "background" if it is within a tolerance of this.
 static const unsigned char BG_R = 0;
 static const unsigned char BG_G = 255;
 static const unsigned char BG_B = 0;
-// Threshold: a pixel is non-background if |R-BG_R| + |G-BG_G| + |B-BG_B| > THRESHOLD.
-static const int BG_THRESHOLD = 30;
+// A pixel is non-background if it differs from BG_* by more than BG_TOLERANCE
+// in ANY single channel (max, not summed, across R/G/B). See
+// scene_fruit_splat.cpp for why summed-over-3-channels-then-thresholded is
+// wrong: it lets a real per-channel shift hide under a combined threshold.
+// Bomb models are opaque against this bright-green key so this rarely bites
+// here, but the metric should be consistent project-wide. 8 absorbs
+// float->8-bit blend rounding (glReadPixels returns raw framebuffer bytes,
+// no PNG/JPEG requantisation in this path).
+static const int BG_TOLERANCE = 8;
 
 struct BombSceneBounds {
     int minX, maxX, minY, maxY;
@@ -75,10 +82,12 @@ struct BombSceneBounds {
 };
 
 static bool IsBackground(unsigned char r, unsigned char g, unsigned char b) {
-    int diff = (int)abs((int)r - (int)BG_R)
-             + (int)abs((int)g - (int)BG_G)
-             + (int)abs((int)b - (int)BG_B);
-    return diff <= BG_THRESHOLD;
+    int dr = abs((int)r - (int)BG_R);
+    int dg = abs((int)g - (int)BG_G);
+    int db = abs((int)b - (int)BG_B);
+    int maxDiff = dr > dg ? dr : dg;
+    if (db > maxDiff) maxDiff = db;
+    return maxDiff <= BG_TOLERANCE;
 }
 
 // Measure bounding box of non-background pixels in [xStart,xEnd) x [0,h).

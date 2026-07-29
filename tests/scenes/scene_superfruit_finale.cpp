@@ -87,18 +87,28 @@ static bool ControlStillInHud(HUDControl* ctrl) {
 // counts) -- this only needs to catch "nothing rendered at all", not verify
 // exact shape/colour.
 static const int MIN_DIFF_PIXELS = 150;
-// Per-channel-sum delta above which a pixel counts as "different".
-static const int DIFF_THRESHOLD = 30;
+// A pixel counts as "different" if it differs from the reference frame by
+// more than DIFF_TOLERANCE in ANY single channel (max, not summed, across
+// R/G/B). See scene_fruit_splat.cpp for why summed-over-3-channels-then-
+// thresholded is wrong: it lets a real per-channel shift hide under a
+// combined threshold, silently undercounting faint-but-real draws. This
+// scene's content (combo text, explosion rings, jiblets) is high-contrast so
+// it rarely bit here, but the metric should be consistent project-wide. 8
+// absorbs float->8-bit blend rounding (glReadPixels returns raw framebuffer
+// bytes, no PNG/JPEG requantisation in this path).
+static const int DIFF_TOLERANCE = 8;
 
 static int CountDiffPixels(const unsigned char* a, const unsigned char* b, int w, int h) {
     int count = 0;
     for (int i = 0; i < w * h; ++i) {
         const unsigned char* pa = a + i * 3;
         const unsigned char* pb = b + i * 3;
-        int d = std::abs((int)pa[0] - (int)pb[0])
-              + std::abs((int)pa[1] - (int)pb[1])
-              + std::abs((int)pa[2] - (int)pb[2]);
-        if (d > DIFF_THRESHOLD) ++count;
+        int dr = std::abs((int)pa[0] - (int)pb[0]);
+        int dg = std::abs((int)pa[1] - (int)pb[1]);
+        int db = std::abs((int)pa[2] - (int)pb[2]);
+        int maxDiff = dr > dg ? dr : dg;
+        if (db > maxDiff) maxDiff = db;
+        if (maxDiff > DIFF_TOLERANCE) ++count;
     }
     return count;
 }

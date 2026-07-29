@@ -76,10 +76,25 @@
 static const unsigned char BG_R         = 33;
 static const unsigned char BG_G         = 26;
 static const unsigned char BG_B         = 20;
-static const int           BG_THRESHOLD = 30;
 
-// Minimum non-background pixels to consider a capture "drawn".
-static const int MIN_DRAWN_PIXELS = 50;
+// A pixel counts as non-background if it differs from BG_* by more than
+// BG_TOLERANCE in ANY single channel (max, not summed, across R/G/B). See
+// scene_fruit_splat.cpp for why: summing the abs diff over 3 channels and
+// requiring the total to exceed 30 let a real but faint tint sit under the
+// combined threshold even though every channel had visibly shifted, silently
+// undercounting a well-formed blob. Per-channel max with a small tolerance
+// (absorbs float->8-bit blend rounding, a couple of LSBs -- glReadPixels
+// returns raw framebuffer bytes here, no PNG/JPEG requantisation) fixes that.
+static const int BG_TOLERANCE = 8;
+
+// Minimum non-background pixels to consider a capture "drawn". The jiblet
+// mesh is opaque (unlit red pomegranate-flesh material, not alpha-blended
+// juice), so it was never subject to the low-alpha undercount above -- 8
+// jibs at 0.8-1.25x scale should trivially clear the old 50px floor already.
+// Raised to 200 anyway since 50 was never a meaningful regression floor for
+// 8 opaque mesh fragments; kept conservative (no asset-footprint RE performed
+// for pomegranate_jiblet.mmd) rather than asserting a precise expected count.
+static const int MIN_DRAWN_PIXELS = 200;
 
 // Fixed dt (1/60 s = one simulation frame).
 static const float TICK_DT = 1.0f / 60.0f;
@@ -100,8 +115,12 @@ static inline float JibUniform(float a, float b) {
 }
 
 static bool IsBackground(unsigned char r, unsigned char g, unsigned char b) {
-    int d = abs((int)r - (int)BG_R) + abs((int)g - (int)BG_G) + abs((int)b - (int)BG_B);
-    return d <= BG_THRESHOLD;
+    int dr = abs((int)r - (int)BG_R);
+    int dg = abs((int)g - (int)BG_G);
+    int db = abs((int)b - (int)BG_B);
+    int maxDiff = dr > dg ? dr : dg;
+    if (db > maxDiff) maxDiff = db;
+    return maxDiff <= BG_TOLERANCE;
 }
 
 static int CountNonBackground(const unsigned char* pixels, int w, int h) {

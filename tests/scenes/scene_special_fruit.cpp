@@ -51,11 +51,20 @@
 #include <cstring>
 
 // Background clear colour: glClearColor(0.13f, 0.10f, 0.08f, 1.0f) -- dark wood grey.
-// Approximate [0,255]: (33, 26, 20). Pixels within BG_THRESHOLD L1-distance are background.
+// Approximate [0,255]: (33, 26, 20).
 static const unsigned char BG_R         = 33;
 static const unsigned char BG_G         = 26;
 static const unsigned char BG_B         = 20;
-static const int           BG_THRESHOLD = 30;
+
+// A pixel is non-background if it differs from BG_* by more than BG_TOLERANCE
+// in ANY single channel (max, not summed, across R/G/B). See
+// scene_fruit_splat.cpp for why summed-over-3-channels-then-thresholded is
+// wrong: it lets a real per-channel shift hide under a combined threshold.
+// These fruit/bomb models are opaque so this rarely bites here, but the
+// metric should be consistent project-wide. 8 absorbs float->8-bit blend
+// rounding (glReadPixels returns raw framebuffer bytes, no PNG/JPEG
+// requantisation in this path).
+static const int           BG_TOLERANCE = 8;
 
 // Pixels where all three channels exceed WHITE_THRESH are "near-white" -- flags
 // a likely untextured (white-solid) render when >WHITE_PCT_WARN% of non-bg pixels.
@@ -98,10 +107,12 @@ static const int kEntryCount = (int)(sizeof(kEntries) / sizeof(kEntries[0]));
 // ---- pixel analysis ----
 
 static bool IsBackground(unsigned char r, unsigned char g, unsigned char b) {
-    int d = abs((int)r - (int)BG_R)
-          + abs((int)g - (int)BG_G)
-          + abs((int)b - (int)BG_B);
-    return d <= BG_THRESHOLD;
+    int dr = abs((int)r - (int)BG_R);
+    int dg = abs((int)g - (int)BG_G);
+    int db = abs((int)b - (int)BG_B);
+    int maxDiff = dr > dg ? dr : dg;
+    if (db > maxDiff) maxDiff = db;
+    return maxDiff <= BG_TOLERANCE;
 }
 
 // Count non-background and near-white pixels in a bottom-up RGB buffer.
