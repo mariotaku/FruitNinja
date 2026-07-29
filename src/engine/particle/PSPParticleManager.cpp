@@ -2,7 +2,9 @@
 #include "util/StringHash.h"
 #include "asset/TextureManager.h"
 #include "math/Random.h"
-#include "render/Renderer.h"
+#include "math/MathUtil.h"
+#include "math/Colour.h"
+#include "asset/Mesh.h"
 #include "render/MatrixManager.h"
 #include "render/QUADCUSTOMVERTEX.h"
 #include "render/gl_funcs.h"
@@ -23,16 +25,21 @@ static bool ParseVec3(const char* s, float out[3]) {
     return sscanf(s, "%f %f %f", &out[0], &out[1], &out[2]) == 3;
 }
 
-// Parse "r g b a" ints (0..31) into RGBA bytes, scaling by 255/31.
+// Parse "r g b a" ints (0..31) into BGRA bytes, scaling by 255/31.
 // Matches binary's 255.0f/31.0f multiplier at DAT_001166c4.
+//
+// Byte order is load-bearing: v1.6.1 PSPParticleEmitter::AddParticle @0x0013c554
+// copies these template bytes into the particle LANE BY LANE with no swizzle, and
+// Draw @0x0013eccc then feeds lane 2 to red, lane 1 to green, lane 0 to blue and
+// lane 3 to alpha. So lane 0 must hold blue -- same order as struct Colour.
 static void ParseColourBGRA(const char* s, uint8_t out[4]) {
     if (!s) { out[0] = out[1] = out[2] = out[3] = 0; return; }
     int r = 0, g = 0, b = 0, a = 0;
     sscanf(s, "%d %d %d %d", &r, &g, &b, &a);
     const float scale = 255.0f / 31.0f;
-    out[0] = (uint8_t)(r * scale); // R
+    out[0] = (uint8_t)(b * scale); // B
     out[1] = (uint8_t)(g * scale); // G
-    out[2] = (uint8_t)(b * scale); // B
+    out[2] = (uint8_t)(r * scale); // R
     out[3] = (uint8_t)(a * scale); // A
 }
 
@@ -46,13 +53,13 @@ static uint16_t ParseBlendEnum(const char* s) {
 }
 
 // v1.6.1 PSPParticleManager::PSPParticleManager @0x0013bf40 — manager ctor.
-// Sets m_GlobalPullRadius=0.0 (+0x00), m_GlobalTimeScale=1.0 (+0x04); NULLs all owned pointers.
+// Sets m_GlobalPullRadius=0.0 (+0x00), m_GlobalPullStrength=1.0 (+0x04); NULLs all owned pointers.
 // ASM-spec v1.6.1 PSPParticleManager @0x00013bf40 (non-polymorphic; +0x00 = float
 //   m_GlobalPullRadius, not a vptr): the binary ctor writes this->__vptr = 0, i.e. it zeroes
 //   +0x00 as a data field (the vortex pull radius), not a vtable pointer.
 PSPParticleManager::PSPParticleManager()
     : m_GlobalPullRadius(0.0f)
-    , m_GlobalTimeScale(1.0f)
+    , m_GlobalPullStrength(1.0f)
     , m_GlobalOrigin(0.0f, 0.0f, 0.0f)
     , m_pParticles(0)
     , m_FreeHead(0)
@@ -161,8 +168,8 @@ PSPParticleEmitter* PSPParticleManager::AddEmitter(uint32_t hash,
     e->m_Pos = _Vector3<float>(0, 0, 0);
     e->m_Vel = _Vector3<float>(0, 0, 0);
     e->m_RateScale = 1.0f;
-    e->m_SizeBias = 1.0f;
-    e->m_SpinScale = 1.0f;
+    e->m_LifeBias = 1.0f;
+    e->m_SizeScale = 1.0f;
     e->m_TimeScale = 1.0f;
     e->m_DirCos = 1.0f;
     e->m_DirSin = 0.0f;
@@ -196,134 +203,258 @@ void PSPParticleManager::ClearEmitter(PSPParticleEmitter* emitter) {
 }
 
 // -----------------------------------------------------------------------------
-// Update helpers
+// Spawn / draw primitives shared by AddParticle and Draw
 // -----------------------------------------------------------------------------
-static inline float Rand01() {
-    return (float)rand() / (float)RAND_MAX;
-}
-static inline float RandRange(float lo, float hi) {
-    return lo + (hi - lo) * Rand01();
+
+// v1.6.1 T.971 @0x0013c514 -- Rand32(&Math::g_random, 524287) / 524287.0f, i.e. a
+// uniform float in [0,1). Every random value AddParticle bakes comes from here, off
+// the single shared gameplay stream, so the draw COUNT and ORDER are observable.
+static float T_971() {
+    return Math::g_Random.RandF(1.0f);
 }
 
-// Quadrant-mirror sign (AddParticle @ 0x001157c0):
-//   v > 0 -> -1, v < 0 -> +1, v == 0 -> 0.
+// v1.6.1 floatLERP @0x0013bed8 -- s0 + (s1 - s0) * s2.
+static inline float floatLERP(float a, float b, float t) {
+    return a + (b - a) * t;
+}
+
+// v1.6.1 LERP @0x0013bec0 -- integer lerp with a 12-bit fraction (frac12 in [0,4095]).
+static int LERP(int a, int b, int frac12) {
+    return (a * 0x1000 + ((frac12 * (b * 0x1000 - a * 0x1000)) >> 12)) >> 12;
+}
+
+// ARM VCVT.U32.F32: negative inputs clamp to 0, positives truncate toward zero.
+// The binary NEVER clamps the high end, so colour/size channels above 255 wrap.
+static inline uint32_t VcvtU32(float v) {
+    return v > 0.0f ? (uint32_t)(int32_t)v : 0u;
+}
+
+// Quadrant-mirror sign: v > 0 -> -1, v < 0 -> +1, v == 0 -> 0.
+// (vcmpe.f32 + vmovgt/vmovmi/vldrpl in AddParticle @0x0013c704.)
 static inline float QuadrantMirror(float v) {
     if (v > 0.0f) return -1.0f;
     if (v < 0.0f) return 1.0f;
     return 0.0f;
 }
 
-// v1.6.1 PSPParticleManager::AddParticle @0x13c554 — pop free slot, init particle,
-// push onto template live-list (head at particle_template+0x04).
-// Returns 0 on failure (no free slots).
-static uint16_t AddParticle(PSPParticle* buf, uint16_t& freeHead,
-                             PSPParticleTemplate* tmpl,
-                             PSPParticleEmitter& emitter, const PSPParticleSet& set) {
-    uint16_t idx = freeHead;
-    if (idx == 0) return 0;
-    freeHead = buf[idx].m_NextLink;
+// v1.6.1 PSPParticleEmitter::AddParticle @0x0013c554
+//
+// Draw sequence, in order (do not reorder -- g_Random is the shared stream):
+//   1  T_971  gravity/acceleration lerp t  (ONE t shared by all three components)
+//   3  T_971  set velocity X, Y, Z         (independent t each, in that order)
+//   1  T_971  spawn angle
+//   3  libc rand() & 0xFFF                 (size start / mid / end, through LERP)
+//  12  T_971  colour: byte lanes 0,8,16,24; per lane start, mid, end
+//   6  T_971  tail: spin pair, cycleA pair, cycleB pair, wobble rate+accel,
+//                   wobble amp pair, wobble phase base   (11 template lerps)
+//             with a conditional Rand32(0) after the cycleA and cycleB draws
+// = 23 x T_971 + 3 x libc rand() + 0/1/2 x Rand32(0).
+//
+// The three rand() calls really are libc rand(), not g_Random -- keep them libc.
+void PSPParticleEmitter::AddParticle(PSPParticleSet* set, PSPParticleManager& mgr) {
+    const uint16_t idx = mgr.m_FreeHead;
+    if (idx == 0) return;
 
-    PSPParticle& p = buf[idx];
-    p.m_pOwnerEmitter = &emitter;
-    p.m_Pos = emitter.m_Pos;
+    // Port specific: the binary stores a resolved PSPParticleTemplate* at set+0x00 and
+    // dereferences it unconditionally. The port stores a byte offset into the template
+    // blob plus a 0xFFFFFFFF "unresolved name" sentinel that the binary has no analogue
+    // for, so it has to be screened out here.
+    if (set->m_TemplateOffset == 0xFFFFFFFFu || !mgr.m_pTemplates || !mgr.m_pParticles) return;
+    PSPParticleTemplate* tmpl =
+        reinterpret_cast<PSPParticleTemplate*>(mgr.m_pTemplates + set->m_TemplateOffset);
 
-    // Set-level velocity: randomized per component, halved.
-    // Binary AddParticle @0x115644: local_78.xyz *= 0.5f unconditionally.
-    float vx = RandRange(set.m_VelocityMin[0], set.m_VelocityMax[0]) * 0.5f;
-    float vy = RandRange(set.m_VelocityMin[1], set.m_VelocityMax[1]) * 0.5f;
-    float vz = RandRange(set.m_VelocityMin[2], set.m_VelocityMax[2]) * 0.5f;
+    PSPParticle& p = mgr.m_pParticles[idx];
+    const float life = tmpl->m_Life;
 
-    // 2D rotation by emitter's (DirCos, DirSin) pair.
-    const float cosA = emitter.m_DirCos;
-    const float sinA = emitter.m_DirSin;
-    float rvx = vx * cosA + vy * sinA;
-    float rvy = vy * cosA - sinA * vx;
-    float rvz = vz;
+    p.m_TimeRemaining = life;
+    ++mgr.m_DrawnParticleCount;   // transient: Draw zeroes this every frame
+    mgr.m_FreeHead = p.m_NextLink;
+    p.m_NextLink = tmpl->m_LiveHead;
+    tmpl->m_LiveHead = idx;
+    p.m_DeathThreshold = life - life * m_LifeBias;
 
-    if (tmpl) {
-        p.m_Gravity.x = RandRange(tmpl->m_GravityMin[0], tmpl->m_GravityMax[0]);
-        p.m_Gravity.y = RandRange(tmpl->m_GravityMin[1], tmpl->m_GravityMax[1]);
-        p.m_Gravity.z = RandRange(tmpl->m_GravityMin[2], tmpl->m_GravityMax[2]);
+    p.m_Pos = (tmpl->m_CoordSystem == 0) ? m_Pos : _Vector3<float>::Zero();
+    p.m_pOwner = this;
 
-        p.m_Life = tmpl->m_Life;
-        p.m_Age  = 0.0f;
+    // --- acceleration: lerp(gravityMin, gravityMax, t), ONE t for all components ---
+    {
+        const _Vector3<float> gMin(tmpl->m_GravityMin[0], tmpl->m_GravityMin[1], tmpl->m_GravityMin[2]);
+        const _Vector3<float> gMax(tmpl->m_GravityMax[0], tmpl->m_GravityMax[1], tmpl->m_GravityMax[2]);
+        const _Vector3<float> gDelta = gMax - gMin;
+        const float t = T_971();
+        p.m_Accel = gMin + gDelta * t;
+    }
 
-        p.m_SizeStart = RandRange((float)tmpl->m_SizeStartMin, (float)tmpl->m_SizeStartMax);
-        p.m_SizeMid   = RandRange((float)tmpl->m_SizeMidMin,   (float)tmpl->m_SizeMidMax);
-        p.m_SizeEnd   = RandRange((float)tmpl->m_SizeEndMin,   (float)tmpl->m_SizeEndMax);
+    // --- set velocity: independent t per component, drawn X then Y then Z ---
+    const float tvx = T_971();
+    const float tvy = T_971();
+    const float tvz = T_971();
+    float vx = set->m_VelocityMin[0] + (set->m_VelocityMax[0] - set->m_VelocityMin[0]) * tvx;
+    float vy = set->m_VelocityMin[1] + (set->m_VelocityMax[1] - set->m_VelocityMin[1]) * tvy;
+    float vz = set->m_VelocityMin[2] + (set->m_VelocityMax[2] - set->m_VelocityMin[2]) * tvz;
 
-        // Spin rate: int16 * (182/65536) * 2pi * 60 -> rad/sec.
-        static const float SPIN_INT16_TO_RAD_PER_SEC =
-            (182.0f / 65536.0f) * 6.2831853f * 60.0f;
-        p.m_SpinStart = RandRange((float)tmpl->m_SpinStartMin,
-                                  (float)tmpl->m_SpinStartMax) * SPIN_INT16_TO_RAD_PER_SEC;
-        p.m_SpinEnd   = RandRange((float)tmpl->m_SpinEndMin,
-                                  (float)tmpl->m_SpinEndMax)   * SPIN_INT16_TO_RAD_PER_SEC;
-        p.m_Rotation = RandRange(tmpl->m_AngleMin, tmpl->m_AngleMax);
+    // Emitter velocity scale is applied BEFORE the direction rotation.
+    vx *= m_VelScale;
+    vy *= m_VelScale;
+    vz *= m_VelScale;
 
-        p.m_RotCycleRate  = 0.5f * (tmpl->m_FrictionSpeedStart + tmpl->m_FrictionSpeedEnd);
-        p.m_RotCycleAmp   = tmpl->m_FrictionOffsetMin * (3.14159265f / 180.0f);
-        p.m_RotCyclePhase = Rand01() * 6.2831853f;
+    // 2D rotation by the emitter's (m_DirCos, m_DirSin) pair.
+    {
+        const float rx = vy * m_DirSin + vx * m_DirCos;
+        vy = vy * m_DirCos - m_DirSin * vx;
+        vx = rx;
+    }
 
-        p.m_CycleXRate  = 0.5f * ((float)tmpl->m_CycleXStart + (float)tmpl->m_CycleXEnd);
-        p.m_CycleYRate  = 0.5f * ((float)tmpl->m_CycleYStart + (float)tmpl->m_CycleYEnd);
-        p.m_CycleXPhase = Rand01() * 6.2831853f;
-        p.m_CycleYPhase = Rand01() * 6.2831853f;
+    if (m_bMirrorX != 0) {
+        // Acceleration mirrors around the PARTICLE's x, velocity around the EMITTER's.
+        const float g = p.m_Accel.x;
+        p.m_Accel.x = p.m_Accel.y;
+        p.m_Accel.y = g;
+        p.m_Accel.x *= QuadrantMirror(p.m_Pos.x);
+        p.m_Accel *= m_VelScale;
 
-        // Quadrant-mirror branch (AddParticle @ 0x001157ae), gated on m_bMirrorX.
-        if (emitter.m_bMirrorX != 0) {
-            float gtmp = p.m_Gravity.x;
-            p.m_Gravity.x = p.m_Gravity.y;
-            p.m_Gravity.y = gtmp;
-            p.m_Gravity.x *= QuadrantMirror(p.m_Pos.x);
-            p.m_Gravity.x *= emitter.m_TimeScale;
-            p.m_Gravity.y *= emitter.m_TimeScale;
-            p.m_Gravity.z *= emitter.m_TimeScale;
+        const float s = vx;
+        vx = vy;
+        vy = s;
+        vx *= QuadrantMirror(m_Pos.x);
+        vx *= m_VelScale;
+        vy *= m_VelScale;
+        vz *= m_VelScale;
+    }
 
-            float vtmp = rvx;
-            rvx = rvy;
-            rvy = vtmp;
-            rvx *= QuadrantMirror(emitter.m_Pos.x);
-            rvx *= emitter.m_VelScale;
-            rvy *= emitter.m_VelScale;
-            rvz *= emitter.m_VelScale;
+    // Stored RAW -- the emitter's own m_Vel is NOT added.
+    p.m_Vel = _Vector3<float>(vx / 2.0f, vy / 2.0f, vz / 2.0f);
+
+    // --- spawn angle: int32 template range lerped, then scaled into the index domain ---
+    {
+        const float t = T_971();
+        const float angle = floatLERP((float)tmpl->m_AngleMin, (float)tmpl->m_AngleMax, t);
+        p.m_MirrorX   = m_bMirrorX;
+        p.m_NoAttract = m_bTrailStarted;
+        int a = (int)(angle * 182.0f);
+        p.m_RotAngleIdx = (uint16_t)a;
+        if (m_bMirrorX != 0) {
+            a += (p.m_Pos.x > 0.0f) ? 0xC000 : 0x4000;
+            p.m_RotAngleIdx = (uint16_t)a;
         }
+    }
 
-        p.m_Vel.x = emitter.m_Vel.x + rvx;
-        p.m_Vel.y = emitter.m_Vel.y + rvy;
-        p.m_Vel.z = emitter.m_Vel.z + rvz;
+    // Shape 1 ("Vortex"): rewind a whole template-life of travel so the particle
+    // sweeps INTO the emitter instead of away from it.
+    if (tmpl->m_Shape == 1) {
+        p.m_Pos -= p.m_Vel * life;
+    }
 
-        // Shape-type branching (AddParticle @0x115644):
-        //   0=Point, 1=Vortex (step back half-vel), 2=Direction (face velocity)
-        switch (tmpl->m_Shape) {
-            case 1:
-                p.m_Pos.x -= p.m_Vel.x;
-                p.m_Pos.y -= p.m_Vel.y;
-                p.m_Pos.z -= p.m_Vel.z;
-                break;
-            case 2:
-                p.m_Rotation += atan2f(p.m_Vel.y, p.m_Vel.x);
-                break;
-            default:
-                break;
+    // --- size curve: three libc rand() draws through the 12-bit integer LERP ---
+    {
+        const int rs = LERP(tmpl->m_SizeStartMin, tmpl->m_SizeStartMax, rand() & 0xFFF);
+        const float sizeStart = (float)rs;
+        const int rm = LERP(tmpl->m_SizeMidMin, tmpl->m_SizeMidMax, rand() & 0xFFF);
+        const float sizeMid = (float)rm;
+        const int re = LERP(tmpl->m_SizeEndMin, tmpl->m_SizeEndMax, rand() & 0xFFF);
+        const float scale = m_SizeScale;
+
+        p.m_SizeStart    = (uint16_t)VcvtU32(sizeStart * scale);
+        const float sizeEnd = (float)re;
+        p.m_SizeMidDelta = (int16_t)(int)((sizeMid - sizeStart) * scale);
+        p.m_SizeEndDelta = (int16_t)(int)((sizeEnd - sizeMid) * scale);
+    }
+
+    // --- colour curve: one pass per BYTE LANE, three draws each ---
+    // The binary loads each 4-byte template colour as a word and masks/shifts lane
+    // `sh` = 0, 8, 16, 24 out of it; indexing the byte array is the same value. No
+    // swizzle happens here, so the particle inherits the template's byte order.
+    for (int lane = 0; lane < 4; ++lane) {
+        const int c94 = tmpl->m_ColourStartMax[lane];
+        const int c98 = tmpl->m_ColourStartMin[lane];
+        const float tStart = T_971();
+        const int startVal = (int)((float)c94 + (float)(c98 - c94) * tStart);
+
+        const int c9c = tmpl->m_ColourMidMin[lane];
+        const int ca0 = tmpl->m_ColourMidMax[lane];
+        const float tMid = T_971();
+
+        const int ca4 = tmpl->m_ColourEndMin[lane];
+        const int ca8 = tmpl->m_ColourEndMax[lane];
+        const float tEnd = T_971();
+
+        p.m_ColourStart[lane] = (uint8_t)startVal;
+
+        const int midVal = (int)(uint16_t)(int)((float)c9c + (float)(ca0 - c9c) * tMid);
+        p.m_ColourMidDelta[lane] = (int16_t)(midVal - startVal);
+        const int endVal = (int)((float)ca4 + (float)(ca8 - ca4) * tEnd);
+        p.m_ColourEndDelta[lane] = (int16_t)(endVal - midVal);
+    }
+
+    // Shape 2 ("Direction"): face the velocity. Note the argument order -- the binary
+    // passes (vel.x, vel.y) into Atan2Idx(y, x), so x and y really are swapped here.
+    if (tmpl->m_Shape == 2) {
+        p.m_RotAngleIdx = (uint16_t)(Math::Atan2Idx(p.m_Vel.x, p.m_Vel.y) + (int)p.m_RotAngleIdx);
+    }
+
+    // --- tail: 6 draws feeding 11 template lerps ---
+    {
+        const float t = T_971();
+        p.m_SpinPair[0] = floatLERP((float)tmpl->m_SpinStartMin, (float)tmpl->m_SpinStartMax, t);
+        p.m_SpinPair[1] = floatLERP((float)tmpl->m_SpinEndMin,   (float)tmpl->m_SpinEndMax,   t);
+    }
+    {
+        const float t = T_971();
+        p.m_CycleA[0] = floatLERP((float)tmpl->m_CycleXStartMin, (float)tmpl->m_CycleXStartMax, t);
+        p.m_CycleA[1] = floatLERP((float)tmpl->m_CycleXEndMin,   (float)tmpl->m_CycleXEndMax,   t);
+        if (p.m_CycleA[1] == 0.0f && p.m_CycleA[0] == 0.0f) {
+            p.m_ScaleXIdx = 0;
+        } else {
+            // Rand32 only range-reduces for max in [2, 0xFFFFFFFE]; Rand32(0) hands
+            // back the raw state high word, i.e. a full-range 16-bit start phase.
+            p.m_ScaleXIdx = (uint16_t)Math::g_Random.Rand32(0);
         }
+    }
+    {
+        const float t = T_971();
+        p.m_CycleB[0] = floatLERP((float)tmpl->m_CycleYStartMin, (float)tmpl->m_CycleYStartMax, t);
+        p.m_CycleB[1] = floatLERP((float)tmpl->m_CycleYEndMin,   (float)tmpl->m_CycleYEndMax,   t);
+        if (p.m_CycleB[1] == 0.0f && p.m_CycleB[0] == 0.0f) {
+            p.m_ScaleYIdx = 0;
+        } else {
+            p.m_ScaleYIdx = (uint16_t)Math::g_Random.Rand32(0);
+        }
+    }
+    {
+        const float t = T_971();
+        const float rate = floatLERP(tmpl->m_WobbleRateStartMin, tmpl->m_WobbleRateStartMax, t);
+        p.m_WobbleRate = rate;
+        p.m_WobbleAccel =
+            (floatLERP(tmpl->m_WobbleRateEndMin, tmpl->m_WobbleRateEndMax, t) - rate) / life;
+    }
+    {
+        const float t = T_971();
+        p.m_WobbleAmp[0] = floatLERP(tmpl->m_WobbleAmpStartMin, tmpl->m_WobbleAmpStartMax, t);
+        p.m_WobbleAmp[1] = floatLERP(tmpl->m_WobbleAmpEndMin,   tmpl->m_WobbleAmpEndMax,   t);
+    }
+    {
+        const float t = T_971();
+        p.m_WobblePhaseBase = floatLERP(tmpl->m_WobblePhaseMin, tmpl->m_WobblePhaseMax, t);
+    }
+
+    // --- initial quad basis ---
+    if (p.m_RotAngleIdx == 0) {
+        // NOT an optimisation of the general case: the binary hardcodes these two.
+        p.m_Basis2Sin = -1.0f;
+        p.m_Basis2Cos = 1.0f;
+        p.m_BasisX = _Vector2<float>(1.0f, 0.0f);
+        p.m_BasisY = _Vector2<float>(0.0f, 1.0f);
     } else {
-        p.m_Age  = 0.0f;
-        p.m_Vel.x = emitter.m_Vel.x + rvx;
-        p.m_Vel.y = emitter.m_Vel.y + rvy;
-        p.m_Vel.z = emitter.m_Vel.z + rvz;
-        p.m_Life = 1.0f;
-        p.m_SizeStart = p.m_SizeMid = p.m_SizeEnd = 8.0f;
+        const uint16_t a = p.m_RotAngleIdx;
+        p.m_BasisX = _Vector2<float>(Math::SinIdx((uint16_t)(a + 0x4000)),
+                                     Math::CosIdx((uint16_t)(a + 0x4000)));
+        p.m_BasisY = _Vector2<float>(Math::SinIdx(a), Math::CosIdx(a));
+        // Replicated literally: the modulus is 0xFFF0, not 0x10000, which leaves a
+        // 16-index (~0.09 degree) slip in the original for small `a`. Do not "fix".
+        const uint16_t rem = (uint16_t)(((int)a + 0xDFF2) % 0xFFF0);
+        p.m_Basis2Sin = Math::SinIdx(rem) * 1.41f;
+        p.m_Basis2Cos = Math::CosIdx(rem) * 1.41f;
     }
-
-    // Push onto template live-list: head is at particle_template+0x04.
-    // ASM-verified: v1.6.1 AddParticle @0x0013c554 — r6=tmpl, *(r6+0x4)=newHead, slot->m_NextLink=oldHead.
-    p.m_NextLink = tmpl ? tmpl->m_LiveHead : 0;
-    if (tmpl) {
-        tmpl->m_LiveHead = idx;
-    }
-
-    return idx;
 }
 
 // v1.6.1 PSPEmitterTemplate::Ends @0x00114884
@@ -339,9 +470,7 @@ bool PSPParticleManager::EmitterEnds(const uint8_t* eBlob) {
 }
 
 // UpdateEmitter — spawn pass + advance timer. Mirrors PSPParticleEmitter::Update @0x115d9c.
-static void UpdateEmitter(PSPParticleEmitter& e, float dt,
-                          PSPParticle* buf, uint16_t& freeHead,
-                          uint8_t* pTemplatesBase) {
+static void UpdateEmitter(PSPParticleEmitter& e, float dt, PSPParticleManager& mgr) {
     const uint8_t* eBlob = e.m_pTemplate;
     if (!eBlob) return;
 
@@ -351,14 +480,8 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt,
     const float newTime = currentTime + dtScaled * e.m_RateScale;
 
     for (int si = 0; si < (int)hdr->m_NumSets; ++si) {
-        const PSPParticleSet* set = PSPParticleManager::EmitterSet(
+        PSPParticleSet* set = PSPParticleManager::EmitterSet(
             const_cast<uint8_t*>(eBlob), si);
-
-        PSPParticleTemplate* tmpl = 0;
-        if (set->m_TemplateOffset != 0xFFFFFFFFu && pTemplatesBase) {
-            tmpl = reinterpret_cast<PSPParticleTemplate*>(
-                pTemplatesBase + set->m_TemplateOffset);
-        }
 
         const float startT = set->m_TimeStart;
         const float stopT  = set->m_TimeStop;
@@ -369,13 +492,13 @@ static void UpdateEmitter(PSPParticleEmitter& e, float dt,
                 int desired = (int)(rate * ((currentTime + dtScaled * e.m_RateScale) - startT))
                             - (int)(rate * (currentTime - startT));
                 for (int i = 0; i < desired; ++i)
-                    AddParticle(buf, freeHead, tmpl, e, *set);
+                    e.AddParticle(set, mgr);
             }
         }
 
         if (currentTime <= startT && startT < newTime) {
             for (int i = 0; i < (int)set->m_InitCount; ++i)
-                AddParticle(buf, freeHead, tmpl, e, *set);
+                e.AddParticle(set, mgr);
             if (e.m_RateScale == 0.0f) e.m_Timer += dt;
         }
     }
@@ -398,7 +521,7 @@ void PSPParticleManager::Update(float dt, bool paused) {
 
         if (node->m_bStarted != 0 && node->m_RateScale != 0.0f &&
             (!paused || node->m_bUpdateWhenPaused)) {
-            UpdateEmitter(*node, dt, m_pParticles, m_FreeHead, m_pTemplates);
+            UpdateEmitter(*node, dt, *this);
         }
 
         bool keep = true;
@@ -423,72 +546,33 @@ void PSPParticleManager::Update(float dt, bool paused) {
 }
 
 // -----------------------------------------------------------------------------
-// Draw helpers
+// Draw
 // -----------------------------------------------------------------------------
-static inline uint32_t PackBGRA(const uint8_t c[4]) {
-    return (uint32_t)c[0]
-         | ((uint32_t)c[1] << 8)
-         | ((uint32_t)c[2] << 16)
-         | ((uint32_t)c[3] << 24);
-}
 
-static inline void LerpColour(const uint8_t a[4], const uint8_t b[4],
-                              float t, uint8_t out[4]) {
-    for (int i = 0; i < 4; ++i) {
-        int v = (int)(a[i] + (b[i] - a[i]) * t);
-        if (v < 0) v = 0; if (v > 255) v = 255;
-        out[i] = (uint8_t)v;
-    }
-}
-
-static void FlushParticleVerts(std::vector<QUADCUSTOMVERTEX>& verts,
-                               const PSPParticleTemplate* tmpl,
-                               Mortar::SmartPtr<Mortar::Texture>* texRefs,
-                               int numTexRefs) {
-    if (!verts.empty() && tmpl) {
-        Mortar::Texture* tex = 0;
-        uint32_t tidx = tmpl->m_TextureIdx;
-        if (tidx != 0xFFFFFFFFu && texRefs && (int)tidx < numTexRefs) {
-            tex = texRefs[tidx].Get();
-        }
-        if (tex) {
-            // DIFFERS: original = port varied glBlendFunc per-template from the
-            // asset's <SourceBlend>/<DestinationBlend> tags (tmpl->m_BlendMode);
-            // binary v1.6.1 ignores those tags. glBlendFunc @0x0010c088 is xref'd
-            // exactly twice, both at init (DisplayManagerBada::Init @0x00256c3c,
-            // GlClientStates::Reset @0x00258050), both = (GL_SRC_ALPHA,
-            // GL_ONE_MINUS_SRC_ALPHA); Mesh::DrawTris only toggles GL_BLEND enable,
-            // never the func, and no glBlendEquation symbol exists at all. So every
-            // particle template -- including the additive "rimhit" contact-flash
-            // template -- draws straight-alpha in the real binary. Per-template
-            // additive blending here washed the flash out under the bright splash.
-            // See tmp/asm-verify/blade-flash-re.md.
-            if (Renderer* r = Renderer::GetInstance()) {
-                r->SetBlendEnabled(true);
-                r->BindTexture2D(tex->GetTexId());
-                r->DrawTriList(verts.data(), (int)verts.size(), false);
-            }
-        }
-    }
-    verts.clear();
+Mortar::Texture* PSPParticleManager::GetTemplateTexture(const PSPParticleTemplate* tmpl) const {
+    const uint32_t tidx = tmpl->m_TextureIdx;
+    if (tidx == 0xFFFFFFFFu || !m_pTextureRefs || (int)tidx >= m_NumTextureRefs) return 0;
+    return m_pTextureRefs[tidx].Get();
 }
 
 // v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
-// Outer loop: per particle template (stride 0xB8, count m_NumParticleTemplates).
-// NOTE: spec says "Draw iterates m_pTemplates with m_NumEmitterTemplates as the
-// count per RE" — but this seems like a RE annotation artefact (the outer loop
-// iterates particle templates, not emitter templates). We iterate m_NumParticleTemplates.
-// TODO: v1.6.1 PSPParticleManager::Draw @0x0013eccc — confirm outer loop count
-//   (m_NumParticleTemplates vs m_NumEmitterTemplates) against binary disassembly.
-// ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: callers pass
-// paused = (game_work.bM_Mode != 0). A per-particle gate
-// `if (!paused || p->m_pOwnerEmitter->m_bUpdateWhenPaused)` wraps the rotation,
-// velocity, position and lifetime integration; vertex emission stays outside it,
-// so frozen particles keep rendering at their last state. Every ScreenEffect
-// emitter is created via ScreenEffect::Activate @0x00148f08 -> AddEmitter(hash,
-// NULL, false), i.e. m_bUpdateWhenPaused = 0, so the frenzy overlay freezes.
+//
+// Structure: reset the world matrix stack, upload modelview, zero
+// m_DrawnParticleCount, then for each PARTICLE template (count is mgr+0x24 =
+// m_NumParticleTemplates): skip it whole if its live list is empty or its layer
+// (template+0xB4) does not match, otherwise walk the live list taking a 0xA4
+// stack copy of each particle, reap the expired ones, emit 6 vertices per
+// survivor into one function-static buffer, integrate, and finish with a single
+// Mesh::DrawTriList for the template.
+//
+// Callers pass paused = (game_work.bM_Mode != 0). Every ScreenEffect emitter is
+// created via ScreenEffect::Activate @0x00148f08 -> AddEmitter(hash, NULL, false),
+// i.e. m_bUpdateWhenPaused = 0, so the frenzy overlay freezes while paused.
 void PSPParticleManager::Draw(float dt, bool paused, int layer) {
-    if (!m_pParticles || !m_pTemplates) return;
+    // The binary's vertex staging buffer is a function-static array with NO bounds
+    // check. Sized here for the full 1024-slot particle buffer at 6 verts each plus
+    // the deliberate one-vertex hole every template leaves behind.
+    static QUADCUSTOMVERTEX vt[1024 * 6 + 256];
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().Reset();
@@ -496,152 +580,234 @@ void PSPParticleManager::Draw(float dt, bool paused, int layer) {
 
     m_DrawnParticleCount = 0;
 
-    // TODO: v1.6.1 PSPParticleManager::Draw @0x0013eccc -- pull free particles toward
-    //   m_GlobalOrigin within m_GlobalPullRadius (vortex); read-side not yet ported.
-    //   Write-side (m_GlobalPullRadius set by SuperFruitControl::UpdateExplosion) is wired.
+    int tmplOff    = 0;   // byte cursor into m_pTemplates (stride 0xB8)
+    int vcount     = 0;   // write cursor into vt
+    int batchStart = 0;   // first vt slot belonging to the current template
 
-    static std::vector<QUADCUSTOMVERTEX> s_verts;
-    const PSPParticleTemplate* curTmpl = 0;
+    for (int ti = 0; ti < m_NumParticleTemplates; ++ti, tmplOff += 0xB8) {
+        PSPParticleTemplate* tmpl =
+            reinterpret_cast<PSPParticleTemplate*>(m_pTemplates + tmplOff);
 
-    // Fused integrate+render over per-template live-lists.
-    // Live-list head at particle_template+0x04 (m_LiveHead), chain via particle+0x40 (m_NextLink).
-    for (int ti = 0; ti < m_NumParticleTemplates; ++ti) {
-        PSPParticleTemplate* tmpl = GetParticleTemplate(ti);
-        if (!tmpl || tmpl->m_LiveHead == 0) continue;
+        uint32_t cur = tmpl->m_LiveHead;
+        int batchEnd = batchStart;
 
-        // Walk the live-list for this template.
-        uint16_t* prevLink = &tmpl->m_LiveHead;
-        while (*prevLink != 0) {
-            uint16_t idx = *prevLink;
-            PSPParticle& p = m_pParticles[idx];
+        // ONE layer test for the whole template, not one per particle.
+        if (cur != 0 && tmpl->m_UseDepth == layer) {
+            uint32_t prev = 0;
+            do {
+                PSPParticle* p = &m_pParticles[cur];
+                // Full 0xA4 copy: every curve below is evaluated against the
+                // pre-integration state, so the copy is load-bearing, not a cache.
+                const PSPParticle c = *p;
 
-            // Layer filter.
-            if (tmpl->m_UseDepth != layer) {
-                prevLink = &p.m_NextLink;
-                continue;
+                if (!(c.m_TimeRemaining > c.m_DeathThreshold)) {
+                    // Expired: unlink by index and push the slot onto the free list.
+                    // `prev` deliberately does NOT advance.
+                    if (prev == 0) tmpl->m_LiveHead = p->m_NextLink;
+                    else           m_pParticles[prev].m_NextLink = p->m_NextLink;
+                    const uint16_t oldFree = m_FreeHead;
+                    m_FreeHead = (uint16_t)cur;
+                    m_pParticles[cur].m_NextLink = oldFree;
+                    cur = c.m_NextLink;
+                    continue;
+                }
+
+                // Normalised age off the TEMPLATE's life, not a per-particle one.
+                const float tl = tmpl->m_Life;
+                const float t  = (tl - c.m_TimeRemaining) / tl;
+
+                // Colour + size: two straight segments split at t = 0.5, each half
+                // remapped to [0,1]. Saturation is VCVT.U32.F32 then `& 0xFF`, so
+                // negatives clamp to 0 but anything over 255 WRAPS -- no hi clamp.
+                uint32_t ch0, ch1, ch2, ch3;
+                float size;
+                if (t < 0.5f) {
+                    const float u = t + t;
+                    ch0 = VcvtU32((float)c.m_ColourStart[0] + (float)c.m_ColourMidDelta[0] * u);
+                    ch1 = VcvtU32((float)c.m_ColourStart[1] + (float)c.m_ColourMidDelta[1] * u);
+                    ch2 = VcvtU32((float)c.m_ColourStart[2] + (float)c.m_ColourMidDelta[2] * u);
+                    ch3 = VcvtU32((float)c.m_ColourStart[3] + (float)c.m_ColourMidDelta[3] * u);
+                    size = (float)c.m_SizeStart + (float)c.m_SizeMidDelta * u;
+                } else {
+                    const float u = (t - 0.5f) + (t - 0.5f);
+                    ch0 = VcvtU32((float)(c.m_ColourMidDelta[0] + c.m_ColourStart[0])
+                                  + (float)c.m_ColourEndDelta[0] * u);
+                    ch1 = VcvtU32((float)(c.m_ColourMidDelta[1] + c.m_ColourStart[1])
+                                  + (float)c.m_ColourEndDelta[1] * u);
+                    ch2 = VcvtU32((float)(c.m_ColourMidDelta[2] + c.m_ColourStart[2])
+                                  + (float)c.m_ColourEndDelta[2] * u);
+                    ch3 = VcvtU32((float)(c.m_ColourMidDelta[3] + c.m_ColourStart[3])
+                                  + (float)c.m_ColourEndDelta[3] * u);
+                    size = (float)c.m_SizeStart + (float)c.m_SizeMidDelta
+                         + (float)c.m_SizeEndDelta * u;
+                }
+                ch0 &= 0xFF; ch1 &= 0xFF; ch2 &= 0xFF; ch3 &= 0xFF;
+
+                float sizeX = size * tmpl->m_AspectRatio;
+
+                const bool advance =
+                    (!paused) || (c.m_pOwner != 0 && c.m_pOwner->m_bUpdateWhenPaused != 0);
+
+                if (advance) {
+                    // Rotation + wobble. The wobble phase is QUADRATIC in age.
+                    const float spin = floatLERP(c.m_SpinPair[0], c.m_SpinPair[1], t);
+                    const float age  = tl - c.m_TimeRemaining;
+                    const float phase =
+                        c.m_WobblePhaseBase + (c.m_WobbleRate + c.m_WobbleAccel * 0.5f * age) * age;
+
+                    uint32_t wobble = 0;
+                    if (phase != 0.0f) {
+                        const float s = Math::SinIdx((uint16_t)((int)(phase * 65536.0f) & 0xFFFF));
+                        const float amp = floatLERP(c.m_WobbleAmp[0], c.m_WobbleAmp[1], t);
+                        wobble = (uint32_t)(int)(s * amp * 182.0f) & 0xFFFF;
+                    }
+
+                    // The basis is only rebuilt when the quad actually turns.
+                    if (wobble != 0 || spin != 0.0f) {
+                        const uint32_t rot =
+                            (uint32_t)(int)(spin * 360.0f * dt * 182.0f) + p->m_RotAngleIdx;
+                        const uint32_t a16 = rot & 0xFFFF;
+                        p->m_RotAngleIdx = (uint16_t)rot;
+                        if (a16 == 0) {
+                            p->m_Basis2Sin = -1.0f;
+                            p->m_Basis2Cos = 1.0f;
+                            p->m_BasisX = _Vector2<float>(1.0f, 0.0f);
+                            p->m_BasisY = _Vector2<float>(0.0f, 1.0f);
+                        } else {
+                            const uint16_t a = (uint16_t)((wobble + a16) & 0xFFFF);
+                            p->m_BasisX = _Vector2<float>(Math::SinIdx((uint16_t)(a + 0x4000)),
+                                                          Math::CosIdx((uint16_t)(a + 0x4000)));
+                            p->m_BasisY = _Vector2<float>(Math::SinIdx(a), Math::CosIdx(a));
+                            // Replicated literally: the modulus is 0xFFF0, not 0x10000.
+                            const uint16_t rem = (uint16_t)(((int)a + 0xDFF2) % 0xFFF0);
+                            p->m_Basis2Sin = Math::SinIdx(rem) * 1.41f;
+                            p->m_Basis2Cos = Math::CosIdx(rem) * 1.41f;
+                        }
+                    }
+
+                    // Scale cycles: 16-bit phase indices advanced by rate*182*360*dt,
+                    // then CosIdx of the phase multiplies the quad extent.
+                    const float rateX = floatLERP(c.m_CycleA[0], c.m_CycleA[1], t);
+                    if (rateX != 0.0f) {
+                        p->m_ScaleXIdx = (uint16_t)VcvtU32(
+                            (float)p->m_ScaleXIdx + rateX * 182.0f * 360.0f * dt);
+                    }
+                    if (p->m_ScaleXIdx != 0) sizeX = sizeX * Math::CosIdx(p->m_ScaleXIdx);
+
+                    const float rateY = floatLERP(c.m_CycleB[0], c.m_CycleB[1], t);
+                    if (rateY != 0.0f) {
+                        p->m_ScaleYIdx = (uint16_t)VcvtU32(
+                            (float)p->m_ScaleYIdx + rateY * 182.0f * 360.0f * dt);
+                    }
+                    if (p->m_ScaleYIdx != 0) size = size * Math::CosIdx(p->m_ScaleYIdx);
+                }
+
+                // Channel mapping: lane 2 -> red, lane 1 -> green, lane 0 -> blue,
+                // lane 3 -> alpha, i.e. the baked bytes are already [B,G,R,A].
+                const Colour col((uint8_t)ch2, (uint8_t)ch1, (uint8_t)ch0, (uint8_t)ch3);
+
+                const _Vector2<float> ax = p->m_BasisX * sizeX;   // quad width axis
+                const _Vector2<float> ay = p->m_BasisY * size;    // quad height axis
+
+                float px = c.m_Pos.x;
+                float py = c.m_Pos.y;
+                float pz = c.m_Pos.z;
+                // Global-space templates are stored relative to their emitter.
+                if (tmpl->m_CoordSystem == 1) {
+                    px += c.m_pOwner->m_Pos.x;
+                    py += c.m_pOwner->m_Pos.y;
+                    pz += c.m_pOwner->m_Pos.z;
+                }
+
+                // Grid lock. The +480 / +320 bias puts the snap grid in screen-corner
+                // space rather than around the centred origin.
+                const float gx = tmpl->m_GridLockStart;
+                if (gx > 0.0f) px = (float)(int)((px + 480.0f) / gx + 0.5f) * gx - 480.0f;
+                const float gy = tmpl->m_GridLockEnd;
+                if (gy > 0.0f) py = (float)(int)((py + 320.0f) / gy + 0.5f) * gy - 320.0f;
+
+                // Six verts, two triangles: V3 duplicates V2 and V4 duplicates V1.
+                // Normals at +0x0C..+0x17 are never written (the static buffer keeps
+                // whatever it was zero-initialised with), matching the binary.
+                QUADCUSTOMVERTEX* v = &vt[vcount];
+                v[0].x = px + ax.x + ay.x;      v[0].y = py + ax.y + ay.y;
+                v[0].u = 1.0f;                  v[0].v = 0.0f;
+                v[1].x = px + (ay.x - ax.x);    v[1].y = py + (ay.y - ax.y);
+                v[1].u = 0.0f;                  v[1].v = 0.0f;
+                v[2].x = px + (ax.x - ay.x);    v[2].y = py + (ax.y - ay.y);
+                v[2].u = 1.0f;                  v[2].v = 1.0f;
+                v[3] = v[2];
+                v[4] = v[1];
+                v[5].x = px + (-ax.x - ay.x);   v[5].y = py + (-ax.y - ay.y);
+                v[5].u = 0.0f;                  v[5].v = 1.0f;
+                for (int i = 0; i < 6; ++i) {
+                    v[i].z = pz;
+                    v[i].colour = col.PlatformColour();
+                }
+                vcount += 6;
+
+                // Integration happens AFTER the vertices are emitted, so the frame
+                // shows the pre-integration state.
+                if (advance) {
+                    const float ts = (c.m_pOwner == 0) ? 1.0f : c.m_pOwner->m_TimeScale;
+                    const float dts = dt * ts;
+                    p->m_TimeRemaining = c.m_TimeRemaining - dts;   // full dts, unhalved
+
+                    // Big steps integrate at half rate. (The binary runs the velocity
+                    // and position pass twice when it halves; both passes compute the
+                    // same values, so the first one's stores are dead.)
+                    const float h = (dts > 0.025f) ? dts * 0.5f : dts;
+
+                    p->m_Vel.x = (c.m_Vel.x + h * c.m_Accel.x)
+                               * floatLERP(tmpl->m_VelocityMin[0], tmpl->m_VelocityMax[0], t);
+                    p->m_Vel.y = (c.m_Vel.y + h * c.m_Accel.y)
+                               * floatLERP(tmpl->m_VelocityMin[1], tmpl->m_VelocityMax[1], t);
+                    p->m_Vel.z = (c.m_Vel.z + h * c.m_Accel.z)
+                               * floatLERP(tmpl->m_VelocityMin[2], tmpl->m_VelocityMax[2], t);
+
+                    // Super-fruit explosion shockwave: pushes AWAY from m_GlobalOrigin.
+                    if (m_GlobalPullRadius > 0.0f && tmpl->m_CoordSystem != 1) {
+                        if (c.m_Pos != m_GlobalOrigin && c.m_NoAttract == 0) {
+                            _Vector3<float> dir = c.m_Pos - m_GlobalOrigin;
+                            const float len = dir.Normalise();
+                            if (len < m_GlobalPullRadius) {
+                                p->m_Vel += dir * (m_GlobalPullRadius - len) * h * 10.0f
+                                          * m_GlobalPullStrength;
+                            }
+                        }
+                    }
+
+                    p->m_Pos.x = c.m_Pos.x + h * p->m_Vel.x;
+                    p->m_Pos.y = c.m_Pos.y + h * p->m_Vel.y;
+                    p->m_Pos.z = c.m_Pos.z + h * p->m_Vel.z;
+                }
+
+                prev = cur;
+                cur = c.m_NextLink;
+            } while (cur != 0);
+
+            const int verts = vcount - batchStart;
+            // Replicated literally: the binary burns one vertex slot per drawn
+            // template, leaving a permanent hole between batches.
+            ++vcount;
+            batchEnd = vcount;
+
+            if (verts != 0) {
+                m_DrawnParticleCount += (vcount - batchStart) / 6;
+                // Port specific: the binary keeps a SmartPtr<Texture> inline at
+                // template+0xAC and calls its vtable slots +0x0C / +0x10 without a
+                // null check; the port can legitimately have no texture when an asset
+                // fails to load, so the bind/unbind pair is guarded while the draw
+                // itself still happens.
+                Mortar::Texture* tex = GetTemplateTexture(tmpl);
+                if (tex) tex->Set();
+                Mortar::Mesh::DrawTriList(vt + batchStart, verts, false, 0, 0);
+                if (tex) tex->UnSet(true);
             }
-
-            // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc (local_174):
-            // per-particle dt is scaled by the owning emitter's m_TimeScale.
-            const float pdt = p.m_pOwnerEmitter
-                ? dt * p.m_pOwnerEmitter->m_TimeScale
-                : dt;
-            const bool integrate = !paused
-                || (p.m_pOwnerEmitter && p.m_pOwnerEmitter->m_bUpdateWhenPaused);
-
-            // Integrate / age.
-            if (integrate) p.m_Age += pdt;
-            if (p.m_Age >= p.m_Life) {
-                // Dead: splice out of live-list, return to free-list.
-                *prevLink = p.m_NextLink;
-                p.m_NextLink = m_FreeHead;
-                m_FreeHead = idx;
-                continue;
-            }
-
-            const float life = (p.m_Life > 0.0f) ? p.m_Life : 1.0f;
-            const float t = p.m_Age / life;
-
-            if (integrate) {
-                p.m_Vel += p.m_Gravity * pdt;
-
-                // Velocity damping from particle template (per-component lerp over life).
-                const float dampX = tmpl->m_VelocityMin[0]
-                    + (tmpl->m_VelocityMax[0] - tmpl->m_VelocityMin[0]) * t;
-                const float dampY = tmpl->m_VelocityMin[1]
-                    + (tmpl->m_VelocityMax[1] - tmpl->m_VelocityMin[1]) * t;
-                const float dampZ = tmpl->m_VelocityMin[2]
-                    + (tmpl->m_VelocityMax[2] - tmpl->m_VelocityMin[2]) * t;
-                p.m_Vel.x *= dampX;
-                p.m_Vel.y *= dampY;
-                p.m_Vel.z *= dampZ;
-
-                p.m_Pos += p.m_Vel * pdt;
-
-                const float spin = p.m_SpinStart + (p.m_SpinEnd - p.m_SpinStart) * t;
-                p.m_Rotation += spin * pdt;
-
-                p.m_RotCyclePhase += p.m_RotCycleRate * pdt * 6.2831853f;
-                p.m_CycleXPhase   += p.m_CycleXRate   * pdt * 6.2831853f;
-                p.m_CycleYPhase   += p.m_CycleYRate   * pdt * 6.2831853f;
-            }
-
-            // Batch flush on template change.
-            if (tmpl != curTmpl) {
-                FlushParticleVerts(s_verts, curTmpl, m_pTextureRefs, m_NumTextureRefs);
-                curTmpl = tmpl;
-            }
-
-            // Render.
-            uint8_t col[4];
-            float size;
-            if (t < 0.5f) {
-                float u = t * 2.0f;
-                LerpColour(tmpl->m_ColourStartMin, tmpl->m_ColourMidMin, u, col);
-                size = p.m_SizeStart + (p.m_SizeMid - p.m_SizeStart) * u;
-            } else {
-                float u = (t - 0.5f) * 2.0f;
-                LerpColour(tmpl->m_ColourMidMin, tmpl->m_ColourEndMin, u, col);
-                size = p.m_SizeMid + (p.m_SizeEnd - p.m_SizeMid) * u;
-            }
-            uint32_t packed = PackBGRA(col);
-
-            float aspect = tmpl->m_AspectRatio;
-            if (aspect <= 0.0f) aspect = 1.0f;
-            // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: the quad half-extent
-            // IS the interpolated size (X *= m_AspectRatio) -- NO 0.5 factor. Corners are
-            // center +/- basis*size, so the quad spans 2*size. The port's *0.5f made every
-            // particle 2x too small (most visible on the tiny pixel_blade particle).
-            float hx = size * aspect;
-            float hy = size;
-
-            if (p.m_CycleXRate != 0.0f) hx *= cosf(p.m_CycleXPhase);
-            if (p.m_CycleYRate != 0.0f) hy *= cosf(p.m_CycleYPhase);
-
-            float effectiveRot = p.m_Rotation;
-            if (p.m_RotCycleAmp != 0.0f)
-                effectiveRot += p.m_RotCycleAmp * sinf(p.m_RotCyclePhase);
-
-            const float ca = cosf(effectiveRot);
-            const float sa = sinf(effectiveRot);
-            const float dxX =  ca * hx, dxY = sa * hx;
-            const float dyX = -sa * hy, dyY = ca * hy;
-
-            float px = p.m_Pos.x;
-            float py = p.m_Pos.y;
-            const float pz = p.m_Pos.z;
-
-            // Grid-lock: snap pos to cell centres.
-            const float gx = tmpl->m_GridLockStart;
-            const float gy = tmpl->m_GridLockEnd;
-            if (gx > 0.0f) px = floorf(px / gx + 0.5f) * gx;
-            if (gy > 0.0f) py = floorf(py / gy + 0.5f) * gy;
-
-            struct C { float x, y, u, v; };
-            C corners[4];
-            corners[0].x = px - dxX - dyX; corners[0].y = py - dxY - dyY; corners[0].u = 0.0f; corners[0].v = 0.0f;
-            corners[1].x = px + dxX - dyX; corners[1].y = py + dxY - dyY; corners[1].u = 1.0f; corners[1].v = 0.0f;
-            corners[2].x = px + dxX + dyX; corners[2].y = py + dxY + dyY; corners[2].u = 1.0f; corners[2].v = 1.0f;
-            corners[3].x = px - dxX + dyX; corners[3].y = py - dxY + dyY; corners[3].u = 0.0f; corners[3].v = 1.0f;
-            const int tri[6] = { 0, 1, 2, 0, 2, 3 };
-            for (int i = 0; i < 6; ++i) {
-                const C& c = corners[tri[i]];
-                QUADCUSTOMVERTEX v;
-                v.x = c.x; v.y = c.y; v.z = pz;
-                v.nx = 0; v.ny = 0; v.nz = 1.0f;
-                v.colour = packed;
-                v.u = c.u; v.v = c.v;
-                s_verts.push_back(v);
-            }
-
-            ++m_DrawnParticleCount;
-            prevLink = &p.m_NextLink;
         }
+
+        batchStart = batchEnd;
     }
-    FlushParticleVerts(s_verts, curTmpl, m_pTextureRefs, m_NumTextureRefs);
-    // No blend-func restore needed: glBlendFunc is the init-time constant
-    // (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) everywhere and is never changed
-    // per draw (see the DIFFERS note in FlushParticleVerts).
 }
 
 // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c
@@ -823,7 +989,9 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             }
         }
 
-        // <spin>
+        // <spin startMin startMax endMin endMax> -> tmpl+0x50..0x56.
+        // Slot order proven by AddParticle @0x0013c554: it lerps (0x50,0x52) into the
+        // particle's spin-at-t=0 and (0x54,0x56) into spin-at-t=1 with one shared t.
         {
             TiXmlElement e = pt.FirstChildElement("spin");
             if (e) {
@@ -835,21 +1003,26 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             }
         }
 
-        // <cycleX>, <cycleY>
+        // <cycleX> -> tmpl+0x40..0x46, <cycleY> -> tmpl+0x48..0x4E; same four-slot
+        // (startMin, startMax, endMin, endMax) shape as <spin>.
         {
             TiXmlElement e = pt.FirstChildElement("cycleX");
             if (e) {
                 int v = 0;
-                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl->m_CycleXStart = (int16_t)v;
-                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl->m_CycleXEnd   = (int16_t)v;
+                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl->m_CycleXStartMin = (int16_t)v;
+                if (e.QueryIntAttribute("startMax", &v) == TIXML_SUCCESS) tmpl->m_CycleXStartMax = (int16_t)v;
+                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl->m_CycleXEndMin   = (int16_t)v;
+                if (e.QueryIntAttribute("endMax",   &v) == TIXML_SUCCESS) tmpl->m_CycleXEndMax   = (int16_t)v;
             }
         }
         {
             TiXmlElement e = pt.FirstChildElement("cycleY");
             if (e) {
                 int v = 0;
-                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl->m_CycleYStart = (int16_t)v;
-                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl->m_CycleYEnd   = (int16_t)v;
+                if (e.QueryIntAttribute("startMin", &v) == TIXML_SUCCESS) tmpl->m_CycleYStartMin = (int16_t)v;
+                if (e.QueryIntAttribute("startMax", &v) == TIXML_SUCCESS) tmpl->m_CycleYStartMax = (int16_t)v;
+                if (e.QueryIntAttribute("endMin",   &v) == TIXML_SUCCESS) tmpl->m_CycleYEndMin   = (int16_t)v;
+                if (e.QueryIntAttribute("endMax",   &v) == TIXML_SUCCESS) tmpl->m_CycleYEndMax   = (int16_t)v;
             }
         }
 
@@ -871,16 +1044,25 @@ bool PSPParticleManager::LoadFile(const char* texCategory, const char* xmlPath, 
             }
         }
 
-        // <rotateCycle>
+        // <rotateCycle start end speedStart speedEnd>
+        // TODO: v1.6.1 0x0013d09c (PSPParticleManager::LoadFile) — the attribute ->
+        //   slot mapping for this block is UNVERIFIED. AddParticle @0x0013c554 proves
+        //   the slots are five (min,max) pairs: amp-at-t0 (0x6C,0x70), amp-at-t1
+        //   (0x74,0x78), rate-at-t0 (0x7C,0x80), rate-at-t1 (0x84,0x88) and phase
+        //   (0x8C,0x90). The XML only supplies four scalars, so each presumably fills
+        //   BOTH halves of one pair, but which scalar goes to which pair has not been
+        //   read out of LoadFile. The assignments below are the pre-existing port
+        //   mapping, kept byte-for-byte so this change introduces no new guess --
+        //   they land in the amp/rate slots but almost certainly in the wrong order.
         {
             TiXmlElement e = pt.FirstChildElement("rotateCycle");
             if (e) {
                 float fv = 0.0f;
-                if (e.QueryFloatAttribute("speedStart", &fv) == TIXML_SUCCESS) tmpl->m_FrictionSpeedStart = fv;
-                if (e.QueryFloatAttribute("speedEnd",   &fv) == TIXML_SUCCESS) tmpl->m_FrictionSpeedEnd   = fv;
-                if (e.QueryFloatAttribute("start",      &fv) == TIXML_SUCCESS) tmpl->m_FrictionOffsetMin  = fv;
-                if (e.QueryFloatAttribute("end",        &fv) == TIXML_SUCCESS) tmpl->m_FrictionOffsetMax  = fv;
-                else                                                             tmpl->m_FrictionOffsetMax  = tmpl->m_FrictionOffsetMin;
+                if (e.QueryFloatAttribute("speedStart", &fv) == TIXML_SUCCESS) tmpl->m_WobbleAmpStartMin = fv;
+                if (e.QueryFloatAttribute("speedEnd",   &fv) == TIXML_SUCCESS) tmpl->m_WobbleAmpEndMax   = fv;
+                if (e.QueryFloatAttribute("start",      &fv) == TIXML_SUCCESS) tmpl->m_WobbleRateEndMin  = fv;
+                if (e.QueryFloatAttribute("end",        &fv) == TIXML_SUCCESS) tmpl->m_WobbleRateEndMax  = fv;
+                else                                                          tmpl->m_WobbleRateEndMax  = tmpl->m_WobbleRateEndMin;
             }
         }
 

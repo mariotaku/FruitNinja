@@ -128,11 +128,11 @@ void GameInitialise(void* window, const char* config) {
 
     LOG_INFO("GAMEINIT", "GameInitialise: booting engine");
 
-    // _GLOBAL__I_EngineMathBada.cpp @ 0x001952bc: Math::Random ctor calls
-    // time(NULL)-equivalent seed before OspMain. Port seeds here (first call
-    // in GameInitialise) to ensure srand runs before any rand() consumer
-    // (WaveManager, Fruit::Init, MenuButton random angles etc.).
-    srand((unsigned int)time(nullptr));
+    // No srand here on purpose: the binary imports no srand at all. Its only libc
+    // rand() consumers -- the three size draws in PSPParticleEmitter::AddParticle
+    // @0x0013c554 -- run off glibc's unseeded default sequence, and Math::g_random
+    // is a self-contained LCG that never touches libc. Seeding would desync exactly
+    // those draws. v1.6.1 GameInitialise @0x0011d22c.
 
     // Step 1: Mortar::SystemManager::Init() — 0x0018b024: m_reserved50=0, m_bRunning=1, clock base (skipped)
     SystemManager::GetInstance().Init();

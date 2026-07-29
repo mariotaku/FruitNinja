@@ -171,7 +171,7 @@ void NotificationControl::Update(float dt) {
                 em->m_Pos = _Vector3<float>((rx / 524287.0f) * 20.0f - 10.0f - 100.0f + (float)(oldTick * 100),
                                             160.0f - ry - 25.0f, 0.0f);
                 em->m_bUpdateWhenPaused = 1;   // +0x4C
-                em->m_SpinScale = 1.0f;        // +0x28
+                em->m_SizeScale = 1.0f;        // +0x28
             }
             // Deliberate RNG burn @0x001a3f74, result discarded -- runs even when
             // AddEmitter returns null (binary beq @0x001a3ecc jumps straight here).

@@ -33,10 +33,10 @@
 //   +0x3A..+0x3F uint8 size bytes
 //   +0x40..+0x56 int16 cycle/spin fields
 //   +0x58 uint16 m_BlendMode; +0x5A uint16 pad
-//   +0x5C/+0x60 float angle min/max
+//   +0x5C/+0x60 int32 angle min/max
 //   +0x64/+0x68 float gridlock x/y
 //   +0x6C..+0x90 float rotateCycle fields (10 floats)
-//   +0x94..+0xA8 uint8 Colour[6][4] (RGBA byte order)
+//   +0x94..+0xA8 uint8 Colour[6][4] (BGRA byte order)
 //   +0xAC uint32 m_TextureIdx (blob: index into m_pTextureRefs; 0xFFFFFFFF=none)
 //   +0xB0 float m_AspectRatio
 //   +0xB4 int32 m_UseDepth
@@ -59,43 +59,57 @@ struct PSPParticleTemplate {
     uint8_t  m_SizeMidMax;         // +0x3D
     uint8_t  m_SizeEndMin;         // +0x3E
     uint8_t  m_SizeEndMax;         // +0x3F
-    // +0x40
-    int16_t  m_CycleXStart;        // +0x40
-    int16_t  m_CycleXEnd;          // +0x42
-    int16_t  m_CycleYStart;        // +0x44
-    int16_t  m_CycleYEnd;          // +0x46
-    int16_t  m_RotCycleStart;      // +0x48
-    int16_t  m_RotCycleEndMin;     // +0x4A
-    int16_t  m_RotCycleStart2;     // +0x4C
-    int16_t  m_RotCycleEndMax;     // +0x4E
-    int16_t  m_SpinStartMin;       // +0x50
-    int16_t  m_SpinEndMin;         // +0x52
-    int16_t  m_SpinStartMax;       // +0x54
+    // +0x40..+0x56: three (startMin, startMax, endMin, endMax) int16 quads. Slot order
+    // is pinned by v1.6.1 PSPParticleEmitter::AddParticle @0x0013c554, which lerps the
+    // two START slots and the two END slots with the SAME random t so a particle that
+    // draws "fast" is fast at both ends of its life.
+    int16_t  m_CycleXStartMin;     // +0x40  -> particle m_CycleA[0] (X scale cycle rate at t=0)
+    int16_t  m_CycleXStartMax;     // +0x42
+    int16_t  m_CycleXEndMin;       // +0x44  -> particle m_CycleA[1] (X scale cycle rate at t=1)
+    int16_t  m_CycleXEndMax;       // +0x46
+    int16_t  m_CycleYStartMin;     // +0x48  -> particle m_CycleB[0]
+    int16_t  m_CycleYStartMax;     // +0x4A
+    int16_t  m_CycleYEndMin;       // +0x4C  -> particle m_CycleB[1]
+    int16_t  m_CycleYEndMax;       // +0x4E
+    int16_t  m_SpinStartMin;       // +0x50  -> particle m_SpinPair[0]
+    int16_t  m_SpinStartMax;       // +0x52
+    int16_t  m_SpinEndMin;         // +0x54  -> particle m_SpinPair[1]
     int16_t  m_SpinEndMax;         // +0x56
-    uint16_t m_BlendMode;          // +0x58 -- parsed from XML, unused by Draw: see
-                                    // DIFFERS note in PSPParticleManager.cpp
-                                    // FlushParticleVerts (binary sets glBlendFunc
-                                    // once at init, never per-template).
+    // +0x58: parsed from XML but never consumed. The binary sets glBlendFunc exactly
+    // twice, both at init (DisplayManagerBada::Init @0x00256c3c, GlClientStates::Reset
+    // @0x00258050), both to (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA), and Mesh::DrawTris
+    // only toggles the GL_BLEND enable -- so every particle template, including the
+    // additive-looking "rimhit" flash, actually draws straight-alpha.
+    uint16_t m_BlendMode;          // +0x58
     uint16_t _pad5a;               // +0x5A
-    // +0x5C
-    float    m_AngleMin;           // +0x5C
-    float    m_AngleMax;           // +0x60
+    // +0x5C  spawn-angle range. INT32 in the binary (AddParticle @0x0013c554 loads them
+    //         with vldr+vcvt.f32.s32, not as floats) -- the lerped result is scaled by
+    //         182.0 into the 16-bit angle-index domain.
+    int32_t  m_AngleMin;           // +0x5C
+    int32_t  m_AngleMax;           // +0x60
     float    m_GridLockStart;      // +0x64
     float    m_GridLockEnd;        // +0x68
-    // +0x6C  rotateCycle floats (10 x 4 = 40 bytes = 0x28)
-    float    m_FrictionSpeedStart;    // +0x6C
-    float    m_FrictionSpeedStartMin; // +0x70
-    float    m_FrictionSpeedStartMax; // +0x74
-    float    m_FrictionSpeedEnd;      // +0x78
-    float    m_FrictionSpeedEndMin;   // +0x7C
-    float    m_FrictionSpeedEndMax;   // +0x80
-    float    m_FrictionOffsetMin;     // +0x84
-    float    m_FrictionOffsetMax;     // +0x88
-    float    m_FrictionAngle;         // +0x8C
-    float    m_FrictionSpin;          // +0x90
-    // +0x94  Colour[6][4] = 24 bytes
-    uint8_t  m_ColourStartMax[4];  // +0x94  RGBA
-    uint8_t  m_ColourStartMin[4];  // +0x98
+    // +0x6C  <rotateCycle> block: five (min, max) float pairs, each lerped with one
+    // random t by v1.6.1 PSPParticleEmitter::AddParticle @0x0013c554. The names below
+    // record which particle field each pair feeds -- the offsets are proven, the XML
+    // attribute that fills each slot is NOT (see the TODO in LoadFile).
+    float    m_WobbleAmpStartMin;     // +0x6C  -> particle m_WobbleAmp[0]
+    float    m_WobbleAmpStartMax;     // +0x70
+    float    m_WobbleAmpEndMin;       // +0x74  -> particle m_WobbleAmp[1]
+    float    m_WobbleAmpEndMax;       // +0x78
+    float    m_WobbleRateStartMin;    // +0x7C  -> particle m_WobbleRate
+    float    m_WobbleRateStartMax;    // +0x80
+    float    m_WobbleRateEndMin;      // +0x84  -> particle m_WobbleAccel, via
+    float    m_WobbleRateEndMax;      // +0x88     (lerp(EndMin,EndMax) - rate) / life
+    float    m_WobblePhaseMin;        // +0x8C  -> particle m_WobblePhaseBase
+    float    m_WobblePhaseMax;        // +0x90
+    // +0x94  Colour[6][4] = 24 bytes, each in Colour's own [B,G,R,A] byte order.
+    // v1.6.1 PSPParticleEmitter::AddParticle @0x0013c554 bakes these into the particle
+    // with a straight byte-lane copy (lane i of +0x94 -> particle m_ColourStart[i]),
+    // so the byte order here IS the byte order Draw hands to Colour(r,g,b,a).
+    // Each pair is lerped low-offset -> high-offset with one random t per lane.
+    uint8_t  m_ColourStartMax[4];  // +0x94  BGRA -- lerp source A
+    uint8_t  m_ColourStartMin[4];  // +0x98  BGRA -- lerp source B
     uint8_t  m_ColourMidMin[4];    // +0x9C
     uint8_t  m_ColourMidMax[4];    // +0xA0
     uint8_t  m_ColourEndMin[4];    // +0xA4
@@ -117,12 +131,15 @@ static_assert(__builtin_offsetof(PSPParticleTemplate, m_GravityMin)    == 0x20, 
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_GravityMax)    == 0x2C, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_Shape)         == 0x38, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_CoordSystem)   == 0x39, "");
-static_assert(__builtin_offsetof(PSPParticleTemplate, m_CycleXStart)   == 0x40, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_CycleXStartMin) == 0x40, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_CycleYStartMin) == 0x48, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_SpinStartMin)  == 0x50, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_BlendMode)     == 0x58, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_AngleMin)      == 0x5C, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_GridLockStart) == 0x64, "");
-static_assert(__builtin_offsetof(PSPParticleTemplate, m_FrictionSpeedStart) == 0x6C, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_WobbleAmpStartMin) == 0x6C, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_WobbleRateStartMin) == 0x7C, "");
+static_assert(__builtin_offsetof(PSPParticleTemplate, m_WobblePhaseMin)    == 0x8C, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_ColourStartMax) == 0x94, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_TextureIdx)    == 0xAC, "");
 static_assert(__builtin_offsetof(PSPParticleTemplate, m_AspectRatio)   == 0xB0, "");
@@ -189,103 +206,129 @@ static_assert(__builtin_offsetof(PSPEmitterBlob, m_MaxLifetime) == 0x44, "");
 static_assert(__builtin_offsetof(PSPEmitterBlob, m_NumSets)     == 0x4B, "");
 
 struct PSPParticleEmitter;
+class PSPParticleManager;
 
 // ----------------------------------------------------------------------------
 // Per-particle runtime state. Binary: 0xA4 (164) bytes, non-polymorphic.
-// +0x40: uint16 m_NextLink — free-list / live-list chain (0=end).
-// +0xA0: PSPParticleEmitter* m_pOwnerEmitter — set by AddParticle, read by Draw.
+//
+// Everything the renderer needs is BAKED HERE AT SPAWN by
+// v1.6.1 PSPParticleEmitter::AddParticle @0x0013c554 -- Draw never re-reads the
+// template's colour/size/spin ranges, it only evaluates the baked curves. The
+// two consequences that matter for anyone touching this struct:
+//
+//   * Colour and size are stored as a start value plus two SIGNED deltas
+//     (start -> mid over t in [0,0.5], mid -> end over t in [0.5,1]).
+//     Draw's saturation is ARM VCVT.U32.F32 + `& 0xFF`: negatives clamp to 0,
+//     but there is NO upper clamp -- values above 255 WRAP. That is the
+//     binary's behaviour and is deliberate here.
+//   * m_TimeRemaining COUNTS DOWN and the particle is alive while
+//     m_TimeRemaining > m_DeathThreshold. m_DeathThreshold is not zero: at
+//     spawn it is `life - life * emitter->m_LifeBias`, so the visible duration
+//     is `templateLife * emitter->m_LifeBias`. Normalised age used by every
+//     curve is `t = (templateLife - m_TimeRemaining) / templateLife`, i.e. it
+//     is keyed off the TEMPLATE's life, not a per-particle one.
+//
+// Angles are 16-bit indices (65536 == full turn, so degrees * 182), not radians.
 // ----------------------------------------------------------------------------
 struct PSPParticle {
-    _Vector3<float> m_Pos;             // +0x00
-    _Vector3<float> m_Vel;             // +0x0C
-    _Vector3<float> m_Gravity;         // +0x18
-    float    m_Age;             // +0x24
-    float    m_Life;            // +0x28
-    float    m_SizeStart;       // +0x2C
-    float    m_SizeMid;         // +0x30
-    float    m_SizeEnd;         // +0x34
-    float    m_Rotation;        // +0x38
-    float    m_SpinStart;       // +0x3C
-    uint16_t m_NextLink;        // +0x40  1-based index: free-next (free) / live-next (live); 0=end
-    uint16_t _pad42;            // +0x42
-    uint16_t m_RotAngleIdx;     // +0x44  rotation angle as 16-bit index (AddParticle: angle*182; Draw: += spin*360*182*dt)
-    uint16_t m_pad46;           // +0x46
-    float    m_RotCycleRate;    // +0x48
-    float    m_RotCyclePhase;   // +0x4C
-    uint16_t m_ScaleXAngleIdx;  // +0x50  X-scale cycle angle (16-bit idx); Draw: CosIdx -> width scale (local_44)
-    uint16_t m_pad52;           // +0x52
-    float    m_RotCycleAmp;     // +0x54
-    float    m_SpinEnd;         // +0x58  port: spin-end rate (rad/sec)
-    uint16_t m_ScaleYAngleIdx;  // +0x5C  Y-scale cycle angle (16-bit idx); Draw: CosIdx -> height scale (local_48)
-    uint16_t m_pad5e;           // +0x5E
-    float    m_CycleXRate;      // +0x60
-    float    m_CycleXPhase;     // +0x64
-    float    m_CycleYRate;      // +0x68
-    float    m_CycleYPhase;     // +0x6C
-    float    m_RotCycleC0;      // +0x70  rotation-cycle modulation constant term (AddParticle: lerp tmpl+0x8C/0x90)
-    float    m_RotCycleC1;      // +0x74  rotation-cycle modulation linear term (AddParticle: lerp tmpl+0x7C/0x80)
-    float    m_RotCycleC2;      // +0x78  rotation-cycle modulation quadratic term (per-life rate; AddParticle: (lerp tmpl+0x84/0x88)/m_Life)
-    uint16_t m_AlphaBase;       // +0x7C  packed colour/alpha base (Draw: VectorUnsignedToFloat -> alpha local_f4)
-    int16_t  m_AlphaMidDelta;   // +0x7E  colour interp delta, first half (Draw local_f2)
-    int16_t  m_AlphaEndDelta;   // +0x80  colour interp delta, second half (Draw local_f0)
-    uint16_t m_pad82;           // +0x82
-    _Vector2<float> m_BasisX;          // +0x84  rotated quad basis X (Draw: m_BasisX from RotCycle SinIdx/CosIdx)
-    _Vector2<float> m_BasisY;          // +0x8C  rotated quad basis Y
-    float    m_Basis2Cos;       // +0x94  secondary basis cos*1.41 (Draw flM_Basis2Cos)
-    float    m_Basis2Sin;       // +0x98  secondary basis sin*1.41 (Draw flM_Basis2Sin)
-    uint8_t  m_NoAttract;       // +0x9C  per-particle flag: when set, skip global-origin attractor pull (Draw local_d3 gate)
-    uint8_t  m_pad9d[3];        // +0x9D
-    // +0xA0  owning emitter. ASM-spec v1.6.1 PSPParticleManager::AddParticle @0x0013c554
-    // stores the emitter `this` here (the decompiler renders the store as (float)this);
-    // Draw @0x0013eccc dereferences it for +0x4C m_bUpdateWhenPaused (per-particle pause
-    // gate) and +0x2C m_TimeScale (per-particle dt scale).
-    PSPParticleEmitter* m_pOwnerEmitter;
+    _Vector3<float> m_Pos;          // +0x00
+    _Vector3<float> m_Vel;          // +0x0C
+    _Vector3<float> m_Accel;        // +0x18  constant acceleration (gravity), baked per particle
+    uint8_t  m_ColourStart[4];      // +0x24  [B,G,R,A] -- same byte order as struct Colour
+    int16_t  m_ColourMidDelta[4];   // +0x28  colour at t=0.5 minus m_ColourStart, per lane
+    int16_t  m_ColourEndDelta[4];   // +0x30  colour at t=1 minus colour at t=0.5, per lane
+    float    m_TimeRemaining;       // +0x38  COUNTDOWN; Draw decrements by dt*emitter->m_TimeScale AFTER emitting verts
+    float    m_DeathThreshold;      // +0x3C  alive iff m_TimeRemaining > this
+    uint16_t m_NextLink;            // +0x40  1-based slot index: live-list next / free-list next; 0=end
+    uint16_t _pad42;                // +0x42  (binary writes +0x40 as a 32-bit store)
+    uint16_t m_RotAngleIdx;         // +0x44  persistent quad rotation, 16-bit angle index
+    uint16_t _pad46;                // +0x46
+    float    m_SpinPair[2];         // +0x48  spin rate (turns/sec) at t=0 and t=1; Draw lerps by t
+    uint16_t m_ScaleXIdx;           // +0x50  X scale-cycle phase, 16-bit angle index (CosIdx -> width multiplier)
+    uint16_t _pad52;                // +0x52
+    float    m_CycleA[2];           // +0x54  X scale-cycle rate at t=0 / t=1
+    uint16_t m_ScaleYIdx;           // +0x5C  Y scale-cycle phase, 16-bit angle index (CosIdx -> height multiplier)
+    uint16_t _pad5e;                // +0x5E
+    float    m_CycleB[2];           // +0x60  Y scale-cycle rate at t=0 / t=1
+    float    m_WobbleAmp[2];        // +0x68  rotation-wobble amplitude at t=0 / t=1
+    float    m_WobblePhaseBase;     // +0x70  wobble phase constant term
+    float    m_WobbleRate;          // +0x74  wobble phase linear term
+    float    m_WobbleAccel;         // +0x78  wobble phase quadratic term (already divided by template life)
+    uint16_t m_SizeStart;           // +0x7C  quad half-height at t=0 (unsigned)
+    int16_t  m_SizeMidDelta;        // +0x7E  half-height at t=0.5 minus m_SizeStart
+    int16_t  m_SizeEndDelta;        // +0x80  half-height at t=1 minus half-height at t=0.5
+    uint16_t _pad82;                // +0x82
+    _Vector2<float> m_BasisX;       // +0x84  quad width axis (unit), recomputed by Draw when spinning/wobbling
+    _Vector2<float> m_BasisY;       // +0x8C  quad height axis (unit)
+    // +0x94/+0x98: a second, 1.41-scaled basis pair derived from
+    // `(angle + 0xDFF2) % 0xFFF0`. Written by both AddParticle and Draw and
+    // never read by either -- kept because it is part of the 0xA4 layout.
+    float    m_Basis2Sin;           // +0x94
+    float    m_Basis2Cos;           // +0x98
+    uint8_t  m_MirrorX;             // +0x9C  copy of emitter->m_bMirrorX at spawn
+    uint8_t  m_NoAttract;           // +0x9D  copy of emitter->m_bTrailStarted; when set, skip the global pull
+    uint8_t  _pad9e[2];             // +0x9E
+    // +0xA0  owning emitter. Draw dereferences it for +0x08 m_Pos (global-space
+    // templates), +0x2C m_TimeScale and +0x4C m_bUpdateWhenPaused.
+    PSPParticleEmitter* m_pOwner;
 
     PSPParticle()
-        : m_Pos(0,0,0), m_Vel(0,0,0), m_Gravity(0,0,0)
-        , m_Age(0), m_Life(0)
-        , m_SizeStart(0), m_SizeMid(0), m_SizeEnd(0)
-        , m_Rotation(0), m_SpinStart(0)
+        : m_Pos(0,0,0), m_Vel(0,0,0), m_Accel(0,0,0)
+        , m_TimeRemaining(0), m_DeathThreshold(0)
         , m_NextLink(0), _pad42(0)
-        , m_RotAngleIdx(0), m_pad46(0)
-        , m_RotCycleRate(0), m_RotCyclePhase(0)
-        , m_ScaleXAngleIdx(0), m_pad52(0)
-        , m_RotCycleAmp(0), m_SpinEnd(0)
-        , m_ScaleYAngleIdx(0), m_pad5e(0)
-        , m_CycleXRate(0), m_CycleXPhase(0)
-        , m_CycleYRate(0), m_CycleYPhase(0)
-        , m_RotCycleC0(0), m_RotCycleC1(0), m_RotCycleC2(0)
-        , m_AlphaBase(0), m_AlphaMidDelta(0), m_AlphaEndDelta(0), m_pad82(0)
+        , m_RotAngleIdx(0), _pad46(0)
+        , m_ScaleXIdx(0), _pad52(0)
+        , m_ScaleYIdx(0), _pad5e(0)
+        , m_WobblePhaseBase(0), m_WobbleRate(0), m_WobbleAccel(0)
+        , m_SizeStart(0), m_SizeMidDelta(0), m_SizeEndDelta(0), _pad82(0)
         , m_BasisX(0,0), m_BasisY(0,0)
-        , m_Basis2Cos(0), m_Basis2Sin(0)
-        , m_NoAttract(0), m_pOwnerEmitter(0)
+        , m_Basis2Sin(0), m_Basis2Cos(0)
+        , m_MirrorX(0), m_NoAttract(0)
+        , m_pOwner(0)
     {
-        m_pad9d[0] = m_pad9d[1] = m_pad9d[2] = 0;
+        for (int i = 0; i < 4; ++i) {
+            m_ColourStart[i] = 0;
+            m_ColourMidDelta[i] = 0;
+            m_ColourEndDelta[i] = 0;
+        }
+        m_SpinPair[0] = m_SpinPair[1] = 0.0f;
+        m_CycleA[0] = m_CycleA[1] = 0.0f;
+        m_CycleB[0] = m_CycleB[1] = 0.0f;
+        m_WobbleAmp[0] = m_WobbleAmp[1] = 0.0f;
+        _pad9e[0] = _pad9e[1] = 0;
     }
 };
 #ifdef __bada__
 static_assert(sizeof(PSPParticle) == 164, "PSPParticle size mismatch");
-static_assert(__builtin_offsetof(PSPParticle, m_Pos)          == 0x00, "");
-static_assert(__builtin_offsetof(PSPParticle, m_Vel)          == 0x0C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_Gravity)      == 0x18, "");
-static_assert(__builtin_offsetof(PSPParticle, m_Age)          == 0x24, "");
-static_assert(__builtin_offsetof(PSPParticle, m_Life)         == 0x28, "");
-static_assert(__builtin_offsetof(PSPParticle, m_Rotation)     == 0x38, "");
-static_assert(__builtin_offsetof(PSPParticle, m_SpinStart)    == 0x3C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_NextLink)     == 0x40, "");
-static_assert(__builtin_offsetof(PSPParticle, m_RotAngleIdx)   == 0x44, "");
-static_assert(__builtin_offsetof(PSPParticle, m_RotCycleRate) == 0x48, "");
-static_assert(__builtin_offsetof(PSPParticle, m_ScaleXAngleIdx) == 0x50, "");
-static_assert(__builtin_offsetof(PSPParticle, m_RotCycleAmp)  == 0x54, "");
-static_assert(__builtin_offsetof(PSPParticle, m_SpinEnd)      == 0x58, "");
-static_assert(__builtin_offsetof(PSPParticle, m_ScaleYAngleIdx) == 0x5C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_CycleXRate)   == 0x60, "");
-static_assert(__builtin_offsetof(PSPParticle, m_AlphaBase)    == 0x7C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_BasisX)       == 0x84, "");
-static_assert(__builtin_offsetof(PSPParticle, m_BasisY)       == 0x8C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_Basis2Cos)    == 0x94, "");
-static_assert(__builtin_offsetof(PSPParticle, m_NoAttract)    == 0x9C, "");
-static_assert(__builtin_offsetof(PSPParticle, m_pOwnerEmitter) == 0xA0, "");
+static_assert(__builtin_offsetof(PSPParticle, m_Pos)             == 0x00, "");
+static_assert(__builtin_offsetof(PSPParticle, m_Vel)             == 0x0C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_Accel)           == 0x18, "");
+static_assert(__builtin_offsetof(PSPParticle, m_ColourStart)     == 0x24, "");
+static_assert(__builtin_offsetof(PSPParticle, m_ColourMidDelta)  == 0x28, "");
+static_assert(__builtin_offsetof(PSPParticle, m_ColourEndDelta)  == 0x30, "");
+static_assert(__builtin_offsetof(PSPParticle, m_TimeRemaining)   == 0x38, "");
+static_assert(__builtin_offsetof(PSPParticle, m_DeathThreshold)  == 0x3C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_NextLink)        == 0x40, "");
+static_assert(__builtin_offsetof(PSPParticle, m_RotAngleIdx)     == 0x44, "");
+static_assert(__builtin_offsetof(PSPParticle, m_SpinPair)        == 0x48, "");
+static_assert(__builtin_offsetof(PSPParticle, m_ScaleXIdx)       == 0x50, "");
+static_assert(__builtin_offsetof(PSPParticle, m_CycleA)          == 0x54, "");
+static_assert(__builtin_offsetof(PSPParticle, m_ScaleYIdx)       == 0x5C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_CycleB)          == 0x60, "");
+static_assert(__builtin_offsetof(PSPParticle, m_WobbleAmp)       == 0x68, "");
+static_assert(__builtin_offsetof(PSPParticle, m_WobblePhaseBase) == 0x70, "");
+static_assert(__builtin_offsetof(PSPParticle, m_WobbleRate)      == 0x74, "");
+static_assert(__builtin_offsetof(PSPParticle, m_WobbleAccel)     == 0x78, "");
+static_assert(__builtin_offsetof(PSPParticle, m_SizeStart)       == 0x7C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_SizeMidDelta)    == 0x7E, "");
+static_assert(__builtin_offsetof(PSPParticle, m_SizeEndDelta)    == 0x80, "");
+static_assert(__builtin_offsetof(PSPParticle, m_BasisX)          == 0x84, "");
+static_assert(__builtin_offsetof(PSPParticle, m_BasisY)          == 0x8C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_Basis2Sin)       == 0x94, "");
+static_assert(__builtin_offsetof(PSPParticle, m_Basis2Cos)       == 0x98, "");
+static_assert(__builtin_offsetof(PSPParticle, m_MirrorX)         == 0x9C, "");
+static_assert(__builtin_offsetof(PSPParticle, m_NoAttract)       == 0x9D, "");
+static_assert(__builtin_offsetof(PSPParticle, m_pOwner)          == 0xA0, "");
 #endif
 
 // ----------------------------------------------------------------------------
@@ -298,8 +341,12 @@ struct PSPParticleEmitter {
     _Vector3<float> m_Pos;                             // +0x08
     _Vector3<float> m_Vel;                             // +0x14
     float    m_RateScale;                       // +0x20
-    float    m_SizeBias;                        // +0x24
-    float    m_SpinScale;                       // +0x28
+    // +0x24: fraction of the template life a particle actually gets. AddParticle sets
+    // the death threshold to `life - life * m_LifeBias`, so the visible duration is
+    // `templateLife * m_LifeBias` while the curves still run against the full template
+    // life (a bias below 1 therefore truncates the tail of the colour/size ramp).
+    float    m_LifeBias;                        // +0x24
+    float    m_SizeScale;                       // +0x28  multiplies the baked start/mid/end sizes
     float    m_TimeScale;                       // +0x2C
     float    m_DirCos;                          // +0x30
     float    m_DirSin;                          // +0x34
@@ -310,14 +357,25 @@ struct PSPParticleEmitter {
     PSPParticleEmitter*    m_Next;              // +0x44
     PSPParticleEmitter**   m_pRefPtr;           // +0x48
     uint8_t  m_bUpdateWhenPaused;               // +0x4C
-    uint8_t  m_bTrailStarted;                   // +0x4D
+    uint8_t  m_bTrailStarted;                   // +0x4D  copied into the particle's m_NoAttract
     uint8_t  _pad4e[2];                         // +0x4E
+
+    // v1.6.1 PSPParticleEmitter::AddParticle @0x0013c554 -- pop a free slot from
+    // `mgr`, bake every per-particle curve from `set` + its particle template, and
+    // push the slot onto that template's live list (head at template+0x04).
+    //
+    // Draws EXACTLY 23 values from Math::g_Random via RandF(1.0f), plus 3 libc
+    // rand() calls and 0/1/2 conditional Rand32(0) draws. g_Random is the one
+    // shared gameplay stream, so the count and order are globally observable --
+    // do not add, remove or reorder a draw. Silently does nothing when the free
+    // list is empty (1024 slots).
+    void AddParticle(PSPParticleSet* set, PSPParticleManager& mgr);
 
     PSPParticleEmitter()
         : m_Timer(0), m_bStarted(1), m_pad06(0)
         , m_Pos(0,0,0), m_Vel(0,0,0)
-        , m_RateScale(1.0f), m_SizeBias(1.0f)
-        , m_SpinScale(1.0f), m_TimeScale(1.0f)
+        , m_RateScale(1.0f), m_LifeBias(1.0f)
+        , m_SizeScale(1.0f), m_TimeScale(1.0f)
         , m_DirCos(1.0f), m_DirSin(0.0f), m_VelScale(1.0f)
         , m_bMirrorX(0)
         , m_pTemplate(0), m_Next(0), m_pRefPtr(0)
@@ -334,8 +392,8 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_bStarted)          == 0x0
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Pos)               == 0x08, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_Vel)               == 0x14, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_RateScale)         == 0x20, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_SizeBias)          == 0x24, "");
-static_assert(__builtin_offsetof(PSPParticleEmitter, m_SpinScale)         == 0x28, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_LifeBias)          == 0x24, "");
+static_assert(__builtin_offsetof(PSPParticleEmitter, m_SizeScale)         == 0x28, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_TimeScale)         == 0x2C, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirCos)            == 0x30, "");
 static_assert(__builtin_offsetof(PSPParticleEmitter, m_DirSin)            == 0x34, "");
@@ -352,7 +410,7 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_bTrailStarted)     == 0x4
 // PSPParticleManager — singleton manager.
 // Binary struct layout (0x38 bytes, v1.6.1 @0x0013bf40):
 //   +0x00  float                         m_GlobalPullRadius  (non-polymorphic; NOT a vptr)
-//   +0x04  float                         m_GlobalTimeScale
+//   +0x04  float                         m_GlobalPullStrength
 //   +0x08  Vec3                          m_GlobalOrigin
 //   +0x14  PSPParticle*                  m_pParticles
 //   +0x18  uint16_t                      m_FreeHead
@@ -366,6 +424,9 @@ static_assert(__builtin_offsetof(PSPParticleEmitter, m_bTrailStarted)     == 0x4
 // ----------------------------------------------------------------------------
 class PSPParticleManager : public Mortar::Singleton<PSPParticleManager> {
     friend class Mortar::Singleton<PSPParticleManager>;
+    // AddParticle is a PSPParticleEmitter method in the binary and pops directly
+    // from the manager's free list / particle buffer.
+    friend struct PSPParticleEmitter;
 
 public:
     // v1.6.1 PSPParticleManager::AddEmitter @0x0013c1b8
@@ -383,11 +444,25 @@ public:
     void Update(float dt, bool paused = false);
 
     // v1.6.1 PSPParticleManager::Draw @0x0013eccc — fused integrate+render.
+    //
+    // Iterates PARTICLE templates (m_NumParticleTemplates). `layer` is tested ONCE
+    // per template against template+0xB4, so a template belongs wholly to one layer;
+    // GameDraw calls this three times per frame with layer = -1, 0, 1.
+    //
+    // Per template it walks the live list, taking a full 0xA4 stack copy of each
+    // particle first (every curve is evaluated against the pre-integration state),
+    // reaps expired slots back onto the free list, appends 6 vertices per survivor
+    // into one function-static buffer and issues a single Mesh::DrawTriList for the
+    // whole template with template+0xAC's texture bound around it. Integration runs
+    // AFTER vertex emission, so what you see is last frame's state.
+    //
     // `paused` (callers pass game_work.bM_Mode != 0) freezes each particle whose
-    // owning emitter has m_bUpdateWhenPaused == 0: rotation, velocity, position and
-    // age stop advancing. Vertex emission is UNCONDITIONAL — frozen particles keep
-    // drawing at their last state. Per-particle dt is scaled by the owning emitter's
-    // m_TimeScale.
+    // owning emitter has m_bUpdateWhenPaused == 0: rotation, scale cycles, velocity,
+    // position and lifetime all stop advancing. Vertex emission stays UNCONDITIONAL,
+    // so frozen particles keep drawing at their last state. Per-particle dt is scaled
+    // by the owning emitter's m_TimeScale.
+    //
+    // Also resets m_DrawnParticleCount at entry and accumulates verts/6 per template.
     void Draw(float dt, bool paused, int layer = 0);
 
     // v1.6.1 PSPParticleManager::LoadFile @0x0013d09c
@@ -449,7 +524,7 @@ public:
 
     // Binary manager global fields (v1.6.1 @0x0013bf40):
     //   +0x00 m_GlobalPullRadius (ctor = 0.0)
-    //   +0x04 m_GlobalTimeScale (ctor = 1.0)
+    //   +0x04 m_GlobalPullStrength (ctor = 1.0)
     //   +0x08 m_GlobalOrigin
     // Written each frame by SuperFruitControl::UpdateExplosion.
     // ASM-spec v1.6.1 PSPParticleManager @0x00013bf40 (non-polymorphic; +0x00 = float
@@ -457,13 +532,26 @@ public:
     //   field, not a real vtable -- so +0x00 is the world-space vortex pull radius (Draw
     //   pulls free particles toward m_GlobalOrigin within this radius). Removing the port's
     //   virtual dtor drops the compiler vptr and makes +0x00 available for this float.
-    float m_GlobalPullRadius;    // +0x00  vortex pull radius (0.0 at reset/ctor)
-    float m_GlobalTimeScale;     // +0x04  global time speed (1.0 at reset/ctor)
+    // Draw applies these to every particle whose template is LOCAL-space
+    // (template+0x39 != 1) and whose m_NoAttract flag is clear:
+    //   len = |pos - m_GlobalOrigin|; if (len < m_GlobalPullRadius)
+    //     vel += normalise(pos - m_GlobalOrigin) * (m_GlobalPullRadius - len)
+    //            * h * 10.0f * m_GlobalPullStrength;
+    // The direction points AWAY from the origin, so this is the super-fruit
+    // explosion shockwave, not an attractor. Disabled while m_GlobalPullRadius <= 0.
+    float m_GlobalPullRadius;    // +0x00  shockwave radius (0.0 at reset/ctor)
+    float m_GlobalPullStrength;  // +0x04  shockwave strength multiplier (1.0 at reset/ctor)
     _Vector3<float> m_GlobalOrigin;        // +0x08  explosion epicenter
 
 private:
     PSPParticleManager();
     ~PSPParticleManager();  // non-virtual: binary is non-polymorphic (+0x00 is data, not a vptr)
+
+    // Resolve template+0xAC to a Texture. The binary keeps a SmartPtr<Texture> inline
+    // in the blob; the port keeps a 4-byte index into m_pTextureRefs so the blob stride
+    // stays 0xB8 on 64-bit hosts. Returns null when the template has no texture or the
+    // asset failed to load (a port-only outcome -- the binary ships all of them).
+    Mortar::Texture* GetTemplateTexture(const PSPParticleTemplate* tmpl) const;
 
     // Binary-faithful layout fields (+0x14 onwards, following vptr+GlobalTimeScale+GlobalOrigin):
     PSPParticle*                              m_pParticles;           // +0x14  1024-slot flat buffer
@@ -493,7 +581,7 @@ private:
 // with no holes; their correctness is enforced by the sizeof(PSPParticleManager) check (when port-only
 // tail fields are absent), not by individual offset asserts.
 static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalPullRadius) == 0x00, "");
-static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalTimeScale)  == 0x04, "");
+static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalPullStrength) == 0x04, "");
 static_assert(__builtin_offsetof(PSPParticleManager, m_GlobalOrigin)     == 0x08, "");
 #endif
 

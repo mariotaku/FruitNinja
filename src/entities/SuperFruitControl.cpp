@@ -469,7 +469,7 @@ void SuperFruitControl::Update(float dt)
             // v1.6.1 SuperFruitControl::Update @0x001bca10: finale end zeroes PSPParticleManager+0x00
             //   (m_GlobalPullRadius, the vortex pull radius -- a float, not a vptr).
             PSPParticleManager::GetInstance().m_GlobalPullRadius = 0.0f;
-            PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
+            PSPParticleManager::GetInstance().m_GlobalPullStrength = 1.0f;
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
             //   (HUD+0x24); end ts=1.
             if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
@@ -892,7 +892,7 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
                             e->m_Pos = line->a();
                         }
                         e->m_TimeScale /= WaveManager::GetInstance()->m_ComboSpeedDivisor; // +0x2c
-                        e->m_SpinScale *= 0.5f;                                            // +0x28
+                        e->m_SizeScale *= 0.5f;                                            // +0x28
                     }
                 }
             }
@@ -1326,7 +1326,7 @@ void SuperFruitControl::ResetAll()
     // v1.6.1 SuperFruitControl::Reset @0x001bb52c: also zeroes PSPParticleManager+0x00
     //   (m_GlobalPullRadius, the vortex pull radius -- a float, not a vptr).
     PSPParticleManager::GetInstance().m_GlobalPullRadius = 0.0f;
-    PSPParticleManager::GetInstance().m_GlobalTimeScale = 1.0f;
+    PSPParticleManager::GetInstance().m_GlobalPullStrength = 1.0f;
     // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: slow-mo = game_work.mHud->m_globalTimeScale
     //   (HUD+0x24); restore to 1.0.
     if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
@@ -1480,7 +1480,7 @@ void SuperFruitControl::UpdateExplosion(float dt)
     mgr.m_GlobalPullRadius = m_InnerRadius * 1.6f;
 
     float modeBias = (game_work.gameMode == 2) ? 1.5f : 0.5f;
-    mgr.m_GlobalTimeScale =
+    mgr.m_GlobalPullStrength =
         T_1616(m_Timer, m_Lifetime + 2.3f + modeBias, m_Lifetime + 2.05f);
 
     // Push scale, computed ONCE (@0x001baff4) -- same idiom as PushBombsAway.
