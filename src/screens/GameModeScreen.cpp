@@ -386,7 +386,7 @@ void GameModeScreen::CreateControls() {
     // --- Button 1: BACK (plain ring m_RingTex[0x10], bomb fruit, QuitCallback) ---
     // ASM-spec v1.6.1 GameModeScreen::CreateControls @0x001819bc: ring label =
     //   MenuButton::SetText(GETSTRING(...)) over plain m_RingTex[...].
-    // Binary fruit type: FruitInfo_GetCount() (bomb threshold index).
+    // Binary fruit type: g_FruitInfoCount (bomb threshold index).
     m_pBackButton = new MenuButton();
     m_pBackButton->m_Texture = game_work.m_RingTex[0x10];
     {
@@ -396,7 +396,7 @@ void GameModeScreen::CreateControls() {
         // convention for edge-pinned ring/menu buttons).
         m_pBackButton->Init(_Vector3<float>(MapX(POS_BACK.x, "modeselect.btn.back"), POS_BACK.y, POS_BACK.z),
                             Mortar::Delegate0<void>::Make(this, &GameModeScreen::QuitCallback),
-                            FruitInfo_GetCount(), _Vector3<float>(0, 0, 0),
+                            g_FruitInfoCount, _Vector3<float>(0, 0, 0),
                             Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.

@@ -845,7 +845,7 @@ void WaveManager::Resume() {
 
     // 6. Re-spawn saved entities from sd->m_EntityStates.
     // Binary @ 0x00124b9c-0x00124cd8: per-EntityState dispatch.
-    // g_FruitCount = **DAT_00124f04; port derives via FruitInfo_GetCount().
+    // g_FruitCount = **DAT_00124f04, i.e. the g_FruitInfoCount global @0x00332a1c.
     // Default spawn Vec3* = DAT_00124f08 -> GOT slot -> Save.cpp file-scope
     // global Vec3 (1,1,1), constructed in _GLOBAL__I_Save_cpp @ 0x0012bfe0
     // (same GOT offset 0x77cc as DAT_00124f08; the ctor literal is 1.0,1.0,1.0).
@@ -853,7 +853,7 @@ void WaveManager::Resume() {
     // "p3 nullable, defaults to (1,1,1)", so passing nullptr is the exact
     // functional equivalent of passing &g_DefaultSpawnVec.
     // Binary @ 0x00124f08
-    const int g_FruitCount = FruitInfo_GetCount();
+    const int g_FruitCount = g_FruitInfoCount;
     bool respawned = false;
     for (std::list<EntityState>::iterator eit = sd->m_EntityStates.begin();
          eit != sd->m_EntityStates.end(); ++eit)

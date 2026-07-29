@@ -296,8 +296,13 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
 
     // Colour selection. Binary reads FruitTypeColour(fruitType) when in
     // range, else falls back to a default colour + ColourPhase = 0.75.
-    const FruitInfo* info = FruitInfo_Get(fruitType);
-    if (info) {
+    // The range test is explicit here because Fruit::Slice passes the
+    // critical-flash sentinel `m_FruitType + g_FruitInfoCount`, which is
+    // exactly the out-of-range case this branch exists for -- FruitInfo_Get
+    // (v1.6.1 Fruit::FruitInfo @0x001da5c0) does not bounds-check.
+    const bool inRange = (fruitType >= 0 && fruitType < (long)g_FruitInfoCount);
+    const FruitInfo* info = inRange ? FruitInfo_Get(fruitType) : nullptr;
+    if (inRange) {
         m_ColourPhase = 0.0f;
         m_ColB = info->m_FruitColour[0];
         m_ColG = info->m_FruitColour[1];
@@ -351,10 +356,9 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
     // its real fruit. Distinct from the suppression lookup below, which uses
     // the RAW type behind a range guard.
     {
-        const int fruitCount = FruitInfo_GetCount();
+        const int fruitCount = g_FruitInfoCount;
         const long wrapped = (fruitCount > 0) ? (fruitType % fruitCount) : 0;
-        const FruitInfo* specialInfo = Fruit::FruitInfo(wrapped);
-        m_bSpecial = specialInfo ? specialInfo->m_bSpecial : 0;
+        m_bSpecial = (fruitCount > 0) ? Fruit::FruitInfo(wrapped)->m_bSpecial : 0;
     }
 
     m_FruitType = fruitType;
@@ -387,7 +391,7 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
             suppress = true;                       // draw 5 @0x001ebae4
         } else if (m_ColA == 0) {
             suppress = true;                       // transparent fruit (e.g. banana)
-        } else if (m_FruitType >= FruitInfo_GetCount()) {
+        } else if (m_FruitType >= g_FruitInfoCount) {
             suppress = false;                      // out of range -> no draw 6
         } else if (Fruit::FruitInfo(m_FruitType)->m_bOnSide == 0) {
             suppress = false;                      // not on-side -> no draw 6
@@ -469,8 +473,11 @@ void SplatEntity::UpdateSplat(float dt) {
             // field_0x2fc != 0) forces splat-type to 2 or 3 (the large-round pair).
             // In FruitInfo the field at +0x2fc is m_bOnSide.
             {
-                const FruitInfo* info = FruitInfo_Get(m_FruitType);
-                if (info && info->m_bOnSide != 0) {
+                // m_FruitType may still hold MakeSplat's out-of-range
+                // critical-flash sentinel, so range-check before indexing --
+                // FruitInfo_Get (v1.6.1 Fruit::FruitInfo @0x001da5c0) does not.
+                if (m_FruitType >= 0 && m_FruitType < g_FruitInfoCount
+                        && FruitInfo_Get(m_FruitType)->m_bOnSide != 0) {
                     type = (Math::g_Random.Rand32(2) == 0) ? 2 : 3;
                 }
             }
@@ -588,7 +595,7 @@ void SplatEntity::UpdateSplat(float dt) {
         // m_FruitType may be an out-of-range placeholder (MakeSplat's
         // "no FruitInfo" fallback); wrap into the valid table range before
         // re-fetching the fruit's true colour (binary's module-by-count guard).
-        const int fruitCount = FruitInfo_GetCount();
+        const int fruitCount = g_FruitInfoCount;
         const long freshType = (fruitCount > 0) ? (m_FruitType % fruitCount) : 0;
         const Colour fresh = Fruit::FruitTypeColour(freshType);
         const Colour& crit = Fruit::CRITICAL_COLOUR;

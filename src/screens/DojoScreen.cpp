@@ -329,7 +329,7 @@ void DojoScreen::CreateButtons() {
     //   byte store is m_bBackdropActive, not m_bRespondsToBackKey -- see the
     //   Port specific marker on the m_bRespondsToBackKey write below.)
     if (m_pBackButton == nullptr) {
-        const int bombFruitType = FruitInfo_GetCount();
+        const int bombFruitType = g_FruitInfoCount;
         m_pBackButton = new MenuButton();
         m_pBackButton->m_Texture = game_work.m_RingTex[16];
         // DIFFERS: opt-in widescreen -- this is the SAME red bomb back/quit

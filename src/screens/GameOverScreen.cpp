@@ -806,7 +806,7 @@ void GameOverScreen::DeletedControl(HUDControl* ctrl) {
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::FindMostOfFruit() {
-    const int count = FruitInfo_GetCount();
+    const int count = g_FruitInfoCount;
     const uint8_t gameMode = game_work.gameMode;
 
     // Candidate filter: i runs to MAX_FRUIT_TYPES - 1 (the last registered type
@@ -815,7 +815,6 @@ void GameOverScreen::FindMostOfFruit() {
     std::vector<int> src;
     for (int i = 0; i < count - 1; ++i) {
         const FruitInfo* fi = FruitInfo_Get(i);
-        if (!fi) continue;
         if (gameMode == GAME_MODE_ARCADE && fi->m_pPowers == 0) continue;
         if (fi->m_bIsSuperFruit != 0) continue;
         src.push_back(i);
@@ -841,7 +840,6 @@ void GameOverScreen::FindMostOfFruit() {
         if (!save) break;
         int i = order[k];
         const FruitInfo* fi = FruitInfo_Get(i);
-        if (!fi) continue;
         int c = save->GetTotal(fi->m_TotalStatHash);
         if (c > bestCount) {
             bestCount = c;
@@ -950,7 +948,7 @@ void GameOverScreen::CreateQuitButton() {
     m_pQuitBtn->Init(
         btnPos,
         Mortar::Delegate0<void>::Make(this, &GameOverScreen::OnQuitClicked),
-        FruitInfo_GetCount(),
+        g_FruitInfoCount,
         globalCenter,
         Mortar::Delegate0<void>()
     );

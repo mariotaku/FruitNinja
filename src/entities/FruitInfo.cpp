@@ -16,11 +16,18 @@
 #include <cstring>
 #include <string>
 
+// Backing storage for the table g_pFruitInfo points at. See the contract block
+// in FruitInfo.h for why the port uses a fixed array where the binary heap-
+// allocates `count * 0x338 + 8`.
 static FruitInfo s_FruitInfos[FRUIT_INFO_MAX];
-static int s_FruitInfoCount = 0;
 
-// Parsed from <bomb size="..." collision="..."/>. Binary stores these on
-// g_pFruitInfo+0x88/+0x8C. Port keeps them as module statics.
+// v1.6.1 .bss @0x00332a1c / @0x00332a28. Written only by FruitInfo_Load below.
+int        g_FruitInfoCount = 0;
+FruitInfo* g_pFruitInfo     = s_FruitInfos;
+
+// Parsed from <bomb size="..." collision="..."/>. Binary stores these at
+// +0x88/+0x8C off a separate globals block (NOT off the g_pFruitInfo table).
+// Port keeps them as module statics.
 static float s_BombSize      = 55.0f;  // default from original fruitlist.xml
 static float s_BombCollision = 25.0f;  // default from original fruitlist.xml
 
@@ -130,18 +137,24 @@ void FruitInfo_Load(const char* xmlPath)
         bombElem.QueryFloatAttribute("collision", &s_BombCollision);
     }
     // --- Count <FruitInfo> elements ---
-    s_FruitInfoCount = 0;
+    // v1.6.1 Fruit::LoadInfo: `g_FruitInfoCount = 0` @0x001e13c8, then `++`
+    // per parsed element @0x001e13e4.
+    g_FruitInfoCount = 0;
     for (TiXmlElement e = root.FirstChildElement("FruitInfo");
          e; e = e.NextSiblingElement("FruitInfo"))
     {
-        s_FruitInfoCount++;
+        g_FruitInfoCount++;
     }
-    if (s_FruitInfoCount > FRUIT_INFO_MAX)
-        s_FruitInfoCount = FRUIT_INFO_MAX;
+    if (g_FruitInfoCount > FRUIT_INFO_MAX)
+        g_FruitInfoCount = FRUIT_INFO_MAX;
+    // v1.6.1 Fruit::LoadInfo @0x001e14ac: publish the table base. The binary
+    // stores `buffer + 8` (past the stride/count prefix); the port stores the
+    // static array's element 0.
+    g_pFruitInfo = s_FruitInfos;
     // --- Parse each <FruitInfo> element ---
     int idx = 0;
     for (TiXmlElement elem = root.FirstChildElement("FruitInfo");
-         elem && idx < s_FruitInfoCount;
+         elem && idx < g_FruitInfoCount;
          elem = elem.NextSiblingElement("FruitInfo"), idx++)
     {
         FruitInfo& fi = s_FruitInfos[idx];
@@ -420,7 +433,7 @@ void FruitInfo_Load(const char* xmlPath)
             }
         }
     }
-    LOG_INFO("FRUITINFO", "Fruit::LoadInfo: loaded %d fruit types from '%s'", s_FruitInfoCount, xmlPath);
+    LOG_INFO("FRUITINFO", "Fruit::LoadInfo: loaded %d fruit types from '%s'", g_FruitInfoCount, xmlPath);
 
     // Original: calls LoadFruitModels() at the very end (loads 3D mesh per fruit type)
     LoadFruitModels();
@@ -441,21 +454,11 @@ const Colour& FruitInfo_GetCriticalColour()
     return s_CriticalColour;
 }
 
+// v1.6.1 Fruit::FruitInfo @0x001da5c0. Unconditional: no bounds check, no null
+// return. See the contract block in FruitInfo.h.
 const FruitInfo* FruitInfo_Get(int type)
 {
-    if (type < 0 || type >= s_FruitInfoCount)
-        return nullptr;
-    return &s_FruitInfos[type];
-}
-
-int FruitInfo_GetCount()
-{
-    return s_FruitInfoCount;
-}
-
-FruitInfo* FruitInfo_GetArray()
-{
-    return s_FruitInfos;
+    return &g_pFruitInfo[type];
 }
 
 Mortar::Texture* FruitInfo_GetShadowTex()
@@ -470,7 +473,7 @@ Mortar::Texture* FruitInfo_GetShadowTex()
 // icons (gameplay HUD only, never shown at menu) stay deferred here.
 void FruitInfo_LoadHudTextures()
 {
-    for (int i = 0; i < s_FruitInfoCount; ++i) {
+    for (int i = 0; i < g_FruitInfoCount; ++i) {
         FruitInfo& fi = s_FruitInfos[i];
         if (!fi.m_Name[0]) continue;
 

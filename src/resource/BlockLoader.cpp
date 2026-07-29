@@ -283,9 +283,9 @@ void BuildIngameQueue(std::vector<WorkItem>* q) {
     // until the finalizer's own FruitInfo array members take over ownership --
     // FruitInfo_LoadHudTextures reloads (cache hit) straight into
     // fi.m_HudTexture/m_ZenTexture, which is the real strong-ref home.
-    for (int i = 0; i < FruitInfo_GetCount(); i++) {
+    for (int i = 0; i < g_FruitInfoCount; i++) {
         const FruitInfo* fi = FruitInfo_Get(i);
-        if (!fi || !fi->m_Name[0]) continue;
+        if (!fi->m_Name[0]) continue;
         char texName[64];
         snprintf(texName, sizeof(texName), "hud_%s.tex", fi->m_Name);
         q->push_back(MakeTexItem(texName, &s_HeldIngame));

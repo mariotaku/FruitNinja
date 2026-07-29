@@ -108,9 +108,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    int fruitCount = FruitInfo_GetCount();
+    int fruitCount = g_FruitInfoCount;
     if (fruitCount <= 0) {
-        fprintf(stderr, "FAIL: FruitInfo_GetCount()=%d -- fruitlist.xml not loaded\n",
+        fprintf(stderr, "FAIL: g_FruitInfoCount=%d -- fruitlist.xml not loaded\n",
                 fruitCount);
         return 1;
     }

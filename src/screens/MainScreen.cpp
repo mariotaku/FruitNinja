@@ -1291,7 +1291,7 @@ void MainScreen::CreateQuitButton() {
     // @0x0015e3c6), so this may in fact be genuine binary behaviour not yet
     // located here rather than a port addition -- don't treat as settled.
     m_pQuitButton->m_bRespondsToBackKey = 1;
-    int fruitCount = FruitInfo_GetCount();
+    int fruitCount = g_FruitInfoCount;
     // ASM-spec v1.6.1 MainScreen::CreateButtons @0x0019687c: quit button Init pos = (0,0,0)
     m_pQuitButton->Init(_Vector3<float>(0.0f, 0.0f, 0.0f),
         Mortar::Delegate0<void>::Make(this, &MainScreen::QuitGamesCallback), fruitCount, _Vector3<float>(0,0,0), nullptr);

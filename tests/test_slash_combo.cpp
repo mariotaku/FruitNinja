@@ -15,7 +15,7 @@
 //
 // Pure logic: no SDL init, no GL, no audio. Fruit::FruitType is called once
 // inside CheckCombo to seed its rare-fruit table; with no fruitlist.xml
-// loaded FruitInfo_GetCount()==0 so every rare type resolves to -1, which
+// loaded g_FruitInfoCount==0 so every rare type resolves to -1, which
 // never collides with the non-negative type ids used below (all cases here
 // use uniq >= 2 and never reach the rare path anyway).
 //

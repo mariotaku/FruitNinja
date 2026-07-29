@@ -384,7 +384,7 @@ void AboutScreen::CreateBackButton()
 {
     if (m_pBackButton) return;
 
-    const int bombFruitType = FruitInfo_GetCount();
+    const int bombFruitType = g_FruitInfoCount;
 
     m_pBackButton = new MenuButton();
 

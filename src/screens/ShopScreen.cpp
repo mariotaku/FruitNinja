@@ -1034,14 +1034,14 @@ void ShopScreen::Update(float dt) {
             // @0x001b3568) uses QuitShopCallback as the press delegate.
             // Texture comes from *(GameTask + 0x17c) — a per-task Mortar::SmartPtr<Texture>.
             // Fruit type: Fruit::MAX_FRUIT_TYPES, reached via PTR @0x002d7dc4 ->
-            // 0x00332a1c (.bss, written by Fruit::LoadInfo) -- what FruitInfo_GetCount()
-            // returns; an out-of-range index forces a bomb.
-            // Port uses bomb fruit type (FruitInfo_GetCount()) matching the
+            // 0x00332a1c (.bss, written by Fruit::LoadInfo) -- i.e. g_FruitInfoCount;
+            // an out-of-range index forces a bomb.
+            // Port uses bomb fruit type (g_FruitInfoCount) matching the
             // DojoScreen back-button pattern: out-of-range index forces a bomb.
             // Binary: after AddControl, scales m_RestScale and fruit piece by
             // 0.825f (literal @0x001b3d38).
             if (!m_pBuyButton) {
-                const int backFruitType = FruitInfo_GetCount();  // forces bomb spawn
+                const int backFruitType = g_FruitInfoCount;  // forces bomb spawn
                 m_pBuyButton = new MenuButton();
                 // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: BACK ring uses m_RingTex[16] (red_ring.tex).
                 m_pBuyButton->m_Texture = game_work.m_RingTex[16];
@@ -1282,13 +1282,13 @@ void ShopScreen::Update(float dt) {
         // with same QuitShopCallback. Texture from *(GameTask + 0x180).
         // Fruit type: `ldr r3,[GOT 0x002d7dc4]; ldr r3,[r3]` = Fruit::MAX_FRUIT_TYPES
         // @0x00332a1c (.bss, written at runtime by Fruit::LoadInfo @0x001e13c8) --
-        // i.e. exactly what FruitInfo_GetCount() returns. NOT a .data constant.
+        // i.e. exactly g_FruitInfoCount. NOT a .data constant.
         // Port uses same backFruitType (bomb) as state 0.
         // After AddControl (LAB_001b3c84):
         //   m_RestScale *= 0.825f (literal @0x001b3d38)
         //   fruit piece scale *= 0.825f
         {
-            const int backFruitType = FruitInfo_GetCount();
+            const int backFruitType = g_FruitInfoCount;
             m_pBuyButton = new MenuButton();
             // ASM-spec v1.6.1 ShopScreen::Update @0x001b321c: state-3 (post-purchase) back
             // button uses game_work+0x180 (m_BackIconTex), NOT m_RingTex[16] -- confirmed

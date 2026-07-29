@@ -501,22 +501,20 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
             // Executed once before the per-digit loop.
             int comboCount = g_ComboFruitType;
             if (comboCount < 0) comboCount = 0;
-            int fruitInfoCount = FruitInfo_GetCount();
+            int fruitInfoCount = g_FruitInfoCount;
             int idx = (comboCount < 1) ? 0 : (comboCount < fruitInfoCount ? comboCount : fruitInfoCount - 1);
             const FruitInfo* fi = FruitInfo_Get(idx);
             Colour tint(255, 255, 255, alpha);
-            if (fi) {
-                // Rebind +0x74 (m_Texture) to per-fruit HUD icon for this frame.
-                // HUDControl3d::Draw will render it after PreDraw returns.
-                // m_HudTexture corresponds to fi->m_pFruitTexture in the binary doc.
-                if (fi->m_HudTexture.IsValid()) m_Texture = fi->m_HudTexture;
+            // Rebind +0x74 (m_Texture) to per-fruit HUD icon for this frame.
+            // HUDControl3d::Draw will render it after PreDraw returns.
+            // m_HudTexture corresponds to fi->m_pFruitTexture in the binary doc.
+            if (fi->m_HudTexture.IsValid()) m_Texture = fi->m_HudTexture;
 
-                // Tint from FRUIT_INFO->m_FactColour (+0x2F8), alpha overridden.
-                tint.r = fi->m_FactColour[0];
-                tint.g = fi->m_FactColour[1];
-                tint.b = fi->m_FactColour[2];
-                tint.a = alpha;
-            }
+            // Tint from FRUIT_INFO->m_FactColour (+0x2F8), alpha overridden.
+            tint.r = fi->m_FactColour[0];
+            tint.g = fi->m_FactColour[1];
+            tint.b = fi->m_FactColour[2];
+            tint.a = alpha;
 
             // Cursor init: MeasureString(scoreBuf) * m_ScalePulse * 48 + 5.
             // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80 (0x001ad16c): the

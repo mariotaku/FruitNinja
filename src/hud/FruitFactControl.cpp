@@ -436,7 +436,7 @@ bool FruitFactControl::UpPressed(InputEvent* /*ev*/) {
     // v1.6.1 FruitFactControl::UpPressed @0x00170a20 -- next-fruit fact navigation (NOT "forward to page").
     // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
     const ::FruitInfo* info;
-    int fruitCount = FruitInfo_GetCount();
+    int fruitCount = g_FruitInfoCount;
     int ca = (int)m_ComboA;
     do {
         ++ca;
@@ -444,7 +444,7 @@ bool FruitFactControl::UpPressed(InputEvent* /*ev*/) {
             ca = 0;
         }
         info = Fruit::FruitInfo(ca);
-    } while (info == NULL || info->m_FactCount < 1);      // +0x270 = m_FactCount
+    } while (info->m_FactCount < 1);                      // +0x270 = m_FactCount
     m_ComboA = (unsigned int)ca;
     int cb = -1;
     m_FactText = Fruit::GetFact(NULL, &cb, ca, -1);
@@ -462,7 +462,7 @@ bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
     // v1.6.1 FruitFactControl::DownPressed @0x00170924 -- prev-fruit fact navigation (NOT "forward to page").
     // Skip fruits with zero facts; wrap on global fruit count (*piVar2 @ DAT_00170b14).
     const ::FruitInfo* info;
-    int fruitCount = FruitInfo_GetCount();
+    int fruitCount = g_FruitInfoCount;
     int ca = (int)m_ComboA;
     do {
         --ca;
@@ -470,7 +470,7 @@ bool FruitFactControl::DownPressed(InputEvent* /*ev*/) {
             ca = fruitCount - 1;
         }
         info = Fruit::FruitInfo(ca);
-    } while (info == NULL || info->m_FactCount < 1);      // +0x270 = m_FactCount
+    } while (info->m_FactCount < 1);                      // +0x270 = m_FactCount
     m_ComboA = (unsigned int)ca;
     int cb = -1;
     m_FactText = Fruit::GetFact(NULL, &cb, ca, -1);

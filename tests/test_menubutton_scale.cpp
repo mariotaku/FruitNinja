@@ -44,7 +44,7 @@ static void NoOpCb() {}
 // If dojoShrink==true, apply the DojoScreen 0.825 shrink after Init (before
 // any Update tick), matching DojoScreen::CreateButtons.
 static float MeasureBombScale(fn::TestHarness& h, bool dojoShrink) {
-    int bombType = FruitInfo_GetCount();
+    int bombType = g_FruitInfoCount;
 
     // Position chosen from DojoScreen POS_PLAY_BUTTON: doesn't matter for scale.
     _Vector3<float> spawnPos(16.0f, -66.0f, 0.0f);
@@ -101,9 +101,9 @@ int main(int argc, char* argv[]) {
     if (!h.Init()) return 1;
 
     // Verify FruitInfo was loaded.
-    int fruitCount = FruitInfo_GetCount();
+    int fruitCount = g_FruitInfoCount;
     if (fruitCount <= 0) {
-        fprintf(stderr, "FAIL: FruitInfo_GetCount()=%d -- fruitlist.xml not loaded\n", fruitCount);
+        fprintf(stderr, "FAIL: g_FruitInfoCount=%d -- fruitlist.xml not loaded\n", fruitCount);
         return 1;
     }
     printf("[SETUP] fruitCount=%d bombType=%d bombRawSize=%.2f\n",

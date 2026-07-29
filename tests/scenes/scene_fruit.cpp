@@ -50,7 +50,7 @@ static const float SPIN_MAGNITUDE    =  2.5f;
 struct SceneFruitData {
     Fruit*  fruit;
     Bomb*   bomb;
-    // Cycle step: 0 .. FruitInfo_GetCount()-1 = fruit types; step == count = bomb.
+    // Cycle step: 0 .. g_FruitInfoCount-1 = fruit types; step == count = bomb.
     int     step;
     int     fruitType;   // mirrored from step when step < count; -1 when bomb slot
     int     respawnCountdown;
@@ -71,14 +71,14 @@ static void KillCurrentEntity(SceneFruitData* d) {
 }
 
 // Spawn (or re-spawn) the entity for the current step.
-// step < FruitInfo_GetCount() => fruit; step == count => bomb.
+// step < g_FruitInfoCount => fruit; step == count => bomb.
 static void SpawnSceneFruit(SceneFruitData* d, Game& game) {
     KillCurrentEntity(d);
 
     Mortar::ActorManager* am = game.actorManager;
     if (!am) return;
 
-    const int count = FruitInfo_GetCount();
+    const int count = g_FruitInfoCount;
     const bool isBombSlot = (d->step == count);
 
     if (isBombSlot) {
@@ -169,7 +169,7 @@ static bool SceneFrameTick(SceneFruitData* d, Game& game, SDL_Window* window) {
         // Handle MOUSEBUTTONDOWN only: with SDL_HINT_MOUSE_TOUCH_EVENTS a click
         // also fires a synthesized FINGERDOWN, which would double-advance the cycle.
         if (ev.type == SDL_MOUSEBUTTONDOWN) {
-            int count = FruitInfo_GetCount();
+            int count = g_FruitInfoCount;
             if (count > 0) d->step = (d->step + 1) % (count + 1);
             d->requestRespawn = true;
         }

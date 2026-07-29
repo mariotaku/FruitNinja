@@ -55,11 +55,11 @@ static void SnapshotHUD(std::list<HUDControl*>& out) {
 }
 
 // Find the back-bomb MenuButton in the HUD control list that was NOT in the
-// pre-existing snapshot. The back button is a bomb (m_FruitType == FruitInfo_GetCount())
+// pre-existing snapshot. The back button is a bomb (m_FruitType == g_FruitInfoCount)
 // added by DojoScreen, not any pre-existing MainScreen button.
 static MenuButton* FindDojoBackBomb(const std::list<HUDControl*>& existingControls) {
     if (!game_work.mHud) return NULL;
-    int bombType = FruitInfo_GetCount();
+    int bombType = g_FruitInfoCount;
     for (std::list<HUDControl*>::iterator it = game_work.mHud->controls.begin();
          it != game_work.mHud->controls.end(); ++it) {
         HUDControl* ctrl = *it;
@@ -83,7 +83,7 @@ static MenuButton* FindDojoBackBomb(const std::list<HUDControl*>& existingContro
 // the Home baseline.  This replicates test_menubutton_scale's MeasureBombScale
 // with dojoShrink=false, kept local so this test is self-contained.
 static float MeasureHomeBombScale(fn::TestHarness& h) {
-    int bombType = FruitInfo_GetCount();
+    int bombType = g_FruitInfoCount;
     _Vector3<float> spawnPos(185.0f, -106.0f, 0.0f);
     _Vector3<float> hitBounds(0.0f, 0.0f, 0.0f);
 
@@ -133,9 +133,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Verify FruitInfo was loaded.
-    int fruitCount = FruitInfo_GetCount();
+    int fruitCount = g_FruitInfoCount;
     if (fruitCount <= 0) {
-        fprintf(stderr, "FAIL: FruitInfo_GetCount()=%d -- fruitlist.xml not loaded\n", fruitCount);
+        fprintf(stderr, "FAIL: g_FruitInfoCount=%d -- fruitlist.xml not loaded\n", fruitCount);
         return 1;
     }
     printf("[SETUP] fruitCount=%d bombType=%d\n", fruitCount, fruitCount);

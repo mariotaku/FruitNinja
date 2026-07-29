@@ -219,13 +219,49 @@ void FruitInfo_Load(const char* xmlPath);
 void FruitInfo_LoadHudTextures();
 #endif
 
-// Access loaded data
+// --- Runtime FRUIT_INFO table: the binary's two .bss globals ---
+//
+// v1.6.1 reads both of these as plain globals at every consumer. There is NO
+// accessor function for the count anywhere in the binary (all ~15 count sites
+// -- Fruit::FruitType, MenuButton::Update, ShopScreen::Update, RandomFruit,
+// WaveManager::UpdateWave, ... -- are a direct `ldr` on 0x00332a1c), so the
+// port exposes them as globals too and reads them directly.
+//
+// g_FruitInfoCount -- v1.6.1 .bss @0x00332a1c. The RUNTIME number of
+//   <FruitInfo> elements parsed from fruitlist.xml. (Ghidra labels it
+//   MAX_FRUIT_TYPES, which is misleading -- it is not a capacity.) Written
+//   ONLY inside FruitInfo_Load: `= 0` (v1.6.1 Fruit::LoadInfo @0x001e13c8),
+//   then `++` per parsed element (@0x001e13e4).
+//
+//   It doubles as the BOMB fruit-type sentinel: MenuButton / ShopScreen /
+//   DojoScreen / GameModeScreen / MainScreen / GameOverScreen pass exactly
+//   this value as a "fruit type" to force a Bomb entity, and Fruit::Slice
+//   passes `m_FruitType + g_FruitInfoCount` to SplatEntity::MakeSplat to
+//   trigger the critical flash. Any consumer that can hold such an
+//   out-of-range value MUST range-check against g_FruitInfoCount before
+//   indexing g_pFruitInfo -- FruitInfo_Get does not.
+//
+// g_pFruitInfo -- v1.6.1 .bss @0x00332a28, written by FruitInfo_Load
+//   (@0x001e14ac). Points at ELEMENT 0 of the table, so `g_pFruitInfo[type]`
+//   is the whole addressing story.
+//   DIFFERS: original = `operator new(count * 0x338 + 8)` with an 8-byte
+//   prefix holding the stride (0x338) and a redundant count, the global
+//   pointing at buffer+8 (v1.6.1 Fruit::LoadInfo @0x001e1084); the port keeps
+//   a fixed FRUIT_INFO_MAX-sized static array and points at its element 0,
+//   because nothing in the port reads that prefix. The ACCESS pattern is
+//   identical; only the allocation differs.
+extern int        g_FruitInfoCount;
+extern FruitInfo* g_pFruitInfo;
+
+// v1.6.1 Fruit::FruitInfo @0x001da5c0 -- the whole body is
+// `return g_pFruitInfo + type * sizeof(FruitInfo);` (8 instructions, one MLA).
+// NO bounds check, NO null return, NO clamp: the result is never null, so do
+// not test it. Pass only a type in [0, g_FruitInfoCount).
 const FruitInfo* FruitInfo_Get(int type);
-int FruitInfo_GetCount();
-FruitInfo* FruitInfo_GetArray();
 
 // Global bomb settings from the <bomb size="..." collision="..."/> element
-// in fruitlist.xml. Binary stores these on g_pFruitInfo+0x88/+0x8C.
+// in fruitlist.xml. Binary stores these at +0x88/+0x8C off a separate globals
+// block (NOT off the g_pFruitInfo table); the port keeps them as file statics.
 float FruitInfo_GetBombSize();
 float FruitInfo_GetBombCollision();
 

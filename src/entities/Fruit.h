@@ -322,7 +322,9 @@ public:
     static Colour CRITICAL_COLOUR;
     // Binary @ 0x00174fc8 — return FRUIT_INFO[type].m_FactColour
     static Colour FruitFactColour(long type);
-    // Binary @ 0x00174ff8 — equivalent of FruitInfo_Get(); preserved for binary call-shape parity
+    // v1.6.1 Fruit::FruitInfo @0x001da5c0 — equivalent of FruitInfo_Get(); preserved
+    // for binary call-shape parity. Unconditional `g_pFruitInfo[type]`: never null,
+    // never range-checked — pass only a type in [0, g_FruitInfoCount).
     // Fully-qualified return type avoids GCC -Wchanges-meaning since the
     // method name shadows the struct.
     static const ::FruitInfo* FruitInfo(long type);

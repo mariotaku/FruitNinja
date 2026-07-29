@@ -152,7 +152,7 @@ static void RenderSplatFrame(SDL_Window* window) {
 // MakeSplat with an OUT-OF-RANGE fruitType (m_FruitType + FruitInfo_
 // GetCount()) -- exactly the construction used by the real critical-slice
 // call site (Fruit::Slice @0x001dcf5c, see Fruit.cpp:1661-1668:
-// `splatFruitType = m_FruitType + (isCritical ? FruitInfo_GetCount() : 0)`).
+// `splatFruitType = m_FruitType + (isCritical ? g_FruitInfoCount : 0)`).
 // Once landed, UpdateSplat lerps m_ColR/G/B from Fruit::CRITICAL_COLOUR
 // toward the fruit's own Fruit::FruitTypeColour() as phase decays 1.5 -> 0.
 //
@@ -172,13 +172,13 @@ static int RunCriticalFlashScene(fn::TestHarness& h) {
     if (fruitType < 0) fruitType = Fruit::FruitType("watermelon", false);
     if (fruitType < 0) fruitType = 0;
 
-    const int fruitCount = FruitInfo_GetCount();
-    const FruitInfo* info = FruitInfo_Get(fruitType);
-    if (!info || fruitCount <= 0) {
+    const int fruitCount = g_FruitInfoCount;
+    if (fruitCount <= 0) {
         fprintf(stderr, "[scene_fruit_splat --critical] FAIL: FruitInfo lookup failed "
                 "(fruitType=%d fruitCount=%d)\n", fruitType, fruitCount);
         return 1;
     }
+    const FruitInfo* info = FruitInfo_Get(fruitType);
 
     const Colour fresh = Fruit::FruitTypeColour(fruitType);
     const Colour& crit = Fruit::CRITICAL_COLOUR;
@@ -320,11 +320,11 @@ int main(int argc, char* argv[]) {
         fruitType = 0;
     }
 
-    const FruitInfo* info = FruitInfo_Get(fruitType);
-    if (!info) {
-        fprintf(stderr, "[scene_fruit_splat] FAIL: FruitInfo_Get(%d) returned null\n", fruitType);
+    if (g_FruitInfoCount <= 0) {
+        fprintf(stderr, "[scene_fruit_splat] FAIL: fruitlist.xml not loaded (count=0)\n");
         return 1;
     }
+    const FruitInfo* info = FruitInfo_Get(fruitType);
 
     const unsigned int fruitAlpha = (unsigned int)info->m_FruitColour[3];
     printf("[scene_fruit_splat] fruitType=%d (%s)  colour BGRA=(%u,%u,%u,%u)\n",

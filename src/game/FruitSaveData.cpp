@@ -648,7 +648,7 @@ void SaveGame(FruitSaveData* save) {
                 snprintf(v3, sizeof(v3), "%f,%f,%f", b->m_AccelForce.x, b->m_AccelForce.y, b->m_AccelForce.z); // +0x8c
                 ent.SetAttribute("grav", v3);
                 // Binary "MAX_FRUIT_TYPES" sentinel == fruit count (Resume: type >= fruitCount -> Bomb).
-                ent.SetAttribute("type", FruitInfo_GetCount());
+                ent.SetAttribute("type", g_FruitInfoCount);
                 ent.SetAttribute("hit",  b->m_bHit ? "true" : "false");                     // +0x68
                 ent.SetDoubleAttribute("wait", (double)b->GetWait());                       // +0xa4
                 st.InsertEndChild(ent);

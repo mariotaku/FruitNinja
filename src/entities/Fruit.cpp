@@ -248,7 +248,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/)
     m_OnKilled.Clear();
     m_OnExpired.Clear();
     // v1.6.1 Fruit::Init @0x001e2898: range-check fruitType; out-of-range falls back to RandomFruit(true).
-    if (fruitType >= 0 && fruitType < (long)FruitInfo_GetCount()) {
+    if (fruitType >= 0 && fruitType < (long)g_FruitInfoCount) {
         m_FruitType = (uint8_t)fruitType;
     } else {
         m_FruitType = (uint8_t)RandomFruit(true);
@@ -346,7 +346,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/)
         // (scale is an Entity member SetFruitType itself never touches -- Init sets
         // it directly here, separate from the SetFruitType call below.)
         const FruitInfoData* info = FruitInfo_Get(m_FruitType);
-        float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
+        float fruitScale = info->m_Scale * 0.01f;
         scale = _Vector3<float>::One() * fruitScale;
 
         // ASM-spec v1.6.1 Fruit::Init @0x001e2898: calls SetFruitType(this, m_FruitType, scaleVec.x)
@@ -373,7 +373,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/)
         // active power-fruits including self (this fruit is already registered in
         // ActorManager by the time Init runs), so >=2 means "another one is already live".
         const FruitInfoData* gateInfo = FruitInfo_Get(m_FruitType);
-        if (gateInfo && gateInfo->m_pPowers) {
+        if (gateInfo->m_pPowers) {
             static const uint32_t kFreezeHash = StringHash("freeze");
             bool kill = false;
             if (NumberOfPowerupFruits() >= 2) {
@@ -401,7 +401,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/)
     // Increment global active-power-fruit counter for power-fruits. Pairs with
     // KillFruit's natural-expiry decrement.
     const FruitInfoData* spawnInfo = FruitInfo_Get(m_FruitType);
-    if (spawnInfo && spawnInfo->m_pPowers) {
+    if (spawnInfo->m_pPowers) {
         ++g_PowerFruitCount;
     }
 
@@ -423,10 +423,10 @@ void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/)
 void Fruit::SetFruitType(long fruitType, float scaleParam) {
     m_FruitType = (uint8_t)fruitType;
     const FruitInfoData* info = FruitInfo_Get(fruitType);
-    float fruitScale = info ? info->m_Scale * 0.01f : 1.0f;
+    float fruitScale = info->m_Scale * 0.01f;
     m_VisualScale = _Vector3<float>::One() * fruitScale;
-    const float fScale   = info ? info->m_Scale          : 25.0f;
-    const float fColBase = info ? info->m_CollisionScale : 1.0f;
+    const float fScale   = info->m_Scale;
+    const float fColBase = info->m_CollisionScale;
     const float base = fColBase + COL_RADIUS_FACTOR * fScale;
     if (base <= 0.0f) {
         delete m_Col;
@@ -455,7 +455,7 @@ void Fruit::Chuck(float delay) {
     // game_work.m_SaveData->m_TimeRemainingSave -- TimeControl::Update writes it
     // every frame (binary @ 0x00162830).
     const FruitInfoData* chuckInfo = FruitInfo_Get(m_FruitType);
-    if (chuckInfo && chuckInfo->m_pPowers && chuckInfo->m_pPowers->m_pArray
+    if (chuckInfo->m_pPowers && chuckInfo->m_pPowers->m_pArray
             && game_work.m_SaveData) {
         static const uint32_t kFreezeHash = StringHash("freeze");
         const float waveTimer = game_work.m_SaveData->m_TimeRemainingSave;
@@ -546,7 +546,7 @@ void Fruit::Update(float dt) {
             {
                 const FruitInfoData* info = FruitInfo_Get(m_FruitType);
                 bool ok = false;
-                if (info && info->m_TrailHash) {
+                if (info->m_TrailHash) {
                     ok = SetTrailParticles(info->m_TrailHash);
                 }
                 if (!ok && Game::GetInstance()->IsFastHardware()) {
@@ -734,7 +734,7 @@ void Fruit::Update(float dt) {
     // (When NOT sliced the axes in m_SliceAxes are the unit basis from Init/SetupSliceRotations.)
     {
         const FruitInfoData* spinInfo = FruitInfo_Get((long)m_FruitType);
-        const bool isSuperFruit = (spinInfo && spinInfo->m_bIsSuperFruit);
+        const bool isSuperFruit = (spinInfo->m_bIsSuperFruit != 0);
         Quaternion* rotSlots[2] = { &m_Rot1, &m_Rot2 };
         _Vector3<float>* velSlots[2] = {&m_RotVel1, &m_RotVel2};
         for (int idx = 0; idx < 2; ++idx) {
@@ -992,7 +992,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
 
     if (doMissPenalty) {
         const FruitInfoData* info = FruitInfo_Get(m_FruitType);
-        if (!m_bNoPowerUp && !m_bSliced && info && info->m_Score < 5) {
+        if (!m_bNoPowerUp && !m_bSliced && info->m_Score < 5) {
             Game* g = Game::GetInstance();
             if (g) {
                 // v1.6.1 Fruit::KillFruit @0x001deba8 (miss path):
@@ -1005,13 +1005,12 @@ void Fruit::KillFruit(bool doMissPenalty) {
                     // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8
                     // Dropped-fruit tracking (NOT a life loss). "dropped" is the global counter;
                     // m_DropsKey is the same per-fruit key used by the score path (line ~904), but
-                    // here trackSession=false. Per-fruit AddToTotal is gated on info != null.
+                    // here trackSession=false. (There is no info != null gate: v1.6.1
+                    // Fruit::FruitInfo @0x001da5c0 is an unconditional array index.)
                     if (game_work.m_SaveData) {
                         static const uint32_t hDropped = StringHash("dropped");
                         game_work.m_SaveData->AddToTotal("dropped", hDropped, 1, false, false);
-                        if (info) {
-                            game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1, false, false);
-                        }
+                        game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1, false, false);
                     }
                 } else if (Mortar::FailureEnabled(game_work.gameMode)) {
                     // Classic / Combo miss penalty (Zen falls through to no-op).
@@ -1058,7 +1057,7 @@ void Fruit::KillFruit(bool doMissPenalty) {
     //    the counter at 1 across multiple natural expirations.
     if (!(flags & ENT_KILLED)) {
         const FruitInfoData* killInfo = FruitInfo_Get(m_FruitType);
-        if (killInfo && killInfo->m_pPowers) {
+        if (killInfo->m_pPowers) {
             int v = g_PowerFruitCount;
             int newv = 0;
             if (v > 1) newv = v - 1;
@@ -1788,7 +1787,7 @@ void Fruit::Slice() {
         // (m_bParam3) is a constant 0 here (binary `mov r3,#0`), not isCritical. GetFree() never
         // returns null (v1.6.1 SplatEntity::GetFree @0x001eb318 -- flat round-robin pool steals
         // the cursor slot when full).
-        const long splatFruitType = (long)m_FruitType + (isCritical ? FruitInfo_GetCount() : 0);
+        const long splatFruitType = (long)m_FruitType + (isCritical ? g_FruitInfoCount : 0);
         // ASM-spec v1.6.1 Fruit::Slice @0x001dcfc8: mute arg = (FruitInfo+0x330
         // m_bIsSuperFruit != 0) -- super-fruit splats land silent.
         s->MakeSplat(pos, sv, /*m_bParam3=*/false,
@@ -2089,12 +2088,12 @@ void Fruit::RotateFacingUp(bool alignToFacing, _Vector3<float> spinVelAxis) {
 // m_NameHashUpper. Returns index on match. If not found and
 // fallbackRandom=true returns a random index in [0, MAX_FRUIT_TYPES-1), else -1.
 int Fruit::FruitType(const char* name, bool fallbackRandom) {
-    const int count = FruitInfo_GetCount();
+    const int count = g_FruitInfoCount;
     if (name && *name) {
         const uint32_t hash = StringHash(name);
         for (int i = 0; i < count; i++) {
             const FruitInfoData* info = FruitInfo_Get(i);
-            if (info && (info->m_NameHash == hash || info->m_NameHashUpper == hash)) {
+            if (info->m_NameHash == hash || info->m_NameHashUpper == hash) {
                 return i;
             }
         }
@@ -2332,7 +2331,7 @@ void DrawSlices(float dt, bool pass)
 void Fruit::LoadFruitModels() {
     if (g_fruitData.s_fruitModels) return;  // already loaded
 
-    const int count = FruitInfo_GetCount();
+    const int count = g_FruitInfoCount;
     if (count <= 0) return;
 
     // Step 1: Allocate raw array with header (matches binary: operator_new(count*0x24 + 8))
@@ -2357,8 +2356,6 @@ void Fruit::LoadFruitModels() {
     // Step 3: Per-fruit model loading (ALL indices, no skip for missing names)
     for (int i = 0; i < count; ++i) {
         const FruitInfoData* info = FruitInfo_Get(i);
-        if (!info) continue;
-
         const char* name = info->m_ModelName;
         if (!name[0]) continue;
 
@@ -2563,13 +2560,13 @@ static int s_TotalCritAvail  = 0;
 
 // ASM-spec v1.6.1 Fruit::RandomFruit @ 0x001dc5d8 (decompile)
 int Fruit::RandomFruit(bool includeOnSide) {
-    const int cnt = FruitInfo_GetCount();
+    const int cnt = g_FruitInfoCount;
     if (s_TotalWeight < 1) {
         s_TotalWeight     = 0;
         s_TotalAvail      = 0;
         s_TotalCrit       = 0;
         s_TotalCritAvail  = 0;
-        FruitInfoData* fi = FruitInfo_GetArray();
+        FruitInfoData* fi = g_pFruitInfo;
         for (int i = 0; i < cnt; ++i, ++fi) {
             s_TotalWeight += fi->m_Chance;
             fi->m_CumWeight = s_TotalWeight;
@@ -2585,7 +2582,7 @@ int Fruit::RandomFruit(bool includeOnSide) {
     }
     bool isCrit = WaveManager::GetInstance()->CriticalMode(0);
     Math::Random* rng = &WaveManager::GetInstance()->m_Random;
-    FruitInfoData* fruitInfoData = FruitInfo_GetArray();
+    FruitInfoData* fruitInfoData = g_pFruitInfo;
     if (!isCrit) {
         if (includeOnSide) {
             uint32_t r = rng->Rand32((uint32_t)s_TotalWeight);
@@ -2750,19 +2747,19 @@ void AddQuad(QUADCUSTOMVERTEX** out, float cx, float cy, float w, float h, Colou
 // v1.6.1 Fruit::FruitTypeName @0x001da4a4
 const char* Fruit::FruitTypeName(long type) {
     const FruitInfoData* info = FruitInfo_Get((int)type);
-    return info ? info->m_Name : nullptr;
+    return info->m_Name;
 }
 
 // v1.6.1 Fruit::FruitTypeHash @0x001da4cc
 unsigned long Fruit::FruitTypeHash(long type) {
     const FruitInfoData* info = FruitInfo_Get((int)type);
-    return info ? (unsigned long)info->m_NameHash : 0UL;
+    return (unsigned long)info->m_NameHash;
 }
 
 // v1.6.1 Fruit::FruitFactTexture @0x001da4f8
 const char* Fruit::FruitFactTexture(long type) {
     const FruitInfoData* info = FruitInfo_Get((int)type);
-    return info ? info->m_FactTexture : nullptr;
+    return info->m_FactTexture;
 }
 
 // v1.6.1 Fruit::FruitTypeColour @0x001da524
@@ -2883,8 +2880,8 @@ bool Fruit::IsOffscreen() const {
 void Fruit::EnableCollision(bool enable) {
     if (enable) {
         const FruitInfoData* info = FruitInfo_Get(m_FruitType);
-        const float fScale   = info ? info->m_Scale          : 25.0f;
-        const float fColBase = info ? info->m_CollisionScale : 1.0f;
+        const float fScale   = info->m_Scale;
+        const float fColBase = info->m_CollisionScale;
         const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
         if (!m_Col) m_Col = new ColSphere();
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
@@ -2938,7 +2935,7 @@ void Fruit::Release() {
 // fruit has no facts, re-roll via recursion GetFact(outType, outFactIdx, -1, -1).
 // Both AddToTotal calls pass trackSession=true, achievementGate=true.
 const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int factIdx) {
-    const int count = FruitInfo_GetCount();
+    const int count = g_FruitInfoCount;
     if (count <= 0) return nullptr;
 
     int ft = fruitType;
@@ -2954,7 +2951,6 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
     if (outType) *outType = ft;
 
     const FruitInfoData* chosen = FruitInfo_Get(ft);
-    if (!chosen) return nullptr;
 
     int fi = factIdx;
     if (fi < 0) {  // round-robin path

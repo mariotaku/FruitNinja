@@ -288,7 +288,7 @@ void MenuButton::CreateFruit() {
     Game* game = Game::GetInstance();
     if (!game || !game->actorManager) return;
 
-    int bombThreshold = FruitInfo_GetCount();
+    int bombThreshold = g_FruitInfoCount;
     int entityType = (bombThreshold <= m_FruitType) ? 1 : 0;
     Mortar::Entity* e = game->actorManager->Add(entityType, true);
     if (!e) return;
@@ -370,7 +370,7 @@ void MenuButton::CreateFruit() {
 void MenuButton::Release() {
     if (m_pTrackedFruit) {
         Mortar::Entity* e = static_cast<Mortar::Entity*>(m_pTrackedFruit);
-        int bombThreshold = FruitInfo_GetCount();
+        int bombThreshold = g_FruitInfoCount;
         if (m_FruitType < bombThreshold) {
             static_cast<Fruit*>(e)->m_pOwner = nullptr;
         } else if (m_FruitType == bombThreshold) {
@@ -699,7 +699,7 @@ void MenuButton::Update(float dt) {
             // and overwrites entity->pos (+0x10) every frame. This is the entire hold mechanism.
             entity->pos = GetAdjustedPos();
 
-            int bombThreshold = FruitInfo_GetCount();
+            int bombThreshold = g_FruitInfoCount;
             if (m_FruitType < bombThreshold) {
                 // FRUIT branch: also write pos2 (+0xc8 = m_SecondPos) to prevent lerp/streak.
                 // Binary @ 0x0019a860 calls slot 15 a second time and stores into entity+0xc8.

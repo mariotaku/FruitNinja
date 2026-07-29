@@ -30,7 +30,7 @@ void PreloadSounds() {
     for (int k = 0; k < 24; ++k)
         sm->PreLoadSound(k_PreloadedSounds[k]);
 
-    const int fruitCount = FruitInfo_GetCount();
+    const int fruitCount = g_FruitInfoCount;
     for (int i = 0; i < fruitCount; ++i) {
         const FruitInfo* fi = FruitInfo_Get(i);
         // TODO: m_pSounds/m_SoundCount populated by fruit XML loader (binary offset +0x31C/+0x320)

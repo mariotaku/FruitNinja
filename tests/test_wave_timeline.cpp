@@ -273,7 +273,7 @@ int main(int argc, char* argv[]) {
                     Fruit* f = static_cast<Fruit*>(e);
                     const char* typeName = Fruit::FruitTypeName((long)f->m_FruitType);
                     const FruitInfo* fi  = FruitInfo_Get((int)f->m_FruitType);
-                    bool isSuper = fi && fi->m_bIsSuperFruit;
+                    bool isSuper = (fi->m_bIsSuperFruit != 0);
 
                     SpawnRecord rec;
                     if (typeName && typeName[0] != '\0') {
