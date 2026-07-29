@@ -31,14 +31,26 @@ Fix: drop Mesa3D's llvmpipe software-GL DLLs next to the test executables.
    ```
 4. Copy both `opengl32.dll` and `libgallium_wgl.dll` into the unified test
    output dir from above (e.g. `build/host/tests/`).
-5. Run tests with the software-rasterizer env vars:
+5. Run tests:
+   ```
+   ctest --test-dir build/host -R screenshot
+   ```
+   `ctest` sets `GALLIUM_DRIVER=llvmpipe` / `LIBGL_ALWAYS_SOFTWARE=1` /
+   `MESA_GL_VERSION_OVERRIDE=2.1` itself on every GL-dependent test (see the
+   `ENVIRONMENT` wiring in `tests/CMakeLists.txt`'s `fn_add_game_test` /
+   `add_test` override) -- you no longer need to export them by hand for
+   `ctest` runs. Without those DLLs in place, WGL falls back to the real
+   display adapter regardless of the env vars, which can hard-crash the
+   process (no useful error) if the display is asleep.
+
+   Running a test **exe directly** (not through `ctest`) still needs the vars
+   exported manually, since nothing else sets them:
    ```
    set GALLIUM_DRIVER=llvmpipe
    set LIBGL_ALWAYS_SOFTWARE=1
    set MESA_GL_VERSION_OVERRIDE=2.1
-   ctest --test-dir build/host -R screenshot
+   ./build/host/tests/test_screen.exe main
    ```
-   or directly: `GALLIUM_DRIVER=llvmpipe LIBGL_ALWAYS_SOFTWARE=1 ./build/host/tests/test_screen.exe main`
 
 These DLLs are gitignored build artifacts -- do **not** commit them. They're
 opt-in for whoever needs headless rendering; on a machine with the display on

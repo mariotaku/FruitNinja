@@ -185,6 +185,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // Logged BEFORE the call: on Windows a software-GL fallback (Mesa
+    // llvmpipe) hitting the real display adapter instead can hard-terminate
+    // the process from inside SDL_GL_CreateContext with no SEH exception and
+    // no chance to reach the !gl check below -- this line is the last thing
+    // that survives in that case, so a bare exit code isn't silent about
+    // where it died (see tests/README.md / tests/CMakeLists.txt for the
+    // equivalent ctest-side env wiring).
+    LOG_INFO("mainSDL", "Creating GL context (SDL_GL_CreateContext)...");
     SDL_GLContext gl = SDL_GL_CreateContext(window);
     if (!gl) {
         LOG_ERROR("mainSDL", "GL context failed: %s", SDL_GetError());

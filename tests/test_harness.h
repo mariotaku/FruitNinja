@@ -312,6 +312,15 @@ struct TestHarness {
             return false;
         }
 
+        // Logged (and flushed -- stderr is unbuffered, see the ctor) BEFORE the
+        // call: a missing GALLIUM_DRIVER/LIBGL_ALWAYS_SOFTWARE/MESA_GL_VERSION_OVERRIDE
+        // env (see tests/README.md, and the ctest ENVIRONMENT wiring in
+        // tests/CMakeLists.txt's fn_add_game_test) can make Mesa's opengl32.dll
+        // hit the real display adapter and hard-terminate the process from inside
+        // SDL_GL_CreateContext with no SEH exception and no chance to reach the
+        // !gl check below -- this line is the last thing that survives in that
+        // case, so a bare exit code is no longer silent about where it died.
+        std::fprintf(stderr, "Creating GL context (SDL_GL_CreateContext)...\n");
         gl = SDL_GL_CreateContext(window);
         if (!gl) {
             std::fprintf(stderr, "GL ctx failed: %s\n", SDL_GetError());

@@ -78,6 +78,12 @@ macro(add_scene_test _target _source)
             endforeach()
         endif()
     endif()
+
+    # task #125: register with the same FN_GL_CONTEXT_TEST_EXES global property
+    # that tests/CMakeLists.txt's add_test() override reads, so the ctest
+    # entries below (bomb_scale, fruit_splat, ...) automatically get the Mesa
+    # llvmpipe env -- every scene test here renders, none opt out.
+    set_property(GLOBAL APPEND PROPERTY FN_GL_CONTEXT_TEST_EXES ${_target})
 endmacro()
 
 # ---- scene_fruit: single watermelon in a ballistic arc ----

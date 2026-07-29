@@ -31,6 +31,66 @@ foreach(_fn_test_cfg Debug Release RelWithDebInfo MinSizeRel)
 endforeach()
 
 # ---------------------------------------------------------------------------
+# GL-context ctest environment (task #125).
+#
+# Mesa's software-GL fallback needs three env vars (GALLIUM_DRIVER=llvmpipe,
+# LIBGL_ALWAYS_SOFTWARE=1, MESA_GL_VERSION_OVERRIDE=2.1 -- see tests/README.md)
+# or opengl32.dll (the DLL shim copied next to every test exe on Windows,
+# see fn_copy_dll_dependency below) tries the real display adapter and can
+# die with an unrecoverable native failure (observed: exit 0x80070057, no SEH
+# exception -- indistinguishable from a code crash) whenever the display is
+# asleep. ctest never set these, so running the suite depended on the CALLER
+# having exported them first; forgetting produced a false "hundreds of tests
+# failing" reading.
+#
+# Fix: wire ENVIRONMENT on the ctest entry automatically instead of relying on
+# every add_test() call site to remember set_tests_properties(... ENVIRONMENT
+# ...). fn_add_game_test() below records each GL-context executable target in
+# the FN_GL_CONTEXT_TEST_EXES global property (pass NO_GL_CONTEXT as a 3rd arg
+# to opt an executable out -- for the handful of targets that link
+# fruit-ninja-game purely for symbol access and never call TestHarness::Init's
+# SDL_GL_CreateContext, e.g. the SDL_INIT_EVENTS-only input tests); the
+# add_test() override just below stamps ENVIRONMENT on every ctest entry whose
+# COMMAND runs one of those executables -- so a call site literally cannot
+# forget it. tests/scenes/CMakeLists.txt's add_scene_test reuses the same
+# property.
+#
+# WIN32-only: the Mesa DLL shim only sits next to the exes on Windows: Linux/CI
+# use system GL or their own software stack and must not be forced onto this
+# path.
+# ---------------------------------------------------------------------------
+set(FN_GL_TEST_ENV "GALLIUM_DRIVER=llvmpipe;LIBGL_ALWAYS_SOFTWARE=1;MESA_GL_VERSION_OVERRIDE=2.1")
+set_property(GLOBAL PROPERTY FN_GL_CONTEXT_TEST_EXES "")
+
+# Overrides the built-in add_test(): CMake makes the previous definition of an
+# overridden command available under an underscore-prefixed name (standard
+# CMake idiom, used e.g. by Conan's generated toolchain files to hook
+# find_package()). Every add_test(NAME <n> COMMAND <exe> ...) call in this
+# directory (and tests/scenes/, which inherits this macro via
+# add_subdirectory) is intercepted; if <exe> was registered as a GL-context
+# executable, the env above gets attached to the new ctest entry.
+macro(add_test)
+    _add_test(${ARGN})
+    if (WIN32)
+        # ARGN can't be passed to list() directly inside a macro (it isn't a
+        # normal variable -- only ${ARGN} substitution works); copy it first.
+        set(_fn_gt_args ${ARGN})
+        list(FIND _fn_gt_args "COMMAND" _fn_gt_cmd_idx)
+        list(FIND _fn_gt_args "NAME" _fn_gt_name_idx)
+        if (_fn_gt_cmd_idx GREATER -1 AND _fn_gt_name_idx GREATER -1)
+            math(EXPR _fn_gt_exe_idx "${_fn_gt_cmd_idx} + 1")
+            math(EXPR _fn_gt_name_val_idx "${_fn_gt_name_idx} + 1")
+            list(GET _fn_gt_args ${_fn_gt_exe_idx} _fn_gt_exe)
+            list(GET _fn_gt_args ${_fn_gt_name_val_idx} _fn_gt_test_name)
+            get_property(_fn_gt_gl_exes GLOBAL PROPERTY FN_GL_CONTEXT_TEST_EXES)
+            if (_fn_gt_exe IN_LIST _fn_gt_gl_exes)
+                set_tests_properties(${_fn_gt_test_name} PROPERTIES ENVIRONMENT "${FN_GL_TEST_ENV}")
+            endif()
+        endif()
+    endif()
+endmacro()
+
+# ---------------------------------------------------------------------------
 # Helper macro: fn_add_game_test
 #
 # Registers an executable that links against fruit-ninja-game, SDL2::SDL2main,
@@ -38,11 +98,16 @@ endforeach()
 # This replaces the ~20 lines of boilerplate each test used to carry verbatim.
 #
 # Usage:
-#   fn_add_game_test(<target> <source>)
+#   fn_add_game_test(<target> <source> [NO_GL_CONTEXT])
+#
+# NO_GL_CONTEXT opts the target out of the automatic Mesa-llvmpipe ENVIRONMENT
+# wiring above -- only for targets that never call TestHarness::Init() /
+# SDL_GL_CreateContext (grep this file for "no SDL"/"no GL"/"SDL_INIT_EVENTS
+# only" comments to see which link fruit-ninja-game for symbol access alone).
 #
 # The caller then adds include dirs, ctest entries, and test properties as
 # needed after the macro call -- the macro only wires the shared link/copy
-# boilerplate.
+# boilerplate (+ GL-context test registration above).
 #
 # opengl32 is linked on WIN32 only; on non-WIN32 OpenGL::GL is found and linked
 # (except for test_screen which resolves glReadPixels at runtime -- that target
@@ -126,6 +191,13 @@ macro(fn_add_game_test _target _source)
                         $<TARGET_FILE_DIR:${_target}>)
             endforeach()
         endif()
+    endif()
+
+    # ARGN can't be used with IN_LIST directly inside a macro (only ${ARGN}
+    # substitution works); copy it to a normal variable first.
+    set(_fn_agt_extra_args ${ARGN})
+    if (NOT "NO_GL_CONTEXT" IN_LIST _fn_agt_extra_args)
+        set_property(GLOBAL APPEND PROPERTY FN_GL_CONTEXT_TEST_EXES ${_target})
     endif()
 endmacro()
 
@@ -212,7 +284,7 @@ add_test(NAME stringhash COMMAND test_stringhash)
 # HashTypeConvert: 7-entry type-hash table (fruit/bomb/coin/slash/blast/jiblet/fruitray).
 # EncodeUTF8FromUCS: ASCII, 2-byte (U+00E9), 3-byte (U+4E2D) codepoints.
 # Uses fn_add_game_test (fruit-ninja-game carries HashTypeConvert); no SDL_Init needed.
-fn_add_game_test(test_math_utils test_math_utils.cpp)
+fn_add_game_test(test_math_utils test_math_utils.cpp NO_GL_CONTEXT)
 add_test(NAME math_utils COMMAND test_math_utils)
 set_tests_properties(math_utils PROPERTIES TIMEOUT 30)
 
@@ -617,7 +689,7 @@ set_tests_properties(render_interp PROPERTIES TIMEOUT 60)
 # so the head-cap slot at index m_PointCount does not carry stale positions from
 # a prior slice. Pure buffer-content check: no SDL init, no GL, no audio --
 # SlashEntity init only allocates heap memory (ColLine, vertex buffers).
-fn_add_game_test(test_slash_reset test_slash_reset.cpp)
+fn_add_game_test(test_slash_reset test_slash_reset.cpp NO_GL_CONTEXT)
 add_test(NAME slash_reset COMMAND test_slash_reset)
 set_tests_properties(slash_reset PROPERTIES TIMEOUT 30)
 
@@ -630,7 +702,7 @@ set_tests_properties(slash_reset PROPERTIES TIMEOUT 30)
 #   (3) NEAR-BOUNDARY -- closest just outside radius -> MISS; just inside -> HIT
 # Pure buffer-content check: no SDL init, no GL, no audio -- follows test_slash_reset.cpp
 # bootstrap pattern (fn_add_game_test, SlashEntity::Init only).
-fn_add_game_test(test_slash_collision test_slash_collision.cpp)
+fn_add_game_test(test_slash_collision test_slash_collision.cpp NO_GL_CONTEXT)
 add_test(NAME slash_collision COMMAND test_slash_collision)
 set_tests_properties(slash_collision PROPERTIES TIMEOUT 30)
 
@@ -640,7 +712,7 @@ set_tests_properties(slash_collision PROPERTIES TIMEOUT 30)
 # and 0x15 (5 fruit, 3 types, one pair) branches, plus 0x16/0x17/0x04/fallback
 # and the dominant-type out param. High-fan-in scoring leaf: feeds the game-over
 # fact board and persisted save data. Pure logic: no SDL init, no GL, no audio.
-fn_add_game_test(test_slash_combo test_slash_combo.cpp)
+fn_add_game_test(test_slash_combo test_slash_combo.cpp NO_GL_CONTEXT)
 add_test(NAME slash_combo COMMAND test_slash_combo)
 set_tests_properties(slash_combo PROPERTIES TIMEOUT 30)
 
@@ -652,7 +724,7 @@ set_tests_properties(slash_combo PROPERTIES TIMEOUT 30)
 # multiple motions -> single flush-move (catch-up invariant G), FINGERUP deferred
 # release, held-finger single-dispatch-per-tick, ReleaseAllFingers atomicity (#162).
 # Uses FN_TEST to expose pending-state accessors; SDL_INIT_EVENTS only (no GL/audio).
-fn_add_game_test(test_input_tick_invariant test_input_tick_invariant.cpp)
+fn_add_game_test(test_input_tick_invariant test_input_tick_invariant.cpp NO_GL_CONTEXT)
 target_compile_definitions(test_input_tick_invariant PRIVATE FN_TEST)
 add_test(NAME input_tick_invariant COMMAND test_input_tick_invariant)
 set_tests_properties(input_tick_invariant PROPERTIES TIMEOUT 30)
@@ -666,7 +738,7 @@ set_tests_properties(input_tick_invariant PROPERTIES TIMEOUT 30)
 # still applies every queued sample in order (determinism). Same harness
 # pattern as test_input_tick_invariant (real InputTranslatorSDL + real Touch,
 # SDL_INIT_EVENTS only -- no GL/audio).
-fn_add_game_test(test_realtime_drag_livepos test_realtime_drag_livepos.cpp)
+fn_add_game_test(test_realtime_drag_livepos test_realtime_drag_livepos.cpp NO_GL_CONTEXT)
 target_compile_definitions(test_realtime_drag_livepos PRIVATE FN_TEST)
 add_test(NAME realtime_drag_livepos COMMAND test_realtime_drag_livepos)
 set_tests_properties(realtime_drag_livepos PROPERTIES TIMEOUT 30)
@@ -684,7 +756,7 @@ set_tests_properties(realtime_drag_livepos PROPERTIES TIMEOUT 30)
 #   * a same-tick DOWN+MOTION fast flick still registers on the press frame.
 # MUST FAIL on the old curr!=prev press-frame TouchMove heuristic.
 # FN_TEST exposes InputTranslatorSDL state + the SlashEntity bomb-latch seam.
-fn_add_game_test(test_slash_input test_slash_input.cpp)
+fn_add_game_test(test_slash_input test_slash_input.cpp NO_GL_CONTEXT)
 target_compile_definitions(test_slash_input PRIVATE FN_TEST)
 add_test(NAME slash_input COMMAND test_slash_input)
 set_tests_properties(slash_input PROPERTIES TIMEOUT 30)
@@ -1143,7 +1215,7 @@ set_tests_properties(screenshot_scorecontrol PROPERTIES TIMEOUT 60
 # XML uses the BINARY element names (<state>/<total>/<unlocked>, not <que>-for-state/
 # <SliceTotal>/<achievements>). Pure in-process: constructs a Game only for the
 # MortarGame version singleton; no SDL/GL/audio.
-fn_add_game_test(test_save_roundtrip test_save_roundtrip.cpp)
+fn_add_game_test(test_save_roundtrip test_save_roundtrip.cpp NO_GL_CONTEXT)
 add_test(NAME save_roundtrip COMMAND test_save_roundtrip)
 set_tests_properties(save_roundtrip PROPERTIES TIMEOUT 30)
 
@@ -1161,7 +1233,7 @@ set_tests_properties(save_roundtrip PROPERTIES TIMEOUT 30)
 # leaf test, see the CASE 4 gap comment). Pure in-process: constructs a Game
 # + FileSystem_Direct only (mirrors GameInitialise.cpp Step 3) so
 # BonusManager::Init() loads the real bonusAwards.xml; no SDL/GL/audio.
-fn_add_game_test(test_bonus_manager test_bonus_manager.cpp)
+fn_add_game_test(test_bonus_manager test_bonus_manager.cpp NO_GL_CONTEXT)
 add_test(NAME bonus_manager COMMAND test_bonus_manager)
 set_tests_properties(bonus_manager PROPERTIES TIMEOUT 30)
 
@@ -1171,7 +1243,7 @@ set_tests_properties(bonus_manager PROPERTIES TIMEOUT 30)
 # <purchase_info>) while leaving genuinely purchased (cost>0) powers alone.
 # Pure in-process: Game + FileSystem_Direct only, loads the real
 # xml/poweruplist.xml; no SDL/GL/audio.
-fn_add_game_test(test_powerup test_powerup.cpp)
+fn_add_game_test(test_powerup test_powerup.cpp NO_GL_CONTEXT)
 add_test(NAME powerup COMMAND test_powerup)
 set_tests_properties(powerup PROPERTIES TIMEOUT 30)
 
