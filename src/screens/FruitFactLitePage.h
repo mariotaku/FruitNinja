@@ -5,8 +5,18 @@
 // FruitFactLitePage : FruitFactPage  (v1.6.1 binary)
 //
 // Binary refs (v1.6.1):
-//   ctor   0x0017ad5c
+//   ctor   0x0017ad5c / 0x0017a87c  [C1/C2 variants]
 //   Update 0x0017a220
+//
+// DEAD in v1.6.1 -- linked-but-unreferenced relic, NOT in-game UI.
+// Evidence: no .plt thunk exists for the ctor (.plt = 0x00102964-0x00116d13), its only
+// xref is Ghidra's synthetic Entry Point [EXTERNAL], and its vtable @0x002cd2c8 is
+// referenced solely by its own ctor/dtor/dtor_deleting bodies. GameOverScreen::Update
+// @0x00187220, the sole FruitFactControl::RegisterPage call site, registers exactly three
+// pages and never this one. (Contrast the live sibling FruitFactBonusFactPage: ctor
+// 0x00173d90, .plt thunk 0x0010c77c, called from 0x00187340.)
+// Do NOT instantiate to force visuals -- that would ADD divergence, per the game-over
+// nav-arrows precedent. Zero instantiation sites is CORRECT.
 //
 
 #include "FruitFactPage.h"

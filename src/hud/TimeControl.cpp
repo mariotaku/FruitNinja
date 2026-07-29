@@ -338,5 +338,18 @@ void TimeControl::Draw(float* hudScaleRaw) {
                          overlayTint, 0);
     }
 
-    // TODO: v1.6.1 TimeControl::Draw @0x001c12d4 -- clock-icon block (MatrixStack Reset/Scale/Translate/Upload, TintWhite(hudScale), Mesh::DrawQuadUnCached, texture Set/UnSet) is unported, guarded by m_Texture.IsValid(). Unknown whether m_Texture is ever assigned in v1.6.1; if it is, this whole block needs porting, not just the tint.
+    // Verified dead branch: v1.6.1 TimeControl::m_Texture (HUDControl3d +0x74) is never
+    // assigned anywhere in the binary, so the IsValid()-guarded clock-icon block in
+    // v1.6.1 TimeControl::Draw @0x001c12d4 (MatrixStack Reset/Scale/Translate/Upload,
+    // TintWhite(hudScale) @0x001c1520, Mesh::DrawQuadUnCached @0x001c154c, texture
+    // Set/UnSet) never executes. Correctly NOT ported -- porting it would draw an icon
+    // the original never shows.
+    // Traced: HUDControl3d ctor @0x0018b72c (SmartPtr default-ctor only), TimeControl
+    // ctor @0x001c0fe0, Init @0x001c087c (vtable slot 4 -> Reset @0x001c0930),
+    // Reset, Update @0x001c0a48, CountDown @0x001c0890, Skip @0x001c089c,
+    // SetToMultiplayerState @0x001c08d0, Release @0x001c11c8 (SetNull, not a load).
+    // Decisive: the construction site in GameInit @0x001ce1c0 (~0x001ce560-0x001ce598)
+    // does ctor -> Init -> CountDown(90.9) -> HUD::AddControl with NO
+    // LoadLocalisedTexture call -- unlike the sibling ScoreControl and CoinCounter
+    // built in that same function, which do load and assign their textures there.
 }
