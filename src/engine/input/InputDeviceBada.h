@@ -38,16 +38,24 @@ public:
     virtual void              Destroy();
     virtual void              Update(float dt);
     virtual void              AddActionMapper(InputActionMapper* mapper);
+    // DIFFERS: ClearActions/RegisterInputCallback are NON-VIRTUAL base methods in the
+    //   binary (@0x002758b0 / @0x002759f4) — InputDeviceBada overrides neither. These
+    //   two overrides exist only to host the port's m_bindings substitute for the
+    //   Defunct InputManager::LoadConfigFile; see InputDevice.h.
     virtual void              ClearActions(unsigned long actionHash, bool last);
     virtual void              RegisterInputCallback(unsigned long actionHash,
                                                     InputDeviceCallback cb);
     virtual void              Reset();
+    // Not overridden in the binary either: the Bada vtable (0x002d0468) shares the
+    // base's (0x002d0f70) inline-empty `bx lr` bodies for these three. See the
+    // SETTLED note in InputDeviceBada.cpp.
     virtual void              SetQueueEventsUntilUpdate(bool v);
     virtual void              SetSendDownCallbacksEachUpdate(bool v);
     virtual void              OnAxisExtentsChanged();
     virtual InputDeviceTypes  GetDeviceType();
 
-    // Port-side dispatch (not a binary vtable slot).
+    // DIFFERS: PORT-INVENTED, no binary counterpart — the binary dispatches through
+    //   the non-virtual InputDevice::CheckActions -> InputActionMapper::ProcessEvent.
     virtual void              DispatchEvent(InputEvent* event);
 
     // Binary-faithful derived fields (ctor-zero). Names match the Ghidra

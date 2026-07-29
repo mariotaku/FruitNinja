@@ -69,6 +69,15 @@ void InputManager::Update(float dt) {
     m_inUpdate = false;
 }
 
+// This stub BLOCKS removing the port's m_bindings substitute (InputDeviceBada).
+// In the binary this function is the ONLY producer of InputActionMappers: it parses
+// Input/Input.txt and, per action line, does operator new(0x44) + InputActionMapper
+// ctor + InputManager::AddActionMapper (which broadcasts to every device's
+// AddActionMapper, filling InputDevice::m_ActionMappers). With it stubbed,
+// m_ActionMappers stays permanently empty, so the binary-faithful non-virtual
+// RegisterInputCallback/ClearActions/CheckActions bodies would register and dispatch
+// nothing — hence the port's InputDeviceBinding list stands in. Porting this also
+// needs InputManager::ParseAction and InputManager::ParseKey.
 int InputManager::LoadConfigFile(const char* path) {
     (void)path;
     // Defunct: input config file — no-op stub; v1.6.1 Mortar::InputManager::LoadConfigFile @ 0x002442fc

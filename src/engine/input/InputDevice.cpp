@@ -7,9 +7,11 @@ namespace Mortar {
 // ev is a by-value template event: only its actionFlags/keycode/m_mapper
 // fields feed the filter, matching the binary reading its 3 relevant words
 // out of the by-value InputEvent (0x14 bytes -- see InputEvent.h).
-// DIFFERS: binary also stores bool m_Flag40(+0x40)=true; the port's
-// Delegate1 (36 bytes) overlays that byte position (see header DIFFERS),
-// so there's no separate field left to set it in.
+// TODO: v1.6.1 0x002756b0 (Mortar::InputActionMapper::InputActionMapper) --
+// the binary also copies InputEvent words 3 and 4 (binary +0x0c / +0x10) into
+// m_Param4 / m_Param5. The port's InputEvent is remapped and carries no field
+// for those words, so both are hardcoded 0 here; wire them once InputEvent is
+// made layout-faithful.
 InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
                                       unsigned long actionHash,
                                       unsigned long configSourceHash)
@@ -83,12 +85,12 @@ void InputActionMapper::ProcessEvent(InputEvent* event) {
     }
 }
 
-// Binary @ 0x001b3794 — InputDevice ctor: set fns ptr, list ctor, list clear.
+// v1.6.1 InputDevice::InputDevice @0x002759a8 — set fns ptr, list ctor, list clear.
 // Port: standard C++ ctor (vptr set by compiler, m_ActionMappers default-constructed).
 InputDevice::InputDevice() {
 }
 
-// Binary @ 0x001b3744 — InputDevice dtor.
+// v1.6.1 InputDevice::~InputDevice @0x00275958 (deleting variant @0x0027598c).
 InputDevice::~InputDevice() {
 }
 
@@ -97,19 +99,21 @@ void InputDevice::Destroy() {
     m_ActionMappers.clear();
 }
 
-// Binary @ 0x???? — ClearActions stub.
+// v1.6.1 InputDevice::ClearActions @0x002758b0 — non-virtual in the binary (see
+// InputDevice.h DIFFERS for why the port declares it virtual). Body not ported.
 void InputDevice::ClearActions(unsigned long, bool) {}
 
-// Binary @ 0x???? — RegisterInputCallback stub.
+// v1.6.1 InputDevice::RegisterInputCallback @0x002759f4 — non-virtual in the binary
+// (see InputDevice.h DIFFERS). Body not ported.
 void InputDevice::RegisterInputCallback(unsigned long, InputDeviceCallback) {}
 
-// Binary @ 0x???? — AxisEvent stub.
+// v1.6.1 InputDevice::AxisEvent @0x0027582c — stub.
 void InputDevice::AxisEvent(long, unsigned long, float, float, unsigned long, long) {}
 
-// Binary @ 0x???? — ButtonPressed stub.
+// v1.6.1 InputDevice::ButtonPressed @0x00275864 — stub.
 void InputDevice::ButtonPressed(unsigned long, unsigned long, float, unsigned long, long) {}
 
-// v1.6.1 InputDevice::CheckActions @0x00275fc7. Iterate m_ActionMappers list, call ProcessEvent.
+// v1.6.1 InputDevice::CheckActions @0x002757fc. Iterate m_ActionMappers list, call ProcessEvent.
 void InputDevice::CheckActions(InputEvent* event) {
     for (std::list<InputActionMapper*>::iterator it = m_ActionMappers.begin();
          it != m_ActionMappers.end(); ++it) {

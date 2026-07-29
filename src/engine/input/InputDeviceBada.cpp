@@ -137,10 +137,12 @@ void InputDeviceBada::AddActionMapper(InputActionMapper* mapper) {
     m_ActionMappers.push_back(mapper);
 }
 
-// v1.6.1 Mortar::InputDevice::ClearActions @0x002758b0 — clear matching bindings.
-// (InputDeviceBada does not override it; this is the base-class body. Distinct
+// v1.6.1 Mortar::InputDevice::ClearActions @0x002758b0 — NON-VIRTUAL base method in
+// the binary, so InputDeviceBada has nothing to override there. This override exists
+// only to service the port's m_bindings substitute (see InputDevice.h DIFFERS); it
+// goes away with m_bindings once InputManager::LoadConfigFile is ported. Distinct
 // symbol from the manager-side broadcaster Mortar::InputManager::ClearActions
-// @0x002441e0.) last=true on the final device in iteration.
+// @0x002441e0. last=true on the final device in iteration.
 void InputDeviceBada::ClearActions(unsigned long actionHash, bool /*last*/) {
 #if !defined(__bada__)
     for (std::list<InputDeviceBinding>::iterator it = m_bindings.begin();
@@ -156,13 +158,15 @@ void InputDeviceBada::ClearActions(unsigned long actionHash, bool /*last*/) {
 #endif
 }
 
-// v1.6.1 Mortar::InputDevice::RegisterInputCallback @0x002759f4 — InputDeviceBada
-// does NOT override this; it inherits the base body, which walks the
-// m_ActionMappers intrusive list, matches m_ActionHash and calls
-// InputActionMapper::SetCallback. (Manager-side broadcaster: @0x0024475c.)
-// DIFFERS: original = per-device binding via InputActionMapper; port uses
-//   direct InputDeviceBinding list for SDL dispatch path (no InputActionMapper
-//   ctor ported yet).
+// v1.6.1 Mortar::InputDevice::RegisterInputCallback @0x002759f4 — NON-VIRTUAL base
+// method in the binary (no vtable slot), which walks m_ActionMappers, matches
+// m_ActionHash and installs the callback. (Manager-side broadcaster: @0x0024475c.)
+// DIFFERS: original = per-device binding via InputActionMapper; port overrides the
+//   method and uses a direct InputDeviceBinding list, because the binary's only
+//   producer of InputActionMappers is InputManager::LoadConfigFile @0x002442fc,
+//   which is a Defunct stub here — so m_ActionMappers is always empty and the
+//   binary-faithful body would register nothing. Remove this override together
+//   with m_bindings when LoadConfigFile is ported.
 void InputDeviceBada::RegisterInputCallback(unsigned long actionHash,
                                             InputDeviceCallback cb) {
 #if !defined(__bada__)
@@ -188,6 +192,14 @@ void InputDeviceBada::Reset() {
     Touch::GetInstance().Clear();
 }
 
+// SETTLED (do not re-litigate): InputDeviceBada does NOT override
+// SetQueueEventsUntilUpdate / SetSendDownCallbacksEachUpdate. Both vtables — base
+// 0x002d0f70 and Bada 0x002d0468 — point at the SAME 4-byte `bx lr` bodies
+// (0x00243554 and 0x00243558), emitted from inline empty `{}` in the base header.
+// Same story for OnAxisExtentsChanged (0x00243550) and IsDown (0x0024355c).
+// So the empty __bada__ arm below is ALREADY FAITHFUL; the !__bada__ arms writing
+// m_queueUntilUpdate / m_sendDownEachUpdate are port inventions belonging to the
+// m_bindings substitute (see InputDevice.h DIFFERS) and are deleted with it.
 void InputDeviceBada::SetQueueEventsUntilUpdate(bool v) {
 #if !defined(__bada__)
     m_queueUntilUpdate = v;
@@ -204,11 +216,11 @@ void InputDeviceBada::SetSendDownCallbacksEachUpdate(bool v) {
 #endif
 }
 
-// ASM-spec v1.6.1 InputDeviceBada::OnAxisExtentsChanged @ 0x00243550 — InputDeviceBada::OnAxisExtentsChanged().
-// Empty body in the binary (inherits the InputDevice base no-op; the touch
-// device has no axis extents to recompute). The InputManager-level broadcast
-// that fans this out across devices is InputManager::OnAxisExtentsChanged
-// @ 0x00244238 — a separate function, not this per-device override.
+// v1.6.1 InputDevice::OnAxisExtentsChanged @0x00243550 — a shared inline-empty `bx lr`
+// body, NOT an InputDeviceBada override: the Bada vtable (0x002d0468) slot +0x1c holds
+// the same address as the base vtable (0x002d0f70). The touch device has no axis
+// extents to recompute. The InputManager-level broadcast that fans this out across
+// devices is InputManager::OnAxisExtentsChanged @0x00244238 — a separate function.
 void InputDeviceBada::OnAxisExtentsChanged() {
 }
 
