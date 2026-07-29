@@ -316,9 +316,12 @@ void TimeControl::Draw(float* hudScaleRaw) {
     _Vector3<float> drawPos(drawX, drawY, 0.0f);
 
     // DAT_00162b0c = 32.0 -- font size for countdown text. binary @ 0x00162982
+    // ASM-spec v1.6.1 TimeControl::Draw @0x001c12d4: tint at 0x001c1364 -- m_DrawColour * hudScale before DrawString.
+    const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
+    Colour drawColour = Colour::TintColour(m_DrawColour, tintRGB);
     font->DrawString(32.0f, 1.0f, 0.0f,
                      m_TextBuffer, drawPos,
-                     m_DrawColour, 0xe);
+                     drawColour, 0xe);
 
     // Optional powerup overlay ("+N" time bonus text)
     if (m_PowerupOverlay[0] != '\0') {
@@ -327,11 +330,13 @@ void TimeControl::Draw(float* hudScaleRaw) {
         // Binary @ 0x001629d0: green powerup-overlay tint.
         // DAT_00162b1c -> GOT chain -> 0x00268f6c (Colour::Green singleton).
         Colour overlayTint(0, 255, 0, 255);
+        // ASM-spec v1.6.1 TimeControl::Draw @0x001c12d4: tint at 0x001c1414 -- overlayTint * hudScale before DrawString.
+        overlayTint = Colour::TintColour(overlayTint, tintRGB);
         // DAT_00162b0c = 24.0 -- powerup overlay font size. binary @ 0x00162a..
         font->DrawString(24.0f, 1.0f, 0.0f,
                          m_PowerupOverlay, overlayPos,
                          overlayTint, 0);
     }
 
-    // Binary @ 0x00162a..: tick-tock UV quad branch. Dead code in shipped binary; m_Texture never assigned. Skipped.
+    // TODO: v1.6.1 TimeControl::Draw @0x001c12d4 -- clock-icon block (MatrixStack Reset/Scale/Translate/Upload, TintWhite(hudScale), Mesh::DrawQuadUnCached, texture Set/UnSet) is unported, guarded by m_Texture.IsValid(). Unknown whether m_Texture is ever assigned in v1.6.1; if it is, this whole block needs porting, not just the tint.
 }
