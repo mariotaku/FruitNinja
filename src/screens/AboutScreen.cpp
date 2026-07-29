@@ -803,29 +803,36 @@ void AboutScreen::AddLine(const char* text, Colour colour, int fontSize)
 // AboutScreen::CreateCreditsMarquee  @ 0x0015ac0c
 // Builds the m_Marquees scrolling credits list.
 // ASM-spec v1.6.1 AboutScreen::CreateCreditsMarquee @0x0015ac0c:
-//   Adds lines via AddLine; lays out positions: Vec3(-220, 47 - 12*i, 0) per item.
-//   Lang gate: if langFlag in {0x0D, 0x0E, 0x14}, insert blank padding after LSTR 0x349.
+//   20 AddLine calls total, in order: heading; gated blank; unconditional
+//   blank (titleColour); LEAD0; gated blank; 6 dev-name lines; unconditional
+//   blank (titleColour); LEAD1; gated blank; "Shainiel Deo..." line;
+//   unconditional blank (titleColour); LEAD2; gated blank; "Natalie
+//   Clarke..." line; "Char + Emma Wood..." line. The 6 blank lines are
+//   section spacers (no text content) but still occupy marquee slots and
+//   shift every later line's y in the layout loop below.
+//   langGate is computed once and reused at all four gated-blank sites:
+//   langId in {0x0D, 0x0E, 0x14}. Colour helper @0x0015a064 always writes
+//   alpha=0xff, so the gated blanks use Colour(0,0,0,255), not alpha 0.
+//   Lays out positions: Vec3(-220, 47 - 12*i, 0) per item.
 // -----------------------------------------------------------------------
 void AboutScreen::CreateCreditsMarquee()
 {
     const Colour& titleColour = game_work.m_TitleColour;
+    const int langId = (int)game_work.languageFlag;
+    const bool langGate = (langId == 0x0D || langId == 0x0E || langId == 0x14);
 
-    // LSTR 0x349 -- heading line (Colour(0xB9,0x4F,0x37), fontSize 12)
+    // LSTR 0x349 -- heading line (Colour(0xB9,0x4F,0x37), fontSize 12)                    [1]
     AddLine(GETSTRING(LSTR_ABOUT_HEADING, 0), Colour(0xB9, 0x4F, 0x37, 255), 12);
 
-    // Lang gate: if languageFlag in {0x0D=13, 0x0E=14, 0x14=20}, add blank padding.
-    // ASM-spec v1.6.1 AboutScreen::CreateCreditsMarquee @0x0015ac0c: langId gate.
-    {
-        const int langId = (int)game_work.languageFlag;
-        if (langId == 0x0D || langId == 0x0E || langId == 0x14) {
-            AddLine("", Colour(0, 0, 0, 0), 8);
-        }
-    }
+    if (langGate) AddLine("", Colour(0, 0, 0, 255), 8);                                    // [2]
+    AddLine("", titleColour, 8);                                                            // [3]
 
-    // LSTR 0x347 -- colour-leader line 0 (Colour(0x68,0x9A,0x27), fontSize 10)
+    // LSTR 0x347 -- colour-leader line 0 (Colour(0x68,0x9A,0x27), fontSize 10)             [4]
     AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD0, 0), Colour(0x68, 0x9A, 0x27, 255), 10);
 
-    // 6 dev-name lines -- Colour = m_TitleColour, fontSize 8
+    if (langGate) AddLine("", Colour(0, 0, 0, 255), 8);                                    // [5]
+
+    // 6 dev-name lines -- Colour = m_TitleColour, fontSize 8                              [6..11]
     AddLine("Luke Muscat, Shath, Steven Last,",                           titleColour, 8);
     AddLine("Jason Harwood, Adam Wood, Jesse Higginson,",                 titleColour, 8);
     AddLine("Brent Hobson, Matt Ross, Jason Maundrell,",                  titleColour, 8);
@@ -833,14 +840,22 @@ void AboutScreen::CreateCreditsMarquee()
     AddLine("Grant Peters, Joe Gatling,",                                  titleColour, 8);
     AddLine("Peter McNeill, Michael Szewczyk, Paul McNab",                 titleColour, 8);
 
-    // LSTR 0x348 -- colour-leader line 1 (Colour(0x8D,0x4A,0xB9), fontSize 10)
-    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD1, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10);
-    AddLine("Shainiel Deo, Phil Larsen, Tony Takoushi,",                  Colour(0x8D, 0x4A, 0xB9, 255), 8);
+    AddLine("", titleColour, 8);                                                            // [12]
 
-    // LSTR 0x34A -- colour-leader line 2 (Colour(0x8D,0x4A,0xB9), fontSize 10)
+    // LSTR 0x348 -- colour-leader line 1 (Colour(0x8D,0x4A,0xB9), fontSize 10)             [13]
+    AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD1, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10);
+
+    if (langGate) AddLine("", Colour(0, 0, 0, 255), 8);                                    // [14]
+    AddLine("Shainiel Deo, Phil Larsen, Tony Takoushi,",                  Colour(0x8D, 0x4A, 0xB9, 255), 8); // [15]
+
+    AddLine("", titleColour, 8);                                                            // [16]
+
+    // LSTR 0x34A -- colour-leader line 2 (Colour(0x8D,0x4A,0xB9), fontSize 10)             [17]
     AddLine(GETSTRING(LSTR_ABOUT_MARQUEE_LEAD2, 0), Colour(0x8D, 0x4A, 0xB9, 255), 10);
-    AddLine("Natalie Clarke, Chloe Pearson,",                             Colour(0x8D, 0x4A, 0xB9, 255), 8);
-    AddLine("Char + Emma Wood, Nell + Calyb Rehua",                       Colour(0x8D, 0x4A, 0xB9, 255), 8);
+
+    if (langGate) AddLine("", Colour(0, 0, 0, 255), 8);                                    // [18]
+    AddLine("Natalie Clarke, Chloe Pearson,",                             Colour(0x8D, 0x4A, 0xB9, 255), 8); // [19]
+    AddLine("Char + Emma Wood, Nell + Calyb Rehua",                       Colour(0x8D, 0x4A, 0xB9, 255), 8); // [20]
 
     // Lay out positions: Vec3(-220, 47 - 12*i, 0) per item (i = 0..n-1).
     for (int i = 0; i < (int)m_Marquees.size(); ++i) {
