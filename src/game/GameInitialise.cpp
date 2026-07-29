@@ -61,6 +61,7 @@
 #include <ctime>
 #include <string>
 #include "game/GameWork.h"
+#include "game/GameTaskState.h"
 #include "game/StartupEffects.h"  // FN::g_SaveFileExisted (Emscripten-only)
 #include "engine/render/FontCacheObjectTTF.h"  // GetAtlas()->InitialiseData for #282 lang scale
 
@@ -506,7 +507,7 @@ void GameInitialise(void* window, const char* config) {
 #endif
 }
 
-// Matches GameDestroy (0x10b7ec, 174 lines) — full engine teardown.
+// Matches GameDestroy (v1.6.1 GameDestroy @0x0011cea4, 174 lines) — full engine teardown.
 // Order follows the binary exactly; unported steps are stubbed with TODO.
 void GameDestroy() {
     Game* game = Game::GetInstance();
@@ -528,20 +529,26 @@ void GameDestroy() {
     ShopScreen::UnLoadContent();
     PowerUpShop::UnLoadContent();
     LeaderboardScreen::UnLoadContent();
+    SuperFruitControl::UnLoadContent();
 
     // --- 2.5. Ingame popups (v1.6.1 @0x0016db38 DeleteAllPopups) ---
     DeleteAllPopups();
 
     // --- 3. Data managers ---
     // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
-    ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0010b7ec — after UnLoadAchievementInfo
+    ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0011cea4 — after UnLoadAchievementInfo
 
     // --- 3.5. Entity pool teardown (Port specific: before HUD so Fruit::Release() /
     //   Bomb::Release() can still reach live MenuButton objects to clear m_pOwner /
-    //   m_pOwnerButton back-refs. In the binary, CleanupFruit/Bomb/Splat/Slash (step 10
-    //   TODO) performed this cleanup explicitly; the port substitutes actorManager
-    //   deletion, which calls vtable Release() on every live entity. Must precede HUD
-    //   teardown or Fruit::Release() at line 2433 dereferences a freed MenuButton.) ---
+    //   m_pOwnerButton back-refs.) ---
+    // ActorManager::Clear() (run by its dtor here) only deletes the 7 heap-new'd Entity
+    // subtypes registered in EntityFactory.cpp (Fruit, Bomb, Coin, SlashEntity, BombBlast,
+    // Jiblet, FruitRay) -- it is a DIFFERENT, orthogonal ownership domain from the static
+    // caches CleanupBomb/CleanupFruit/CleanUpSplat/CleanupSlash tear down below (model/texture
+    // flat arrays, SliceEffect pool, BombFlash pool, SplatEntity pool, SlashEntityGhost ring).
+    // Calling both is not a double-free -- deleting actorManager here first (so live entities
+    // can still reach MenuButton back-refs) and the Cleanup* static-resource calls later are
+    // both required for full teardown parity with the binary.
     { delete game->actorManager; game->actorManager = nullptr; }
 
     // --- 4. HUD ---
@@ -559,7 +566,7 @@ void GameDestroy() {
     game_work.m_TutorialControl = nullptr;
 
     // --- 6. Fonts (field_0x50..0x80, 11 Font* slots + TTF slot at +0x614) ---
-    // Matches GameDestroy @ 0x0010b7ec font teardown sequence.
+    // Matches GameDestroy @ 0x0011cea4 font teardown sequence.
     // Reserved slots (pFontReserved0, pFontReserved1, pFontReserved2) are already null.
     // Slots +0x70..+0x7C: binary iterates and skips deletion if ptr == pFontArcade (alias).
     // SmartPtr::SetNull handles ref-counting; aliased slots just lose one ref.
@@ -601,13 +608,21 @@ void GameDestroy() {
     // TODO: FileManager::ClearSystems
     PSPParticleManager::GetInstance().Destroy();
     StringTableUtilUnloadTable(0);  // closes StringTableUtilUnloadTable TODO (v1.6.1 @0x14c9f8)
-    // Binary GameDestroy @0x0011d1b4 calls CleanupBomb -> CleanupFruit -> CleanUpSplat -> CleanupSlash
-    // here. The port does NOT call them: entity teardown is already done above via the
-    // actorManager deletion (the "Port specific" substitution at step 3.5), so calling these
-    // would DOUBLE-FREE the fruit/splat/slash pools + models. The functions are ported (for
-    // asm-verify symbol coverage) but left uncalled until the port's teardown is reconciled
-    // with the binary's (use the Cleanup* path OR the actorManager path, not both).
-    // TODO: reconcile GameDestroy teardown to the binary's CleanupBomb/Fruit/Splat/Slash path.
+    // Binary GameDestroy @0x0011cea4 calls CleanupBomb -> CleanupFruit -> CleanUpSplat -> CleanupSlash
+    // here, right after StringTableUtilUnload(). These tear down STATIC resource caches that
+    // ActorManager::Clear() (step 3.5) never touches -- orthogonal ownership, not a double-free:
+    //   CleanupBomb  -- 2 bomb models + 2 textures, BombFlash::CleanUp() pool (distinct from the
+    //                    live Bomb entity list)
+    //   CleanupFruit -- s_fruitModels/fruitInfo flat arrays, SliceEffect list + MemoryPool,
+    //                    4 slice models, 7 atlases
+    //   CleanUpSplat -- SplatEntity::pool (splats are not an ActorManager entity type at all --
+    //                    absent from the EntityFactory::CreateEntity switch)
+    CleanupBomb();
+    CleanupFruit();
+    CleanUpSplat();
+    // TODO: v1.6.1 CleanupSlash @0x001e8204 -- unported, needs SlashEntityGhost; releases
+    // s_ghosts[8] (stride 0x10) + nulls 3 Texture SmartPtrs, sets loaded=false. Call here
+    // once ported.
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
     { delete game->inputManager; game->inputManager = nullptr; }
@@ -619,7 +634,21 @@ void GameDestroy() {
     // Note: Mortar::TextureManager::Destroy -- port uses SDL/GL teardown at process exit.
     // Binary @0x0011d1b4 (GameDestroy): AnimationManager::Destroy() (-> ReleaseAll, no-op body).
     Mortar::AnimationManager::GetInstance().Destroy();
-    // Note: Mortar::MeshManager::Destroy -- not yet ported; no-op acceptable at shutdown.
+
+    // Port specific: GameInit.cpp:268-275 loads these outside the binary's init
+    // path, so the matching release is port-side too. MUST run before
+    // MeshManager::Destroy so no GL-owning object survives into atexit -- the GL
+    // context is already gone by then.
+    {
+        GameTaskState* ts = GetTaskState();
+        ts->sliceFxMesh.SetNull();
+        ts->sliceFxCritMesh.SetNull();
+        ts->pBackgroundTexture.SetNull();
+    }
+    // TODO: v1.6.1 0x001df1c0 (Fruit::DestroyFruitModels) -- ported but has no port call
+    // site; s_sliceModel[4] refs are never dropped. Needs an RE pass on the binary's call sites.
+
+    Mortar::MeshManager::GetInstance()->Destroy();   // v1.6.1 GameDestroy @0x0011cea4
     // Note: Mortar::TextureManager::Destroy (binary calls twice) -- same as above.
     // Note: Mortar::DisplayManager::Destroy -- SDL2 window/GL teardown handles this.
     // Note: Mortar::SoundManager::Destroy -- SoundManager teardown on process exit.

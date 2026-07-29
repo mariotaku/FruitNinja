@@ -3053,6 +3053,11 @@ void Fruit::UpdateBombAvoidance(float dt) {
 // Binary teardown order: (1) pre-null SmartPtr+EffectProperty* per element if loaded,
 // (2) element dtors + delete raw block, (3) pool destroy, (4) null slice models,
 // (5) clear loaded flag.
+// DEAD CODE in v1.6.1: zero `bl` xrefs across all 383,199 instructions in the image --
+// no caller by name or address, not on any shutdown/reload path. Do NOT add a call site
+// to "wire it in"; the binary itself never calls it. Kept only because it is a real
+// binary symbol (port preserves binary shape). The equivalent release of s_sliceModel[0..3]
+// for the port's own teardown lives in CleanupFruit's port-specific tail block instead.
 void Fruit::DestroyFruitModels() {
     // Step 1: if loaded, null each element's SmartPtr<Model> and EffectProperty* fields
     // before the dtor loop runs (binary T_2039 SmartPtr::SetPtr(null) per slot @+0x18..+0x4c,
@@ -3170,6 +3175,17 @@ void CleanupFruit() {
 
     // Step 7: mark unloaded.
     g_fruitData.s_fruitModelsLoaded = 0;
+
+    // Port specific: the binary's CleanupFruit @0x001defd4 does NOT release
+    // s_sliceModel[0..3]; only Fruit::DestroyFruitModels @0x001df1c0 does, and that
+    // function is DEAD in v1.6.1 (verified: zero bl xrefs across the whole image).
+    // The binary leaks these four refs at process exit, harmlessly -- its fruit
+    // globals are a flat .bss struct with no destructor. The port's g_fruitData is a
+    // real C++ object whose implicit dtor runs at atexit, after GL teardown, so the
+    // refs MUST be severed here instead.
+    for (int i = 0; i < 4; ++i) {
+        g_fruitData.s_sliceModel[i].SetNull();
+    }
 }
 
 // ASM-spec v1.6.1 Fruit::AddShadow @0x001dbbe8.
