@@ -53,12 +53,6 @@ public:
     bool ColAABBLine(ColAABB* box, ColLine* line, _Vector3<float>* out);
     // v1.6.1 ColAABB::ColAABBSphere @ 0x002760c4 -- AABB-vs-Sphere closest-point test + penetration normal into out.
     bool ColAABBSphere(ColAABB* box, ColSphere* sphere, _Vector3<float>* out);
-
-    // ---- convenience wrappers (no separate binary entry; delegate to static helpers) ----
-    // TODO: ColAABB::IntersectsSphere binary address unknown -- thin wrapper over ColAABBSphere.
-    bool IntersectsSphere(const ColSphere& sphere);
-    // TODO: ColAABB::IntersectsLine binary address unknown -- thin wrapper over ColAABBLine.
-    bool IntersectsLine(const ColLine& line);
 };
 
 #ifdef __bada__

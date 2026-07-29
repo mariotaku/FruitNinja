@@ -141,6 +141,13 @@ static int          s_CurrentFree = 0;
 
 static Mortar::SmartPtr<Mortar::Texture>       s_SplatTex;
 
+// v1.6.1 static-init @0x001eca34: default-constructed alongside s_SplatTex (BSS+0x2c,
+// immediately after s_SplatTex's BSS+0x28) and nulled by CleanUpSplat @0x001ec88c.
+// Confirmed via Ghidra xrefs: zero write sites anywhere in the binary besides its own
+// ctor/dtor and CleanUpSplat -- a genuinely dead/unassigned texture slot, not a gap in
+// SplatEntity::LoadContent. Kept for CleanUpSplat teardown-shape parity only.
+static Mortar::SmartPtr<Mortar::Texture>       s_SplatTexUnused;
+
 static const int MAX_SPLATS_PER_FRAME = 128;
 static QUADCUSTOMVERTEX s_SplatVerts[MAX_SPLATS_PER_FRAME * 6];
 
@@ -696,12 +703,12 @@ void SplatEntity::CleanUp() {
 // 1. SplatEntity::CleanUp() -- destroys pool
 // 2. s_loadedSplat = false
 // 3. null s_SplatTex (BSS+0x28)
+// 4. null s_SplatTexUnused (BSS+0x2c) -- see its declaration above; never assigned elsewhere.
 void CleanUpSplat() {
     SplatEntity::CleanUp();
     s_loadedSplat = false;
     s_SplatTex.SetNull();
-    // TODO: v1.6.1 CleanUpSplat @0x001ec88c -- binary nulls a 2nd SmartPtr<Texture> at +0x2c;
-    // SplatEntity::LoadContent not yet RE'd to identify it.
+    s_SplatTexUnused.SetNull();
 }
 
 // Defunct: dead code in v1.6.1 -- in export table but never called; v1.6.1 CleanupSplat @0x001ed0ec

@@ -226,18 +226,6 @@ bool ColAABB::ColAABBLine(ColAABB* box, ColLine* line, _Vector3<float>* out) {
     return true;
 }
 
-// TODO: ColAABB::IntersectsSphere binary address unknown -- thin wrapper over ColAABBSphere.
-bool ColAABB::IntersectsSphere(const ColSphere& sphere) {
-    ColSphere* s = const_cast<ColSphere*>(&sphere);
-    return ColAABBSphere(this, s, 0);
-}
-
-// TODO: ColAABB::IntersectsLine binary address unknown -- thin wrapper over ColAABBLine.
-bool ColAABB::IntersectsLine(const ColLine& line) {
-    ColLine* l = const_cast<ColLine*>(&line);
-    return ColAABBLine(this, l, 0);
-}
-
 // Binary slot 3 @ 0x0027674c -- double-dispatch by other->GetType().
 // SPHERE/LINE results are NEGATED before storing (binary points from sphere/line
 // INTO the AABB); AABB-vs-AABB is stored as-is. On hit, both collide flags are set.
