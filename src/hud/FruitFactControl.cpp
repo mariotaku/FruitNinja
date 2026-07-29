@@ -424,7 +424,7 @@ bool FruitFactControl::RightPressed(InputEvent* /*ev*/) {
     //   return true;
     int cb = (int)m_ComboB + 1;
     const ::FruitInfo* info = Fruit::FruitInfo((int)m_ComboA);
-    if (info && info->m_FactCount <= cb) {
+    if (info->m_FactCount <= cb) {
         cb = 0;
     }
     m_ComboB = (unsigned int)cb;

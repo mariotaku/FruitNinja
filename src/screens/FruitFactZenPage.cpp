@@ -148,10 +148,12 @@ void FruitFactZenPage::Init() {
                 m_Facts[i] = 0;
             }
             // ASM-spec v1.6.1 FruitFactZenPage::Init @0x00180320: icon tex = FruitInfo(m_Facts[i])->m_ZenTexture (+0x304); scale arg = Vec3::Zero (auto-size).
-            const FruitInfo* fi = Fruit::FruitInfo(m_Facts[i]);
+            // m_Facts[i] defaults to -1 (FruitSaveData::m_BestComboFruits sentinel, see fill loop
+            // above) and otherwise holds a live m_FruitType (always in range) -- only the negative
+            // sentinel needs guarding; FruitInfo_Get no longer bounds-checks.
             Mortar::SmartPtr<Mortar::Texture> iconTex;
-            if (fi) {
-                iconTex = fi->m_ZenTexture;
+            if (m_Facts[i] >= 0) {
+                iconTex = Fruit::FruitInfo(m_Facts[i])->m_ZenTexture;
             }
 
             float x = (span * -0.5f - 8.0f) + (float)i * spacing;

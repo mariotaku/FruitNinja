@@ -628,7 +628,7 @@ void SaveGame(FruitSaveData* save) {
                 ent.SetDoubleAttribute("sliceWait", (double)f->m_SliceTimer);               // +0xbc
 
                 const ::FruitInfo* info = Fruit::FruitInfo((long)f->m_FruitType);
-                if (info && info->m_bIsSuperFruit) {                                        // +0x330
+                if (info->m_bIsSuperFruit) {                                                // +0x330
                     SuperFruitControl::SaveSuperFruitState(f, &ent);
                 }
                 st.InsertEndChild(ent);

@@ -203,7 +203,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     const FruitInfo* fi = Fruit::FruitInfo((long)fruitType);
-    const char* modelName = fi ? fi->m_ModelName : "";
+    const char* modelName = fi->m_ModelName;
 
     // The jiblet mesh SuperFruitControl::LoadContent @0x001bda74 loads into the
     // file-static JibletModel SmartPtr (not externally reachable; load the same

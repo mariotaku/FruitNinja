@@ -313,7 +313,7 @@ void Fruit::Init(void* /*p1*/, long fruitType, _Vector3<float>* /*scaleOrNull*/)
     // ASM-verified: 2026-07-15T00:00Z v1.6.1 Fruit::Init super-fruit override @ 0x001e2c94..0x001e2cf8 (asm-inspector)
     {
         const ::FruitInfo* info = Fruit::FruitInfo((long)m_FruitType);
-        if (info != nullptr && info->m_bIsSuperFruit) {
+        if (info->m_bIsSuperFruit) {
             float angleBase = GetRandBetween(12.0f, 40.0f, 0.0f, 0.0f);
             uint32_t angle16 = (uint32_t)((int)(angleBase * 182.0f)) & 0xffff;
             m_Rot1 = Quaternion::Identity();
@@ -2848,7 +2848,7 @@ int Fruit::NumberOfPowerupFruits() {
     while (e) {
         Fruit* f = static_cast<Fruit*>(e);
         const ::FruitInfo* info = Fruit::FruitInfo((long)f->m_FruitType);
-        if (info && info->m_pPowers != NULL) {
+        if (info->m_pPowers != NULL) {
             ++count;
         }
         am = Mortar::ActorManager::GetInstance();

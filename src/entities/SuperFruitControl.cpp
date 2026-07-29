@@ -875,7 +875,7 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
             particleStopper = 0;
             if (m_pHostFruit) {
                 const FruitInfo* fi = Fruit::FruitInfo((long)m_pHostFruit->m_FruitType);
-                uint32_t emitterHash = fi ? fi->m_NameHash : 0;
+                uint32_t emitterHash = fi->m_NameHash;
                 PSPParticleManager& pm = PSPParticleManager::GetInstance();
                 if (pm.EmitterExists(emitterHash)) {
                     // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbd8c: AddEmitter's
@@ -970,7 +970,7 @@ void SuperFruitControl::ExplodeSuperFruit()
     // fmt string @ 0x0028383a: "models/Fruit/%s_%c_piece_%d.mmd"
     // DAT_001bae64=700.0f (angular-vel scalar), 0x1bae60=600.0f (lo), 0x1bae5c=1000.0f (hi)
     const FruitInfo* fi = Fruit::FruitInfo((long)hostFruitType);
-    const char* modelName = fi ? fi->m_ModelName : "";
+    const char* modelName = fi->m_ModelName;
 
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     Mortar::MeshManager* mm = Mortar::MeshManager::GetInstance();
@@ -1091,7 +1091,6 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
     if (fruit->flags & ENT_KILLED) return;
 
     const FruitInfo* info = Fruit::FruitInfo((long)fruit->m_FruitType);
-    if (!info) return;
 
     // Gate: m_bIsSuperFruit flag at FRUIT_INFO+0x330
     if (!info->m_bIsSuperFruit) return;
@@ -1187,7 +1186,7 @@ void SuperFruitControl::SuperFruitSliced(Fruit* fruit, int /*idx*/, Mortar::Enti
 {
     if (!fruit) return;
     const FruitInfo* info = Fruit::FruitInfo((long)fruit->m_FruitType);
-    if (!info || !info->m_bIsSuperFruit) return;
+    if (!info->m_bIsSuperFruit) return;
 
     std::map<Fruit*, SuperFruitControl*>::iterator it = SuperFruitControls.find(fruit);
     if (it != SuperFruitControls.end() && it->second) {
@@ -1644,7 +1643,7 @@ void SuperFruitControl::SpawnJibs()
     if (m_pHostFruit) {
         // Emitter name = sprintf("%s_explode", <fruit model name>).
         const ::FruitInfo* fi = Fruit::FruitInfo((long)m_pHostFruit->m_FruitType);
-        const char* modelName = fi ? fi->m_ModelName : "";
+        const char* modelName = fi->m_ModelName;
         char buf[128];
         snprintf(buf, sizeof(buf), "%s_explode", modelName);
         uint32_t hash = StringHash(buf);

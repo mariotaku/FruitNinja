@@ -2011,8 +2011,13 @@ void SlashEntity::Update(float dt) {
                         {
                             int bonusCoins = 0;
                             for (int i = 0; i < m_ComboCounter; ++i) {
+                                // m_ComboFruitTypes[i] defaults to -1 (see the resets above) and
+                                // otherwise only ever holds a live fruit's m_FruitType, which is
+                                // always in [0, g_FruitInfoCount) -- so only the negative sentinel
+                                // needs guarding; FruitInfo_Get no longer bounds-checks.
+                                if (m_ComboFruitTypes[i] < 0) continue;
                                 const ::FruitInfo* fi = Fruit::FruitInfo(m_ComboFruitTypes[i]);
-                                if (fi && fi->m_CoinsMax > 0) { bonusCoins = m_ComboCounter; break; }
+                                if (fi->m_CoinsMax > 0) { bonusCoins = m_ComboCounter; break; }
                             }
                             _Vector3<float> coinPos = m_SliceFruitPos;
                             if (m_pComboMissControl) coinPos = m_pComboMissControl->pos;
