@@ -261,6 +261,12 @@
   "score": 3460,
   "verdict": "FIX-NEEDED"
  },
+ "_Z12ParseSpawnerP12TiXmlElementP12SPAWNER_INFO": {
+  "asm_hash": "d3dbf4d3e2d2f5ff",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] 114 context lines against 74 binary-only / 66 port-only -- the two bodies are near-identical. All differences are the documented drift set: StringHash(char const*) vs StringHash(char const*,int) (the port passes a precomputed strlen, hence the extra strlen + TiXmlElement::Name()), and the free SplitWords(char const*, std::vector<std::string>&) vs the port's WaveManager::SplitWords member. QueryFloatAttribute (11 common + 1 each side), Attribute x4, ParsePlacement, ParseVector, operator new[], the __cxa_guard pair and strcmp all match. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_Z12PreloadRingsv": {
   "asm_hash": "602ee6f832bdb8a4",
   "decided_at": "2026-07-28T13:30Z",
@@ -300,6 +306,12 @@
   "reason": "Tooling artifact, not a port bug. report.json cites binary addr 0x0010bf6c for this symbol, which GhidraMCP get_function_by_address resolves to an unrelated function (_M_clear, list<Bonus> helper, only 11 bytes) -- the asm-verify pipeline's binary-address resolution for this whole Game.cpp/GameMode.cpp cluster is off by a systematic +0x10000 (confirmed same pattern for GameTaskUpdate/Draw/Exit/SetupGameWork/GameTaskInitInput below). The TRUE v1.6.1 ParseGameMode is at 0x0011bf6c (confirmed via get_function_by_address: 'Function: ParseGameMode at 0011bf6c'), which is exactly the address src/game/GameMode.cpp:13 already cites. Direct GhidraMCP decompile of 0x0011bf6c shows: guarded StringHash cache of 'CLASSIC'/'CASINO'/'ARCADE'/'ZEN' into a 4-slot static array, then a loop returning the matching index or 4 if unmatched -- this is an EXACT semantic match for src/game/GameMode.cpp:15-24. The report's diff also shows extra unrelated tail instructions (a second, differently-shaped 4-element loop with uxtb/lsl#2 indexing) that don't belong to ParseGameMode at all, confirming the tool's disassembly window overran into adjacent code. Port is correct; the DIVERGE verdict is a false positive from the tool's broken address/window resolution for this cluster.",
   "verdict": "ACCEPT-cosmetic"
  },
+ "_Z13ParseSaveFileP9TiXmlNodeP13FruitSaveData": {
+  "asm_hash": "49c9435617c2b772",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] ~80% explained by the accepted bespoke-parser -> TinyXML restructure: binary StringHash(char const*)/_OS_atoi/_OS_atof/OS_SPrintf vs port StringHash(char const*,int)/QueryIntAttribute/atof/snprintf; TiXmlNode::FirstChildElement/NextSiblingElement const-vs-non-const overloads; std::list push_back / std::map operator[] out-of-line in the binary vs inlined _List_node_base::hook / _Rb_tree::_M_insert_unique_ in the port; SuperFruitState::Parse, ParseVersionInfo, ParseWaveInfo, ParseAchievements, ParseGameMode, ParseVector, PowerUpManager::LoadActivePowerUps, FruitSaveData::AddToTotal and the recursive ParseSaveFile all present on both sides. BLOCKER (~20% unexplained): the binary calls GetModeName(GAME_MODE) x4 and OS_SPrintf x4 (per-mode key construction) that the port never calls, and the port issues 28 QueryIntAttribute vs the binary's 17 + 4 _OS_atoi -- the per-mode key set is not proven equivalent. Needs an RE pass over 0x00154c8c's 4 GetModeName sites before this can close.",
+  "verdict": "ACCEPT-deferred"
+ },
  "_Z13PreloadSoundsv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 24600,
@@ -326,6 +338,18 @@
   "decided_at": "2026-06-26T00:00Z",
   "reason": "Defunct: IAP -- no-op stub; src/game/Licensing.cpp:19. Binary loads float+int id=11 and tail-calls Bada IAP; port body is empty.",
   "verdict": "ACCEPT-defunct"
+ },
+ "_Z14DrawBackgroundv": {
+  "asm_hash": "82d71f08da6c0163",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. covers the draw path (binary Mesh::DrawTriList + Colour::PlatformColour through MatrixManager vs port Renderer::DrawQuad through MatrixStack). TintWhite is present in the port as an inlined static (src/game/GameInit.cpp:788, Colour::TintWhite from Colour.h:21), and GetCurrentBackground() is the port's accessor. BLOCKER: the binary calls LerpF<float>(float,float,float) FOUR times and TintWhite TWICE and reads ItemManager::GetInstance() and Colour::Black; the port's DrawBackground (src/game/GameInit.cpp:755) has no LerpF at all and one TintWhite. The 4-way background colour cross-fade looks unported. Needs RE of v1.6.1 DrawBackground @0x001ccaf4 to spec the LerpF operands before closing.",
+  "verdict": "ACCEPT-deferred"
+ },
+ "_Z14FileStringHashPKc": {
+  "asm_hash": "f4a6f8951d0ff360",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] The single binary-only symbol is dsstofile(int) called 23x -- a per-character table helper the port folds into an unrolled inline loop (261 port-only lines against 130 binary-only, with strlen common). Semantically the port's FileStringHash is pinned by docs/engine/string-hash.md and its unit test, so the hash VALUES are known-correct and a mismatch would fail loudly. BLOCKER (why not cosmetic): the rationale is structural inference only -- nothing in the diff proves the 23 dsstofile applications map onto the port's unrolled body, and this is a high-fan-in leaf where a silent drift is catastrophic. Close it by confirming the port's test vectors cover the path, or with an asm-inspector pass on 0x00252e98.",
+  "verdict": "ACCEPT-deferred"
  },
  "_Z14FrontendUpdatefb": {
   "decided_at": "2026-06-14T05:55Z",
@@ -366,6 +390,12 @@
   "score": 3200,
   "verdict": "ACCEPT-deferred"
  },
+ "_Z15SaveCurrentDatab": {
+  "asm_hash": "726891eabbda78c5",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] REAL GAP: wave state is never persisted. The binary's SaveCurrentData @0x001cde20 calls WaveManager::GetInstance()->SaveWaveInfo(FruitSaveData*); the port's SaveCurrentData (src/game/FruitSaveData.cpp:1010-1053) IGNORES its fullSave parameter entirely and never calls SaveWaveInfo -- even though the port HAS a full implementation at src/game/WaveManager.cpp:1019 and its own header documents the contract ('fullSave=true triggers WaveManager::SaveWaveInfo', src/game/FruitSaveData.h:422). Net effect: the in-progress wave/speed/spawner snapshot is dropped on every save, so a resumed game restarts its wave state. SPEC: restore the parameter name and, inside SaveCurrentData, call WaveManager::GetInstance()->SaveWaveInfo(&snapshot) on the fullSave path before SaveGame(&snapshot). Also read the binary's IsMultiplayer() gate at that site to confirm whether the call is additionally MP-gated. Secondary/benign: the port reads game_work.currentScore / missCount directly where the binary calls the GetCurrentScore(int) and GetCurrentMissCount(int) accessors, and the binary's Fruit::s_consecutiveType / s_consecutiveCount reads are inside the port's FruitSaveData::SnapshotComboState(); the FruitSaveData copy-ctor is out-of-line in the binary and inlined (as _Rb_tree::_M_copy / _List_node_base::hook) in the port.",
+  "verdict": "FIX-NEEDED"
+ },
  "_Z16ChangeBackgroundPKc": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 4600,
@@ -389,6 +419,12 @@
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary SetScoreDelegate(Delegate1<int,int>) vs port SetScoreDelegate(ScoreModifier*). Defunct score delegation system replaced with port-local ScoreModifier. No gameplay impact.",
   "verdict": "ACCEPT-defunct"
+ },
+ "_Z17AddToCurrentScoreiibb": {
+  "asm_hash": "b86096ce2ff829e7",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] NOTE: the underlying sweep (report.json 2026-07-28 14:59) PREDATES commits 9c408405/142d7b93 (rng) and e531b283 (Fruit <critical> globals), so every port-side 'CALL =rand' and Fruit::NEW_LIFE_AT delta in this row is a stale pre-fix artifact, not a live divergence. Most of the delta is benign: the binary's Delegate1<int,int>::Call(int) is the port's g_ScoreDelegate(...) read + indirect call; the binary's GetScoreMultiplyer(int) wrapper is bypassed by the port, which calls its callee PowerUpManager::GetInstance()->GetScoreGainMultiplier() directly (the wrapper IS ported, src/hud/ScoreControl.cpp:80 -- a function-boundary deviation, not a value change); the PointsPacket + SendP2PPacket block is correctly Defunct-stubbed (marker at the tail of AddToCurrentScore in src/game/GameOver.cpp); the Delegate1<bool,MortarSound*>::Global construction around SFXPlay is the port's default-argument form; StringHash + the __cxa_guard pair and FruitSaveData::AddToTotal x2 match; the two __aeabi_idiv and the Fruit::NEW_LIFE_AT global read are stale (the port read it as a compile-time 100 at sweep time; commit e531b283 made it a real global after this sweep). BLOCKER: the binary calls WaveManager::GetInstance() in this function and the port does not -- unaccounted, and this is the live scoring path. Needs a look at what 0x0011a4c0 does with the WaveManager handle before closing.",
+  "verdict": "ACCEPT-deferred"
  },
  "_Z17GamePreInitialisev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -778,6 +814,12 @@
   "score": 5050,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN10MainScreen17DrawLoadingSymbolEPf": {
+  "asm_hash": "0ea3550ba8741f1b",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] MISSING HUD TINT (same class as GameOverScreen::DrawOrder and the recorded MenuButton::Draw residue). The binary calls TintColour(Colour, float*) then Colour::PlatformColour() before Mesh::DrawTriList; src/screens/MainScreen.cpp has no TintColour/TintWhite anywhere, so the loading spinner ignores the HUD tint. It also skips the binary's SmartPtr<Texture>::operator bool() guard on MenuButton::m_loadingTexture (3 reads binary-side, 0 port-side). SPEC: in MainScreen::DrawLoadingSymbol, guard on the loading texture being valid and modulate the vertex colour with Colour::TintColour(colour, hudScale) (src/engine/math/Colour.h:39) using the float* hudScale argument the function already takes. Remainder of the delta (MatrixStack/UploadModelViewOnly, SinIdx/CosIdx -> sinf/cosf, inlined _Vector3 ops, _Vector3::One Meyers static) is the accepted ES2/trig migration.",
+  "verdict": "FIX-NEEDED"
+ },
  "_ZN10MainScreen17MoreGamesCallbackEv": {
   "decided_at": "2026-06-18T01:24Z",
   "max_score": 600,
@@ -831,6 +873,12 @@
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary CreateNormalLeaderboardButton(float) vs port CreateNormalLeaderboardButton(). Defunct online leaderboard button; float param was leaderboard opacity or timing arg. No gameplay impact.",
   "verdict": "ACCEPT-defunct"
+ },
+ "_ZN10MainScreen4DrawEPf": {
+  "asm_hash": "837640fb4096662a",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. covers the bulk (binary Mesh::DrawQuadUnCached/DrawTriList through MatrixManager vs port Renderer::DrawQuad/DrawTriList; 20 binary MatrixManager::m_instance thunks vs the port's inlined MatrixStack). BLOCKER: the binary reads MainScreen::m_fruitTex and MainScreen::m_ninjaTex (2x each) and guards them with SmartPtr<Texture>::operator bool() x4 plus a Colour::PlatformColour() conversion; the port reads neither texture global and emits no such guard (it reads MortarGame::s_instance instead). Only 22 context lines against 392 binary-only + 236 port-only -- the rationale does not account for the whole delta, so NOT cosmetic.",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN10MainScreen4HideEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -1029,6 +1077,12 @@
   "score": 8940,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN10MenuButton7SetTextEPKc6ColourS2_ffbb": {
+  "asm_hash": "ee3e34bfcb7c14db",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Delta fully accounted for. BakedStringTTF ctor/dtor, FitStringToWidth, ApplyGradient_TopBottom, ApplyFormatting_Circle x2, MenuButton::SetInnerGlow and the new/delete pairs all match 1:1. Differences are all known-benign: the port's (anonymous namespace)::GetSharedTTFFont() accessor vs the binary's direct game_work font read; std::string _Rep::_M_destroy / _S_empty_rep_storage inlining vs the binary's out-of-line basic_string ctor/dtor (4 dtors -> 2 _M_destroy); Math::Abs<float> -> fabsf; 3 Colour(u8,u8,u8,u8) + 2 Colour copy-ctors inlined port-side.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN10MenuButton9BeginDrawEf": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 500,
@@ -1181,6 +1235,12 @@
   "score": 5540,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN10ShopScreen9DrawOrderEPfi": {
+  "asm_hash": "a0a2315d2092d082",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. Remaining named differences all resolve: ShopScreen::s_TexBGStore / s_TexDialogBox are the documented static-name drift (same storage the binary reads through its own statics); GetIngamePopup(int) is the port's accessor for the popup the binary reaches through game_work; IngamePopup::Draw, ItemInfo::IsLocked and all 4 DrawQuadUnCached sites match 1:1 in count. Binary Scale44/GlobalTranslate44 pairs map onto the port's MatrixStack::SetCurrentMatrix(mat) after building the same matrix inline. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN10ShopScreenC1EP10DojoScreen": {
   "decided_at": "2026-06-18T02:35Z",
   "max_score": 5200,
@@ -1236,6 +1296,18 @@
   "reason": "Score 8200/7900. Port has bx lr stub vs binary. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 9130/7900 -> 9180/7800]",
   "score": 9180,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN11AboutScreen20CreateCreditsMarqueeEv": {
+  "asm_hash": "c4ac9672abfecd36",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] REAL CONTENT GAP. The binary makes 20 AddLine(char const*, Colour, int) calls (12 unaligned + 8 common); the port makes 14 (src/screens/AboutScreen.cpp:814,821,826,829-834,837,838,841,842,843). Six credit lines are missing from the port's marquee. Everything else in the row is benign: GETSTRING_CAST_0(LocalizedString) vs GETSTRING(LocalizedString,int) is the known signature drift, and the binary's out-of-line std::vector<MarqueeText*>::size()/operator[] are inlined in the port's trailing layout loop (:846-850, which matches). SPEC for implementer: RE v1.6.1 AboutScreen::CreateCreditsMarquee @0x0015ac0c, enumerate all 20 AddLine call sites in order (text pointer, Colour literal, fontSize) and add the 6 the port omits. Note the language gate at :818-823 emits one blank spacer via a branch where the binary may emit several distinct AddLine(\"\") sites -- count those separately from real credit lines. The per-item layout loop (pos = Vec3(-220, 47 - 12*i, 0)) is already correct.",
+  "verdict": "FIX-NEEDED"
+ },
+ "_ZN11AboutScreen4DrawEPf": {
+  "asm_hash": "6a65e462e267d9ce",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. plus static-name drift AboutScreen::m_creditsTexture/m_senseiTexture -> AboutScreen::s_TexCredits/s_TexSensei (same two statics, same 2 reads each). DrawQuadUnCached count matches (binary 3 thunked + 1 direct, port 4 direct), AboutScreen::NewDraw() present both sides, SmartPtr<Texture>::operator bool() x4 is the port's inlined IsValid(). Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11AboutScreen4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -1323,6 +1395,12 @@
   "reason": "Binary has bx lr; port has bx lr + trailing nops. Score 400/100. ACCEPT-cosmetic. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
   "score": 400,
   "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN11BonusScreen14BuildBonusTextEv": {
+  "asm_hash": "e9855a98aa2750bd",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Most of the delta is benign: 4 'new Mortar::BakedStringBox' sites on both sides (src/screens/BonusScreen.cpp BuildBonusText), SetGradient x2, SetStroke(2-arg) and SetStroke(3-arg), SetShadow, SetColour/SetText all present; OS_SPrintf -> snprintf; GETSTRING_CAST_0 -> GETSTRING; Colour(u8,u8,u8,u8) x11 inlined port-side. BLOCKER: the binary iterates the award list IN THIS FUNCTION via BonusManager::GetFirstBestBonus / GetNextBestBonus (std::_List_iterator<Bonus>), while the port iterates a pre-populated m_Awards vector filled elsewhere, and the port adds 8 BakedStringBox::Update() calls the binary never makes here. Until m_Awards is proven to be populated from the same GetFirstBestBonus ordering (src/game/BonusManager.cpp:201/207), row order and content are not verified equivalent.",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN11BonusScreen15GetTimePerAwardEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -1862,6 +1940,12 @@
   "reason": "ACCEPT-deferred: clamp ceiling constant now 0x3d8da741 on both sides -- diff line 18ddd4 shows `| 238: .word 0x3d8da741` (match marker), confirming fix is present. Residual divergence is 100% INHERENT: 12-slot flat-pool unroll (port) vs binary 6-slot pointer-array loop, plus GOT/PIC addressing; documented in src/hud/MissControl.cpp DIFFERS comment. 664% ratio is pure pool-representation, no semantic gap remains. Score 18595/2800.",
   "score": 11690,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN11MissControl4DrawEPf": {
+  "asm_hash": "7c4370bf94c67f64",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] NOTE: the underlying sweep (report.json 2026-07-28 14:59) PREDATES commits 9c408405/142d7b93 (rng) and e531b283 (Fruit <critical> globals), so every port-side 'CALL =rand' and Fruit::NEW_LIFE_AT delta in this row is a stale pre-fix artifact, not a live divergence. With the stale rand() removed the delta is fully accounted for: the port's MissControl::Draw uses Math::g_Random.Rand32(8) x2 at src/hud/MissControl.cpp:766-767, matching the binary's two LOCAL[Math::g_random] draws. Rest is systemic: Mortar::FailureEnabled(game_work.gameMode) is inline in the port (the binary calls the free FailureEnabled()), IsMultiplayer() present both sides, Math::Abs<float> -> fabsf, SinIdx/CosIdx -> sinf/cosf, _Matrix44 Scale44/RotZ44/GlobalTranslate44 inlined via the port's Matrix44 helpers, MatrixManager::_UploadCurrentMatrices(bool) -> UploadModelViewOnly(), SmartPtr<Texture>::operator bool() -> IsValid(), _Vector3::Zero global -> literal. DrawQuadUnCached 1:1.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11MissControl4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -2565,6 +2649,12 @@
   "reason": "Score 1110/600. Port pre-loads r1=[r0,#0] then saves r4; binary loads inline. Also tail-calls HUDControl::SetToMultiplayerState. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1110/600 -> 915/600]",
   "score": 915,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN11TimeControl4DrawEPf": {
+  "asm_hash": "d13e2bd1f9a03f0a",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] MISSING HUD TINT, third instance of the class. The binary's TimeControl::Draw calls TintColour(Colour, float*) TWICE (once per drawn string) and TintWhite(float*) once (for the backing quad), and reads the Colour::Green global; src/hud/TimeControl.cpp contains no TintColour/TintWhite reference at all, so both the timer text and its plate ignore the HUD tint/fade. SPEC: in TimeControl::Draw, pass each text colour through Colour::TintColour(colour, hudScale) and the quad colour through Colour::TintWhite(hudScale[0], hudScale[1], hudScale[2]) (src/engine/math/Colour.h:21,39), using the float* hudScale the function receives -- same shape as src/hud/CoinCounter.cpp:72-73. Confirm against the binary whether the low-time colour is the Colour::Green global before tinting. Benign remainder: free IsTimedGame() vs the port's TimeControl::IsTimedGame() const member, Font::DrawString(Utf8StringIterator,...) vs the port's char-const* wrapper overload, Math::Abs -> fabsf, MatrixManager::_UploadCurrentMatrices -> UploadModelViewOnly, and the port's extra MainScreen::GetCameraTransition()/snprintf.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN11TimeControl4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -3307,6 +3397,12 @@
   "score": 1200,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN12ShopListItem15DrawDescriptionEv": {
+  "asm_hash": "44889f20df47accd",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] The only unmatched binary call is IsDeviceUpsideDown(), which the port implements as a documented defunct no-op: '// Defunct: accelerometer DeviceUpsideDown -- no-op stub; v1.6.1 IsDeviceUpsideDown @ 0x0011a154' at src/game/GameMode.h:72-73 (inline, so it vanishes at -O2 and takes its dependent branch with it -- which also explains the binary's second ItemInfo::IsLocked() and second ShopScreen::GetDescriptionTextXPos() call, both on the upside-down arm). Everything else matches: 2 BakedStringBox new/ctor/SetText/Update/FitIntoVerticalBounds/dtor pairs, SetTranslation x2, SetColour x2, GETSTRING_CAST_0 x2, FruitSaveData::PlayedModeToday, and Colour(u8,u8,u8,u8) x4 inlined port-side.",
+  "verdict": "ACCEPT-defunct"
+ },
  "_ZN12ShopListItem4DrawEv": {
   "decided_at": "2026-06-14T06:00Z",
   "max_score": null,
@@ -3325,6 +3421,12 @@
   "reason": "ShopListItem method stub/divergence. Score 21777/12900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 21777/12900 -> 21230/14000]",
   "score": 21230,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN12ShopListItem7NewDrawEv": {
+  "asm_hash": "2c3920e094808e1c",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] NOTE: the underlying sweep (report.json 2026-07-28 14:59) PREDATES commits 9c408405/142d7b93 (rng) and e531b283 (Fruit <critical> globals), so every port-side 'CALL =rand' and Fruit::NEW_LIFE_AT delta in this row is a stale pre-fix artifact, not a live divergence. Delta fully accounted for: the port DOES call DrawDarkness() (src/hud/ShopListItem.cpp:487, inside NewDraw 425-492) -- it shows as binary-only purely because the port emits it as a tail branch that the CALL-token filter does not match. DrawDividers / DrawFloatingText / DrawIcon / DrawInAppPurchaseTags / DrawDescription and the BakedStringBox new/ctor/dtor pairs all match. Remaining: binary Colour(u8,u8,u8,u8) x4 + Colour::operator= inlined port-side; GETSTRING_CAST_0 vs GETSTRING drift; Vec2 ctor folded into BakedStringBox::Draw.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12ShopListItem8DrawIconEv": {
   "asm_hash": "3fe211874dfbd8a5",
@@ -4050,6 +4152,12 @@
   "score": 24445,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN13SliderControl4DrawEPf": {
+  "asm_hash": "f64d0d28f62a4a6e",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. TintColour IS present in the port at src/hud/SliderControl.cpp:252, inside Draw (239-301), as the inlined Colour::TintColour static -- so unlike TimeControl/MainScreen this row is NOT a missing-tint case. SliderControl::s_box / s_slider reads fold into the port's inlined quad setup, DrawQuadUnCached counts match (2 thunked / 2 direct), Font::DrawString is common, and the port's extra Utf8StringIterator copy-ctor is the iterator being passed by value. Colour::Yellow / Colour::White globals are materialised inline. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN13SliderControl4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 100,
@@ -4336,6 +4444,12 @@
   "score": 29400,
   "verdict": "ACCEPT-defunct"
  },
+ "_ZN14GameModeScreen4DrawEPf": {
+  "asm_hash": "0494c919b22f6f97",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. Named calls match: BaseScreen::DrawBorders(BakedStringBox*,float,Vec3), GameModeScreen::DrawConnectTexture(Vec3), BakedStringBox::SetTranslation x2 + Draw x2, and the DrawQuadUnCached counts. GameModeScreen::s_zenBoardTexture / s_senseiTexture reads and the Colour::White / _Vector3::UnitX globals are folded into the port's inlined operand build (Meyers-static Vec3 accessors). 12 binary _Vector3(float,float,float) ctors + 5 operator* are inlined port-side. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN14GameModeScreen4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 500,
@@ -4566,6 +4680,12 @@
   "reason": "Port uses ite ne/eq idiom: if state!=0 r3=0x81 else r3=1; binary uses cbnz/adds sequence achieving same values. str r3,[r0,#0x34] identical. Purely scheduling/encoding difference. Score 805/700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 805/700 -> 1060/700]",
   "score": 1060,
   "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN14GameOverScreen9DrawOrderEPfi": {
+  "asm_hash": "3b680a4943cce2c4",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] MISSING HUD TINT (new instance of the MenuButton::Draw class-#110 residue). The binary calls TintColour(Colour, float*) and then Colour::PlatformColour() before its Mesh::DrawTriList; the port calls neither -- src/screens/GameOverScreen.cpp contains no TintColour/TintWhite reference at all, so the loading-symbol quad is drawn at full un-modulated colour instead of being scaled by the HUD tint. SPEC: in GameOverScreen::DrawOrder, wrap the tri-list colour with Colour::TintColour(colour, hudScale) (src/engine/math/Colour.h:39) exactly as HUDControl3d::Draw does (src/hud/HUDControl3d.cpp:70), using the per-frame hudScale float[3] DrawOrder already receives. Secondary, benign: the binary reads MenuButton::m_loadingTexture directly where the port calls MenuButton::GetSparkleRingTex() (accessor drift), and SinIdx/CosIdx -> sinf/cosf is accepted. Those two cover the rest of the delta.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN14GameOverScreenC1EPKcifiiii": {
   "decided_at": "2026-06-14T05:55Z",
@@ -4873,6 +4993,12 @@
   "score": 12000,
   "verdict": "ACCEPT-cosmetic"
  },
+ "_ZN15TutorialControl4DrawEPf": {
+  "asm_hash": "91d798bc8d780b57",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. DrawQuadUnCached counts match (2 thunked binary / 2 direct port) and the two indirect draws are common. The binary's __aeabi_idivmod is the page-index modulo, strength-reduced to a constant multiply in the port. Binary Colour(u8,u8,u8,u8) + Colour copy + _Vector3 ctor/operator-/operator* and the _Vector3::One global are inlined port-side. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN15TutorialControl4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 700,
@@ -5103,6 +5229,12 @@
   "score": 85000,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN16VerticalScroller4DrawEPf": {
+  "asm_hash": "30c6040f9942593c",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. The three static texture reads (VerticalScroller::s_slider / s_arrow / s_box) are folded into the port's inlined quad setup and the DrawQuadUnCached counts match (binary 3 thunked + 1 sized, port 3 + 1 sized). The binary's 4 Scale44/GlobalTranslate44 pairs map onto the port's 4 MatrixStack::SetCurrentMatrix + UploadModelViewOnly sequences. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN16VerticalScroller4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 100,
@@ -5158,6 +5290,18 @@
   "reason": "VerticalScroller method stub/divergence. Score 1580/2400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1580/2400 -> 2060/2100]",
   "score": 2060,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN17FruitFactLitePageC1EP16FruitFactControl": {
+  "asm_hash": "45dc0bdc59c8a2d8",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] UNPORTED PAGE + DEFINED-BUT-NEVER-CALLED. The binary ctor @0x0017ad5c builds the whole Lite page: 4x LoadLocalisedTexture into s_wordsTex, 3x GenericHUDControl + BaseScreen::AddGenericControl, CreateSenseisHead / CreateHorizontalDivider / CreateSenseisFruitFactTitle / CreateSenseisFruitFactText, a Math::g_random draw, and a TranisitionInfo(InAndOut, ...) -> PulseInfo animation setup. The port's ctor (src/screens/FruitFactLitePage.cpp:7) only initialises 4 scalars and delegates to the base; unlike its sibling pages there is NO Init()/builder holding the body, and FruitFactLitePage is never instantiated anywhere in src/ (zero call sites outside its own TU). SPEC for implementer: first settle liveness -- get_xrefs_to on v1.6.1 FruitFactLitePage::FruitFactLitePage @0x0017ad5c. If v1.6.1 has zero call sites (the FruitFactLeaderboard / FruitFactRewardsPage precedent in CLAUDE.md), reclassify as dead code and leave it stubbed. If it IS instantiated, port the ctor body per the call list above, mirroring the FruitFactBonusFactPage::Init() layout pattern.",
+  "verdict": "FIX-NEEDED"
+ },
+ "_ZN17FruitFactLitePageC2EP16FruitFactControl": {
+  "asm_hash": "45dc0bdc59c8a2d8",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] UNPORTED PAGE + DEFINED-BUT-NEVER-CALLED. The binary ctor @0x0017ad5c builds the whole Lite page: 4x LoadLocalisedTexture into s_wordsTex, 3x GenericHUDControl + BaseScreen::AddGenericControl, CreateSenseisHead / CreateHorizontalDivider / CreateSenseisFruitFactTitle / CreateSenseisFruitFactText, a Math::g_random draw, and a TranisitionInfo(InAndOut, ...) -> PulseInfo animation setup. The port's ctor (src/screens/FruitFactLitePage.cpp:7) only initialises 4 scalars and delegates to the base; unlike its sibling pages there is NO Init()/builder holding the body, and FruitFactLitePage is never instantiated anywhere in src/ (zero call sites outside its own TU). SPEC for implementer: first settle liveness -- get_xrefs_to on v1.6.1 FruitFactLitePage::FruitFactLitePage @0x0017ad5c. If v1.6.1 has zero call sites (the FruitFactLeaderboard / FruitFactRewardsPage precedent in CLAUDE.md), reclassify as dead code and leave it stubbed. If it IS instantiated, port the ctor body per the call list above, mirroring the FruitFactBonusFactPage::Init() layout pattern.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN17GenericHUDControl7SetTextEPN6Mortar14BakedStringBoxE": {
   "asm_hash": "949559c6272c9844",
@@ -5303,6 +5447,30 @@
   "score": 6995,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN17SuperFruitControl10ChangeTextEPKcbPPN6Mortar16FancyBakedStringE": {
+  "asm_hash": "956eff8245d2ece1",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Delta fully accounted for. The binary's 4 LerpColourFromArray(float, Colour*, int) calls are the port's 4 SuperFruitColourMorph3(a,b,c,t) sites in SuperFruitControl::ChangeText -- same 3-stop colour interpolation, same key t = m_SliceCount/35 clamped, re-expressed as a local helper instead of the shared array form (note: the shared LerpColourFromArray IS ported at src/engine/math/Colour.cpp:55, so this is a helper-substitution boundary deviation, not a behaviour change). The binary's 16 Colour(u8,u8,u8,u8) ctors are exactly the port's 16 Colour literals (4 morphs x 3 stops + 4 whites). IsFastHardware() -> Game::GetInstance()->IsFastHardware() virtual (layers 3 vs 0, glow size 3.0 vs 0.0). BakedStringTTF::ApplyGradientSplit -> FancyBakedString::ApplyGradientSplit is the port's wrapper, 3 calls each side at 0.55/0.50/0.00. PregenerateText, FancyBakedString ctor/dtor and new/delete all match.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN17SuperFruitControl13DrawExplosionEv": {
+  "asm_hash": "6a2c2baf56d6c438",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Inverse function-boundary split, semantics preserved. The binary open-codes BOTH shockwave rings inline (SuperFruitControl::ShockWaveTexture read 4x, 2x Scale44 + GlobalTranslate44, 2x DrawQuadUnCached, 2x _Vector3::operator/ and _Vector3::One); the port factors them into a helper and calls it twice -- DrawRing(m_InnerRadius, m_Lifetime + 0.85f) and DrawRing(m_OuterRadius, m_Lifetime + 2.05f) at src/entities/SuperFruitControl.cpp:708-709 (the second is emitted as a tail branch, which is why only one CALL token appears). The 184 binary-only instructions are therefore present in the port, just inside DrawRing @:717 -- which has no binary counterpart and so is UNPAIRED and never asm-verified. Ring radii, ramp times and the 2-ring structure match the spec comment.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN17SuperFruitControl15UpdateExplosionEf": {
+  "asm_hash": "78c02f1a6be3549e",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] 100% of the delta accounted for. Call graph matches 1:1 once resolution noise is removed: 3 GetEntityFirst / 3 loops both sides (fruit/bomb/jib), AddToCurrentScore + WaveManager::SetAbsoluteDtMod + GetWavedt + Math::Sqrt common. Divergence sources, each fully covered: (a) ActorManager::GetEntityFirst/Next differ only in the demangled param type (binary long vs port int, identical ARM32 ABI) -- that text mismatch alone breaks LCS alignment and re-lists both sides' loop bodies; (b) binary calls _Vector3 operator-/*/+=/Normalise, Fruit::Sliced, Fruit::IsActive out-of-line, port inlines them (accounts for the 561 port-only lines); (c) binary calls ActorManager::GetInstance() 6x, port hoists it once (same singleton); (d) the 5 binary CALL =LOCAL are the T_1616/T_1629 ramp helpers, inlined in the port (src/entities/SuperFruitControl.cpp:82,91); (e) port builds the PSPParticleManager Meyers singleton inline vs binary's out-of-line GetInstance(); (f) the 1e6 pool constant is _Vector3::Normalise's near-zero guard, the same DAT the binary uses (src/engine/math/_Vector3.h:66). Float-constant sets look disjoint but are equivalent: the binary CHAINS delta offsets off a running sum (0.35/0.55/0.65/0.4/0.6/0.25/0.75) where the port materialises absolute offsets (0.85/1.4/2.05/1.25/1.45/1.1/2.3/2.55) -- e.g. binary L+0.5, +0.35 -> L+0.85, +0.55 -> L+1.4, +0.65 -> L+2.05. Same absolute ramp times.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN17SuperFruitControl17ExplodeSuperFruitEv": {
+  "asm_hash": "189fc6e34abc2feb",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. Call graph matches 1:1: SplatEntity::GetFree + MakeSplat, CriticalFlash, Fruit::FruitInfo, MeshManager::Load + AsciiString, Jiblet::Init, ActorManager::Add (binary long / port int -- same ABI), GameSound::SFXPlay, Math::Random::Rand32, _Vector3::Normalise. The binary's Delegate1<bool,MortarSound*>::Global construction around SFXPlay + DefaultSoundRemovedCallback is the port's default-argument form of the same call. _Quaternion::Matrix33 / _Matrix33::MultVec33 / operator _Matrix44 are inlined port-side (424 port-only lines). IsFastHardware() -> virtual via MortarGame::s_instance. SinIdx/CosIdx -> sinf/cosf. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN17SuperFruitControl19SaveSuperFruitStateEP5FruitP12TiXmlElement": {
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary SuperFruitControl::SaveSuperFruitState(Fruit*, TiXmlElement*) vs port (TiXmlElement*). Port drops the Fruit* param. Fix: add Fruit* as first param.",
@@ -5314,11 +5482,23 @@
   "reason": "Port adds null checks on SpawnFruit results and SaveData; binary is more direct. Extra conditional around stat AddToTotal. Consistent with incomplete SuperFruitControl port.",
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN17SuperFruitControl6SlicedEPN6Mortar6EntityE": {
+  "asm_hash": "0c92630937f7adaf",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. plus: the binary's free IsFastHardware() x2 is the port's virtual Game::GetInstance()->IsFastHardware() (MortarGame::s_instance + indirect CALL, src/engine/MenuBackground.cpp:23); binary Fruit::fruitInfo global read vs port Fruit::FruitInfo(long) accessor; AddSlice x2, SpawnRay, ChangeText, EmitterExists, AddEmitter, GetSliceDir, RemoveTrailParticles, AddToSpeedLossTime and SFXPlay all present both sides. BLOCKER: the binary calls SuperFruitHitControl::RemoveQuickly() (0x001bee10) and _Vector3::Magnitude(); the port calls neither and has no RemoveQuickly implementation at all -- it survives only as a comment at src/entities/SlashEntity.h:384 ('floors m_TailPos.z to 0.8f'). Until that is ported or proven inlined, the delta is not fully covered.",
+  "verdict": "ACCEPT-deferred"
+ },
  "_ZN17SuperFruitControl6UpdateEf": {
   "asm_hash": "c14c962ba4b45315",
   "decided_at": "2026-07-28T13:30Z",
   "reason": "False-accept mined 2026-07: throw gate read m_SpinAxis.x instead of host->m_Gravity.x, and port always wrote m_TimeScale where the binary has a no-write arm (binary @0x001bca10). FIXED in 57b6a5fb. Fresh sweep should confirm. [resolved-operand pass 2026-07-28] resolution re-check: residual delta is FruitCamera::Transition/TransitionOut vs the port's StartZoomIn/StartZoomOut rename, SinIdx/CosIdx -> sinf/cosf, pow -> powf, Meyers-static PSPParticleManager, Delegate0/Delegate1 construction drift, StringHash arity. No new gap found.",
   "verdict": "MATCH-FIX-APPLIED"
+ },
+ "_ZN17SuperFruitControl9DrawOrderEPfi": {
+  "asm_hash": "72b3b5a21f29abda",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Delta fully accounted for. SinTransition x3, JumpySinPulse, SinPulse, FancyBakedString::Draw x2 and SuperFruitControl::DrawExplosion() all match 1:1. The binary's 3 CALL =LOCAL are its outlined per-TU pulse helpers, inlined port-side, and its LerpF<_Vector3<float>> / _Vector3 operator- / operator* / operator+= / copy-ctor are all inlined in the port (185 port-only lines). Vec2 ctor folded into FancyBakedString::Draw.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN17SuperFruitControl9SpawnJibsEv": {
   "decided_at": "2026-07-01T00:00Z",
@@ -5558,6 +5738,12 @@
   "score": 19670,
   "verdict": "ACCEPT-cosmetic"
  },
+ "_ZN19NotificationControl4DrawEPf": {
+  "asm_hash": "ad7528445b8e42a1",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. NotificationControl::s_banner and s_unlockBanner are read on both sides (binary 2x each via thunk, port 1x each direct). The one real name difference is the Font::DrawString overload: binary DrawString(Utf8StringIterator,float,float,float,Colour,float,float,float,int,MortarRectangleT<float>*,float) vs port DrawString(float,float,float,char const*,_Vector3 const&,Colour const&,int) -- the port's own iterator-free wrapper over the same font path, one call each side. DrawQuadUnCached 4 vs 4, BakedStringBox SetTranslation/Draw 2 vs 2. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN19NotificationControl4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 500,
@@ -5696,6 +5882,18 @@
   "reason": "sig-mismatch: binary ParseUrl(int,int) (URL index parameters) vs port ParseUrl(char const*). Defunct news URL handling; no gameplay impact.",
   "verdict": "ACCEPT-defunct"
  },
+ "_ZN22FruitFactBonusFactPageC1EP16FruitFactControl": {
+  "asm_hash": "5250bc7e269c9baf",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Function-boundary split, not a missing feature. The binary builds the whole page in the ctor (4 GenericHUDControl + AddGenericControl, 2 LoadLocalisedTexture, 2 BakedStringBox, CreateTitleTextControl / CreateHorizontalDivider / CreateSenseisFruitFactTitle / CreateSenseisFruitFactText / CreateSenseisHead, a BonusManager::GetFirstBestBonus loop, LoadContent). The port's ctor is a bare base-ctor delegation (src/screens/FruitFactBonusFactPage.cpp:42) and that body lives in FruitFactBonusFactPage::Init() (:57), which IS invoked immediately after construction at src/screens/GameOverScreen.cpp:1242. So the code exists; the paired symbol is empty. BLIND SPOT worth naming: Init() has no binary counterpart, so it is UNPAIRED and its ~384 instructions of logic are never asm-verified by any row. Closing this needs a manual diff of port Init() against binary ctor 0x001743b8.",
+  "verdict": "ACCEPT-deferred"
+ },
+ "_ZN22FruitFactBonusFactPageC2EP16FruitFactControl": {
+  "asm_hash": "5250bc7e269c9baf",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Function-boundary split, not a missing feature. The binary builds the whole page in the ctor (4 GenericHUDControl + AddGenericControl, 2 LoadLocalisedTexture, 2 BakedStringBox, CreateTitleTextControl / CreateHorizontalDivider / CreateSenseisFruitFactTitle / CreateSenseisFruitFactText / CreateSenseisHead, a BonusManager::GetFirstBestBonus loop, LoadContent). The port's ctor is a bare base-ctor delegation (src/screens/FruitFactBonusFactPage.cpp:42) and that body lives in FruitFactBonusFactPage::Init() (:57), which IS invoked immediately after construction at src/screens/GameOverScreen.cpp:1242. So the code exists; the paired symbol is empty. BLIND SPOT worth naming: Init() has no binary counterpart, so it is UNPAIRED and its ~384 instructions of logic are never asm-verified by any row. Closing this needs a manual diff of port Init() against binary ctor 0x001743b8.",
+  "verdict": "ACCEPT-deferred"
+ },
  "_ZN23ProgressionTimerControl10ResetTimerEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 300,
@@ -5795,6 +5993,12 @@
   "score": 2360,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN24FruitFactClassicFactPage9DrawOrderEPfi": {
+  "asm_hash": "9d216e78d791719c",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Systemic-and-accepted in this codebase: ES2 renderer migration (binary MatrixManager::m_instance/_UploadCurrentMatrices + _Matrix44::Scale44/GlobalTranslate44 out-of-line vs port MatrixStack::Reset/SetCurrentMatrix + UploadModelViewOnly with the Matrix44 helpers inlined); Math::SinIdx/CosIdx -> sinf/cosf (accepted approximation); _Vector3/Colour ctors+operators inlined in the port, out-of-line in the binary; SmartPtr::assign/release vs operator=/~SmartPtr; _Vector3::Zero()/One() Meyers statics vs binary BSS globals; Meyers-singleton guard/__cxa_guard/__aeabi_atexit vs binary out-of-line GetInstance(); OS_SPrintf/_OS_snprintf -> snprintf; Math::Abs<float> -> fabsf. plus the accepted namespace drift: the binary's free LoadLocalisedTexture(char const*) vs port Mortar::TextureManager::LoadLocalisedTexture, and SmartPtr::assign/release vs operator=/~SmartPtr. BakedStringBox ctor/SetText/SetColour/SetTranslation/Draw/SetHorizontalLineSpacing/SetShadow, Utf8StringIterator, Font::GetStringHeight, MatrixStack::Reset/Translate/Scale and DrawQuadUnCached all match in count. The port's extra GetClassicFactTTFFont() is its accessor for the font the binary loads from game_work, and Texture::SetUnCached/UnSetUnCached bracket the same uncached draw the binary does inline. MatrixManager::_UploadCurrentMatrices(bool) -> UploadModelViewOnly() is the ES2 rename. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN24GlobalProbabilityOveride16CheckForOverrideERi": {
   "asm_hash": "b80c5a5872bae7d2",
   "decided_at": "2026-07-28T13:10Z",
@@ -5813,6 +6017,18 @@
   "asm_hash": "08cf9f48fea46358",
   "decided_at": "2026-06-26T00:00Z",
   "reason": "Same as D1Ev: port adds null check on m_TypeChances [+8] before dtor. See TODO stubs at src/game/GlobalProbabilityOveride.cpp:28.",
+  "verdict": "ACCEPT-deferred"
+ },
+ "_ZN27FruitFactBigClassicFactPageC1EP16FruitFactControlii": {
+  "asm_hash": "107cab4ddad37dc7",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Function-boundary split like FruitFactBonusFactPage: the binary ctor @0x00172884 builds 3 GenericHUDControls + AddGenericControl and reads GameOverScreen::m_senseiBody / m_senseiHeads; the port ctor (src/screens/FruitFactBigClassicFactPage.cpp:12) only stores m_factIndex/m_pageIndex and the body lives in FruitFactBigClassicFactPage::Init() (:30). BLOCKER + DEFINED-BUT-NEVER-CALLED: unlike FruitFactBonusFactPage (constructed at src/screens/GameOverScreen.cpp:1237 with Init() called at :1242), FruitFactBigClassicFactPage has ZERO construction sites anywhere in src/ -- both the ctor and Init() are dead port-side. Settle with get_xrefs_to on v1.6.1 0x00172884: if the binary instantiates it (multi-page classic fact board), the port is missing a page; if not, it is dead code like FruitFactLeaderboard/RewardsPage.",
+  "verdict": "ACCEPT-deferred"
+ },
+ "_ZN27FruitFactBigClassicFactPageC2EP16FruitFactControlii": {
+  "asm_hash": "107cab4ddad37dc7",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Function-boundary split like FruitFactBonusFactPage: the binary ctor @0x00172884 builds 3 GenericHUDControls + AddGenericControl and reads GameOverScreen::m_senseiBody / m_senseiHeads; the port ctor (src/screens/FruitFactBigClassicFactPage.cpp:12) only stores m_factIndex/m_pageIndex and the body lives in FruitFactBigClassicFactPage::Init() (:30). BLOCKER + DEFINED-BUT-NEVER-CALLED: unlike FruitFactBonusFactPage (constructed at src/screens/GameOverScreen.cpp:1237 with Init() called at :1242), FruitFactBigClassicFactPage has ZERO construction sites anywhere in src/ -- both the ctor and Init() are dead port-side. Settle with get_xrefs_to on v1.6.1 0x00172884: if the binary instantiates it (multi-page classic fact board), the port is missing a page; if not, it is dead code like FruitFactLeaderboard/RewardsPage.",
   "verdict": "ACCEPT-deferred"
  },
  "_ZN30ScrollingMenuItemRemoveAnimate6UpdateEf": {
@@ -6582,6 +6798,12 @@
  "_ZN6Jiblet4InitEiR8_Vector3IfEfS1_N6Mortar8SmartPtrINS3_5ModelEEEmfS1_": {
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary Jiblet::Init(int, Vec3&, float, Vec3, SmartPtr<Model>, ulong, float, Vec3) vs port (float, float, int, Vec3*, Vec3*, SmartPtr<Model> const&, ulong, Vec3*). Major param reorder + value vs pointer divergence. Fix: restructure port Init to match binary param order and passing conventions.",
+  "verdict": "FIX-NEEDED"
+ },
+ "_ZN6Jiblet6UpdateEf": {
+  "asm_hash": "13505f92a63525c3",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] TWO real findings. (1) MISSING CALL / inlined binary symbol: the binary's Jiblet::Update calls Jiblet::Kill() on the out-of-bounds retire; the port has NO Jiblet::Kill at all and open-codes 'flags |= ENT_KILLED;' at src/entities/Jiblet.cpp:224-227. That breaks the preserve-function-boundaries rule AND leaves Kill()'s real body unverified -- if the binary's Kill also releases m_pEmitter / returns the model, the port leaks the emitter on every off-screen jiblet. SPEC: RE v1.6.1 Jiblet::Kill (callee of Jiblet::Update @0x001e5330), add it as a real method, and call it from the bounds check instead of setting the flag inline. (2) DOUBLE-PRECISION TRIG: the port emits sin/cos (double) THREE times plus one sinf/cosf pair, where the binary uses Math::SinIdx/CosIdx (uint16 brad LUT). The single sinf/cosf pair is the accepted index-trig approximation; the three DOUBLE calls come from the inlined _Quaternion::CreateFromAxisAngle path and are a genuine port defect (float literals promoted to double) -- switch them to sinf/cosf. Everything else in the row (PSPParticleManager Meyers singleton, inlined _Matrix44/_Quaternion ops, SplatEntity::GetFree/MakeSplat, EmitterExists/AddEmitter, Normalise, Rand32) is benign.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar10MortarGame10SaveOnExitEv": {
@@ -7901,6 +8123,12 @@
   "score": 1650,
   "verdict": "ACCEPT-cosmetic"
  },
+ "_ZN6Mortar14Get_Next_ValueEPcS0_PiPS0_": {
+  "asm_hash": "436fc51e75588e3e",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Only two named differences: _OS_snprintf(char*,int,char const*,...) -> snprintf (accepted platform substitution, 2 calls each side) and operator new[] 2x binary / 1x port -- the port allocates the scratch buffer once where the binary allocates per branch, same lifetime. The 220 port-only lines are the inlined character-scan loop the binary keeps as straight-line code. Delta fully accounted for.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN6Mortar14ResourceLoader10InitializeERNS_10DataReaderE": {
   "decided_at": "2026-06-18T01:15Z",
   "max_score": 11400,
@@ -8106,6 +8334,12 @@
   "score": 1970,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN6Mortar16FancyBakedString21FancyBakedStringBuildEPNS_18FontCacheObjectTTFEPKcfR6ColouriffS5_fS5_fS5_ifiS5_S5_": {
+  "asm_hash": "88ff32e78afff290",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] 87 common lines and the same primitives on both sides (BakedStringTTF ctor, ApplyFormatting_Circle, FancyBakedString::Init, operator new). BLOCKER: the counts do not match -- the binary emits 7 BakedStringTTF constructions and 7 ApplyFormatting_Circle calls, the port emits 9 and 5. That is a different number of effect layers built for the same argument list, which changes what the fancy string actually renders. Needs a per-layer walk of v1.6.1 FancyBakedStringBuild @0x0024b1c8 against the port's FancyBakedString before this can be accepted; the systemic rationales (inlining, allocator) do not explain a layer-count difference.",
+  "verdict": "ACCEPT-deferred"
+ },
  "_ZN6Mortar16FancyBakedString8ShutdownEv": {
   "asm_hash": "fea90bb2a1e54874",
   "decided_at": "2026-07-28T13:10Z",
@@ -8186,6 +8420,12 @@
   "score": 47000,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN6Mortar24AlternativeTextureLoader12CreateLoaderERKNS_11AsciiStringE": {
+  "asm_hash": "90f606854e88e585",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Delta fully accounted for. Both sides call TextureLoader::CreateLoader, SubstituteApparentSizeTextureSource, AsciiString::Resize, strrchr x2, memcpy x2 and read AlternativeTextureLoader::Postfix. The apparent 'missing Prefix read' is alignment noise: the port's fast path tests both statics together (if (Prefix.Empty() && Postfix.Empty()), src/engine/asset/AlternativeTextureLoader.cpp:166) and the slow path concatenates dir + Prefix + filename + Postfix (:170-180), so Prefix IS read -- the compiler just materialises both statics from one anchor. Rest is the documented SmartPtr drift: SmartPtr<T>::Clear/SetPtrCast<T> (binary) vs assign/release (port), and AsciiString::_GetPtr() 9x in the binary vs 4x in the port (pointer hoisted out of the length arithmetic).",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN6Mortar35SubstituteApparentSizeTextureSource12UnlockLayersEPKNS_13TextureSource4DataE": {
   "asm_hash": "33c977d201b6e3fa",
   "decided_at": "2026-07-04T00:00Z",
@@ -8196,6 +8436,12 @@
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch MED: binary SubstituteApparentSizeTextureSourceData ctor(SmartPtr<TextureSource> const&, ulong, ulong) vs port (TextureSource*, ulong, ulong). Binary takes SmartPtr by const-ref; port takes raw pointer. Fix: change port first param to SmartPtr<TextureSource> const&.",
   "verdict": "FIX-NEEDED"
+ },
+ "_ZN6Mortar4Bada14Texture2D_Bada5CacheEv": {
+  "asm_hash": "2e3f403867de84cd",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Platform GL-upload path; the ES2/SDL backend migration explains the shape (binary glTexImage2D_1/glTexParameteri_1 thunks vs the port's direct gl* entry points, DisplayManager Meyers singleton vs out-of-line GetInstance, the port's Renderer::BindTextureForUpload and GetPlatformMag/MinFilter + WrapS/T accessors). BLOCKER: three binary behaviours have no port counterpart at all -- (a) glCompressedTexImage2D_1, i.e. the compressed-texture upload branch; (b) TextureConverter::TryConvert / TryConvertCleanup driven by GLFormatFinder::FindBestFormat + PixelFormat::operator!= / HasChannel, i.e. the format-negotiation fallback; (c) DisplayManager::EnterCriticalSection / LeaveCriticalSection and TextureSource::AutoLock around the upload. The port instead emits 4 plain glTexImage2D. If those are intentional platform deviations they need a '// DIFFERS:' marker; otherwise compressed .tex assets take a different upload path than the binary.",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar4Bada14Texture2D_Bada9SetSourceERKNS_8SmartPtrINS_13TextureSourceEEEm": {
   "decided_at": "2026-07-01T00:00Z",
@@ -8856,6 +9102,12 @@
   "reason": "Fixes applied, cross-build ASM stable (0 raw DIVERGE). Deferred for re-verify with fresh staging. [re-triaged 2026-06-18T01:28Z]",
   "score": 49960,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN6Mortar9LoadAnimsERNS_14ResourceLoaderE": {
+  "asm_hash": "00cb3e0dd67f940c",
+  "decided_at": "2026-07-29T02:30Z",
+  "reason": "[resolved-operand pass 2026-07-29] Delta fully accounted for by the documented nesting/API drift plus std inlining: Mortar::AnimTrackGroup::VectorTrack (binary) vs top-level Mortar::VectorTrack (port) -- the same known namespace-drift class; ResourceLoader::Read<AsciiString>()/Read<T>() templates vs the port's ResourceLoader::ReadString() and inlined typed reads; std::vector<T>::resize(n,val) out-of-line in the binary vs inlined _M_fill_insert in the port; std::map::operator[] vs _Rb_tree::_M_insert_unique_. 'vtable for Mortar::AnimationList' is read on both sides, and AsciiString::Set plus operator new/new[] are common. WrapPtr<AnimationList> -> SmartPtr::assign is the accepted SmartPtr drift. The 596 port-only lines are the inlined vector/AsciiString bodies (17 VectorTrack dtors, 14 memcpy).",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar9Texture2DC1Ev": {
   "asm_hash": "eb00d0dbbf50b875",
