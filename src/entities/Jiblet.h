@@ -81,6 +81,12 @@ public:
 
     // Vtable slot 6: PostUpdate (binary @ 0x1e5c04). Empty.
     void PostUpdate(float dt) override;
+
+    // Binary @ 0x1e52ec. NOT a vtable slot -- plain member (Mortar::Entity has
+    // no Kill()). Sole real call site: the bounds-kill branch at the tail of
+    // Jiblet::Update (0x1e5714). Retires the trail emitter and drops the model
+    // ref before marking the entity dead.
+    void Kill();
 };
 
 #ifdef __bada__

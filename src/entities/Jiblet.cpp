@@ -220,8 +220,23 @@ void Jiblet::Update(float dt) {
     // [-192,192] -> retire. NOTE: only pos.x/pos.y are tested in the binary.
     if (pos.x < -288.0f || pos.x > 288.0f ||
         pos.y < -192.0f || pos.y > 192.0f) {
-        flags |= ENT_KILLED;
+        Kill();
     }
+}
+
+// ASM-spec v1.6.1 Jiblet::Kill @0x001e52ec: (1) if m_pEmitter, ClearEmitter
+// and null it; (2) m_pModel.SetPtr(0) -- drops the model SmartPtr ref;
+// (3) flags |= ENT_KILLED. Non-virtual member (Mortar::Entity has no Kill
+// vtable slot). Sole real call site is the bounds-kill branch in Update
+// above (0x1e5714); the other xrefs are structural (entry-point external
+// ref, shared inter-TU GOT slot), not additional call sites.
+void Jiblet::Kill() {
+    if (m_pEmitter) {
+        PSPParticleManager::GetInstance().ClearEmitter(m_pEmitter);
+        m_pEmitter = 0;
+    }
+    m_pModel.SetPtr(nullptr);
+    flags |= ENT_KILLED;
 }
 
 // Draw @ 0x1e5750 (vtable slot 5 / +0x14)
