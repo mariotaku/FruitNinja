@@ -236,6 +236,23 @@ Three causes, three remedies:
    mangled signature (`Fruit::Draw()` vs `Fruit::Draw(Renderer&)`), so the
    exact-name intersection never fires. `signature-mismatch.py` is the detector;
    `run.sh` calls it after the sweep and prints the ranked top rows.
+4. **Scope drift.** Same `Class::Method(params)`, different ENCLOSING scope —
+   the port moved a class into or out of a namespace (`LinkedHeap` vs
+   `Mortar::LinkedHeap`) or dropped an outer class (`SlashModInfo::SlashSoundMods`
+   vs `SlashSoundMods`). The base identities differ, so cause 3's detector is
+   blind to it; `signature-mismatch.py`'s second pass matches on the innermost
+   `Class::Method` + normalised params instead.
+5. **Rename drift.** The port renamed the symbol outright — a corrected binary
+   typo (`CheckHasGoneOffsceen` → `CheckHasGoneOffscreen`), a vtable-slot
+   rename (`DrawUpdate` → `PostUpdate`), free function → class static. Nothing
+   generic can detect this; each one needs a hand-reviewed alias.
+6. **Inverted pairing** — worse than unpaired, because it reads as *handled*.
+   The port's symbol carrying the binary's exact mangled name is a thin
+   forwarder while the real body lives under a port-chosen name, so the sweep
+   diffs forwarder-vs-body, scores it, and the body is never looked at
+   (`GameModifier::ApplyModifier` = 20 B forwarder, body in `OnDeferComplete`).
+   Tell: a paired row whose port side is a handful of bytes against a large
+   binary body. The fix is the same `port_mangled` alias.
 
 ```sh
 python tools/asm-verify/signature-mismatch.py              # report only
@@ -252,6 +269,19 @@ that binary symbol". Findings with a differing param TYPE at equal arity are
 never auto-aliased — those may be genuinely different functions, and an alias
 there would hide a real gap behind a fake pairing. Symbols already aliased drop
 out of the report, so the list drains as it is worked.
+
+A base identity with SEVERAL unpaired overloads per side is not automatically
+ambiguous: `overload_pairs` matches them one by one on (ctor/dtor variant,
+arity, width-normalised param types), and a key with two claimants on either
+side stays unmatched. Without that, every multi-overload base was pinned at
+"ambiguous" forever and the list stopped draining on its own. Templates are
+still excluded from auto write-back — their bodies are libstdc++-version
+sensitive, and the mangled name carries a return type the loose key ignores.
+
+Addresses in the report and in the aliases it writes are **Ghidra convention**
+(raw ELF + image base, matching `src/` markers); `binary_addr_raw` keeps the
+nm/objdump value. Override the base for another target with
+`ASM_VERIFY_IMAGE_BASE`.
 
 ## Gutted `__bada__` bodies
 
