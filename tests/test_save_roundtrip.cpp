@@ -23,9 +23,12 @@
 #ifdef _WIN32
 #include <direct.h>
 #define fn_getcwd _getcwd
+#define fn_mkdir(p) _mkdir(p)
 #else
 #include <unistd.h>
+#include <sys/stat.h>
 #define fn_getcwd getcwd
+#define fn_mkdir(p) mkdir(p, 0755)
 #endif
 
 #include "game/FruitSaveData.h"
@@ -68,9 +71,23 @@ int main() {
     {
         char cwd[1024];
         game->data_dir = fn_getcwd(cwd, sizeof(cwd)) ? std::string(cwd) : std::string(".");
-        // Save/load resolve via save_dir (GetSavePath = save_dir + "/FruitySave.xml");
-        // point it at the same writable cwd this test reads/writes from.
+        // Save/load resolve via save_dir (GetSavePath = save_dir + "/FruitySave.xml").
+        // Task #124: use the same per-test-binary FN_TEST_SAVE_DIR convention as
+        // test_harness.h (this test never calls Game::init(), so it can't go
+        // through Mortar_ResolveSaveDir/FN_SAVE_DIR_OVERRIDE -- it sets save_dir
+        // directly instead) rather than the shared tests/ binary cwd, so a stray
+        // FruitySave.xml left behind by a crash before the end-of-test cleanup
+        // doesn't sit in the shared cwd every other test binary also runs from.
+#ifdef FN_TEST_SAVE_DIR
+        // Two mkdir calls, not a general recursive mkdir: FN_TEST_SAVE_DIR is
+        // always exactly "<this test binary's own dir>/save" (CMakeLists.txt),
+        // and the binary's own dir necessarily already exists.
+        fn_mkdir(FN_TEST_SAVE_DIR);
+        game->save_dir = std::string(FN_TEST_SAVE_DIR) + "/save_roundtrip";
+        fn_mkdir(game->save_dir.c_str());
+#else
         game->save_dir = game->data_dir;
+#endif
     }
     Mortar::MortarGame::GetInstance()->m_versionCombined =
         GetVersionFromString(GetVersionString());

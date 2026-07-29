@@ -132,6 +132,13 @@ macro(fn_add_game_test _target _source)
     target_compile_definitions(${_target} PRIVATE
         FN_TEST_SCREENSHOT_DIR="${CMAKE_CURRENT_BINARY_DIR}/screenshots")
 
+    # Base directory for the per-test hermetic save-dir override (task #124).
+    # test_harness.h creates "<FN_TEST_SAVE_DIR>/<sanitized label>_<pid>" per
+    # test process and points FN_SAVE_DIR_OVERRIDE (src/platform/SaveDirSDL.h)
+    # at it, so no test reads/writes the machine-global SDL_GetPrefPath save.
+    target_compile_definitions(${_target} PRIVATE
+        FN_TEST_SAVE_DIR="${CMAKE_CURRENT_BINARY_DIR}/save")
+
     # fn_link_game_engine_group (defined in the root CMakeLists.txt) wraps
     # fruit-ninja-game + mortar_engine in a GNU-ld --start-group/--end-group
     # on non-MSVC linkers -- see its definition for why the two static libs

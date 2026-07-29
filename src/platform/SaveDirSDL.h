@@ -11,7 +11,17 @@
 // it doesn't already exist. Callers join with "/" + filename (FruitSaveData,
 // ItemManager, SettingsSave path helpers).
 //
-// Per platform:
+// Test-only override: if the FN_SAVE_DIR_OVERRIDE env var is set (non-empty),
+// it wins over every platform branch below and is returned as-is (directory
+// created if missing). The real game never sets this var, so production
+// save location is unchanged; tests/test_harness.h sets a fresh per-test
+// directory before calling Game::init() so no test can read or write the
+// machine-global save (see task #124 -- a leftover active powerup in the
+// shared SDL_GetPrefPath save silently changed later tests' dt scaling).
+// Distinct name from the Wii-only compile-time FN_SAVE_DIR macro
+// (src/config.h.in) -- unrelated mechanisms, different platforms.
+//
+// Per platform (when FN_SAVE_DIR_OVERRIDE is not set):
 //   Emscripten     -> "/save" (IDBFS mount; see mainEmscripten.cpp)
 //   webOS          -> "<appDir>/Save" (writable under the dev-mode install
 //                      dir; appDir comes from fn_webos_app_dir())

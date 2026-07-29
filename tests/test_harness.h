@@ -70,6 +70,9 @@
 #include <sys/stat.h>
 #ifdef _WIN32
 #  include <direct.h>
+#  include <process.h>  // _getpid
+#else
+#  include <unistd.h>   // getpid
 #endif
 #include <SDL_image.h>
 
@@ -80,6 +83,15 @@
 // relative fallback covers a non-CMake / unknown build of this header.
 #ifndef FN_TEST_SCREENSHOT_DIR
 #define FN_TEST_SCREENSHOT_DIR "tmp/test/screenshots"
+#endif
+
+// Base directory the per-test hermetic save-dir override (task #124) is
+// created under. FN_TEST_SAVE_DIR is an absolute path supplied by
+// tests/CMakeLists.txt's fn_add_game_test macro (${CMAKE_CURRENT_BINARY_DIR}/save,
+// colocated with FN_TEST_SCREENSHOT_DIR). Relative fallback for a non-CMake
+// build of this header (resolved against the process CWD).
+#ifndef FN_TEST_SAVE_DIR
+#define FN_TEST_SAVE_DIR "tmp/test/save"
 #endif
 
 // glReadPixels isn't in the thin gl_funcs.h wrapper -- pull via
@@ -341,6 +353,15 @@ struct TestHarness {
         if (m_langOverride >= 0) {
             game_work.languageFlag = (uint8_t)m_langOverride;
         }
+
+        // Task #124: hermetic per-test save directory. Point Mortar_ResolveSaveDir
+        // (src/platform/SaveDirSDL.h) at a throwaway directory scoped to this test's
+        // label instead of the machine-global SDL_GetPrefPath location, so a save
+        // left behind by one test (e.g. an active powerup, which scales dt in
+        // GameUpdate) can never leak into a later test's start state. Reset the
+        // known save files (not just create the dir) so a rerun of the SAME test
+        // starts from a known state even if a prior run left files behind.
+        SetupHermeticSaveDir_();
 
         if (!game.init(window, gl)) {
             std::fprintf(stderr, "game.init failed\n");
@@ -824,6 +845,65 @@ private:
 #else
         mkdir(buf, 0755);
 #endif
+    }
+
+    // Sanitize a test label into a filesystem-safe directory-name component
+    // (replaces anything outside [A-Za-z0-9_-] with '_'). Used to give each
+    // ctest entry its own save-dir leaf under FN_TEST_SAVE_DIR.
+    static std::string SanitizeForPath_(const char* label_) {
+        std::string s(label_ ? label_ : "test");
+        for (size_t i = 0; i < s.size(); ++i) {
+            char c = s[i];
+            bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                      (c >= '0' && c <= '9') || c == '-' || c == '_';
+            if (!ok) s[i] = '_';
+        }
+        if (s.empty()) s = "test";
+        return s;
+    }
+
+    // Task #124: create "<FN_TEST_SAVE_DIR>/<sanitized label>_<pid>", delete
+    // the three known save filenames inside it (belt-and-suspenders start-
+    // clean guard -- see below), then point FN_SAVE_DIR_OVERRIDE (read by
+    // Mortar_ResolveSaveDir, src/platform/SaveDirSDL.h) at it.
+    //
+    // The PID suffix -- not just the label -- matters: several binaries
+    // register MULTIPLE ctest NAMEs against the SAME fixed compile-time
+    // label (e.g. test_dojoscreen's "dojoscreen" / "screenshot_dojo_english"
+    // / "screenshot_dojo_chinese" ctest entries all pass the same label to
+    // TestHarness's ctor). Under `ctest -j`, two of those can boot
+    // concurrently; a label-only dir would let both processes' GameInit
+    // boot-time save read and GameExit save write race the same file. Each
+    // ctest NAME still runs this test binary as its own OS process, so the
+    // PID makes every concurrent invocation unique regardless of label
+    // collisions. The label prefix is kept purely for human-readable
+    // directory names when inspecting the build tree's save dir after
+    // a failure.
+    //
+    // The dir itself is intentionally NOT wiped/recreated (MkdirRecursive_
+    // has no matching rmdir -r) -- only its known contents are deleted,
+    // which are the only files any save-path helper ever writes there (see
+    // FruitSaveData::GetSavePath / SettingsSave::GetSettingsSavePath /
+    // ItemManager::BuildItemSaveFullPath). With the PID suffix this is a
+    // pure safety net (a fresh PID directory is already empty); it only
+    // matters in the astronomically unlikely event of PID reuse.
+    void SetupHermeticSaveDir_() {
+        char pidbuf[32];
+#if defined(_WIN32)
+        std::snprintf(pidbuf, sizeof(pidbuf), "%d", (int)_getpid());
+#else
+        std::snprintf(pidbuf, sizeof(pidbuf), "%d", (int)getpid());
+#endif
+        std::string dir = std::string(FN_TEST_SAVE_DIR) + "/" +
+                           SanitizeForPath_(label) + "_" + pidbuf;
+        MkdirRecursive_(dir.c_str());
+        static const char* const kSaveFiles[] = {
+            "FruitySave.xml", "SettingsSave.xml", "ItemSave.xml"
+        };
+        for (size_t i = 0; i < sizeof(kSaveFiles) / sizeof(kSaveFiles[0]); ++i) {
+            std::remove((dir + "/" + kSaveFiles[i]).c_str());
+        }
+        SDL_setenv("FN_SAVE_DIR_OVERRIDE", dir.c_str(), 1);
     }
 
     // Create FN_TEST_SCREENSHOT_DIR and any subdirectory implied by 'name'.

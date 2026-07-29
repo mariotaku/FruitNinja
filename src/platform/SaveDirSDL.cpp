@@ -26,6 +26,15 @@ void fn_mkdir(const std::string& path) {
 } // namespace
 
 std::string Mortar_ResolveSaveDir(const char* appDir) {
+    // Test-only override -- see SaveDirSDL.h. Checked before any platform
+    // branch so a test process never touches the machine-global save dir.
+    if (const char* override_dir = SDL_getenv("FN_SAVE_DIR_OVERRIDE")) {
+        if (override_dir[0] != '\0') {
+            std::string s(override_dir);
+            fn_mkdir(s);
+            return s;
+        }
+    }
 #if defined(__EMSCRIPTEN__)
     (void)appDir;
     // IDBFS mount -- see mainEmscripten.cpp; mounted (and FS.mkdir'd) there
