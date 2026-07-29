@@ -52,6 +52,7 @@
 #include <SDL.h>
 #include "render/gl_funcs.h"
 #include "Game.h"
+#include "debug/CrashHandler.h"
 #include "engine/audio/SoundManager.h"
 #include "game/GameWork.h"
 #include "hud/HUD.h"
@@ -123,6 +124,12 @@ struct TestHarness {
           m_glReadPixels(NULL),
           m_winW(960), m_winH(640)
     {
+        // Port specific: MSVC fully buffers stdout/stderr when the stream is
+        // a pipe (which ctest always uses) -- a hard crash never flushes the
+        // buffer, so the last printed line lies about where the process died.
+        // _IONBF (not _IOLBF -- MSVC documents line-buffering as behaving
+        // like full buffering) must run before ANY logging, so it lives here
+        // in the ctor rather than Init(): the ctor always runs first.
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
     }
@@ -262,6 +269,14 @@ struct TestHarness {
 
     // -------- init --------
     bool Init() {
+        // Win32 + _DEBUG only: register an unhandled-SEH filter that prints
+        // exception code, faulting address, and a symbolised stack trace to
+        // stderr before the OS terminates the process (no-op elsewhere --
+        // see CrashHandler.h). Matches mainSDL.cpp's call shape/order: after
+        // stdout/stderr are unbuffered (done in the ctor above, which always
+        // runs before Init()) so a crash mid-test doesn't also lose this.
+        FN::InstallCrashHandler();
+
         // Synthesize SDL_FINGER* events from the mouse (must be set BEFORE
         // SDL_Init) so interactive tests get touch input the widgets hit-test,
         // matching mainSDL.cpp. TOUCH_MOUSE_EVENTS=0 stops the reverse round-trip.

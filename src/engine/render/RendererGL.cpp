@@ -98,6 +98,13 @@ void Renderer::shutdown() {
         glDeleteBuffers(1, &m_QuadVBO);
         m_QuadVBO = 0;
     }
+    // Port specific: no binary counterpart. s_instance was never cleared here,
+    // so it dangled past Game::renderer's stack lifetime; atexit singleton
+    // teardown (PowerUpManager/TextureManager/PSPParticleManager freeing
+    // cached textures) then dereferenced Renderer::GetInstance() into a dead
+    // frame. This makes the ~41 `if (Renderer* r = GetInstance())` guards in
+    // the tree actually gate on liveness.
+    if (s_instance == this) s_instance = nullptr;
 }
 
 // Pack one source vertex (pos 3xfloat @posOff, uv 2xfloat @uvOff, colour

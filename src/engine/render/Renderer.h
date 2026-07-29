@@ -92,6 +92,14 @@ struct Renderer {
     static Renderer* GetInstance() { return s_instance; }
 
     Renderer();
+    // Port specific: no binary counterpart. Covers the destroyed-without-
+    // shutdown() path (e.g. a stack-local Renderer going out of scope without
+    // an explicit shutdown() call) so s_instance never dangles past this
+    // object's lifetime. shutdown() clears it too (see RendererGL.cpp /
+    // RendererGX.cpp) so the common path clears it before GL teardown; this
+    // is the backstop. Non-polymorphic, single-instance, never copied --
+    // adding a dtor has no layout/vtable impact.
+    ~Renderer() { if (s_instance == this) s_instance = nullptr; }
 
     // Sets s_instance and creates the GL resources for the 2D shader path
     // (program, streaming VBO, 1x1 white texture). Requires a LIVE GL

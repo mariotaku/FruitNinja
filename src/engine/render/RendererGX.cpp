@@ -403,6 +403,11 @@ void Renderer::shutdown() {
         free(m_WhiteTexBuf);
         m_WhiteTexBuf = nullptr;
     }
+    // Port specific: no binary counterpart. See RendererGL.cpp::shutdown()'s
+    // matching comment -- s_instance must be cleared here so the atexit
+    // singleton teardown (PowerUpManager/TextureManager/PSPParticleManager)
+    // sees a dead GetInstance() rather than dereferencing a dangling this.
+    if (s_instance == this) s_instance = nullptr;
 }
 
 // Port specific: GX equivalents of RendererGL::InitGL's one-time GL state
