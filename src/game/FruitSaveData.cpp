@@ -12,6 +12,7 @@
 #include "ItemManager.h"
 #include "AchievementManager.h"
 #include "PowerUpManager.h"
+#include "WaveManager.h"
 #include "GameMode.h"
 #include "ScreenEffect.h"
 #include "engine/util/StringHash.h"
@@ -1007,7 +1008,7 @@ bool* GetIsSavingBool() {
 // SaveGame(&snapshot). pSaveData itself is left untouched so existing
 // in-memory state survives the save.
 // ----------------------------------------------------------------------
-void SaveCurrentData(bool /*fullSave*/) {
+void SaveCurrentData(bool fullSave) {
     Game* g = Game::GetInstance();
     if (!g || !game_work.m_SaveData) return;
 
@@ -1027,6 +1028,16 @@ void SaveCurrentData(bool /*fullSave*/) {
     // Snapshot combo globals into save fields before writing.
     // Binary: SaveCurrentData @ 0x001cde20 offset 0x001ccd08/0x001ccd34.
     snapshot.SnapshotComboState();
+
+    // fullSave gates the wave-progression snapshot (candidate waves, current
+    // spawner state, combo/cold timers) -- header contract @0x001cde20:
+    // "fullSave=true triggers WaveManager::SaveWaveInfo." Callers that pass
+    // false (PauseScreen retry/quit, GameOverScreen retry) are discarding the
+    // in-progress run, so the wave state they'd persist is stale/irrelevant.
+    if (fullSave) {
+        WaveManager* wm = WaveManager::GetInstance();
+        if (wm) wm->SaveWaveInfo(&snapshot);
+    }
 
     // Binary does NOT update +0x40 in SaveCurrentData; it is rebuilt as the
     // CLASSIC-mode alias by ParseSaveFile on next load.
