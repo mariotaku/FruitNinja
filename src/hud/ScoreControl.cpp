@@ -429,8 +429,11 @@ void ScoreControl::Draw(float* hudScaleRaw) {
     // Skip P1 in multiplayer
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
 
-    // g_GameData.someTimer >= -1.0f — uses m_TransitionTimer (+0x0C)
-    if (game_work.m_PauseAmount < -1.0f) return;
+    // ASM-spec v1.6.1 ScoreControl::Draw @0x001abd2c-0x001abd44:
+    //   vmov s15,#-1.0 ; vldr s14,[game_work+0xc] ; vcmpe s14,s15 ; bgt <draw>
+    // The gate is a STRICT greater-than, so m_PauseAmount == -1.0f suppresses the
+    // draw. -1.0f is a live value (GameInit and BombHit both write it).
+    if (!(game_work.m_PauseAmount > -1.0f)) return;
 
     // Binary @0x1abce8: vldr.32 s15,[r3,#0x20] (HUD+0x20 = m_DrawAlpha, per-frame alpha).
     float intensity = game_work.mHud->m_DrawAlpha;   // binary derefs unguarded
@@ -450,7 +453,12 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
     uint8_t alpha = (uint8_t)std::min(255.0f, std::max(0.0f, 255.0f * cameraIntensity));
     float transTimer = game_work.m_PauseAmount;  // g_GameData.someTimer
 
-    if (transTimer >= -1.0f) {
+    // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ad5b8:
+    //   vmov s15,#-1.0 ; vldr s14,[game_work+0xc] ; vcmpe s14,s15
+    //   ble 0x001ad0b8 (skip Section A) ; else b 0x001acef8 (Section A)
+    // Strict greater-than, matching ScoreControl::Draw @0x001abd2c. At exactly
+    // -1.0f (written by GameInit and BombHit) Section A is skipped.
+    if (transTimer > -1.0f) {
         // Section A: Score digits
         if (game_work.pFontNumbers.IsValid()) {
             char buf[32];

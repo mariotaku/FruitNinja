@@ -2,6 +2,7 @@
 
 #include "TimeControl.h"
 #include "game/GameMode.h"
+#include "hud/HUD.h"
 #include "network/P2PMessageHandling.h"
 #include "Game.h"
 #include "hud/HUDLayer.h"
@@ -269,14 +270,18 @@ void TimeControl::Update(float dt) {
 
     // pos.y re-anchor every timed frame based on camera transition. Non-MP branch:
     //   tiltMix = 1.0 - |cameraTransition|
-    //   pos.y   = size.y * -2 * tiltMix + (2*size.y + 320) * 0.5
-    // For size.y=18 and stable in-game camera (transition=0), pos.y = 142.
+    //   pos.y   = size.y * -2 * tiltMix * m_globalTimeScale + (2*size.y + 320) * 0.5
+    // For size.y=18, stable in-game camera (transition=0) and timeScale=1, pos.y = 142.
+    // ASM-spec v1.6.1 TimeControl::Update @0x001c0f90: the tilt term is scaled by
+    // HUD+0x24 (m_globalTimeScale), so during slow-mo the clock slides toward
+    // size.y+160. The binary derefs game_work.m_pHud (+0x40) unguarded.
     float camTilt = 0.0f;
     if (game_work.mMainScreen) {
         camTilt = fabsf(game_work.mMainScreen->GetCameraTransition());
     }
     const float tiltMix = 1.0f - camTilt;   // non-MP path; SameScreenMP unported
-    pos.y = size.y * -2.0f * tiltMix + (size.y * 2.0f + 320.0f) * 0.5f;
+    pos.y = (size.y * -2.0f) * (tiltMix * game_work.mHud->m_globalTimeScale) +
+            (size.y * 2.0f + 320.0f) * 0.5f;
 }
 
 // v1.6.1 TimeControl::Draw @0x001c12d4
