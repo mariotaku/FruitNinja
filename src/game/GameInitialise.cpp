@@ -57,6 +57,7 @@
 #include "util/Localisation.h"
 #include "util/StringHash.h"
 #include "debug/Logger.h"
+#include "debug/GLHandleLeakCheck.h"
 #include <cstdlib>
 #include <ctime>
 #include <string>
@@ -535,7 +536,11 @@ void GameDestroy() {
     DeleteAllPopups();
 
     // --- 3. Data managers ---
-    // Note: AchievementManager::UnLoadAchievementInfo -- no-op stub (achievement UI not ported).
+    // v1.6.1 GameDestroy @0x0011cea4 calls UnLoadAchievementInfo here, immediately
+    // before UnLoadItemData. The binary body @0x00117ea4 opens with two SmartPtr
+    // nulls (NotificationControl::s_banner / s_unlockBanner) before its
+    // AchievementInfo map walk; both are ported and were released nowhere.
+    AchievementManager::GetInstance()->UnLoadAchievementInfo();
     ItemManager::GetInstance()->UnLoadItemData();  // Binary @ 0x0011cea4 — after UnLoadAchievementInfo
 
     // --- 3.5. Entity pool teardown (Port specific: before HUD so Fruit::Release() /
@@ -617,12 +622,13 @@ void GameDestroy() {
     //                    4 slice models, 7 atlases
     //   CleanUpSplat -- SplatEntity::pool (splats are not an ActorManager entity type at all --
     //                    absent from the EntityFactory::CreateEntity switch)
+    //   CleanupSlash -- nulls the slash textures (g_BladeTex, g_ModTexture)
     CleanupBomb();
     CleanupFruit();
     CleanUpSplat();
-    // TODO: v1.6.1 CleanupSlash @0x001e8204 -- unported, needs SlashEntityGhost; releases
-    // s_ghosts[8] (stride 0x10) + nulls 3 Texture SmartPtrs, sets loaded=false. Call here
-    // once ported.
+    CleanupSlash();
+    // TODO: v1.6.1 CleanupSlash @0x001e8204 -- the 8x SlashEntityGhost::Release(ghost_ring[i])
+    // step is still deferred (blocked on the SlashEntityGhost port); see SlashEntity.cpp.
 
     // --- 11. Port-specific cleanup (SDL replacements) ---
     { delete game->inputManager; game->inputManager = nullptr; }
@@ -653,6 +659,31 @@ void GameDestroy() {
     // Note: Mortar::DisplayManager::Destroy -- SDL2 window/GL teardown handles this.
     // Note: Mortar::SoundManager::Destroy -- SoundManager teardown on process exit.
     // Note: Mortar::SystemManager::Destroy -- no Mortar::SystemManager class in port; Bada OS only.
+
+#ifndef __bada__
+    // Port specific: teardown leak guard. Invariant -- at this point no
+    // GL-handle-owning object may still be alive; the GL context dies before
+    // atexit runs, so anything surviving here leaks its handle. See
+    // debug/GLHandleLeakCheck.h for why these three classes are the whole set
+    // and why the counters are __bada__-gated statics.
+    //
+    // LOG_ERROR, deliberately NOT an assert: an abort here would kill the test
+    // suite before the rest of the teardown backlog is drained. Promote this to
+    // a hard assert once all three counts reach zero.
+    {
+        const int liveTex  = FN::GLLiveCount_Texture2D();
+        const int liveGeom = FN::GLLiveCount_Geometry();
+        const int liveFont = FN::GLLiveCount_FontInterface();
+        if (liveTex != 0 || liveGeom != 0 || liveFont != 0) {
+            LOG_ERROR("GAMEINIT",
+                      "GameDestroy: GL-handle leak -- Texture2D_Bada=%d Geometry=%d FontInterface=%d still alive",
+                      liveTex, liveGeom, liveFont);
+        } else {
+            LOG_INFO("GAMEINIT",
+                     "GameDestroy: GL-handle leak check clean -- Texture2D_Bada=0 Geometry=0 FontInterface=0");
+        }
+    }
+#endif
 }
 
 // ASM-spec v1.6.1 InitialiseStrings @0x11c1c8

@@ -270,6 +270,13 @@ void AchievementManager::LoadAchievementInfo() {
 // ---------------------------------------------------------------------------
 
 void AchievementManager::UnLoadAchievementInfo() {
+    // Binary body @0x00117ea4 opens with two SmartPtr nulls -- the exact inverse of
+    // LoadAchievementInfo's two preamble texture loads -- before the map walk.
+    // Nulling twice is safe: GameDestroy calls this, then the singleton dtor runs it
+    // again at atexit against already-null slots.
+    NotificationControl::s_banner.SetNull();
+    NotificationControl::s_unlockBanner.SetNull();
+
     // Binary: iterates only m_All to free heap entries, then clears all 12 maps
     // GCC 4.4: range-for is C++11 (added in GCC 4.6); use explicit iterator loop.
     for (std::map<uint32_t, AchievementInfo*>::iterator it = m_All.begin(); it != m_All.end(); ++it) {

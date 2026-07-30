@@ -3,6 +3,7 @@
 #include "render/Renderer.h"
 #include "render/gl_funcs.h"
 #include "debug/Logger.h"
+#include "debug/GLHandleLeakCheck.h"
 #include <cstring>
 #include <cstdlib>
 
@@ -20,6 +21,15 @@ extern bool Wii_LastTexSubImageOk();
 #endif
 
 namespace Mortar {
+
+#ifndef __bada__
+// Port specific: GameDestroy teardown leak guard -- see debug/GLHandleLeakCheck.h
+// for the invariant and why this is __bada__-gated. Counts live FontInterface
+// instances; each owns its atlas pages' GL textures (freed in Clear(), which the
+// dtor runs), so a surviving instance is a surviving page-texture owner. STATIC
+// storage only; the FontInterface layout is unchanged.
+static int s_LiveFontInterface = 0;
+#endif
 
 // Atlas texel layout. Host/web: RGBA8 (white RGB + alpha=coverage). Wii:
 // LUMINANCE_ALPHA (2 B/texel: L=intensity, A=coverage), uploaded by the GX
@@ -50,6 +60,9 @@ FontInterface::FontInterface()
     , m_RunPage(nullptr)
 #endif
 {
+#ifndef __bada__
+    ++s_LiveFontInterface;
+#endif
     // Port specific: pages are allocated lazily on first PackGlyphCell (binary
     // TextureAtlas @0x00269c9c starts empty; port follows the same model).
 }
@@ -62,6 +75,9 @@ void FontInterface::InitialiseData(float fontScale, float globalSizeScale) {
 }
 
 FontInterface::~FontInterface() {
+#ifndef __bada__
+    --s_LiveFontInterface;
+#endif
     Clear();
 }
 
@@ -390,3 +406,9 @@ void FontInterface::MarkPageDirty(FontAtlasPage* page, int x, int y, int w, int 
 }
 
 } // namespace Mortar
+
+#ifndef __bada__
+namespace FN {
+int GLLiveCount_FontInterface() { return Mortar::s_LiveFontInterface; }
+}
+#endif

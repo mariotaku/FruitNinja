@@ -112,8 +112,11 @@ public:
     // xml/achievementList.xml (camelCase, per v1.6.1 literal)
     void LoadAchievementInfo();
 
-    // v1.6.1 AchievementManager::UnLoadAchievementInfo @0x00117ea4 — free m_All
-    // entries, clear all maps
+    // v1.6.1 AchievementManager::UnLoadAchievementInfo @0x00117ea4 — nulls the two
+    // preamble banner textures LoadAchievementInfo took (NotificationControl::s_banner
+    // / s_unlockBanner), frees the m_All entries, then clears all maps. Called from
+    // GameDestroy immediately before ItemManager::UnLoadItemData, and again from the
+    // singleton dtor at atexit — idempotent, safe to call twice.
     void UnLoadAchievementInfo();
 
     // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::AchievementExists @ 0x00116ea8 (asm-inspector)

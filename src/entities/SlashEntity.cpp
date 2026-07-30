@@ -248,6 +248,8 @@ void SlashEntity::ReleaseContent() {
 //    the +0xd8 slot and one covers +0xd4; the third is unidentified (RE gap below).
 // 2. For i=0..7: SlashEntityGhost::Release(ghost_ring[i]) -- deferred (SlashEntityGhost not ported).
 // 3. Clear loaded flag (bool at BSS+0xcc -- not yet tracked in port).
+// Called from GameDestroy right after CleanUpSplat(), matching the binary's
+// CleanupBomb -> CleanupFruit -> CleanUpSplat -> CleanupSlash order.
 void CleanupSlash() {
     // Step 1: null the 3 slash textures in binary order (+0xd0, +0xd8, +0xd4).
     // Port identifies g_BladeTex and g_ModTexture; only 2 of 3 slots are mapped.

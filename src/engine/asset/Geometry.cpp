@@ -4,10 +4,18 @@
 #include "asset/Effect.h"
 #include "asset/Texture.h"
 #include "render/Renderer.h"
+#include "debug/GLHandleLeakCheck.h"
 #include <cstring>
 
 
 namespace Mortar {
+
+#ifndef __bada__
+// Port specific: GameDestroy teardown leak guard -- see debug/GLHandleLeakCheck.h
+// for the invariant and why this is __bada__-gated. STATIC storage only; the
+// Geometry layout is unchanged.
+static int s_LiveGeometry = 0;
+#endif
 
 // TODO: re-verify v1.6.1 GeometryBinding_Bada address (symbol absent in Bada v1.6.1 binary; the binding is GeometryBinding_GLES1, ctor folded into GeometryBinding @0x00263e90) -- zero-initialises pads (via memset of _pad regions)
 // and default-constructs m_EffectGroup / m_VertexStreams / m_IndexStream.
@@ -74,11 +82,17 @@ Geometry::Geometry(SmartPtr<GeometryBinding> binding,
     , m_MaterialIndex(0)
 {
     memset(&m_Layout, 0, sizeof(m_Layout));
+#ifndef __bada__
+    ++s_LiveGeometry;
+#endif
     BuildPropList(props);
 }
 
 // v1.6.1 Mortar::Geometry::~Geometry @0x00264f40 (D0/D2)
 Geometry::~Geometry() {
+#ifndef __bada__
+    --s_LiveGeometry;
+#endif
     if (m_Vbo) { glDeleteBuffers(1, &m_Vbo); }
     if (m_Ibo) { glDeleteBuffers(1, &m_Ibo); }
 }
@@ -149,3 +163,9 @@ EffectProperty* Geometry::GetProperty(const char* name) {
 }
 
 }  // namespace Mortar
+
+#ifndef __bada__
+namespace FN {
+int GLLiveCount_Geometry() { return Mortar::s_LiveGeometry; }
+}
+#endif

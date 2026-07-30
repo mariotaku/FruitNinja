@@ -6,6 +6,7 @@
 #include "render/DisplayManager.h"
 #include "render/Renderer.h"
 #include "debug/Logger.h"
+#include "debug/GLHandleLeakCheck.h"
 #include "util/Endian.h"
 #include <cstring>
 #include <vector>
@@ -98,6 +99,13 @@ Texture2D::~Texture2D() {
 namespace Mortar {
 namespace Bada {
 
+#ifndef __bada__
+// Port specific: GameDestroy teardown leak guard -- see debug/GLHandleLeakCheck.h
+// for the invariant and why this is __bada__-gated. STATIC storage: Texture2D_Bada
+// is size-pinned by `operator new(100)` and must not grow an instance member.
+static int s_LiveTexture2D = 0;
+#endif
+
 // Port specific: no binary counterpart (used by the UploadTex1ToGL DIFFERS load path).
 Texture2D_Bada::Texture2D_Bada()
     : m_PrimType(0)
@@ -105,6 +113,9 @@ Texture2D_Bada::Texture2D_Bada()
     , m_Pad5c(0)
     , m_Source()
 {
+#ifndef __bada__
+    ++s_LiveTexture2D;
+#endif
 }
 
 // Binary ctor @0x0022a7d8.
@@ -114,11 +125,17 @@ Texture2D_Bada::Texture2D_Bada(const Mortar::SmartPtr<TextureSource>& src, unsig
     , m_Pad5c(0)
     , m_Source()
 {
+#ifndef __bada__
+    ++s_LiveTexture2D;
+#endif
     SetSource(src, param2);
 }
 
 // Binary dtor @0x00229b8c (in-place).
 Texture2D_Bada::~Texture2D_Bada() {
+#ifndef __bada__
+    --s_LiveTexture2D;
+#endif
     ReleaseCache();
 }
 
@@ -335,6 +352,12 @@ void Texture2D_Bada::SetSource(const Mortar::SmartPtr<TextureSource>& src, unsig
 
 } // namespace Bada
 } // namespace Mortar
+
+#ifndef __bada__
+namespace FN {
+int GLLiveCount_Texture2D() { return Mortar::Bada::s_LiveTexture2D; }
+}
+#endif
 
 // ---------------------------------------------------------------------------
 // Texture::Load factory + helpers (binary @0x0022a854 Texture2D::Load)
