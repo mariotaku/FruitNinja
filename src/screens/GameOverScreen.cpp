@@ -1416,7 +1416,9 @@ void GameOverScreen::Update(float dt) {
             alpha = 0.0f;
             game_work.bM_bPaused = 0;
             m_FruitFactAlpha = 0.0f;
-            WaveManager::NewGame();
+            // v1.6.1 GameOverScreen::Update @0x00187178: `bl WaveManager::GetInstance ;
+            // bl WaveManager::NewGame` -- NewGame is a __thiscall member, not a static.
+            WaveManager::GetInstance()->NewGame();
             SetTerminate();
         }
 

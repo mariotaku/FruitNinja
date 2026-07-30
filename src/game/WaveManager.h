@@ -61,13 +61,13 @@ public:
     uint8_t _pad_0x2c[9];     // +0x2c
 
     // +0x35: DEFUNCT MP wave-sync "local ready" flag (binary offset 0x39).
-    // Reset writes 1; ShouldDisplayNetworkWaitIndicator @0x00123130 returns true only
+    // Reset writes 1; ShouldDisplayNetworkWaitIndicator @0x00123114 returns true only
     // when this == 0 (i.e. local wave not yet ready). SP never displays the indicator.
-    // v1.6.1 WaveManager::Reset @0x0012ba78 / ShouldDisplayNetworkWaitIndicator @0x00123130
+    // v1.6.1 WaveManager::Reset @0x0012ba78 / ShouldDisplayNetworkWaitIndicator @0x00123114
     uint8_t m_SyncLocalReady;  // +0x35
     // +0x36: DEFUNCT MP wave-sync "remote pending" flag (binary offset 0x3a).
     // Reset writes 0; ShouldDisplayNetworkWaitIndicator requires this != 0 to show wait UI.
-    // v1.6.1 ShouldDisplayNetworkWaitIndicator @0x00123130
+    // v1.6.1 ShouldDisplayNetworkWaitIndicator @0x00123114
     uint8_t m_SyncRemotePending; // +0x36
     // +0x37: DEFUNCT MP "sync received" flag (binary offset 0x3b).
     // RecievedSync @0x00123444 sets this = 1 on an inbound wave-sync packet; Reset clears it.
@@ -278,12 +278,18 @@ public:
     // 0x001247f0: serialise current wave state into FruitSaveData.
     int  SaveWaveInfo(FruitSaveData* save);
 
-    // v1.6.1 GameOver @0x0012b838 / NewGame @0x0012b860: static entry points.
-    static void GameOver();
-    static void NewGame();
+    // __thiscall MEMBERS in the binary -- `this` arrives in r0 and is forwarded straight
+    // into ResetGlobalDt(this, 1.0f); neither body calls WaveManager::GetInstance.
+    // Proof: GameOver @0x0012b838 / NewGame @0x0012b860 both open with
+    //   vmov.f32 s0,#1.0 ; bl ResetGlobalDt   -- r0 is never written before the bl.
+    // Caller side confirms it too: WaveManager::Reset @0x0012bf10 does `cpy r0,r4` (r4=this)
+    // before `bl NewGame`, and GameOverScreen::Update @0x00187178 does
+    // `bl WaveManager::GetInstance ; bl NewGame`.
+    void GameOver();
+    void NewGame();
 
-
-    // 0x00121ed8: clears per-entity speed-control list.
+    // v1.6.1 WaveManager::ResetGlobalDt @0x0012b770: reaps fired m_ProbabilityOverride entries,
+    // then writes dt into m_SpeedAccum (+0x78) and zeroes m_StepAccumulator (+0x2dc).
     void ResetGlobalDt(float dt);
 
     // 0x001249d0: re-randomises per-wave spawn chance pool.
@@ -396,20 +402,35 @@ public:
 
     // --- Networking stubs (defunct online MP) ------------------------
 
-    // 0x001217e0: always returns 0.
-    static int  UpdateNetworking(float dt, int playerIdx);
+    // v1.6.1 WaveManager::UpdateNetworking @0x00123108: body is `mov r0,#0 ; bx lr`.
+    // MEMBER, not static: the call site in UpdateWave @0x00125de8 sets up
+    //   cpy r0,r4 (this) ; vmov.f32 s0,s16 (dt) ; cpy r1,r6 (playerIdx) ; bl UpdateNetworking.
+    int  UpdateNetworking(float dt, int playerIdx);
 
-    // v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110: empty.
-    static void SendWaveSyncPacket();
+    // v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110: body is a bare `bx lr`.
+    // An empty body proves nothing about the calling convention, and v1.6.1 has no call
+    // site, so member-vs-static is NOT provable from the binary. Declared a member to match
+    // every other WaveManager entry point that IS provable.
+    void SendWaveSyncPacket();
 
-    // 0x00121980: always false.
-    static bool ShouldDisplayNetworkWaitIndicator();
+    // v1.6.1 WaveManager::ShouldDisplayNetworkWaitIndicator @0x00123114.
+    // MEMBER: the body reads [r0,#0x39], [r0,#0x3a] and [r0,#0x44] -- r0 is `this`.
+    // Binary body (not ported -- see the .cpp stub):
+    //   if (game_work+0x174 == 0) return false;
+    //   if (m_SyncLocalReady != 0) return false;
+    //   if (m_SyncRemotePending == 0) return false;
+    //   return m_NetTimerA > 3.0f;
+    bool ShouldDisplayNetworkWaitIndicator();
 
     // v1.6.1 WaveManager::RequestCoins @0x001233b0: calls COIN_CHANCEINATOR::GetCoins().
-    static void RequestCoins();
+    // MEMBER: the first instruction is `ldr r3,[r0,#0x234]` (m_pCurrentWave[0]) and the tail
+    // does `add r0,r5,#0x1e4` off r5 = r0 -- r0 is `this`, no GetInstance call anywhere.
+    void RequestCoins();
 
     // Split whitespace-separated string into tokens. Returns the count written.
     // Binary return value used by PROBABILITY_OVERIDE::Parse to set m_TypeCount.
+    // v1.6.1 SplitWords @0x0014fb38 -- genuinely STATIC: r0 is the `const char*` (the body
+    // does `subs r5,r0,#0` then `ldrb r3,[r5,#0x0]`) and r1 is the out-vector. No `this`.
     static int SplitWords(const char* str, std::vector<std::string>& out);
 
     // v1.6.1 WaveManager::ParseGlobalProbabilityOverides @0x00129718

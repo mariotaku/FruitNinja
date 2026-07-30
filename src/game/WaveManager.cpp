@@ -1101,28 +1101,35 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 // GameOver / NewGame
 // ----------------------------------------------------------------------------
 
+// ASM-spec v1.6.1 WaveManager::GameOver @0x0012b838: verified by instruction-by-instruction
+// read of the Ghidra disassembly against this body, NOT by a cross-compile-and-diff.
+// ASM-verified is reserved for the compile+diff pass, so this stays ASM-spec until
+// asm-verify or asm-inspector confirms it.
+//   Binary body, instruction for instruction:
+//     stmdb sp!,{r4,lr} / vmov.f32 s0,#1.0 / bl ResetGlobalDt / bl PowersEnabled / cmp r0,#0
+//     / ldmiaeq sp!,{r4,pc} / bl PowerUpManager::GetInstance / mov r1,#0 / b PowerUpManager::Reset
+//   __thiscall: r0 is never written before `bl ResetGlobalDt`, so the incoming `this` is what
+//   ResetGlobalDt receives. There is NO self-null-check (a null WaveManager faults inside
+//   ResetGlobalDt, loudly) and NO WaveManager::GetInstance call. The PowersEnabled gate IS
+//   genuine here -- contrast NewGame @0x0012b860, which has no gate.
 void WaveManager::GameOver() {
-    // ASM-spec v1.6.1 WaveManager::GameOver @ 0x0012b838: ResetGlobalDt(this, 1.0f)
-    // FIRST and UNCONDITIONALLY, then PowersEnabled() gates PowerUpManager::Reset(false).
-    // Binary body is exactly: vmov s0,#1.0 / bl ResetGlobalDt / bl PowersEnabled / cmp #0 / popeq
-    // / bl PowerUpManager::GetInstance / mov r1,#0 / b PowerUpManager::Reset. There is NO
-    // self-null-check (a null WaveManager faults inside ResetGlobalDt, loudly). The PowersEnabled
-    // gate IS genuine here -- contrast NewGame @ 0x0012b860, which has no gate.
-    // Residual divergence: the binary's GameOver/NewGame are __thiscall MEMBERS (this arrives
-    // in r0); the port declares them static, so it emits an extra bl WaveManager::GetInstance
-    // the binary does not have. Not a guard -- a call-shape gap, tracked separately.
-    GetInstance()->ResetGlobalDt(1.0f);
+    ResetGlobalDt(1.0f);
     if (PowersEnabled()) {
         PowerUpManager::GetInstance()->Reset(false);
     }
 }
 
+// ASM-spec v1.6.1 WaveManager::NewGame @0x0012b860: verified by instruction-by-instruction
+// read of the Ghidra disassembly against this body, NOT by a cross-compile-and-diff.
+// ASM-verified is reserved for the compile+diff pass, so this stays ASM-spec until
+// asm-verify or asm-inspector confirms it.
+//   Binary body, instruction for instruction:
+//     stmdb sp!,{r4,lr} / vmov.f32 s0,#1.0 / bl ResetGlobalDt
+//     / bl PowerUpManager::GetInstance / mov r1,#1 / b PowerUpManager::Reset
+//   Same __thiscall shape as GameOver. Both calls are unconditional: no self-null-check and
+//   no PowersEnabled gate -- NewGame always resets power-ups.
 void WaveManager::NewGame() {
-    // ASM-spec v1.6.1 WaveManager::NewGame @ 0x0012b860 -- ResetGlobalDt then
-    // PowerUpManager::Reset(true), both called unconditionally: the binary has NO self-null-check
-    // and NO PowersEnabled gate here (contrast GameOver @ 0x0012b838, which DOES gate
-    // PowerUpManager::Reset behind PowersEnabled -- NewGame always resets power-ups).
-    GetInstance()->ResetGlobalDt(1.0f);
+    ResetGlobalDt(1.0f);
     PowerUpManager::GetInstance()->Reset(true);
 }
 
@@ -2493,11 +2500,20 @@ void WaveManager::CriticalChanceMod(float mult)  { m_CritChanceMult *= mult; }  
 // Networking stubs
 // ----------------------------------------------------------------------------
 
+// Defunct: P2P MP networking pump -- no-op stub; v1.6.1 WaveManager::UpdateNetworking @0x00123108
+// (the binary body is `mov r0,#0 ; bx lr` -- it already returns 0 unconditionally).
+// MEMBER, not static: UpdateWave @0x00125de8 passes `this` in r0 alongside dt in s0.
 int  WaveManager::UpdateNetworking(float /*dt*/, int /*playerIdx*/) { return 0; }
-// Defunct: P2P MP wave-sync packet -- no-op stub; v1.6.1 WaveManager::SendWaveSyncPacket @ 0x00123110
-// (the binary body is empty too -- a literal `return;`); only the GOT trampoline at 0x00102390 had a body,
+// Defunct: P2P MP wave-sync packet -- no-op stub; v1.6.1 WaveManager::SendWaveSyncPacket @0x00123110
+// (the binary body is empty too -- a bare `bx lr`); only the GOT trampoline at 0x00102390 had a body,
 // and that calls a NetworkManager fn pointer that's null on Bada.
 void WaveManager::SendWaveSyncPacket()                               {}
+// Defunct: P2P MP wave-wait indicator -- no-op stub; v1.6.1
+// WaveManager::ShouldDisplayNetworkWaitIndicator @0x00123114. The binary reads
+// m_SyncLocalReady / m_SyncRemotePending / m_NetTimerA off `this` behind a global MP gate
+// (game_work+0x174) that is never set in single-player, so the live result is always false.
+// TODO: v1.6.1 0x00123114 (WaveManager::ShouldDisplayNetworkWaitIndicator) -- port the real
+// body once the game_work+0x174 MP-enabled global is identified.
 bool WaveManager::ShouldDisplayNetworkWaitIndicator()               { return false; }
 
 // Binary @ 0x00121778.
@@ -2519,18 +2535,19 @@ int COIN_CHANCEINATOR::GetCoins() {
 // If that yields > 0, done. Else: advance RNG via fallback m_CoinChanceinator[idx].
 // The fallback byte index comes from the current game-mode coin-table slot.
 void WaveManager::RequestCoins() {
-    // ASM-spec v1.6.1 WaveManager::RequestCoins @ 0x001233b0: the binary dereferences
-    // m_pCurrentWave[0] UNCONDITIONALLY (ldr r3,[this,#564] ; ldr r3,[r3,#0x6c]) -- there is
+    // ASM-spec v1.6.1 WaveManager::RequestCoins @0x001233b0: a __thiscall MEMBER -- the very
+    // first instruction is `ldr r3,[r0,#0x234]` (m_pCurrentWave[0]) and the tail computes
+    // `add r0,r5,#0x1e4` off r5 = r0. No WaveManager::GetInstance call anywhere in the body.
+    // The binary dereferences m_pCurrentWave[0] UNCONDITIONALLY (ldr r3,[r3,#0x6c]) -- there is
     // no curWave null-check, and no bounds check on the gameMode fallback index either.
-    WaveManager* self = GetInstance();
-    WAVE_INFO* curWave = self->m_pCurrentWave[0];
+    WAVE_INFO* curWave = m_pCurrentWave[0];
     COIN_CHANCEINATOR* primary = static_cast<COIN_CHANCEINATOR*>(curWave->m_pCoinChance);
     if (primary && primary->GetCoins() > 0)
         return;
     // Fallback: RNG-advance only — return value discarded (binary behaviour).
     // coinChance index = game_work.gameMode (uint8 @ +0x04). Per-mode table at
-    // WaveManager+0x1dc, stride 8.
-    self->m_CoinChanceinator[game_work.gameMode].GetCoins();
+    // WaveManager+0x1e4, stride 8.
+    m_CoinChanceinator[game_work.gameMode].GetCoins();
 }
 
 // ASM-spec v1.6.1 GetRandomPowerSpawner @0x0012403c
