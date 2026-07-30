@@ -123,20 +123,36 @@ public:
     // Returns iterator index if hash found, -1 otherwise.
     int  AchievementExists(uint32_t hash);
 
-    // Unlock paths — Binary addresses above
-    // ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0011773c (asm-inspector)
+    // Unlock paths — Binary addresses above.
+    //
+    // Mode-bitmask gate: the eight entries below marked (mode-gated) each call the real
+    // GetModeBitMask @0x0011bae0 (see GameMode.h) and test it against
+    // AchievementInfo::m_ModeBitmask(+0x98). The two marked (UNGATED) have zero
+    // GetModeBitMask calls in their bodies — verified against the xref set of the
+    // 0x0010445c thunk, not assumed from a convention. Do not "restore" a gate there.
+
+    // ASM-spec v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0011773c (mode-gated;
+    // no threshold test). Downgraded from ASM-verified — the stamp was taken on a body
+    // whose gate was a port-only `1u << (gameMode & 3)` fold, not the real call.
     unsigned int UnlockBonusAchievement(unsigned long bonusId);
-    // ASM-spec v1.6.1 AchievementManager::UnlockComboAchievement @ 0x001175e8
+    // ASM-spec v1.6.1 AchievementManager::UnlockComboAchievement @ 0x001175e8 (mode-gated)
     int  UnlockComboAchievement(int comboLen, int* fruitArr);
+    // v1.6.1 @0x00117b20 (mode-gated)
     int  UnlockComboStarAchievement(int combo, uint32_t starTypeHash);
+    // v1.6.1 @0x00117948 (mode-gated, BOTH buckets). Binary always returns 0.
     int  UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash);
+    // v1.6.1 @0x00117880 (mode-gated). Returns 0/1 "queued something", not a count.
     int  UnlockEndScoreAchievement(int score, int hiScore);
+    // v1.6.1 @0x00117bd0 (mode-gated). Returns 0/1 "queued something", not a count.
     int  UnlockScoreAchievement(int score);
+    // v1.6.1 @0x00117c8c (mode-gated). Returns 0/1 "queued something", not a count.
     int  UnlockScoreUnsulliedAchievement(int score);
+    // v1.6.1 @0x00117a68 (mode-gated)
     int  UnlockSpecificFruitAchievement(int fruitTypeHash, unsigned int count);
+    // v1.6.1 @0x001177e0 — UNGATED. Mode selection is implicit at load time.
     int  UnlockSpecificOrderAchievement(uint32_t newFruitHash);
-    // v1.6.1 @0x00117d48 — threshold test only, NO mode-bitmask gate (unlike
-    // UnlockScoreAchievement). Returns 0/1 "queued something", not a count.
+    // v1.6.1 @0x00117d48 — threshold test only, UNGATED (unlike UnlockScoreAchievement).
+    // Returns 0/1 "queued something", not a count.
     int  UnlockTotalFruitAchievement(int total);
 
     // v1.6.1 AchievementManager::UnlockedAchievement @0x001180a8 — show popup via

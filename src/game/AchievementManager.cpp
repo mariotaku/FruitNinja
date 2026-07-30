@@ -193,8 +193,8 @@ void AchievementManager::LoadAchievementInfo() {
         // wildcard (all bits), NOT 0. Previous port bug: case-sensitive strstr against
         // lowercase literals never matched the XML's uppercase mode values, and the
         // absent-attr default was 0 (deny-all) instead of the binary's -1 (allow-all),
-        // so every achievement's m_ModeBitmask stayed 0 and ModeBitmaskAllows() always
-        // returned false.
+        // so every achievement's m_ModeBitmask stayed 0 and the mode gate always
+        // rejected.
         const char* modeAttr = e.Attribute("mode");
         info->m_ModeBitmask = ParseModeMask(modeAttr);
 
@@ -373,23 +373,26 @@ int AchievementManager::UnlockAchievementInNetwork(const char* /*name*/) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: mode bitmask gate
-// Returns non-zero if the current game mode is permitted by m_ModeBitmask.
-// Binary: tests (1 << gameMode) & m_ModeBitmask
-// ---------------------------------------------------------------------------
-
-// UnlockTotalFruitAchievement @0x00117d48 does NOT use this helper -- its loop has
-// no GetModeBitMask call at all. UnlockScoreAchievement @0x00117bd0 does. The
-// remaining call sites below are still unconfirmed against their binary bodies.
-// TODO: v1.6.1 0x00117bd0 (UnlockScoreAchievement) -- the binary gate is
-// `GetModeBitMask(game_work+0x4) & info->+0x98`, a real function call. This helper
-// models it as `1u << (gameMode & 3)`, which folds modes 4+ onto 0..3. RE
-// GetModeBitMask and port it as its own function.
+// Mode-bitmask gate
+//
+// The binary has no gate helper -- each mode-gated Unlock* path emits the pair
+// `uVar = info->m_ModeBitmask(+0x98); GetModeBitMask((byte)game_work+0x4); test`
+// inline, calling the real GetModeBitMask @0x0011bae0 (see GameMode.h for its body).
+// The port now does the same, so the former port-only ModeBitmaskAllows() static is
+// gone. It modelled the gate as `1u << (gameMode & 3)`, which folded mode 4 -- the
+// binary's ALL-modes wildcard -- onto CLASSIC's single bit and aliased modes 5..31
+// onto 0..3, exactly the masking bug #153 found in Get/SetCurrentModeHighscore.
+//
+// Gate presence is NOT uniform, and is per-function fact, not a convention:
+//   gated (GetModeBitMask xrefs @0x0011bae0 thunk 0x0010445c):
+//     UnlockScoreAchievement @0x00117bd0, UnlockScoreUnsulliedAchievement @0x00117c8c,
+//     UnlockEndScoreAchievement @0x00117880, UnlockBonusAchievement @0x0011773c,
+//     UnlockSpecificFruitAchievement @0x00117a68, UnlockComboStarAchievement @0x00117b20,
+//     UnlockComboAchievement @0x001175e8, UnlockConsecutiveAchievement @0x00117948 (BOTH buckets).
+//   ungated (zero GetModeBitMask calls in the body):
+//     UnlockTotalFruitAchievement @0x00117d48, UnlockSpecificOrderAchievement @0x001177e0.
+//
 // Every peer reads game_work straight off the GOT with no null test, so no guard here.
-static int ModeBitmaskAllows(uint32_t bitmask) {
-    uint8_t gm = game_work.gameMode & 0x03;
-    return (bitmask & (1u << gm)) ? 1 : 0;
-}
 
 // ---------------------------------------------------------------------------
 // UnlockTotalFruitAchievement  (v1.6.1 @0x00117d48)
@@ -424,16 +427,20 @@ int AchievementManager::UnlockTotalFruitAchievement(int total) {
 // UnlockScoreAchievement  (Binary @ 0x00117bd0)
 // ---------------------------------------------------------------------------
 
+// ASM-spec v1.6.1 AchievementManager::UnlockScoreAchievement @ 0x00117bd0:
+// iterates m_ByType[SCORE]; `score < info->m_Total(+0x8c)` rejects, then the mode gate
+// `GetModeBitMask((byte)game_work+0x4) & info->m_ModeBitmask(+0x98)`. Returns a 0/1
+// "queued something" flag, not a count.
 int AchievementManager::UnlockScoreAchievement(int score) {
-    // Binary: iterates m_ByType[SCORE]; threshold <= score + mode gate
     int unlocked = 0;
     std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SCORE];
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Total <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total <= score &&
+            (GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) != 0) {
             if (QueAchievement(info, it)) {
-                ++unlocked;
+                unlocked = 1;
                 // it was pre-advanced by QueAchievement; don't ++it
             } else {
                 ++it;  // binary always advances, even when QueAchievement fails
@@ -449,16 +456,20 @@ int AchievementManager::UnlockScoreAchievement(int score) {
 // UnlockScoreUnsulliedAchievement  (Binary @ 0x00117c8c)
 // ---------------------------------------------------------------------------
 
+// ASM-spec v1.6.1 AchievementManager::UnlockScoreUnsulliedAchievement @ 0x00117c8c:
+// instruction-for-instruction the same shape as UnlockScoreAchievement @0x00117bd0,
+// only over m_ByType[SCORE_UNSULLIED]. There is NO m_IsGameOver test in the body --
+// "unsullied" is the bucket, not an extra gate. Returns a 0/1 flag, not a count.
 int AchievementManager::UnlockScoreUnsulliedAchievement(int score) {
-    // Binary: same as UnlockScoreAchievement but also checks m_IsGameOver (requires_unsullied)
     int unlocked = 0;
     std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_SCORE_UNSULLIED];
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Total <= score && ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total <= score &&
+            (GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) != 0) {
             if (QueAchievement(info, it)) {
-                ++unlocked;
+                unlocked = 1;
                 // it was pre-advanced by QueAchievement; don't ++it
             } else {
                 ++it;  // binary always advances, even when QueAchievement fails
@@ -479,6 +490,7 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
     // m_ByType[END_SCORE]; exact-match/sentinel test, NOT a "score>threshold" test --
     //   match = (score == info->m_Total) || (info->m_Total < 0 && score == hiScore)
     // Prior port condition (info->m_Total <= score && score > hiScore/2) was fabricated.
+    // Mode-gated. Returns a 0/1 flag, not a count.
     int unlocked = 0;
     std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_END_SCORE];
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
@@ -486,9 +498,9 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
         if (!info) { ++it; continue; }
         const bool match = (score == info->m_Total) ||
                             (info->m_Total < 0 && score == hiScore);
-        if (match && ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (match && (GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) != 0) {
             if (QueAchievement(info, it)) {
-                ++unlocked;
+                unlocked = 1;
                 // it was pre-advanced by QueAchievement; don't ++it
             } else {
                 ++it;  // binary always advances, even when QueAchievement fails
@@ -501,8 +513,11 @@ int AchievementManager::UnlockEndScoreAchievement(int score, int hiScore) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockBonusAchievement  (Binary @ 0x0011773c)
-// ASM-verified: 2026-05-18T00:00 v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0011773c (asm-inspector)
+// UnlockBonusAchievement
+// ASM-spec v1.6.1 AchievementManager::UnlockBonusAchievement @ 0x0011773c
+// (Downgraded from ASM-verified: the stamp was taken on a body whose mode gate was the
+//  port-only `1u << (gameMode & 3)` fold, not the binary's GetModeBitMask @0x0011bae0
+//  call. No threshold test here -- find-by-bonusId, then the mode gate, then Que.)
 // ---------------------------------------------------------------------------
 
 unsigned int AchievementManager::UnlockBonusAchievement(unsigned long bonusId) {
@@ -510,8 +525,7 @@ unsigned int AchievementManager::UnlockBonusAchievement(unsigned long bonusId) {
         m_ByType[ACHIEVEMENT_TYPE_BONUS].find((uint32_t)bonusId);
     if (it == m_ByType[ACHIEVEMENT_TYPE_BONUS].end()) return 0;
     AchievementInfo* info = it->second;
-    unsigned int modeBit = ModeBitmaskAllows(info->m_ModeBitmask);
-    if (modeBit == 0) return 0;
+    if ((GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) == 0) return 0;
     return (unsigned int)QueAchievement(info, it);
 }
 
@@ -528,7 +542,7 @@ int AchievementManager::UnlockSpecificFruitAchievement(int fruitTypeHash, unsign
     AchievementInfo* info = it->second;
     if (!info) return 0;
     if ((uint32_t)info->m_Total > count) return 0;
-    if (!ModeBitmaskAllows(info->m_ModeBitmask)) return 0;
+    if ((GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) == 0) return 0;
     return QueAchievement(info, it);
 }
 
@@ -536,11 +550,14 @@ int AchievementManager::UnlockSpecificFruitAchievement(int fruitTypeHash, unsign
 // UnlockConsecutiveAchievement  (v1.6.1 @0x00117948)
 // ---------------------------------------------------------------------------
 
+// ASM-spec v1.6.1 AchievementManager::UnlockConsecutiveAchievement @ 0x00117948:
+// two bucket lookups, BOTH mode-gated (two GetModeBitMask calls @0x001179c0 and
+// @0x00117a34).
+//   Bucket CONSECUTIVE (5):     keyed by fruitTypeHash; `m_Total <= count` then mode gate.
+//   Bucket CONSECUTIVE_ANY (6): keyed by count itself, so the threshold IS the key --
+//                               no m_Total test in the body, only the mode gate.
+// The binary discards both QueAchievement results and returns a hard 0 (`mov r0,#0`).
 int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fruitTypeHash) {
-    // v1.6.1 @0x00117948: two bucket lookups.
-    // Bucket CONSECUTIVE (5): keyed by fruitTypeHash; threshold <= count + mode gate.
-    // Bucket CONSECUTIVE_ANY (6): keyed by count itself (m_Total == count).
-    int awarded = 0;
     {
         std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_CONSECUTIVE];
         std::map<uint32_t, AchievementInfo*>::iterator it = bucket.find(fruitTypeHash);
@@ -548,9 +565,9 @@ int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fru
             AchievementInfo* info = it->second;
             if (info &&
                 info->m_Total <= count &&
-                ModeBitmaskAllows(info->m_ModeBitmask))
+                (GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) != 0)
             {
-                if (QueAchievement(info, it)) awarded = 1;
+                QueAchievement(info, it);
             }
         }
     }
@@ -560,12 +577,12 @@ int AchievementManager::UnlockConsecutiveAchievement(int count, unsigned int fru
         std::map<uint32_t, AchievementInfo*>::iterator it2 = bucket2.find((uint32_t)count);
         if (it2 != bucket2.end()) {
             AchievementInfo* info = it2->second;
-            if (info && ModeBitmaskAllows(info->m_ModeBitmask)) {
-                if (QueAchievement(info, it2)) awarded = 1;
+            if (info && (GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) != 0) {
+                QueAchievement(info, it2);
             }
         }
     }
-    return awarded;
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -581,7 +598,7 @@ int AchievementManager::UnlockComboStarAchievement(int combo, uint32_t starTypeH
     AchievementInfo* info = it->second;
     if (!info) return 0;
     if (info->m_Total > combo) return 0;
-    if (!ModeBitmaskAllows(info->m_ModeBitmask)) return 0;
+    if ((GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) == 0) return 0;
     return QueAchievement(info, it);
 }
 
@@ -638,7 +655,8 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
 
-        if (info->m_Total > comboLen || !ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total > comboLen ||
+            (GetModeBitMask((GAME_MODE)game_work.gameMode) & info->m_ModeBitmask) == 0) {
             ++it;
             continue;
         }

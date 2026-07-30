@@ -80,9 +80,25 @@ inline bool IsDeviceUpsideDown() {
 // Returns the ASCII mode-name string for the given game mode.
 const char* GetModeName(GAME_MODE gameMode);
 
-// v1.6.1 GetModeBitMask @0x0011bae0 (_Z14GetModeBitMask9GAME_MODE); returns (1 << gameMode).
-// Used by GlobalProbabilityOveride::CheckForOverride to gate mode.
+// ASM-spec v1.6.1 GetModeBitMask @0x0011bae0 (_Z14GetModeBitMask9GAME_MODE) -- whole body:
+//   0011bae0: cmp    r0,#0x4
+//   0011bae4: movne  r3,#0x1
+//   0011bae8: mvneq  r0,#0x0
+//   0011baec: movne  r0,r3, lsl r0
+//   0011baf0: bx     lr
+// Mode 4 is NOT bit 4. It is the "unknown / every mode" sentinel that ParseGameMode
+// @0x0011bf6c returns for an unrecognised mode name, and it maps to the WILDCARD
+// 0xFFFFFFFF. Every other value shifts bit 0 left by the mode index -- a range
+// dispatch, never a `& 3` fold, so mode 5..31 gets its own high bit rather than
+// aliasing onto 0..3.
+// Callers always pass a zero-extended byte (ldrb of game_work+0x4 / ParseGameMode's
+// 0..4 result). An ARM register-specified LSL by 32..255 produces 0, while C's <<
+// is undefined there -- hence the explicit early return for >= 32.
+// Used by ParseModeMask @0x0014f320, GlobalProbabilityOveride::CheckForOverride, and
+// the eight mode-gated AchievementManager::Unlock*Achievement paths.
 inline uint32_t GetModeBitMask(GAME_MODE gameMode) {
+    if ((unsigned)gameMode == 4u)  return 0xFFFFFFFFu;
+    if ((unsigned)gameMode >= 32u) return 0u;
     return (uint32_t)(1u << (unsigned)gameMode);
 }
 
