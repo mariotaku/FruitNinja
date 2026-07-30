@@ -411,8 +411,11 @@ struct TestHarness {
     //
     // How it works:
     //   1. game.init() as normal (boots game, runs initFrames burn-in so HUD is live).
-    //   2. Clear game_work.mHud->controls -- removes MainScreen and all other
-    //      controls the game boot added, WITHOUT deleting them (m_bNoDestructor guard).
+    //   2. Splice game_work.mHud->controls into m_strippedControls -- moves
+    //      MainScreen and all other boot controls OUT of the draw list without
+    //      destroying them (they stay owned by the game subsystems). Shutdown()
+    //      splices them back before game.shutdown() so HUD::Release still walks
+    //      and frees the full ownership graph, matching the binary's teardown.
     //   3. Set m_componentMode=true so RunComponentHeadless uses its own frame loop.
     //
     // The existing RunHeadless / RunInteractive paths are NOT affected; they call
@@ -421,21 +424,16 @@ struct TestHarness {
         if (!Init()) return false;
         m_componentMode = true;
 
-        // Strip the game-state controls from mHud. Mark each control with
-        // m_bNoDestructor=1 before clearing so HUD::Release doesn't free them
-        // (they're owned by the game subsystems, not by us). We just want the
-        // draw list empty so RunComponentHeadless sees a blank canvas.
-        int stripped = 0;
+        // Move the boot-time controls aside instead of destroying the list:
+        // splicing (not clear()) means the nodes -- and the HUDControl*
+        // ownership they represent -- survive intact in m_strippedControls
+        // until Shutdown() splices them back, right before HUD::Release()
+        // walks and deletes them for real.
         if (game_work.mHud) {
-            std::list<HUDControl*>& ctrls = game_work.mHud->controls;
-            for (std::list<HUDControl*>::iterator it = ctrls.begin();
-                 it != ctrls.end(); ++it) {
-                if (*it) { (*it)->m_bNoDestructor = 1; ++stripped; }
-            }
-            ctrls.clear();
+            m_strippedControls.splice(m_strippedControls.begin(), game_work.mHud->controls);
         }
         std::printf("[%s] component mode: HUD cleared (%d controls stripped)\n",
-                    label, stripped);
+                    label, (int)m_strippedControls.size());
         return true;
     }
 
@@ -739,6 +737,17 @@ struct TestHarness {
 
     // -------- shutdown --------
     int Shutdown() {
+        // Splice the boot controls stripped by InitComponent() back into
+        // mHud->controls BEFORE game.shutdown() so GameExit's
+        // game_work.mHud->Release() (GameInit.cpp) walks the full list and
+        // frees them for real, instead of an empty list orphaning 30 boot
+        // controls' textures to atexit (task #146). Naturally idempotent --
+        // splicing an empty m_strippedControls is a no-op -- which matters
+        // because ~TestHarness() calls Shutdown() a second time.
+        if (game_work.mHud) {
+            game_work.mHud->controls.splice(game_work.mHud->controls.begin(), m_strippedControls);
+        }
+
         // Port specific: game teardown must precede SDL_Quit so that
         // SoundManager::SFXStop (called from GameSound::KillAll inside
         // GameDestroy) does not call SDL_LockAudioDevice on a dead audio
@@ -774,6 +783,12 @@ private:
     // Informational only -- the actual isolation is enforced by not calling
     // game.runFrames() in RunComponentHeadless.
     bool m_componentMode;
+    // Boot-time HUD controls (MainScreen etc.) spliced out of game_work.mHud->controls
+    // by InitComponent() so RunComponentHeadless sees a blank draw list. Spliced back
+    // into mHud->controls by Shutdown() before game.shutdown() so HUD::Release still
+    // owns and frees them (task #146 -- clear() used to orphan these, leaking their
+    // textures to atexit).
+    std::list<HUDControl*> m_strippedControls;
     // Per-instance glReadPixels pointer. Loaded lazily via
     // SDL_GL_GetProcAddress on first use; cached for subsequent calls.
     PFN_glReadPixels m_glReadPixels;
