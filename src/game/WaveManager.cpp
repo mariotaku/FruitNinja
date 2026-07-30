@@ -766,8 +766,8 @@ void WaveManager::Reset(bool fullReset) {
     }
 
     // 8. Final per-mode speed-multiplier defaults.
-    // Binary @ 0x00125eb8: dead-code MP sync flag cleared to 0.
-    game_work.m_bP2PReady = 0;
+    // v1.6.1 WaveManager::Reset @0x0012beb8: clear the opponent-ready gate (+0x1A1).
+    game_work.m_bP2POpponentReady = 0;
     m_SpeedScale = 1.0f;
     // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
     m_SpeedAccum = m_SpeedClampStart[game_work.gameMode];

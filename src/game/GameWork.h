@@ -141,29 +141,37 @@ struct GameWork {
     uint8_t m_bUpdatesSuspended;   // +0x195: suspend-updates/system-notification guard (Ghidra: dwField_0x194._1_1_). SetupGameWork sets 1; CustomNotificationCallback@0x1cf0cc sets 1 on notification-shown; MainScreen/GameOverScreen::Update toggle it.
     uint8_t _pad_0x196[2];         // +0x196..+0x197
 
-    // +0x198..+0x19B: four P2P/connection byte fields (Ghidra: dwField_0x198 undefined4).
-    uint8_t m_bGameCenterConnecting; // +0x198: set during GameCenter/P2P connection
-    uint8_t m_bP2PReady;           // +0x199: gates wave-tick on remote-peer ready
-    uint8_t m_bP2PHostMatched;     // +0x19A: P2P checkpoint (TODO: re-verify reads side)
-    uint8_t m_bP2PClientJoined;    // +0x19B: P2P checkpoint (TODO: re-verify)
+    // +0x198..+0x19B: four bytes (Ghidra: dwField_0x198 undefined4) with ZERO xrefs in
+    // v1.6.1 -- neither read nor written anywhere in the binary. They are v1.5.1 relics
+    // that survive only as layout. Do NOT route live state through them: the connection
+    // and opponent-ready flags the port used to keep here are really +0x1A0 / +0x1A1.
+    uint8_t m_reserved198;         // +0x198: no xrefs in v1.6.1
+    uint8_t m_reserved199;         // +0x199: no xrefs in v1.6.1
+    uint8_t m_reserved19a;         // +0x19A: no xrefs in v1.6.1
+    uint8_t m_reserved19b;         // +0x19B: no xrefs in v1.6.1
 
     int     m_FrameTimer;          // +0x19C: frame accumulator (Ghidra: nM_FrameAccumulator)
 
     // +0x1A0..+0x1A7: P2P/GameCenter session-state byte cluster (Defunct: online P2P MP).
     // +0x1A0 IsP2PConnecting@0x11a1f0 returns it; P2PConnect@0x11c388 + GameModeScreen::Update set 1
     //        immediately before ConnectGameCenter -> GameCenter/P2P connection-in-progress flag.
-    uint8_t m_bP2PConnecting;      // +0x1A0  (Defunct: online P2P -- live read by IsP2PConnecting)
-    // +0x1A1 WaveManager::Update@0x126908 gates the online-MP wave tick: when IsOnlineMultiplayer()
-    //        && this byte == 0, dt is forced to 0 (opponent not yet ready). Set by GameModeScreen::Update.
-    uint8_t m_bP2POpponentReady;   // +0x1A1  (Defunct: online P2P -- live read by WaveManager::Update)
+    uint8_t m_bP2PConnecting;      // +0x1A0  (Defunct: online P2P -- live read by IsP2PConnecting @0x0011a1f0, ConnectPressed @0x00175e30; zeroed by SetupGameWork @0x0011c104)
+    // +0x1A1 opponent-ready gate. WaveManager::Update @0x001267e8/@0x00126888 forces dt to 0
+    //        while IsOnlineMultiplayer() && this byte == 0 (opponent not yet ready), and
+    //        TimeControl::Update @0x001c0adc suppresses the timer tick on
+    //        (m_bMPRetryPending && !m_bP2POpponentReady). Set by GameModeScreen::Update,
+    //        cleared by SetupGameWork @0x0011c104 and WaveManager::Reset @0x0012beb8.
+    //        NOTE: this is the real flag -- +0x199 is a dead v1.5.1 relic, never use it.
+    uint8_t m_bP2POpponentReady;   // +0x1A1  (Defunct: online P2P -- but LIVE-read every frame)
     // +0x1A2..+0x1A6: P2P session flags written-never-read in this build (readers were in dead-stripped
-    //        networking code). QuitToMenu@0x1cb764 zeroes 1a2..1a5 alongside DisconnectP2P/MPRetryPending;
-    //        SetupGameWork zeroes 1a2..1a6. No reader found via xref -> reserved, descriptive offset names.
-    uint8_t m_reserved1a2;         // +0x1A2: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
-    uint8_t m_reserved1a3;         // +0x1A3: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
-    uint8_t m_reserved1a4;         // +0x1A4: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
-    uint8_t m_reserved1a5;         // +0x1A5: P2P session flag -- written-never-read (QuitToMenu/SetupGameWork zero it)
-    uint8_t m_reserved1a6;         // +0x1A6: P2P session flag -- written-never-read (SetupGameWork zeroes it)
+    //        networking code). The two writers do NOT overlap: QuitToMenu @0x001cb764 zeroes
+    //        1a2..1a5 (alongside DisconnectP2P/MPRetryPending); SetupGameWork @0x0011c104
+    //        zeroes only 1a6. No reader found via xref -> reserved, descriptive offset names.
+    uint8_t m_reserved1a2;         // +0x1A2: P2P session flag -- written-never-read (QuitToMenu zeroes it)
+    uint8_t m_reserved1a3;         // +0x1A3: P2P session flag -- written-never-read (QuitToMenu zeroes it)
+    uint8_t m_reserved1a4;         // +0x1A4: P2P session flag -- written-never-read (QuitToMenu zeroes it)
+    uint8_t m_reserved1a5;         // +0x1A5: P2P session flag -- written-never-read (QuitToMenu zeroes it)
+    uint8_t m_reserved1a6;         // +0x1A6: P2P session flag -- written-never-read (SetupGameWork zeroes it; its ONLY xref)
     uint8_t _pad_0x1a7;            // +0x1A7
 
     float   m_QuitTransitionTimer; // +0x1A8: quit/cleanup transition timer (Ghidra: flM_QuitTransitionTimer)
@@ -269,6 +277,19 @@ static_assert(offsetof(GameWork, mCountDown)            == 0x184, "GameWork::mCo
 static_assert(offsetof(GameWork, mGameSound)            == 0x18c, "GameWork::mGameSound");
 static_assert(offsetof(GameWork, m_FrameTimer)          == 0x19c, "GameWork::m_FrameTimer");
 static_assert(offsetof(GameWork, m_bUpdatesSuspended)   == 0x195, "GameWork::m_bUpdatesSuspended");
+static_assert(offsetof(GameWork, m_gameDataLicensedState) == 0x190, "GameWork::m_gameDataLicensedState");
+static_assert(offsetof(GameWork, m_reserved198)         == 0x198, "GameWork::m_reserved198");
+static_assert(offsetof(GameWork, m_bP2PConnecting)      == 0x1a0, "GameWork::m_bP2PConnecting");
+static_assert(offsetof(GameWork, m_bP2POpponentReady)   == 0x1a1, "GameWork::m_bP2POpponentReady");
+static_assert(offsetof(GameWork, m_reserved1a2)         == 0x1a2, "GameWork::m_reserved1a2");
+static_assert(offsetof(GameWork, m_reserved1a6)         == 0x1a6, "GameWork::m_reserved1a6");
+static_assert(offsetof(GameWork, m_QuitTransitionTimer) == 0x1a8, "GameWork::m_QuitTransitionTimer");
+static_assert(offsetof(GameWork, m_UpsideDownTimer)     == 0x1b0, "GameWork::m_UpsideDownTimer");
+static_assert(offsetof(GameWork, m_bUpsideDownActive)   == 0x1b4, "GameWork::m_bUpsideDownActive");
+static_assert(offsetof(GameWork, m_reserved1bc)         == 0x1bc, "GameWork::m_reserved1bc");
+static_assert(offsetof(GameWork, pGameOverScreen)       == 0x168, "GameWork::pGameOverScreen");
+static_assert(offsetof(GameWork, m_pActiveHUDControl)   == 0x170, "GameWork::m_pActiveHUDControl");
+static_assert(offsetof(GameWork, m_bMPRetryPending)     == 0x174, "GameWork::m_bMPRetryPending");
 static_assert(offsetof(GameWork, m_pActiveTouchSink)    == 0x1ac, "GameWork::m_pActiveTouchSink");
 static_assert(offsetof(GameWork, m_ElapsedGameTime)     == 0x1b8, "GameWork::m_ElapsedGameTime");
 static_assert(offsetof(GameWork, m_bFrameDirty)         == 0x610, "GameWork::m_bFrameDirty");

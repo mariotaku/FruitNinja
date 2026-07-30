@@ -248,12 +248,14 @@ void QuitToMenu() {
     // the timer on quit (resets the vestigial ramp back to disarmed).
     game_work.m_QuitTransitionTimer = 0.0f;
 
-    // Binary @ 0x00169eae..0x00169ebe: clear-on-quit flags.
-    // m_bDisconnectPending and m_bP2PGameStarted removed in v1.6.1
-    // (those byte slots at +0x19c/+0x19d are now interior to m_FrameTimer int).
+    // v1.6.1 QuitToMenu @0x001cb764: clear-on-quit flags -- m_bMPRetryPending (+0x174)
+    // then the four P2P session bytes +0x1A2..+0x1A5. SetupGameWork does NOT zero these
+    // four; this is their only writer besides the dead-stripped networking code.
     game_work.m_bMPRetryPending = 0;
-    game_work.m_bP2PHostMatched = 0;
-    game_work.m_bP2PClientJoined = 0;
+    game_work.m_reserved1a2 = 0;
+    game_work.m_reserved1a3 = 0;
+    game_work.m_reserved1a4 = 0;
+    game_work.m_reserved1a5 = 0;
 }
 
 // EndRetryLevel moved to BombHit.cpp so GameUpdate can call it

@@ -168,7 +168,10 @@ void TimeControl::Update(float dt) {
     // (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
     bool suppress = game_work.bM_Mode
                  || game_work.bM_bPaused
-                 || (game_work.m_bMPRetryPending && !game_work.m_bP2PReady);
+                 // v1.6.1 TimeControl::Update @0x001c0ad0-0x001c0ae4:
+                 // ldrb [r3,#0x174] ... ldrb [r3,#0x1a1] -- the opponent-ready byte
+                 // is +0x1A1, NOT the dead +0x199 relic the port used to read.
+                 || (game_work.m_bMPRetryPending && !game_work.m_bP2POpponentReady);
 
     if (!suppress) {
         int q;

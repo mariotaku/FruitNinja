@@ -190,9 +190,13 @@ static void DoQuitToMenu() {
     Mortar::NetworkManager::GetInstance()->SpawnThreadController();
 
     game_work.m_QuitTransitionTimer = 0.0f;
-    game_work.m_bMPRetryPending   = 0;
-    game_work.m_bP2PHostMatched   = 0;
-    game_work.m_bP2PClientJoined  = 0;
+    // v1.6.1 QuitToMenu @0x001cb764: m_bMPRetryPending (+0x174) then the four P2P
+    // session bytes +0x1A2..+0x1A5 (not the dead +0x19A/+0x19B pair).
+    game_work.m_bMPRetryPending = 0;
+    game_work.m_reserved1a2 = 0;
+    game_work.m_reserved1a3 = 0;
+    game_work.m_reserved1a4 = 0;
+    game_work.m_reserved1a5 = 0;
 }
 
 // ---------------------------------------------------------------------------
