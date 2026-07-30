@@ -841,6 +841,14 @@ int ScrollingMenu::GetItemClosestToZeroIdx() {
 }
 
 ScrollingMenuItem* ScrollingMenu::GetItemClosestToZero() {
+    // DIFFERS: original = `return m_Items[m_ClosestIdx];` with no bounds test
+    // (v1.6.1 ScrollingMenu::GetItemClosestToZero @0x001912c0 is exactly
+    // vector::operator[](&m_Items, m_ClosestIdx) then a load), using a bounds
+    // check because the RemoveItem path can drive m_ClosestIdx to -1 (see the
+    // `m_ClosestIdx -= 1` above, taken when the last item is removed),
+    // which makes the binary's unguarded operator[] a genuine out-of-bounds read
+    // on an emptied menu. Callers (ShopScreen::Update) already null-test the
+    // result, so returning nullptr is the same control flow minus the UB.
     int idx = GetItemClosestToZeroIdx();
     if (idx < 0 || idx >= (int)m_Items.size()) return nullptr;
     return m_Items[(size_t)idx];
