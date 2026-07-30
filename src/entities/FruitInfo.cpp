@@ -500,14 +500,17 @@ void FruitInfo_LoadHudTextures()
 }
 #endif
 
-// FRUIT_POWERS::AnyActivePowers -- binary @ 0x00175714
-// Returns true if any power in m_pArray is currently active via PowerUpManager.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00175714 (re-analyst)
+// ASM-spec v1.6.1 FRUIT_POWERS::AnyActivePowers @0x001db34c:
+//   loop i in [0, m_Count): mgr = PowerUpManager::GetInstance() (bl 0x0010aca0,
+//   re-fetched every iteration); if (mgr->GetActiveSingle(m_pArray[i].m_PowerHash))
+//   return true. Falls out to return false.
+//   The binary does NOT null-test the manager -- it uses the returned pointer as
+//   `this` for GetActiveSingle straight away.
+// (The prior `ASM-verified ... @0x00175714` stamp was a false claim: that address is
+//  inside FruitFactClassicFactPage::DrawOrder, and the body carried a port-added guard.)
 bool FRUIT_POWERS::AnyActivePowers() {
-    PowerUpManager* mgr = PowerUpManager::GetInstance();
-    if (!mgr) return false;
     for (uint32_t i = 0; i < m_Count; ++i) {
-        if (mgr->GetActiveSingle(m_pArray[i].m_PowerHash)) return true;
+        if (PowerUpManager::GetInstance()->GetActiveSingle(m_pArray[i].m_PowerHash)) return true;
     }
     return false;
 }

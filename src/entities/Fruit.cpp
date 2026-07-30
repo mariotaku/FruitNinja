@@ -872,9 +872,9 @@ void Fruit::PostUpdate(float dt) {
     if (m_bSliced) return;
     if (m_SpawnDelay > 0.0f) return;
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
+    // v1.6.1 Fruit::DrawUpdate @0x001da618 loads game_work straight from the GOT
+    // (ldr r3,[0x1da7d8]; ldr r3,[r5,r3]; ldrb r3,[r3,#0x4]) -- no Game::GetInstance
+    // call and no null test anywhere in the body.
     if (m_Gravity.x == 0.0f) {
         // Vertical-gravity fruit — nudge or hard-bounce on X bounds.
         // ASM-spec v1.6.1 Fruit::DrawUpdate @0x001da618 — gate is
@@ -987,43 +987,42 @@ void Fruit::KillFruit(bool doMissPenalty) {
     if (doMissPenalty) {
         const FruitInfoData* info = FruitInfo_Get(m_FruitType);
         if (!m_bNoPowerUp && !m_bSliced && info->m_Score < 5) {
-            Game* g = Game::GetInstance();
-            if (g) {
-                // v1.6.1 Fruit::KillFruit @0x001deba8 (miss path):
-                //   if (gameMode == ARCADE)            -> AddToTotal tracking only
-                //   else if (FailureEnabled())          -> miss penalty (Classic/Combo)
-                //   else (Zen) -> nothing
-                // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
-                if (game_work.gameMode == GAME_MODE_ARCADE) {
-                    // Arcade: tracking only, no life loss, no MissControl spawn.
-                    // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8
-                    // Dropped-fruit tracking (NOT a life loss). "dropped" is the global counter;
-                    // m_DropsKey is the same per-fruit key used by the score path (line ~904), but
-                    // here trackSession=false. (There is no info != null gate: v1.6.1
-                    // Fruit::FruitInfo @0x001da5c0 is an unconditional array index.)
-                    if (game_work.m_SaveData) {
-                        static const uint32_t hDropped = StringHash("dropped");
-                        game_work.m_SaveData->AddToTotal("dropped", hDropped, 1, false, false);
-                        game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1, false, false);
+            // v1.6.1 Fruit::KillFruit @0x001deba8 (miss path):
+            //   if (gameMode == ARCADE)            -> AddToTotal tracking only
+            //   else if (FailureEnabled())          -> miss penalty (Classic/Combo)
+            //   else (Zen) -> nothing
+            // FailureEnabled() = ((gameMode-2u) > 1u) → true only for Classic/Combo.
+            // game_work comes straight from the GOT (ldr r7,[r5,r3] @0x001dec30);
+            // there is no Game::GetInstance call and no null test on it.
+            if (game_work.gameMode == GAME_MODE_ARCADE) {
+                // Arcade: tracking only, no life loss, no MissControl spawn.
+                // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8
+                // Dropped-fruit tracking (NOT a life loss). "dropped" is the global counter;
+                // m_DropsKey is the same per-fruit key used by the score path (line ~904), but
+                // here trackSession=false. (There is no info != null gate: v1.6.1
+                // Fruit::FruitInfo @0x001da5c0 is an unconditional array index.)
+                // No m_SaveData gate either: @0x001decc4 the binary does
+                // `ldr r0,[r7,#0x50]` and calls AddToTotal with it as `this`, no cmp.
+                static const uint32_t hDropped = StringHash("dropped");
+                game_work.m_SaveData->AddToTotal("dropped", hDropped, 1, false, false);
+                game_work.m_SaveData->AddToTotal(info->m_DropsKey, info->m_DropsHash, 1, false, false);
+            } else if (Mortar::FailureEnabled(game_work.gameMode)) {
+                // Classic / Combo miss penalty (Zen falls through to no-op).
+                // bM_bPaused gate: binary GameUpdate @0x1cf9c4 `ldrb r3,[gctx,#0x5]; cmp; bne`
+                // suppresses miss penalty+gank+GameOver on the menu (bM_bPaused=1).
+                // ASM-spec v1.6.1 GameUpdate @ 0x001cf534 / 0x001cf9c4 (asm-inspector)
+                if (game_work.bM_bPaused == 0) {
+                    if (MissControl* mc = MissControl::GetFree()) {
+                        Mortar::SmartPtr<Mortar::Texture> defTex;
+                        mc->MakeDisappear(pos, 0, defTex);
                     }
-                } else if (Mortar::FailureEnabled(game_work.gameMode)) {
-                    // Classic / Combo miss penalty (Zen falls through to no-op).
-                    // bM_bPaused gate: binary GameUpdate @0x1cf9c4 `ldrb r3,[gctx,#0x5]; cmp; bne`
-                    // suppresses miss penalty+gank+GameOver on the menu (bM_bPaused=1).
-                    // ASM-spec v1.6.1 GameUpdate @ 0x001cf534 / 0x001cf9c4 (asm-inspector)
-                    if (game_work.bM_bPaused == 0) {
-                        if (MissControl* mc = MissControl::GetFree()) {
-                            Mortar::SmartPtr<Mortar::Texture> defTex;
-                            mc->MakeDisappear(pos, 0, defTex);
-                        }
-                        if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
-                        game_work.missCount++;
-                        if (game_work.missCount > 2) {
-                            // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8 -- combo reset only inside game-over branch
-                            g_ComboCount  = 0;
-                            g_ComboFruitType = -1;  // binary writes 0xFFFFFFFF (v1.6.1 Fruit::KillFruit @0x001deba8)
-                            GameOver(-1, -1.0f, -1);
-                        }
+                    if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
+                    game_work.missCount++;
+                    if (game_work.missCount > 2) {
+                        // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8 -- combo reset only inside game-over branch
+                        g_ComboCount  = 0;
+                        g_ComboFruitType = -1;  // binary writes 0xFFFFFFFF (v1.6.1 Fruit::KillFruit @0x001deba8)
+                        GameOver(-1, -1.0f, -1);
                     }
                 }
             }

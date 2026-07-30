@@ -69,11 +69,10 @@ void SetupLighting(const Mortar::SmartPtr<Mortar::Model>&) {}
 void Bomb::LoadContent() {
     if (g_bombData.loaded) return;
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
+    // v1.6.1 Bomb::LoadContent @0x001d6dd4 never calls Game::GetInstance, and it
+    // feeds MeshManager::GetInstance()'s result (bl 0x00111168) straight into
+    // Load with no null test. No guards here.
     Mortar::MeshManager* meshMgr = Mortar::MeshManager::GetInstance();
-    if (!meshMgr) return;
 
     // Binary casing is capital-B (v1.6.1 literals "models/Fruit/Bomb.mmd" /
     // "Bomb_purple.mmd"); on-disk extracted asset is lowercase, resolved by

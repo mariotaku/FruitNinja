@@ -821,9 +821,12 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
     // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bbcdc: on slow hardware, cancel the
     //   slicer's pending splat stream -- if slashEntity->entityType(+0x35) == 3 (SlashEntity)
     //   and !IsFastHardware(), write m_PendingSplats(+0x12c) = -1.
+    //   @0x001bbce8 the binary calls the free IsFastHardware() (bl PLT 0x00106314 ->
+    //   0x0011f394, which reads the MortarGame singleton off the GOT and dispatches
+    //   vtable+0xc) and does `cmp r0,#0; mvneq r3,#0; streq r3,[r7,#0x12c]`.
+    //   There is no Game::GetInstance call and nothing is null-tested.
     if (slashEntity && slashEntity->entityType == 3) {
-        Game* g = Game::GetInstance();
-        if (!(g && g->IsFastHardware())) {
+        if (!Game::GetInstance()->IsFastHardware()) {
             static_cast<SlashEntity*>(slashEntity)->CancelPendingSplats();
         }
     }

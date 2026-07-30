@@ -1538,10 +1538,12 @@ void SlashEntity::Update(float dt) {
         localDt = game_work.dt;
         comboDt = game_work.dt;
         if (game_work.gameMode == GAME_MODE_COMBO) {
+            // ASM-spec v1.6.1 SlashEntity::Update @0x001e86dc: the binary calls
+            // PowerUpManager::GetInstance (bl 0x0010aca0) and reads m_DtMod (+0x64)
+            // off the result with no null test -- twice, once per use.
             comboDt = game_work.dt * 0.666f;
-            PowerUpManager* pum = PowerUpManager::GetInstance();
-            if (pum && pum->m_DtMod < 0.9f) {
-                comboDt = comboDt * pum->m_DtMod;
+            if (PowerUpManager::GetInstance()->m_DtMod < 0.9f) {
+                comboDt = comboDt * PowerUpManager::GetInstance()->m_DtMod;
             }
         }
     }
@@ -1912,8 +1914,12 @@ void SlashEntity::Update(float dt) {
     //       m_Scale -= localDt * 2.0f, clamp >= 0
     // =====================================================================
     {
-        WaveManager* wm = WaveManager::GetInstance();
-        if (m_TrailEmitter && wm && wm->CriticalMode(0)) {
+        // ASM-spec v1.6.1 SlashEntity::Update @0x001e8f74: gate is
+        //   if (m_TrailEmitter(+0x3c) == 0) goto else;
+        //   if (CriticalMode(WaveManager::GetInstance(), 0) == 0) goto else;
+        // The WaveManager pointer (bl 0x0010d064) is passed straight to CriticalMode
+        // with no null test.
+        if (m_TrailEmitter && WaveManager::GetInstance()->CriticalMode(0)) {
             m_Scale += localDt * 2.0f;
             if (m_Scale > 1.0f) m_Scale = 1.0f;
         } else {
@@ -2606,10 +2612,11 @@ bool SlashEntity::TouchDown(InputEvent* event) {
     return true;
 }
 
-// ASM-spec: SlashEntity::TouchMoveX @ 0x17C50C
+// ASM-spec v1.6.1 SlashEntity::TouchMoveX @0x001e785c: the first thing the binary does
+// is load game_work from the GOT and test m_BombHitTimer(+0x10) > 0 -> return false.
+// No Game::GetInstance call, no null test.
 bool SlashEntity::TouchMoveX(InputEvent* event) {
-    Game* g = Game::GetInstance();
-    if (g && game_work.m_BombHitTimer > 0.0f) return false;
+    if (game_work.m_BombHitTimer > 0.0f) return false;
 #if !defined(__bada__)
     m_RawTouchPos.x = event->x;
 #else
@@ -2620,10 +2627,10 @@ bool SlashEntity::TouchMoveX(InputEvent* event) {
     return true;
 }
 
-// ASM-spec: SlashEntity::TouchMoveY @ 0x17C490
+// ASM-spec v1.6.1 SlashEntity::TouchMoveY @0x001e77b4: same shape as TouchMoveX --
+// game_work from the GOT, m_BombHitTimer(+0x10) > 0 -> return false. No guards.
 bool SlashEntity::TouchMoveY(InputEvent* event) {
-    Game* g = Game::GetInstance();
-    if (g && game_work.m_BombHitTimer > 0.0f) return false;
+    if (game_work.m_BombHitTimer > 0.0f) return false;
 #if !defined(__bada__)
     m_RawTouchPos.y = event->y;
 #else
@@ -2637,11 +2644,11 @@ bool SlashEntity::TouchMoveY(InputEvent* event) {
 // The real work is above in UpdatePoints(). This entry point keeps binary
 // symbol parity; it is distinct from the UpdatePoints(float) called from Update().
 
-// ASM-spec: SlashEntity::UpdateTouchDown @ 0x17D2E4
+// ASM-spec v1.6.1 SlashEntity::UpdateTouchDown @0x001e9f08: @0x001ea080 the binary
+// loads game_work from the GOT and short-circuits to the epilogue when
+// m_BombHitTimer(+0x10) > 0. No Game::GetInstance call, no null test.
 void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
-    // Binary @ 0x17D3AC short-circuits when bombHitTimer > 0.
-    Game* g = Game::GetInstance();
-    if (g && game_work.m_BombHitTimer > 0.0f) return;
+    if (game_work.m_BombHitTimer > 0.0f) return;
 #if !defined(__bada__)
     OnTouchActive(m_RawTouchPos.x, m_RawTouchPos.y);
 #else
