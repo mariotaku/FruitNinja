@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-// Action type flags (from InputActionMapper::ProcessEvent at 0x1b3508)
+// Action type flags — v1.6.1 Mortar::InputActionMapper::ProcessEvent @0x00275728
 static const uint32_t INPUT_ACTION_DOWN      = 0x10000;
 static const uint32_t INPUT_ACTION_MOVE      = 0x20000;
 static const uint32_t INPUT_ACTION_UP        = 0x80000;
@@ -22,11 +22,21 @@ struct InputEvent {
     float    x, y;         // position in game coords (480x320)
     float    deltaX, deltaY; // movement delta (for move events)
     // Binary InputEvent is 0x14 bytes (5 words; InputActionMapper ctor takes it
-    // by value, proving the full size): +0x06 ushort keycode, +0x08 InputActionMapper* m_mapper.
+    // by value, proving the full size). Word layout, from its two producers
+    // v1.6.1 InputDevice::AxisEvent @0x0027582c / InputDevice::ButtonPressed @0x00275864:
+    //   +0x00  action word  = mask | 0x20000 (axis) or mask | 0x10000 (button)
+    //   +0x04  word 1       = (axisId << 16 | tag) & 0xffffff on axis events; the
+    //                         trailing `long` arg on button events. Its HIGH half
+    //                         (+0x06) is the ushort keycode ProcessEvent compares.
+    //   +0x08  word 2       = the float axis value on axis events; the button/key
+    //                         id (e.g. 0x6c MouseButton1) on button events.
     // Port layout differs (see DIFFERS in InputDevice.cpp / InputActionMapper::ProcessEvent);
     // these fields are appended here to keep the call graph compiling.
     uint32_t keycode;      // binary +0x06 (ushort); port uses uint32_t for alignment
-    void*    m_mapper;     // binary +0x08 InputActionMapper* matched on DOWN events
+    // MISNOMER: binary word 2 is a value word, not an InputActionMapper*. Kept
+    // under this name only because ProcessEvent's DOWN arm and the mapper ctor
+    // are the sole readers; rename together with the layout-faithful InputEvent.
+    void*    m_mapper;     // binary +0x08, compared against m_KeyMask on DOWN events
 };
 
 #endif

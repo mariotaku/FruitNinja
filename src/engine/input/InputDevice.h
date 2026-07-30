@@ -61,14 +61,22 @@ public:
     // Called by InputDevice::CheckActions per mapper in m_ActionMappers list.
     // Compares the incoming event against this mapper's filter template and
     // fires m_callback(event) on a match.
-    void ProcessEvent(InputEvent* event);
+    // Returns the handler's bool on the MOVE/UP arms (binary tail-calls
+    // Delegate1<bool,InputEvent*>::Call @0x002757d4) and false everywhere else,
+    // including the DOWN arm. CheckActions discards it, so it is unobservable --
+    // the return exists for shape fidelity, NOT to drive a chain-consume.
+    bool ProcessEvent(InputEvent* event);
 
     bool      m_Enabled;           // +0x00  strb #1 in ctor
     uint32_t  m_ActionHash;        // +0x04  OR'd action+flag word (ctor param)
     uint32_t  m_ConfigSourceHash;  // +0x08
-    uint32_t  m_ActionMask;        // +0x0c
-    uint32_t  m_MatchValue;        // +0x10  hi16 = keycode/finger discriminator
-    uint32_t  m_KeyMask;           // +0x14
+    // +0x0c..+0x1c are a verbatim copy of the ctor's by-value InputEvent words
+    // 0..4 (ctor @0x002756b0: `ldmia lr!,{r0-r3} / stmia r12!,{r0-r3}` into
+    // this+0x0c, then word 4 into this+0x1c). ProcessEvent therefore compares
+    // template-word-N against event-word-N, field for field.
+    uint32_t  m_ActionMask;        // +0x0c  event word 0 (type bits | device mask)
+    uint32_t  m_MatchValue;        // +0x10  event word 1; hi16 = keycode/finger discriminator
+    uint32_t  m_KeyMask;           // +0x14  event word 2 (button/key id on DOWN events)
     // TODO: v1.6.1 0x002756b0 (Mortar::InputActionMapper::InputActionMapper) — the ctor
     //   copies InputEvent words 3 and 4 (binary InputEvent +0x0c / +0x10) into these two
     //   fields; the port's InputEvent has no counterpart for those words (its layout is

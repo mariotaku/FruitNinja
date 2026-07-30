@@ -24,6 +24,13 @@
 // Dispatch empty-guard: binary operator() @0x15f490 null-checks the Resolve()
 //   result (at 0x15f498) before vtable dispatch — it does NOT test the flag
 //   byte directly. The port mirrors this via Ptr() returning nullptr when empty.
+//   Where Resolve is inlined the flag read is visible: v1.6.1
+//   Delegate1<bool,InputEvent*>::Call @0x002757d4 is
+//     ldrb r3,[r0,#0x20]; cmp r3,#0; ldrne r0,[r0]; cmp r0,#0; popeq;
+//     ldr r3,[r0]; ldr r3,[r3,#0xc]; blx r3
+//   i.e. flag set -> follow the heap pointer at +0x00, else use the inline
+//   address, then null-check. Empty delegates zero +0x00, so the port's
+//   `if (m_bEmpty) return R()` reaches the same outcome in every state.
 //
 // Concrete subtypes:
 //   FreeFn     — wraps a free function pointer. Sizeof: 4 vptr + 4 fnptr = 8.
@@ -209,13 +216,26 @@ public:
     static Delegate Noop() noexcept { return Delegate(); }
 
 private:
+    // ASM-verified: 2026-07-31T00:00Z v1.6.1 Mortar::Delegate1<bool,InputEvent*>::Call @ 0x002757d4 (asm-inspector)
+    //   With this order the port's out-of-line Delegate1<bool,InputEvent*>::operator()
+    //   compiles to `ldrb [r0,#32]; cmp #0; ...; ldr ip,[r3]; ldr r3,[ip,#12]; blx r3`
+    //   — the `ldr r3,[r3,#0xc]` now matches the binary instruction for instruction.
+    //   Before the swap it emitted `ldr fn,[vptr,#8]`, a slot-order divergence on
+    //   EVERY delegate call site in the port.
+    //
+    // Declaration order IS the vtable slot order — keep it matching the binary's
+    // BaseDelegate table. Read out of v1.6.1 _ZTVN6Mortar9Delegate1IbP10InputEventE6GlobalE
+    // @0x002ce6d8 (slots start at +0x08 of the label, after offset-to-top + typeinfo):
+    //   +0x00 ~BaseDelegate      +0x04 ~BaseDelegate (deleting)
+    //   +0x08 Clone   @0x001d0864   -> CloneTo
+    //   +0x0c Call    @0x001d0714   -> Invoke   (Delegate1<bool,InputEvent*>::Call
+    //                                  @0x002757d4 dispatches `ldr r3,[r3,#0xc]`)
+    //   +0x10 GetTypeID @0x001d0728
+    //   +0x14 Compare   (@0x0015d4ec Callee<T>, @0x0015d574 Global)
     struct Concept {
         virtual ~Concept() {}
-        virtual R    Invoke(Args... args) const = 0;
         virtual void CloneTo(void* dst) const = 0;
-        // Appended after clone-helper to match binary vtable +0x10/+0x14.
-        // v1.6.1 BaseDelegate vtable: +0x10 GetTypeID, +0x14 Compare.
-        // Binary @0x0015d4ec (Callee<T>::Compare), @0x0015d574 (Global::Compare).
+        virtual R    Invoke(Args... args) const = 0;
         virtual int  GetTypeID() const = 0;
         virtual bool Compare(const Concept& o) const = 0;
     };
