@@ -50,9 +50,10 @@ void UpdateBackground();
 //
 // Called from BOTH:
 //   - GameExit (v1.6.1 GameExit @0x001cfed4 step 1) -- the per-session teardown.
-//   - GameDestroy -- required because Game::shutdown() calls GameDestroy and NOT
-//     GameTaskExit (see mainSDL.cpp), so on a normal quit GameExit never runs and
-//     the background texture would otherwise survive into atexit, i.e. past
+//   - GameDestroy -- still required: GameExit only runs when a task state was
+//     live (GameTaskExit gates on GameTaskState::initialized), and quitting
+//     during the splash dispatches SplashExit instead. Without the GameDestroy
+//     call the background texture could survive into atexit, i.e. past
 //     SDL_GL_DeleteContext.
 // Idempotent; ChangeBackground re-loads on demand.
 void UnloadBackground();

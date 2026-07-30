@@ -1093,11 +1093,25 @@ void GameExit() {
     GameTaskState* ts = GetTaskState();
     ts->pBackgroundTexture.SetNull();
 
-    // Release HUD (destroys all controls including MainScreen).
+    // Release HUD (destroys all controls EXCEPT the m_bNoDestructor ones --
+    // MainScreen and the MissControl pool slots, both handled explicitly below).
     // MenuButton::Release does NOT delete its m_pEntity (entities are
     // ActorManager-owned); ActorManager::Clear below handles entity deletion.
     {
         game_work.mHud->Release();
+        // MainScreen is AddControl'd with m_bNoDestructor=1, so HUD::Release
+        // above deliberately SKIPS it. v1.6.1 GameExit @0x001cfed4 then calls the
+        // deleting dtor through the vtable (slot 1) directly, bypassing the
+        // no-destructor gate -- this is the ONLY path that frees MainScreen and
+        // its 11 instance textures (newgame, dojo_icon, openfeint,
+        // gc_achievements, quit, more_games, hd_sound(+_cross), hd_music(+_cross),
+        // hd_slice_fruit). ~MainScreen -> Release() only NULLS its MenuButton
+        // pointers (they are HUD-owned and already freed above), so this is not a
+        // double-free.
+        if (game_work.mMainScreen) {
+            delete game_work.mMainScreen;
+            game_work.mMainScreen = nullptr;
+        }
         delete game_work.mHud;
         game_work.mHud = nullptr;
     }
@@ -1111,7 +1125,7 @@ void GameExit() {
     // and HUD::Release destroys. Binary's GameInit leaks the previous values
     // on re-init (just overwrites); port's GameInit deletes-first, which
     // requires explicit nulls here so the re-run guards become no-ops.
-    game_work.mMainScreen       = nullptr;
+    // (mMainScreen is nulled by its own delete block above.)
     game_work.mCoinCounter      = nullptr;
     game_work.mCountDown        = nullptr;
     game_work.m_TutorialControl = nullptr;
@@ -1122,6 +1136,18 @@ void GameExit() {
     // ActorManager owns SlashEntity[16] + all fruits/bombs. Clear before
     // we null the SlashEntity pointers so the entity destruction order is
     // ActorManager-driven (Release + delete per slot via the type-list walk).
+    //
+    // Entity teardown runs AFTER the HUD here (v1.6.1 GameExit @0x001cfed4 order),
+    // the opposite of GameDestroy, which deletes ActorManager first specifically so
+    // Fruit::Release / Bomb::Release can still reach live MenuButtons. That is safe
+    // on this path because MenuButton::Release @0x0019d064 (reached from ~MenuButton
+    // during HUD::Release above) nulls its tracked entity's m_pOwner /
+    // m_pOwnerButton back-ref, so the Release calls below see a null owner.
+    // Residual gap (faithful to the binary): MenuButton::Remove @0x0019b448 flings
+    // the fruit and clears m_pTrackedFruit WITHOUT clearing fruit->m_pOwner, so a
+    // fruit flung during a menu transition and still airborne at exit reads a freed
+    // MenuButton in Fruit::Release. Fixing it means changing Remove, which is not
+    // binary-faithful -- do not add a port-side guard here.
     Coin::ClearCoins(true);  // v1.6.1 GameExit @0x001cfed4 passes r0=1 (true), not false
     SaveCurrentData();           // writes FruitSaveData XML; v1.6.1 GameExit @0x001cfed4
     WaveManager::GetInstance()->Destroy();  // frees per-session wave state; v1.6.1 WaveManager::Destroy @0x001c1be8

@@ -119,7 +119,10 @@ void Game::Init(int argc, const char** argv) {
     m_bLanguageSet = 1;
 }
 
-// slot 17 — exit + destroy, returns this; TODO: re-verify v1.6.1 Game::End address (no named symbol)
+// slot 17 v1.6.1 Game::End @0x0010a468 — GameTaskExit() then GameDestroy(), returns this.
+// Task exit runs FIRST: GameTaskExit dispatches the live state's exit handler
+// (GameExit @0x001cfed4 for the Game task) which needs the HUD/ActorManager/save
+// data that GameDestroy then tears down. Reached from Game::shutdown().
 Mortar::MortarGame* Game::End() {
     GameTaskExit();
     GameDestroy();
@@ -189,14 +192,23 @@ void Game::SetLanguage(const char* lang) {
 
 // init / run / runFrames — see GameSDL.cpp (SDL-bound).
 
-// Matches: GameDestroy (0x10b7ec) + FruitNinja::OnAppTerminating.
+// Port specific: the platform-teardown wrapper around the binary's slot-17
+// End(). The Bada framework dispatches Game::End (GameTaskExit -> GameDestroy)
+// at app terminate; the SDL/emscripten/Wii entry points call shutdown()
+// instead, so route it through the virtual so the TASK-EXIT half actually
+// runs. Before this, every port entry point called GameDestroy() alone and
+// GameExit() had zero call sites -- leaking MainScreen's instance textures,
+// the MissControl pool and the per-session wave/entity-heap state on quit.
+//
 // Idempotent: main() calls shutdown() explicitly and Game::~Game() chains
 // to it again; without the guard GameDestroy frees its resources twice.
+// GameTaskExit() is separately self-guarding (GameTaskState::initialized), so
+// a Game that never booted a task state runs no exit handler at all.
 void Game::shutdown() {
     static bool s_shutdownDone = false;
     if (s_shutdownDone) return;
     s_shutdownDone = true;
-    GameDestroy();
+    End();  // slot 17: GameTaskExit() then GameDestroy(), binary order
     renderer.shutdown();
     // inputTranslator is deleted in GameSDL.cpp via the dedicated SDL teardown
     // path; we forward-declare InputTranslatorSDL here so we can't delete it.

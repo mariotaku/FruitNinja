@@ -147,6 +147,16 @@ struct Game : public Mortar::MortarGame {
     ~Game();
 
     bool init(void* win, void* gl);   // win = SDL_Window*, gl = SDL_GLContext (opaque to header)
+
+    // Port specific: platform teardown entry point for every non-Bada main
+    // (mainSDL / mainEmscripten / mainWii) and for ~Game(). Runs the binary's
+    // slot-17 End() -- GameTaskExit() (per-session exit handler, i.e. GameExit
+    // when the Game task state was live) then GameDestroy() (engine teardown)
+    // -- followed by the port-only renderer.shutdown().
+    //
+    // Idempotent (function-local static guard): safe to call explicitly from
+    // main() and again from ~Game(). Call it while the GL context is STILL
+    // CURRENT -- both halves release GL-owning objects.
     void shutdown();
     void run();
     void frameTick();               // Port specific: one game tick; thin wrapper for the three below
