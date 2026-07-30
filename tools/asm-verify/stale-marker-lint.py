@@ -63,11 +63,45 @@ Verdicts per marker:
                      symbol's size range. Truly unknown.
   OK-NO-SYM       -- has v1.6.1 but no symbol name in the marker (old 'binary @')
 
+Marker kinds recognised by _PATTERNS (task #139 widened this list): the five
+grammar forms defined in CLAUDE.md -- TODO / ASM-verified / ASM-spec / DIFFERS
+/ Defunct -- plus two informal-but-common bare citation forms that carry no
+prefix keyword at all and were previously invisible to this lint:
+  Bare-v161    -- '// v1.6.1 <Symbol> @0x<addr>' or '// v1.6.1 @0x<addr>'
+                  (no symbol). Common as a plain RE citation inside an
+                  ordinary explanatory comment, not attached to any of the
+                  five grammar keywords.
+  Bare-Binary  -- '// Binary @ 0x<addr>' / '// binary @ 0x<addr>' (old-style,
+                  no version, no symbol).
+These go through the exact same classify() pipeline as every other kind (OK /
+STALE / MID-SYMBOL-MISMATCH / etc. all apply); they are simply excluded from
+Check D (sweep corroboration) by audit-config.toml's audited_marker_kinds,
+since they never claimed "ASM-verified" in the first place.
+
 All NO-VERSION variants carry a sub-verdict:
   NO-VERSION       -- addr resolves to a matching symbol (OK except missing tag)
   NO-VERSION+STALE -- addr resolves but symbol name doesn't match
   NO-VERSION+MID-SYMBOL -- addr is inside a function body (valid mid-func ref)
   NO-VERSION+UNRESOLVED -- addr not found at all
+
+SKIPPED (coverage counter, task #139) -- any '//' comment line that contains
+    an address-like token ('@0x<addr>' or a bare '0x<addr>') but matched NONE
+    of the _PATTERNS kinds above. This is the complement of the widened
+    recogniser: it is printed alongside the existing 'N markers claim
+    ASM-verified...' coverage line so a SEVENTH marker form appearing later in
+    the tree shows up as a number that moves, never as silence. Proven cost of
+    silence: 3 of 5 hand-found stale markers (Fruit.h, SlashEntity.h,
+    MainScreen::Init) were invisible to this lint before task #139 because
+    they used the bare forms above. report.json['skipped_markers'] carries the
+    full list (file/line/raw_line/addr_str).
+
+    KNOWN REMAINING BLIND SPOT (not fixed here, task #139 explicitly scoped it
+    out): an address cited inside a LOG_INFO format STRING rather than a
+    comment is invisible to this line-based, comment-only scanner by design --
+    this is how the DojoScreen.cpp mis-stamp hid (see commit 7f1f6748). A
+    string-literal scan is a separate, larger change (needs to avoid matching
+    unrelated hex-looking data in format strings) and is intentionally not
+    attempted in this pass.
 
 Cross-cutting audit class (orthogonal to 'verdict', reported separately):
 
@@ -438,7 +472,48 @@ _PATTERNS = [
             r'@\s*(?P<addr>' + _HEX_ADDR + r')'
         ),
     ),
+    # ------------------------------------------------------------------
+    # Bare forms (task #139): no TODO:/ASM-verified:/ASM-spec/DIFFERS:/
+    # Defunct: prefix keyword at all -- just a plain RE citation inside an
+    # ordinary comment. Listed LAST so any line carrying one of the five
+    # grammar keywords above already matched (and broke) before reaching
+    # these; only lines with none of those keywords fall through to here.
+    # ------------------------------------------------------------------
+    # Bare v1.6.1 <Symbol> @0x<addr>
+    # e.g.: // v1.6.1 Bomb::GetWait @0x0010d4cc -- thunk returning the...
+    (
+        "Bare-v161",
+        re.compile(
+            r'(?P<ver>v1\.6\.1)\s+'
+            r'(?P<sym>[A-Za-z_][^\s@]+?)\s+'
+            r'@\s*(?P<addr>' + _HEX_ADDR + r')'
+        ),
+    ),
+    # Bare v1.6.1 @0x<addr>  (no symbol)
+    # e.g.: // v1.6.1 @0x0011f4c4 -- reads theGame+0x104
+    (
+        "Bare-v161",
+        re.compile(
+            r'(?P<ver>v1\.6\.1)\s+'
+            r'@\s*(?P<addr>' + _HEX_ADDR + r')'
+        ),
+    ),
+    # Bare Binary @ 0x<addr>  (old-style, no version, no symbol)
+    # e.g.: // Binary @ 0x0010dca8: instantiate FileSystem_Direct(0x14 bytes)
+    # e.g.: if (...)  // binary @ 0x001b9989
+    (
+        "Bare-Binary",
+        re.compile(
+            r'[Bb]inary\s+'
+            r'@\s*(?P<addr>' + _HEX_ADDR + r')'
+        ),
+    ),
 ]
+
+# Bare hex-address token, used only by the SKIPPED coverage counter (task
+# #139) to find comment lines that reference SOME binary address but matched
+# none of the _PATTERNS kinds above.
+_ANY_ADDR_RE = re.compile(_HEX_ADDR)
 
 
 def _ascii_safe(s: str) -> str:
@@ -964,13 +1039,19 @@ def _containment_check(addr: int, sym_ranges: list):
     return None
 
 
-def scan_sources(src_dir: pathlib.Path) -> list:
+def scan_sources(src_dir: pathlib.Path):
     """Scan all .cpp/.h files under src_dir for RE markers.
 
-    Returns list of dicts:
-      file, line, raw_line, kind, has_version, cited_sym (or None), cited_addr (int)
+    Returns (markers, skipped):
+      markers  -- list of dicts: file, line, raw_line, kind, has_version,
+                  cited_sym (or None), cited_addr (int).
+      skipped  -- list of dicts (task #139 coverage counter): '//' comment
+                  lines that contain an address-like token ('@0x<addr>' or a
+                  bare '0x<addr>') but matched NONE of the _PATTERNS kinds.
+                  file, line, raw_line, addr_str.
     """
     results = []
+    skipped = []
     extensions = {'.cpp', '.h', '.cc', '.cxx'}
 
     for fpath in sorted(src_dir.rglob('*')):
@@ -982,6 +1063,7 @@ def scan_sources(src_dir: pathlib.Path) -> list:
             continue
 
         for lineno, raw in enumerate(text.splitlines(), 1):
+            matched = False
             for kind, pat in _PATTERNS:
                 m = pat.search(raw)
                 if not m:
@@ -1020,9 +1102,31 @@ def scan_sources(src_dir: pathlib.Path) -> list:
                     'cited_addr':  addr_int,
                     'addr_str':    addr_str,
                 })
+                matched = True
                 break   # stop at first matching pattern for this line
 
-    return results
+            if matched:
+                continue
+
+            # ----------------------------------------------------------
+            # SKIPPED coverage counter (task #139): a '//' comment that
+            # cites SOME address but matched no recognised marker kind.
+            # Never silent -- see module docstring.
+            # ----------------------------------------------------------
+            cidx = raw.find('//')
+            if cidx == -1:
+                continue
+            comment = raw[cidx:]
+            addr_m = _ANY_ADDR_RE.search(comment)
+            if addr_m:
+                skipped.append({
+                    'file':     str(fpath.relative_to(src_dir.parent)),
+                    'line':     lineno,
+                    'raw_line': raw.strip(),
+                    'addr_str': addr_m.group(0),
+                })
+
+    return results, skipped
 
 
 def _resolve_cited(cited_sym, cited_addr, addr_to_mangled, addr_to_demangled):
@@ -1896,8 +2000,10 @@ def main():
             addr_to_size[start] = sz
 
     print(f"Scanning {src_dir} for RE markers ...", flush=True)
-    markers = scan_sources(src_dir)
+    markers, skipped_lines = scan_sources(src_dir)
     print(f"  {len(markers)} markers found.")
+    print(f"  {len(skipped_lines)} SKIPPED (address-bearing comment, no "
+          f"recognised marker kind).")
 
     print("Classifying (forward + containment + PLT checks) ...", flush=True)
     markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges,
@@ -1915,7 +2021,7 @@ def main():
         print(f"  fixed={fix_counts['fixed']}  ambiguous={fix_counts['ambiguous']}"
               f"  zero_match={fix_counts['zero_match']}  skipped={fix_counts['skipped']}")
         # Re-scan & re-classify against the rewritten sources.
-        markers = scan_sources(src_dir)
+        markers, skipped_lines = scan_sources(src_dir)
         markers = classify(markers, addr_to_mangled, addr_to_demangled, sym_ranges,
                            plt_info)
         markers = _dedupe_sort(markers)
@@ -2009,6 +2115,7 @@ def main():
     with out_path.open('w', encoding='utf-8') as f:
         json.dump({
             'markers':             markers,
+            'skipped_markers':     skipped_lines,
             'hollow_markers':      hollow_markers,
             'symbol_less_markers': symbol_less_markers,
             'deferred_no_blocker': deferred_no_blocker,
@@ -2031,6 +2138,7 @@ def main():
         c = verdict_counts.get(v, 0)
         if c:
             print(f"  {v:<32}: {c}")
+    print(f"  {'SKIPPED (unrecognised)':<32}: {len(skipped_lines)}")
     print(f"  {'HOLLOW-MARKER':<32}: {len(hollow_markers)}")
     print(f"  {'NO-SYMBOL (audit class)':<32}: {len(symbol_less_markers)} "
           f"({_nosym_high} HIGH)")
@@ -2112,6 +2220,19 @@ def main():
                 print(f"  {cnt:>4}  {_ascii_safe(why)}")
             print(f"  (per-marker list in report.json['sweep_audit']['cannot_verify'])")
             print()
+
+    # --- SKIPPED (task #139 coverage counter) -- address-bearing comment that
+    # matched no recognised marker kind. See module docstring.
+    if skipped_lines:
+        print(f"--- SKIPPED ({len(skipped_lines)}) -- address-bearing comment, "
+              f"no recognised marker kind (first 20) ---")
+        for s in skipped_lines[:20]:
+            print(f"  {s['file']}:{s['line']}  @ {s['addr_str']}")
+            print(f"    {_ascii_safe(s['raw_line'])}")
+        if len(skipped_lines) > 20:
+            print(f"  ... and {len(skipped_lines) - 20} more "
+                  f"(full list in report.json['skipped_markers'])")
+        print()
 
     # --- Check A: HOLLOW-MARKER -- trivial port body, non-trivial binary fn.
     if hollow_markers:
