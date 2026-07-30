@@ -208,10 +208,9 @@ void PowerUpShop::Release() {
         m_BuyButton->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>();
 
         // Binary: HUD::RemoveControl(*Game.HUD, m_BuyButton); then delete.
-        Game* game = Game::GetInstance();
-        if (game && game_work.mHud) {
-            game_work.mHud->RemoveControl(m_BuyButton);
-        }
+        // No Game / mHud guard: v1.6.1 PowerUpShop::Release @0x001a9124 loads game_work
+        // from the GOT and calls RemoveControl on mHud (+0x40) unguarded (@0x001a9278).
+        game_work.mHud->RemoveControl(m_BuyButton);
         m_BuyButton->Release();   // binary's vtable Release before delete
         delete m_BuyButton;
         m_BuyButton = NULL;

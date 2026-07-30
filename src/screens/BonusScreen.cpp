@@ -549,19 +549,18 @@ void BonusScreen::Update(float dt) {
     // Starts "Bonus-drum-roll" at volume 0; the per-frame ramp below (after the
     // stop gate) raises it to 0.5..1.166 while the handle is live.
     // -----------------------------------------------------------------------
+    // No Game / mGameSound guard: @0x00163e74 the binary loads game_work from the GOT
+    // and reads mGameSound (+0x18c) straight into r7 before calling SFXPlay.
     if (m_RushLoopSFX == 0 && m_Timer > 0.0f && m_Timer < revealEnd) {
-        Game* game = Game::GetInstance();
-        if (game && game_work.mGameSound) {
-            // v1.6.1 @0x00162a74 (T.1223): binds free-fn DefaultSoundRemovedCallback (engine
-            // no-op default); the default-constructed Delegate1 here is behaviorally
-            // equivalent. (DefaultSoundRemovedCallback returns int, not bool, so it can't be
-            // passed to MakeFree<Delegate1<bool,MortarSound*>> without inventing a wrapper.)
-            m_RushLoopSFX = game_work.mGameSound->SFXPlay(
-                "Bonus-drum-roll", 0.0f, 1.0f,
-                Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
-            if (m_RushLoopSFX) {
-                m_RushLoopSFX->SetVolume(0.0f);
-            }
+        // v1.6.1 @0x00162a74 (T.1223): binds free-fn DefaultSoundRemovedCallback (engine
+        // no-op default); the default-constructed Delegate1 here is behaviorally
+        // equivalent. (DefaultSoundRemovedCallback returns int, not bool, so it can't be
+        // passed to MakeFree<Delegate1<bool,MortarSound*>> without inventing a wrapper.)
+        m_RushLoopSFX = game_work.mGameSound->SFXPlay(
+            "Bonus-drum-roll", 0.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
+        if (m_RushLoopSFX) {
+            m_RushLoopSFX->SetVolume(0.0f);
         }
     }
 
@@ -719,11 +718,10 @@ void BonusScreen::Update(float dt) {
     // ASM-spec v1.6.1 BonusScreen::Update @0x00164160: GameSound::Release(mGameSound,
     //   m_RushLoopSFX, "Bonus-drum-roll") @0x0010dd00, then m_RushLoopSFX = nullptr.
     // -----------------------------------------------------------------------
+    // No Game / mGameSound guard: @0x0016417c the binary loads mGameSound (+0x18c) from
+    // the GOT-resolved game_work and calls GameSound::Release on it unguarded.
     if (m_Timer >= revealEnd && m_RushLoopSFX != 0) {
-        Game* game = Game::GetInstance();
-        if (game && game_work.mGameSound) {
-            game_work.mGameSound->Release(m_RushLoopSFX, "Bonus-drum-roll");
-        }
+        game_work.mGameSound->Release(m_RushLoopSFX, "Bonus-drum-roll");
         m_RushLoopSFX = 0;
     }
 

@@ -124,25 +124,30 @@ static Mortar::FontCacheObjectTTF* GetGameOverTTFFont() {
 // ---------------------------------------------------------------------------
 
 // ASM-spec v1.6.1 GetCurrentScore @0x0011a0cc: playerIdx is ignored by the binary.
+// The whole body is `return game_work.currentScore;` -- six instructions, no guard.
 static int GetCurrentScore(int /*playerIdx*/) {
-    Game* g = Game::GetInstance();
-    return g ? game_work.currentScore : 0;
+    return game_work.currentScore;
 }
 
+// ASM-spec v1.6.1 GetCurrentModeHighscore @0x00119ee4:
+//   ldrb mode,[game_work+4]; if (mode > 3) return 0;         <- range gate, NOT (mode & 3)
+//   sd = game_work.pM_SaveData; if (sd == 0) return 0;       <- GENUINE null guard, keep it
+//   return sd->m_ModeHighScores[mode];                        (sd + 0x44 + mode*4)
 static int GetCurrentModeHighscore() {
-    Game* g = Game::GetInstance();
-    if (!g || !game_work.m_SaveData) return 0;
-    int mode = game_work.gameMode & 0x03;
+    unsigned mode = (unsigned)game_work.gameMode;
+    if (mode > 3) return 0;
+    if (!game_work.m_SaveData) return 0;
     return game_work.m_SaveData->m_ModeHighScores[mode];
 }
 
-// Binary: _Z23SetCurrentModeHighscorei @0x00119f24 (v1.6.1)
-// Free wrapper: reads current mode idx, guards idx<4 + saveData + score beats stored, writes + returns bool.
+// ASM-spec v1.6.1 SetCurrentModeHighscore @0x00119f24:
+//   ldrb mode,[game_work+4]; if (mode > 3) return false;
+//   sd = game_work.pM_SaveData; if (sd == 0) return false;   <- GENUINE null guard, keep it
+//   then compares/stores m_ModeHighScores[mode] inline.
 bool SetCurrentModeHighscore(int score) {
-    Game* g = Game::GetInstance();
-    if (!g || !game_work.m_SaveData) return false;
-    int idx = (int)game_work.gameMode;
-    if (idx < 0 || idx >= 4) return false;
+    unsigned idx = (unsigned)game_work.gameMode;
+    if (idx > 3) return false;
+    if (!game_work.m_SaveData) return false;
     return game_work.m_SaveData->SetCurrentModeHighscore(score);
 }
 
@@ -158,9 +163,10 @@ static void DoSetTerminate(GameOverScreen* self) {
 // ResetGameEntities (via Bomb::HitMenuBomb -> UpdateBombHit @0x001cbbac 1.5s threshold)
 // before this fires. No taskStateIndex hop or WaveManager::Destroy needed here.
 static void DoQuitToMenu() {
+    // No Game guard: v1.6.1 QuitToMenu @0x001cb6e4 calls WaveManager::GetInstance ->
+    // ResetGlobalDt(1.0f), then writes game_work through a plain GOT load
+    // (ldr r3,[r4,r3] @0x001cb710; strb #1,[r3,#0x5]).
     WaveManager::GetInstance()->ResetGlobalDt(1.0f);
-    Game* game = Game::GetInstance();
-    if (!game) return;
 
 #if !defined(__bada__) && defined(FN_BLOCK_PRELOAD)
     // Task #36 Stage 4 -- latch "this is a real quit", consumed by
@@ -573,8 +579,9 @@ void GameOverScreen::Release() {
     // Defunct: CancelHUDProgressionTimer -- no-op stub; v1.6.1 GameOverScreen::CancelHUDProgressionTimer @ 0x00184d4c
     CancelHUDProgressionTimer();
 
-    Game* game = Game::GetInstance();
-    if (game && game_work.pGameOverScreen == this) {
+    // No Game guard: v1.6.1 GameOverScreen::Release @0x00185970 loads game_work from
+    // the GOT and compares +0x168 against `this` directly (cmp r3,r4 @0x00185994).
+    if (game_work.pGameOverScreen == this) {
         // ASM-spec v1.6.1 GameOverScreen::Release @0x00185970
         FruitSaveData* sd = game_work.m_SaveData;
         if (sd) {
@@ -599,7 +606,7 @@ void GameOverScreen::Release() {
 
     // Full 12-slot RemoveControl pass (exact order per spec)
     // ASM-spec v1.6.1 GameOverScreen::Release @0x00185970
-    if (game && game_work.mHud) {
+    if (game_work.mHud) {
         HUD* hud = game_work.mHud;
         if (m_pFruitFact)       hud->RemoveControl(m_pFruitFact);
         if (m_pZenPage)         hud->RemoveControl(m_pZenPage);
@@ -745,14 +752,15 @@ void GameOverScreen::PostCallback(int result) {
 }
 
 // ---------------------------------------------------------------------------
-// LeaderboardsCallback -- TODO: re-verify v1.6.1 address (cited 0x001405a0 is stale: that
-//   address is PowerUp::Deactivate in v1.6.1). Leaderboards is a defunct online stub.
+// LeaderboardsCallback -- v1.6.1 GameOverScreen::LeaderboardsCallback @0x00184cd8.
+// Leaderboards is a defunct online stub.
+// ASM-spec: state gate (m_State +0x8c == 0 || == 6), then game_work from the GOT and
+// m_PauseAmount (+0x0c) compared against the pool constant. No Game null guard.
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::LeaderboardsCallback() {
     if (m_State == STATE_ENTRY_ANIM || m_State == STATE_MAIN_DISPLAY) {
-        Game* game = Game::GetInstance();
-        if (game && game_work.m_PauseAmount > 0.999f) {
+        if (game_work.m_PauseAmount > 0.999f) {
             m_Timer = 0.0f;
             m_State = STATE_LEADERBOARD;
         }
@@ -864,11 +872,11 @@ void GameOverScreen::FindMostOfFruit() {
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::CreateRetryButton() {
-    // Binary guard: if(m_pRetryBtn != 0) return
+    // Binary guard: if(m_pRetryBtn != 0) return  (ldr r6,[r0,#0xa4]; cmp #0; bne exit)
     if (m_pRetryBtn != 0) return;
 
-    Game* game = Game::GetInstance();
-    if (!game || !game_work.mHud) return;
+    // No Game / mHud guard: the binary reaches game_work through the GOT and calls
+    // HUD::AddControl on game_work.mHud (+0x40) unguarded (@0x001861ec).
 
     // ASM-spec v1.6.1 GameOverScreen::CreateRetryButton @0x00185f98
     // DIFFERS: opt-in widescreen -- MapX proportionally spreads Retry away from
@@ -905,10 +913,9 @@ void GameOverScreen::CreateRetryButton() {
         Mortar::Delegate1<void, HUDControl*>::Make(this, &GameOverScreen::DeletedControl);
 }
 
-// Binary @ 0x0014105c
+// v1.6.1 GameOverScreen::RetryCallback @0x001857ec -- no Game null guard; game_work is
+// a GOT load (ldr r5,[r4,r3] @0x00185840) and pM_SaveData is dereferenced unguarded.
 void GameOverScreen::RetryCallback() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
     if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
         m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
     if (game_work.m_PauseAmount <= 0.989945f) return;
@@ -931,8 +938,8 @@ void GameOverScreen::OnRetryClicked() {
 // ---------------------------------------------------------------------------
 
 void GameOverScreen::CreateQuitButton() {
-    Game* game = Game::GetInstance();
-    if (!game || !game_work.mHud) return;
+    // No entry guard and no Game / mHud null test in the binary: it builds the button
+    // unconditionally and calls HUD::AddControl on game_work.mHud (+0x40) @0x00186440.
 
     // ASM-spec v1.6.1 GameOverScreen::CreateQuitButton @0x00186220
     // DIFFERS: opt-in widescreen -- MapX proportionally spreads Quit away from
@@ -982,9 +989,9 @@ void GameOverScreen::CreateQuitButton() {
     }
 }
 
+// v1.6.1 GameOverScreen::QuitCallback @0x00184d6c -- no Game null guard; the state gate
+// (m_State +0x8c in {0,6,0xe,0xa}) is the first thing the binary tests.
 void GameOverScreen::QuitCallback() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
     if (m_State != STATE_ENTRY_ANIM && m_State != STATE_MAIN_DISPLAY &&
         m_State != STATE_QUICK_RESTART && m_State != STATE_LEADERBOARD) return;
     CancelHUDProgressionTimer();

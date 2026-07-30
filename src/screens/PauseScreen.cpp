@@ -465,10 +465,9 @@ void PauseScreen::PreDraw(float* /*hudScale*/) {
     mm.UploadModelViewOnly();
 
     g_FlashTexture->Set();
-    Game* game = Game::GetInstance();
-    if (game) {
-        game->renderer.DrawQuad(tint);
-    }
+    // No Game guard: v1.6.1 PauseScreen::PreDraw @0x001cd35c calls the renderer's
+    // DrawQuad directly (bl 0x001cc648 @0x001cd4ac) with no instance null test.
+    Game::GetInstance()->renderer.DrawQuad(tint);
     // ASM-spec v1.6.1 PauseScreen::PreDraw @0x001cd35c: binary passes 1 (true) to
     // vtable+0x10 UnSet(bool), matching the other two shared-flash-texture call
     // sites (task #141).
