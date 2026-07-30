@@ -24,7 +24,7 @@
 namespace Mortar {
 
 // ---- Tex3 FourCC ----------------------------------------------------------
-// Static-init in binary: v1.6.1 global.constructors.keyed.to.Tex3Format.cpp @0x0022be94 copies
+// Static-init in binary: v1.6.1 _GLOBAL__I_Tex3Format.cpp @0x0022be94 copies
 // .rodata @0x0029ac00 (bytes 54 45 58 01) into .bss @0x0034e3f4.
 // Port: compile-time constant; value identical.
 // DIFFERS: original = DAT_0034e3f4 (static-init copy); port = const literal.
@@ -300,7 +300,7 @@ TextureSourceData* TextureFileFormat::ReadDDSFormat(const void* data, unsigned l
 // ---- Reader [0]: Tex3 -----------------------------------------------------
 // Binary v1.6.1 Tex3Format::Read @0x0022bd7c (outer) / Tex3Format::ReadFormatInternal @0x0022bc6c (inner).
 // Accept gate: u32@0 == kTex3FourCC (0x01584554 = "TEX\x01").
-// FourCC static-init: v1.6.1 global.constructors.keyed.to.Tex3Format.cpp @0x0022be94 copies
+// FourCC static-init: v1.6.1 _GLOBAL__I_Tex3Format.cpp @0x0022be94 copies
 //   .rodata @0x0029ac00 -> .bss @0x0034e3f4.
 // TODO: v1.6.1 0x0022bc6c (Tex3Format::ReadFormatInternal) -- allocate Tex3Data (0x4c bytes), read
 //   TextureInfo fields via MakeIntFormat helpers, read per-layer size table,

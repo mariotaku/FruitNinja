@@ -22,9 +22,9 @@ using Mortar::TextureManager;
 // Bonus -- ctor / dtor / copy
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0010e324 (real ctor; 0x0010005c is the PTR_Bonus_001f04c4 thunk).
+// v1.6.1 Bonus::{ctor} @0x0012ecb8 (C1; base ctor C2 @0x0012ed50).
 // Defaults verified from disassembly:
-//   m_MinSliced = 0, m_MaxSliced = DAT_0010e390 = 10,000,000 (no-upper-bound
+//   m_MinSliced = 0, m_MaxSliced = DAT_0012ed4c = 10,000,000 (no-upper-bound
 //   sentinel), m_DivisibleBy = 0, m_Tier = 5. m_MaxSliced MUST be the large
 //   sentinel because Bonus::IsAchieved gates `score > m_MaxSliced` unconditionally.
 Bonus::Bonus()
@@ -39,7 +39,7 @@ Bonus::Bonus()
     // m_MinFruit, m_MaxFruit, m_PatternHashes default-constructed.
 }
 
-// Binary @ 0x00110090
+// v1.6.1 Bonus::{ctor} @0x00130edc (copy ctor)
 Bonus::Bonus(const Bonus& rhs)
     : m_MinSliced(rhs.m_MinSliced)
     , m_MaxSliced(rhs.m_MaxSliced)
@@ -260,7 +260,7 @@ int Bonus::IsAchieved(int score, std::map<unsigned long, int>& fruitCounts) {
 // BonusType -- ctor / dtor / copy
 // ---------------------------------------------------------------------------
 
-// Binary @ 0x0010df00
+// v1.6.1 BonusType::{ctor} @0x0012e6c0
 BonusType::BonusType()
     : m_HasAchievement(false)
 {

@@ -80,7 +80,7 @@ SpecificOrder::SpecificOrder(const char* spec)
     m_SlotCount = slotIdx;
 }
 
-// Binary @ 0x0010846c
+// v1.6.1 SpecificOrder::Check @0x00116d20
 // Returns 1 if the entire sequence has been completed after this call.
 // Returns 0 otherwise (including on mismatch/reset).
 // Logic:

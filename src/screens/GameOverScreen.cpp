@@ -1008,7 +1008,7 @@ static const char* const g_ComboNameTable[25] = {
     "2_PAIR", "3_OF_A_KIND", "4_OF_A_KIND", "5_OF_A_KIND",
 };
 
-// GetComboName -- binary: _Z12GetComboName10COMBO_TYPE v1.6.1 @0x00110c94
+// v1.6.1 GetComboName @0x00132094 (_Z12GetComboName10COMBO_TYPE)
 const char* GetComboName(COMBO_TYPE starType) {
     return g_ComboNameTable[starType];
 }

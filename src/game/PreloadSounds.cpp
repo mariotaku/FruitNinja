@@ -1,5 +1,5 @@
 // Analysed: 2026-05-03T00:00
-// PreloadSounds -- binary @ 0x0010b204 (PLT stub @ 0x00101cac).
+// v1.6.1 PreloadSounds @0x0011bb94 (_Z13PreloadSoundsv).
 // 24 hard-coded sound names + per-fruit sounds + 7 sword-swipe + 3 visceral-impact.
 // Names are bare (no extension); SoundManager appends ".wav.pcm".
 

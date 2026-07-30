@@ -554,7 +554,7 @@ void SlashModInfo::Parse(TiXmlElement* e) {
         }
 
         // <colour>R,G,B</colour> children -> m_pColours array.
-        // Binary @ 0x001127ee-0x0011287a: counts <colour> children (storing to
+        // v1.6.1 SlashModInfo::ParseSlashModInfo @0x00138d00: counts <colour> children (storing to
         // m_ColourCount each iteration), then allocates (count+2)*4 bytes with
         // a header: [element_size=4, count], storing the data pointer at offset +8.
         int count = 0;

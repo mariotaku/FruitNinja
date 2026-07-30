@@ -43,8 +43,7 @@ void ComboControl::Release() {}
 // ASM-verified: 2026-05-20 v1.6.1 ComboControl::Skip @ 0x001693b0 (re-analyst) -- no-op
 void ComboControl::Skip() {}
 
-// ASM-verified: 2026-05-20 v1.6.1 ComboControl::PreDraw2 @ 0x001693ac (re-analyst) -- extra vtable slot, no-op
-// (binary spells this slot PreDraw2; the port keeps the shorter PreDraw name)
+// ASM-verified: 2026-05-20 v1.6.1 ComboControl::PreDraw @ 0x001693ac (re-analyst) -- extra vtable slot, no-op
 void ComboControl::PreDraw() {}
 
 // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136d74 (re-analyst) -- font=pFontNumbers, white,

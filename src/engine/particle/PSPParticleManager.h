@@ -481,7 +481,7 @@ public:
     // function's body).
     bool EmitterExists(uint32_t hash);
 
-    // v1.6.1 PSPEmitterTemplate::Ends @0x00114884 -- true if every set has a
+    // v1.6.1 PSPEmitterTemplate::Ends @0x0013bee4 -- true if every set has a
     // finite time window (stopT > 0) or zero continuous rate (i.e. the emitter
     // is not indefinitely self-sustaining). Takes the raw emitter-template blob
     // pointer (PSPParticleEmitter::m_pTemplate).

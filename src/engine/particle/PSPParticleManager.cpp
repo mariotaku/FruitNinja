@@ -459,7 +459,7 @@ void PSPParticleEmitter::AddParticle(PSPParticleSet* set, PSPParticleManager& mg
     }
 }
 
-// v1.6.1 PSPEmitterTemplate::Ends @0x00114884
+// v1.6.1 PSPEmitterTemplate::Ends @0x0013bee4
 bool PSPParticleManager::EmitterEnds(const uint8_t* eBlob) {
     if (!eBlob) return true;
     const PSPEmitterBlob* hdr = reinterpret_cast<const PSPEmitterBlob*>(eBlob);

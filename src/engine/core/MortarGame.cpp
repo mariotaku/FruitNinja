@@ -48,7 +48,7 @@ MortarGame::~MortarGame() {
     }
 }
 
-// --- Vtable slot implementations --- v1.6.1 _ZTVN6Mortar10MortarGameE @0x002cfa88, 34 slots ---
+// --- Vtable slot implementations --- v1.6.1 Mortar::MortarGame::vtable @0x002cfa88, 34 slots ---
 
 // slot 2 v1.6.1 Mortar::MortarGame::GetHardwareString @0x0011fb80
 // DIFFERS: the binary returns `this+0x04` (m_versionString), NOT the +0xB4 buffer that

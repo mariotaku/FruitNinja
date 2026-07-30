@@ -8,7 +8,7 @@
 #include "render/MatrixStack.h"
 #include <list>
 
-// ASM-verified: 2026-05-24 v1.6.1 HUD::HUD @ 0x0018c1a0 (re-analyst)
+// ASM-verified: 2026-05-24 v1.6.1 HUD::{ctor} @ 0x0018c1a0 (re-analyst)
 // DIFFERS: binary ctor initialises scales[6] to 1.0f and writes 1.0f at +0x24
 //          (m_globalTimeScale); m_DrawAlpha (+0x20) is left uninitialized by ctor.
 //          Port zero-inits m_DrawAlpha and pre-inits m_globalTimeScale here to

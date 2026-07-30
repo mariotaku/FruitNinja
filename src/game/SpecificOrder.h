@@ -23,7 +23,7 @@ public:
     explicit SpecificOrder(const char* spec);   // v1.6.1 @0x00116efc
     ~SpecificOrder() {}
 
-    // Binary @ 0x0010846c
+    // v1.6.1 SpecificOrder::Check @0x00116d20
     // Returns 1 if the entire sequence has been completed, 0 otherwise.
     // On match of current slot, advances to next slot (or returns 1 on last).
     // On mismatch, retries slot 0; resets to 0 if still no match.

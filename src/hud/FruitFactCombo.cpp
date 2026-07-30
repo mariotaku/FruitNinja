@@ -17,7 +17,7 @@
 using Mortar::TextureManager;
 
 // ---------------------------------------------------------------------------
-// CheckCombo (binary @ 0x00110cb0) -- pattern matcher for the BestCombo slice
+// v1.6.1 CheckCombo @0x001320b4 -- pattern matcher for the BestCombo slice
 // array. Input is a 1..11-slot array of fruit type indices (m_ComboSliceArr
 // values stored as int). Returns 0..24 = combo-name index (see GetComboName
 // at GameOverScreen.cpp:944), or 0xFF for "no combo".

@@ -6,7 +6,7 @@
 #include "math/Matrix43.h"
 #include "math/_Vector3.h"
 
-// Binary MatrixManager: 8500 bytes, polymorphic (v1.6.1 MatrixManager__vtable @0x002d0738, 4 vfn slots).
+// Binary MatrixManager: 8500 bytes, polymorphic (v1.6.1 MatrixManager::vtable @0x002d0738, 4 vfn slots).
 // Layout: vptr(4) + 4*MatrixStack(2120) + 4*int(16) = 8500.
 // Port adds m_CachedProjView + m_ProjVersionUploaded for the GLES2 shader path
 // (DIFFERS, marked below). Binary size applies only under __bada__.
@@ -19,7 +19,7 @@ class MatrixManager {
 public:
     // Binary @ ram:0x0035ced4 — direct global access, no guard.
     static MatrixManager& GetInstance() { return s_instance; }
-    // vptr at +0x00 (emitted by the virtual dtor below; matches v1.6.1 MatrixManager__vtable @0x002d0738)
+    // vptr at +0x00 (emitted by the virtual dtor below; matches v1.6.1 MatrixManager::vtable @0x002d0738)
     MatrixStack m_Projection;  // +0x004, 0x848 bytes
     MatrixStack m_View;        // +0x84C, 0x848 bytes
     MatrixStack m_World;       // +0x1094, 0x848 bytes
@@ -44,7 +44,7 @@ public:
     Matrix44 m_CachedProjView;    // Port specific
     int m_ProjVersionUploaded;    // Port specific
 
-    // v1.6.1 MatrixManager__vtable @0x002d0738 (4 slots): slot 0+1 = dtor pair
+    // v1.6.1 MatrixManager::vtable @0x002d0738 (4 slots): slot 0+1 = dtor pair
     // (~MatrixManager @0x00256ec8, deleting-dtor @0x00256f20),
     // slot 2+3 = vfn (identity unknown). TODO: re-verify v1.6.1 vfn slot addresses.
     // Virtual dtor emits the vptr, matching binary isPolymorphic=true.
@@ -60,7 +60,7 @@ public:
     void SetupOrtho(float top, float bottom, float left, float right,
                     float nearVal, float farVal, Matrix44* out = 0);
 
-    // DIFFERS from v1.6.1 MatrixManager::SetupLookAt @0x00257534. Binary's LookAt43
+    // DIFFERS from v1.6.1 MatrixManager::SetupLookAt @0x002572ac. Binary's LookAt43
     // produces a non-canonical X-flipped view matrix that is compensated
     // by an orientation-matrix multiply in _UploadCurrentMatrices @
     // 0x00257018 (Bada portrait->landscape rotation). Port skips that

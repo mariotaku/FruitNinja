@@ -219,7 +219,7 @@ bool Game::init(void* win, void* gl) {
 
     // Matches original lifecycle:
     GamePreInitialise();   // zero game fields
-    SetHardware("BADA", true);   // v1.6.1 Game::Init @0x0010dbe4: SetHardware between PreInit and Init.
+    SetHardware("BADA", true);   // v1.6.1 Game::Init @0x00120374: SetHardware between PreInit and Init.
                                   // Sets m_bFastHardware=true (Bada Wave = fast HW); gates fruit_flight
                                   // trail fallback, jib count, ScreenEffect filters.
     GameInitialise(nullptr, nullptr);  // boot all engine singletons + load shared data

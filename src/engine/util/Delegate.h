@@ -152,7 +152,8 @@ public:
     }
 
     // Invoke. Empty delegates silently return R(); matches binary flow
-    // v1.6.1 Mortar::Delegate0<void>::operator() @0x15f490 (null-check at 0x15f498 before vtable dispatch).
+    // v1.6.1 Mortar::Delegate0<void>::operator() @0x0015f4b0 is a 4-byte veneer that tail-calls
+    // v1.6.1 Mortar::Delegate0<void>::Call @0x0015f490 -- null-check at 0x0015f498 before vtable dispatch.
     R operator()(Args... args) const {
         if (m_bEmpty) return R();
         return Ptr()->Invoke(std::forward<Args>(args)...);

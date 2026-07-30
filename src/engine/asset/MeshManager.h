@@ -39,7 +39,7 @@ private:
     Mortar::SmartPtr<Model> LoadMeshInternal(const AsciiString& path);
 
 public:
-    // v1.6.1 dtor (D1) @0x002368b8 -- calls Destroy (-> ReleaseAll -> List::Clear) then List::Destroy.
+    // v1.6.1 Mortar::MeshManager::~MeshManager @0x002368a4 (D1/D2 aliased) -- calls Destroy (-> ReleaseAll -> List::Clear) then List::Destroy.
     void Destroy();
     // v1.6.1 Find(AsciiString const&) @0x0023695c -- linear scan; returns the cached Model
     // whose m_name matches, else an empty SmartPtr.

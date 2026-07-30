@@ -21,10 +21,10 @@ public:
     static BonusManager* GetInstance();
 
     void Init();                                // v1.6.1 BonusManager::Init @0x0012f53c
-    void ClearBestBonuses();                    // Binary @ 0x000feb20
+    void ClearBestBonuses();                    // v1.6.1 BonusManager::ClearBestBonuses @0x0012eb38
     void SetUpBonusScreen(BonusScreen* screen); // v1.6.1 BonusManager::SetUpBonusScreen @0x0012ede8
     void AddCombo(int comboLen);                // v1.6.1 BonusManager::AddCombo @0x0012e570
-    bool UnlockPostGameAchievements();          // Binary @ 0x0010e1cc
+    bool UnlockPostGameAchievements();          // v1.6.1 BonusManager::UnlockPostGameAchievements @0x0012eae4
 
     Bonus* GetFirstBestBonus(std::list<Bonus>::iterator& it);
     Bonus* GetNextBestBonus(std::list<Bonus>::iterator& it);

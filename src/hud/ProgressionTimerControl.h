@@ -46,7 +46,7 @@ public:
     // +0xCC: delegate fired when timer expires (36 bytes)
     Mortar::Delegate0<void> m_OnExpiredDelegate;
 
-    // v1.6.1 ctors @0x001aa8d8 / @0x001aa9b8 (neither has a PLT thunk -> never called)
+    // v1.6.1 ProgressionTimerControl::{ctor} @0x001aa9b8 (C1) / C2 @0x001aa8d8 (neither has a PLT thunk -> never called)
     // Pos = Vec3(-230, 140, 0), size = Vec3(0, 18, 0)
     ProgressionTimerControl();
 

@@ -2,7 +2,7 @@
 #include "engine/util/StringHash.h"
 #include <cstring>
 
-// GetModeName -- binary: _Z11GetModeName9GAME_MODE v1.6.1 @0x0010b15c
+// v1.6.1 GetModeName @0x0011bac0 (_Z11GetModeName9GAME_MODE)
 // Returns the ASCII mode-name string used to construct per-mode stat keys.
 const char* GetModeName(GAME_MODE gameMode) {
     static const char* s_Names[] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };

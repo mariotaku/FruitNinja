@@ -15,7 +15,7 @@
 
 // ---------------------------------------------------------------------------
 // Constructor
-// v1.6.1 ctors @0x001aa8d8 / @0x001aa9b8 (neither reachable -- no PLT thunk)
+// v1.6.1 ProgressionTimerControl::{ctor} @0x001aa9b8 (C1) / C2 @0x001aa8d8 (neither reachable -- no PLT thunk)
 // Pos = Vec3(-230, 140, 0). Derivation: Vec3(10,-20,0) + Vec3(480,320,0)*Vec3(-0.5,0.5,0)
 //   = Vec3(10-240, -20+160, 0) = Vec3(-230, 140, 0).
 // Size = Vec3(0, 18, 0).

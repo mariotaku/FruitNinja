@@ -47,7 +47,7 @@ public:
     // vtable +0x30: returns 1.
     int GetType() override { return 1; }
 
-    // Dtor — v1.6.1 D0 @0x0018b77c (deleting) / D1 @0x0018b814 / D2 @0x0018b8a4.
+    // Dtor — v1.6.1 HUDControl3d::~HUDControl3d @0x0018b77c (D0, deleting) / D1 @0x0018b814 / D2 @0x0018b8a4.
     virtual ~HUDControl3d();
 
     // Vtable overrides (all verified — see .cpp markers).

@@ -110,7 +110,7 @@ void Game::Init(int argc, const char** argv) {
     (void)argc; (void)argv;
     GamePreInitialise();
     game_work.languageFlag = 0;         // g_GameData[3] = 0
-    // v1.6.1 Game::Init @0x0010dbe4: Bada Wave (S8500, Cortex-A8 + SGX540) is
+    // v1.6.1 Game::Init @0x00120374: Bada Wave (S8500, Cortex-A8 + SGX540) is
     // fast hardware -> MortarGame::m_bFastHardware (+0xF4) is true at runtime.
     // Game::RenderAtHalfFrames @0x001207f0's slow/half-frame path only trips on
     // iPhone-1G/3G-class device strings, never "BADA". Gates: Fruit::Update's
@@ -121,7 +121,7 @@ void Game::Init(int argc, const char** argv) {
     m_bLanguageSet = 1;
 }
 
-// slot 17 v1.6.1 Game::End @0x0010a468 — GameTaskExit() then GameDestroy(), returns this.
+// slot 17 v1.6.1 Game::End @0x00120364 — GameTaskExit() then GameDestroy(), returns this.
 // Task exit runs FIRST: GameTaskExit dispatches the live state's exit handler
 // (GameExit @0x001cfed4 for the Game task) which needs the HUD/ActorManager/save
 // data that GameDestroy then tears down. Reached from Game::shutdown().
@@ -154,7 +154,7 @@ void Game::UnPaused() {
         Mortar::SoundManager::GetInstance().EndInterruption();
         game_work.mGameSound->Unpause();
     }
-    // Binary @ 0x0010dae8: gate UnpauseGame on m_PauseAmount != 0.0f
+    // v1.6.1 Game::UnPaused @0x001202cc: gate UnpauseGame on m_PauseAmount != 0.0f
     // (the camera transition isn't mid-fade). UnpauseGame
     // sets gs->m_PauseAmount=0.4f, gs->bM_Mode=1.
     if (game_work.m_PauseAmount != 0.0f) {

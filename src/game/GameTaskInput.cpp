@@ -161,7 +161,7 @@ bool PointerDownXboxCallback(InputEvent* /*ev*/) {
     return false;
 }
 
-// PauseGameCallback -- v1.6.1 body @ 0x001a5978 (thunk @ 0x0010d2ec).
+// v1.6.1 PauseScreen::PauseGameCallback @ 0x001a5978 (thunk @ 0x0010d2ec).
 // Wired from PauseScreen::Update (@ 0x001a5f1c/0x001a5f24), not from
 // GameTaskInitInput -- see TODO above Section C.
 // Binary: if (ev != NULL) { if (g_GameData[+2] == 0) PauseGame(); else UnpauseGame(); }

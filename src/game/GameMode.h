@@ -51,14 +51,14 @@ using ::GAME_MODE_COMBO;
 using ::GAME_MODE_ARCADE;
 using ::GAME_MODE_ZEN;
 
-// Binary @ 0x0010a404 -- ((uint8_t)(gameMode - 2u) > 1u) means modes 0/1
+// v1.6.1 FailureEnabled @0x00119ff8 -- ((uint8_t)(gameMode - 2u) > 1u) means modes 0/1
 // (Classic, Combo) return true; 2/3 (Arcade, Zen) return false. Gates the
 // 3-strike miss-penalty / MissControl spawn path.
 inline bool FailureEnabled(uint8_t gameMode) {
     return ((uint8_t)(gameMode - 2u)) > 1u;
 }
 
-// Binary @ 0x0010a44c -- ((uint8_t)(gameMode - 2u) < 2u) means modes 2/3
+// v1.6.1 IsTimedGame @0x0011a060 -- ((uint8_t)(gameMode - 2u) < 2u) means modes 2/3
 // (Arcade, Zen) return true; 0/1 (Classic, Combo) return false. Gates the
 // TimeControl countdown HUD.
 inline bool IsTimedGame(uint8_t gameMode) {
@@ -76,11 +76,11 @@ inline bool IsDeviceUpsideDown() {
 
 } // namespace Mortar
 
-// GetModeName -- binary: _Z11GetModeName9GAME_MODE v1.6.1 @0x0010b15c
+// v1.6.1 GetModeName @0x0011bac0 (_Z11GetModeName9GAME_MODE)
 // Returns the ASCII mode-name string for the given game mode.
 const char* GetModeName(GAME_MODE gameMode);
 
-// GetModeBitMask -- v1.6.1 @0x0010b15c area; returns (1 << gameMode).
+// v1.6.1 GetModeBitMask @0x0011bae0 (_Z14GetModeBitMask9GAME_MODE); returns (1 << gameMode).
 // Used by GlobalProbabilityOveride::CheckForOverride to gate mode.
 inline uint32_t GetModeBitMask(GAME_MODE gameMode) {
     return (uint32_t)(1u << (unsigned)gameMode);

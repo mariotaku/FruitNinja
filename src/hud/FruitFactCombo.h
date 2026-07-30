@@ -41,7 +41,7 @@ enum COMBO_TYPE {
     COMBO_5_OF_A_KIND     = 24
 };
 
-// FruitFact::CheckCombo  binary @ 0x00110cb0
+// v1.6.1 CheckCombo @0x001320b4 (binary is a free function; port namespaces it FruitFact)
 // Classifies a run of sliced fruit type indices into a combo category.
 // Returns a COMBO_TYPE byte (0..0x18 = 0..24); 0xFF = no combo.
 // *outDominantType receives the most-frequent fruit type index.
@@ -58,7 +58,7 @@ Mortar::SmartPtr<Mortar::Texture> GetComboStarTexture(COMBO_TYPE comboType);
 // Returns 0 if comboType > 0x18.
 unsigned int GetComboStarText(COMBO_TYPE comboType);
 
-// GetComboName -- binary: _Z12GetComboName10COMBO_TYPE v1.6.1 @0x00110c94
+// v1.6.1 GetComboName @0x00132094 (_Z12GetComboName10COMBO_TYPE)
 // Returns the ASCII combo-name key string for the given combo type.
 // Definition lives in GameOverScreen.cpp:914 (co-located with g_ComboNameTable).
 const char* GetComboName(COMBO_TYPE starType);

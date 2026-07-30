@@ -31,17 +31,17 @@ public:
     uint32_t                        m_AchievementHash;  // +0xCC
     Mortar::SmartPtr<Mortar::Texture>       m_StarTexture;      // +0xD0  sizeof 4
 
-    Bonus();                                            // Binary @ 0x0010005c
-    Bonus(const Bonus& rhs);                            // Binary @ 0x00110090
+    Bonus();                                            // v1.6.1 Bonus::{ctor} @0x0012ecb8
+    Bonus(const Bonus& rhs);                            // v1.6.1 Bonus::{ctor} @0x00130edc (copy)
     ~Bonus();                                           // TODO: address unresolved (0x0010fa40's
                                                          // PLT thunk resolves to std::list<Fruit*>::{dtor},
                                                          // but Bonus has no such member)
     Bonus& operator=(const Bonus& rhs);
 
     void Parse(TiXmlElement* e); // Binary @ 0x0012f0f8
-    int  IsAchieved(int score, std::map<unsigned long, int>& fruitCounts); // Binary @ 0x0010df38
+    int  IsAchieved(int score, std::map<unsigned long, int>& fruitCounts); // v1.6.1 Bonus::IsAchieved @0x0012e708
 
-    bool operator<(const Bonus& rhs) const { return m_Tier < rhs.m_Tier; } // ascending sort (binary @ 0x0010ed2c)
+    bool operator<(const Bonus& rhs) const { return m_Tier < rhs.m_Tier; } // ascending sort (v1.6.1 Bonus::operator< @0x0012fb3c)
 };
 
 // Layout asserts: ARM32 sizes only (binary target). Not checked on MSVC x64 host.
@@ -74,7 +74,7 @@ public:
     std::vector<Bonus>        m_Bonuses;         // +0x18  sizeof 12
     bool                      m_HasAchievement;  // +0x24
 
-    BonusType();                                 // Binary @ 0x0010df00
+    BonusType();                                 // v1.6.1 BonusType::{ctor} @0x0012e6c0
     BonusType(const BonusType& rhs);             // TODO: address unresolved (0x0010df1c's PLT
                                                   // thunk resolves to std::list<Bonus>::_M_transfer,
                                                   // but BonusType holds std::vector<Bonus>)
@@ -82,8 +82,8 @@ public:
     BonusType& operator=(const BonusType& rhs);
 
     void   Parse(TiXmlElement* e);       // Binary @ 0x0012f3a4
-    Bonus* GetBest();                            // Binary @ 0x0010e094
-    bool   UnlockAchievements();                 // Binary @ 0x0010e12c
+    Bonus* GetBest();                            // v1.6.1 BonusType::GetBest @0x0012e91c
+    bool   UnlockAchievements();                 // v1.6.1 BonusType::UnlockAchievements @0x0012e9f4
 };
 
 // Layout asserts: ARM32 sizes only. GCC 4.4.1 excluded (see Bonus asserts above).

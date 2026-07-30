@@ -183,7 +183,7 @@ public:
 
         Data() : pixels(0), pixelsSize(0) {}
         virtual ~Data() {}
-        // TODO: v1.6.1 0x2cf7e0 (TextureSource::Data vtable) -- binary base Data has a pure-virtual
+        // TODO: v1.6.1 0x2cf7e0 (Mortar::TextureSource::Data::vtable) -- binary base Data has a pure-virtual
         // GetLayer(unsigned long,unsigned long,unsigned long&) const (Tex1Data/SubstituteApparentSize
         // override it); port Data has only a virtual dtor. Vtable-shape divergence, defer to #376.
     };

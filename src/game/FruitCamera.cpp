@@ -313,7 +313,7 @@ void FruitCamera::UpdateShake(float dt) {
         float dx = m_Target.x - m_ShakeDir.x;
         float dy = m_Target.y - m_ShakeDir.y;
         if (dx * dx + dy * dy < 16.0f) {
-            // ASM-spec v1.6.1 FruitCamera::UpdateShake @0x001edc04 (inlined draw
+            // ASM-spec v1.6.1 FruitCamera::UpdateShake @0x001edcc0 (inlined draw
             // @0x001edd64): Math::g_random.Rand32(0x38E0) x1, only when distSq < 16.
             m_ShakeAngle += 0x6388 + (uint16_t)Math::g_Random.Rand32(0x38E0);
 

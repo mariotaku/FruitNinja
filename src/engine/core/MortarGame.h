@@ -62,7 +62,7 @@ public:
 
     MortarGame();
 
-    // --- Vtable (34 slots) --- v1.6.1 _ZTVN6Mortar10MortarGameE @0x002cfa88 ---
+    // --- Vtable (34 slots) --- v1.6.1 Mortar::MortarGame::vtable @0x002cfa88 ---
 
     virtual ~MortarGame();                                  // slots 0/1 v1.6.1 Mortar::MortarGame::~MortarGame @0x0022e070 (D1) / @0x0022e0a4 (D0)
 

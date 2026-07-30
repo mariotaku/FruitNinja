@@ -384,7 +384,7 @@ public:
                   _Vector3<float> offset, _Vector3<float> sizeScale,
                   Colour tint, int layerFlags);
 
-    // v1.6.1 MenuButton::UpdatePieces @0x0019a630: per-addon position/size update
+    // v1.6.1 MenuButton::UpdatePieces @0x0019a624: per-addon position/size update
     void UpdatePieces(float dt);
 
     // v1.6.1 MenuButton::DeletePieces @0x0019cf84: detach and mark addons for HUD removal

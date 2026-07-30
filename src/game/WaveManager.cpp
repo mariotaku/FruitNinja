@@ -706,8 +706,8 @@ void WaveManager::Reset(bool fullReset) {
     m_BlitzSpawnCount = 0;
     m_BlitzState = 0;
     m_NextBlitzTime = m_Random.RandF(10.0f) + 10.0f;
-    SetScore(0, -1);       // Binary @ 0x0010a4b8; playerIdx -1 = all (defunct MP sig)
-    SetMissCount(0, -1);   // Binary @ 0x0010a4e8
+    SetScore(0, -1);       // v1.6.1 SetScore @0x0011a0ec; playerIdx -1 = all (defunct MP sig)
+    SetMissCount(0, -1);   // v1.6.1 SetMissCount @0x0011a12c
     ET_ClearKnownEntities(-1);
 
     // 4. Per-player wave state.

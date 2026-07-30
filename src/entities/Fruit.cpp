@@ -70,7 +70,7 @@ int   Fruit::CRITICAL_CHANCE_START_INC = 30;    // @0x002d8d50
 int   Fruit::NEW_LIFE_AT               = 100;   // @0x002d8d60 (XML omits the attr)
 
 // File-scope global: multicast event fired on every fruit slice.
-// Binary: file-static in Fruit.cpp, ctor'd in global.ctors (v1.6.1 global.constructors.keyed.to.Fruit.cpp @0x001e206c).
+// Binary: file-static in Fruit.cpp, ctor'd in global.ctors (v1.6.1 _GLOBAL__I_Fruit.cpp @0x001e206c).
 // GOT-resolved address: 0x00332a34.
 // Subscribers: ComboModifier, ExplodyFruitModifier, TimeSinkModifier.
 // DIFFERS: binary accesses via GOT load on every subscribe site; port exposes via
@@ -108,7 +108,7 @@ static int g_PowerFruitCount = 0;
 static bool s_FruitThrowSfxFiredThisFrame = false;
 
 // Base slice-rotation axes — written by global.constructors.keyed.to.Fruit.cpp
-// (v1.6.1 global.constructors.keyed.to.Fruit.cpp @0x001e206c). Values: world unit basis X/Y/Z.
+// (v1.6.1 _GLOBAL__I_Fruit.cpp @0x001e206c). Values: world unit basis X/Y/Z.
 //   0x2D9EE4 -> kSliceBaseAxis[0] = (1,0,0)   slice axis[0]
 //   0x2D9ED8 -> kSliceBaseAxis[1] = (0,1,0)   slice axis[1]
 //   0x3328AC -> kSliceBaseAxis[2] = (0,0,1)   slice axis[2]
@@ -1340,7 +1340,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // Note: ppRef=nullptr is safe (matches binary). All *_sliced templates that
         // exist in the XML have <life>0</life> and at least one set with stop="0" and
         // perSec>0, making them naturally-infinite: maxLifetime<=0 && !EmitterTemplateEnds().
-        // The reap condition (binary @ 0x00115ed8: keep if timer<maxLifetime || maxLifetime<=0
+        // The reap condition (v1.6.1 PSPParticleManager::Update @0x0013cf44: keep if timer<maxLifetime || maxLifetime<=0
         // && !Ends()) never frees them while Fruit holds the pointer. For most fruits the
         // template does not exist at all -> AddEmitter returns nullptr on hash-miss, safe.
         // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001ddc70 / @0x001ddc88: r2=NULL, r3=1.
@@ -3010,7 +3010,7 @@ bool Fruit::SetTrailParticles(unsigned long emitterHash) {
     // Note: ppRef=nullptr is safe (matches binary). All trail templates used here
     // (fruit_flight, scorex2_trail, blue_fruit_flight, dragon_trail, etc.) have
     // <life>0</life> with every set having stop="0" and perSec>0 -> naturally-infinite.
-    // Reap (binary @ 0x00115ed8) never frees them while Fruit holds the pointer.
+    // Reap (v1.6.1 PSPParticleManager::Update @0x0013cf44) never frees them while Fruit holds the pointer.
     // ASM-spec v1.6.1 Fruit::SetTrailParticles @0x001db33c: r3=1 (mov r3,#0x1).
     m_pEmitter1 = pm.AddEmitter((uint32_t)emitterHash, nullptr, /*updateWhenPaused=*/true);
     if (m_pEmitter1) m_pEmitter1->m_Pos = pos;

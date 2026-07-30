@@ -78,7 +78,7 @@ void BonusManager::Init() {
 }
 
 // ---------------------------------------------------------------------------
-// ClearBestBonuses -- Binary @ 0x000feb20
+// v1.6.1 BonusManager::ClearBestBonuses @0x0012eb38
 // ---------------------------------------------------------------------------
 void BonusManager::ClearBestBonuses() {
     m_BestBonuses.clear();
@@ -202,7 +202,7 @@ void BonusManager::AddCombo(int comboLen) {
 }
 
 // ---------------------------------------------------------------------------
-// UnlockPostGameAchievements -- Binary @ 0x0010e1cc
+// v1.6.1 BonusManager::UnlockPostGameAchievements @0x0012eae4
 // ---------------------------------------------------------------------------
 bool BonusManager::UnlockPostGameAchievements() {
     bool any = false;

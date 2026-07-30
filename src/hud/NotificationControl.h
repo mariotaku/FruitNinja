@@ -2,7 +2,7 @@
 #define FN_HUD_NOTIFICATION_CONTROL_H
 
 // NotificationControl — HUD popup for achievement unlock notifications.
-// v1.6.1 Binary @ 0x001a4428 (ctor) / 0x001a3c7c (Update) / 0x001a4860 (Draw).
+// v1.6.1 NotificationControl::{ctor} @ 0x001a4428 / Update @ 0x001a3c7c / Draw @ 0x001a4860.
 // sizeof 0x114 = 276 bytes. operator new(0x114) @ 0x00118104.
 
 #include "HUDControl3d.h"
@@ -13,7 +13,7 @@
 
 struct AchievementInfo;
 
-// v1.6.1 Binary @ 0x001a4428 (ctor) / 0x001a3c7c (Update) / 0x001a4860 (Draw). sizeof=0x114.
+// v1.6.1 NotificationControl::{ctor} @ 0x001a4428 / Update @ 0x001a3c7c / Draw @ 0x001a4860. sizeof=0x114.
 class NotificationControl : public HUDControl3d {
 public:
     // Binary enum name: NotificationType (not NotifType).

@@ -1,5 +1,5 @@
 // NotificationControl — HUD popup for achievement unlock / score notifications.
-// v1.6.1 Binary @ 0x001a4428 (ctor) / 0x001a3c7c (Update) / 0x001a4860 (Draw).
+// v1.6.1 NotificationControl::{ctor} @ 0x001a4428 / Update @ 0x001a3c7c / Draw @ 0x001a4860.
 
 #include "NotificationControl.h"
 #include "hud/HUDLayer.h"
