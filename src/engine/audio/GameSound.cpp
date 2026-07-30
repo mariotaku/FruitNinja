@@ -42,8 +42,23 @@ GameSound::~GameSound() {
     }
 }
 
-// ASM-spec v1.6.1 GameSound::FindFree @0x00151a7c: scans the 32 slots (stride 0x3c)
-// testing isFree at slot+0x08; returns the index, or -1 when the pool is full.
+// ASM-verified: 2026-07-31T00:00Z v1.6.1 GameSound::FindFree @ 0x00151a7c (asm-inspector)
+// First-fit, and ONLY first-fit: scan slots 0..31 (stride 0x3c, isFree at slot+0x08 =
+// this+0x10), return the first index whose isFree is non-zero, else -1. There is no
+// second predicate -- the binary never inspects id, sound, pausedBySystem or volume,
+// and it never steals a busy slot. That last part is load-bearing (see fd9b9d1e): the
+// bomb-fuse block holds a raw MortarSound* for the whole session with no validity
+// guard, which is only safe because a live voice can never be recycled under it.
+//
+// asm-verify reports this as DIVERGE "44.4% LCS (18p vs 11b)". It is COSMETIC. GCC
+// 4.4.1's loop-header copy (-ftree-ch, on at -O2) rotates the loop and duplicates the
+// isFree test, so the port emits a check of slot+0x10 AND slot+0x4c with the cursor
+// advancing 0x78 per turn. That second `ldrb`/`cmp`/`b` is the NEXT slot in the
+// rotated loop, not an extra condition on the same slot. Confirmed by compiling three
+// different source spellings (this for-loop, a pointer do-while, and a while + early
+// return) with the Bada toolchain at -O2: the for-loop and the while both emit the
+// identical 18 instructions, the do-while emits 23. No spelling reproduces the
+// binary's 11, so the divergence is not addressable from the source side.
 int GameSound::FindFree() {
     for (int i = 0; i < MAX_SLOTS; i++) {
         if (m_Slots[i].isFree) return i;

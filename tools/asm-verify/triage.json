@@ -9862,11 +9862,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9GameSound8FindFreeEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1100,
-  "reason": "GameSound method stub/divergence. Score 2280/1000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2280/1000 -> 3030/1100]",
-  "score": 3030,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "341013055a9f6e22",
+  "decided_at": "2026-07-31T00:00Z",
+  "max_score": 11,
+  "reason": "GCC 4.4.1 loop-header copy (-ftree-ch, on at -O2) rotates the 32-slot scan and duplicates the isFree test, so the port emits 18 instructions checking slot+0x10 AND slot+0x4c with the cursor advancing 0x78 per turn, vs the binary's 11-instruction un-rotated do-while over slot+0x10 stride 0x3c. The extra ldrb/cmp/b is the NEXT slot in the rotated loop, NOT a second predicate on the same slot: semantics are identical first-fit (return the first index with isFree != 0, else -1), and neither side reads id, sound, pausedBySystem or volume. Verified 2026-07-31 by compiling three source spellings with the Bada toolchain at -O2 via compile-one.sh: the for-loop and a while+early-return both emit the same 18 instructions, a pointer do-while emits 23. No source spelling reproduces the binary's 11, so this is not addressable from the source side. Supersedes the earlier vague 'GameSound method stub/divergence' ACCEPT-deferred.",
+  "score": 6111,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN9GameSound9IsPlayingEPKc": {
   "decided_at": "2026-06-14T05:55Z",
