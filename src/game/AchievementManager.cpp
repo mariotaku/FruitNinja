@@ -74,7 +74,7 @@ AchievementManager* AchievementManager::GetInstance() {
 // LoadAchievementInfo  (Binary @ 0x00118198)
 //
 // mode-mask parsing uses the shared GameMode.h global ParseModeMask
-// (v1.6.1 @0x00116674 / real body @0x0014f320) -- see GameMode.cpp for the
+// (v1.6.1 ParseModeMask @0x0014f320) -- see GameMode.cpp for the
 // implementation; no local copy here.
 // ---------------------------------------------------------------------------
 

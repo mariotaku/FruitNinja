@@ -494,7 +494,7 @@ float Bomb::GetHeighestBomb() {
     return best;
 }
 
-// v1.6.1 Bomb::GetWait @0x0010d4cc -- thunk returning the chuck/fuse delay countdown.
+// v1.6.1 Bomb::GetWait @0x00155e68 -- thunk returning the chuck/fuse delay countdown.
 float Bomb::GetWait() {
     return m_Countdown;
 }

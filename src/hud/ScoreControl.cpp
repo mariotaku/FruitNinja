@@ -487,7 +487,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
             // produces lineOffset = 0, identical to LEFT (0x00). So this call
             // effectively LEFT-anchors the digit string at (drawX, drawY),
             // which keeps multi-digit scores to the right of the watermelon
-            // icon. See ASM-verified v1.6.1 Mortar::Font::DrawString @0x0010671c.
+            // icon. See ASM-verified v1.6.1 Mortar::Font::DrawString @0x0024c7f0.
             game_work.pFontNumbers->DrawString(scale, 1.0f, 0.0f,
                 buf, _Vector3<float>(drawX, drawY, 0.0f), col, 0x0d);
         }

@@ -86,7 +86,7 @@ inline uint32_t GetModeBitMask(GAME_MODE gameMode) {
     return (uint32_t)(1u << (unsigned)gameMode);
 }
 
-// ParseModeMask -- v1.6.1 @0x00116674.
+// ParseModeMask -- v1.6.1 @0x0014f320.
 // Parses a comma-separated mode-name string ("CLASSIC", "ARCADE,CLASSIC", etc.)
 // into a bitmask of GAME_MODE bits (bit N = mode N).
 // Unknown tokens are ignored. Empty/null -> 0xFFFFFFFF (all modes).

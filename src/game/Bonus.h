@@ -33,7 +33,9 @@ public:
 
     Bonus();                                            // Binary @ 0x0010005c
     Bonus(const Bonus& rhs);                            // Binary @ 0x00110090
-    ~Bonus();                                           // Binary @ 0x0010fa40
+    ~Bonus();                                           // TODO: address unresolved (0x0010fa40's
+                                                         // PLT thunk resolves to std::list<Fruit*>::{dtor},
+                                                         // but Bonus has no such member)
     Bonus& operator=(const Bonus& rhs);
 
     void Parse(TiXmlElement* e); // Binary @ 0x0012f0f8
@@ -73,7 +75,9 @@ public:
     bool                      m_HasAchievement;  // +0x24
 
     BonusType();                                 // Binary @ 0x0010df00
-    BonusType(const BonusType& rhs);             // Binary @ 0x0010df1c
+    BonusType(const BonusType& rhs);             // TODO: address unresolved (0x0010df1c's PLT
+                                                  // thunk resolves to std::list<Bonus>::_M_transfer,
+                                                  // but BonusType holds std::vector<Bonus>)
     ~BonusType();
     BonusType& operator=(const BonusType& rhs);
 

@@ -140,7 +140,9 @@ const uint8_t* PSPParticleManager::FindTemplate(uint32_t hash) const {
     return 0;
 }
 
-// Binary @ 0x001148dc
+// TODO: PSPParticleManager::EmitterExists -- address unresolved (0x001148dc's PLT thunk
+// resolves to the unrelated Mortar::InitPlacementArrayCopy<_Vector3<float>>, not this
+// function's body).
 bool PSPParticleManager::EmitterExists(uint32_t hash) {
     return FindTemplate(hash) != 0;
 }
@@ -1283,7 +1285,7 @@ void PSPParticleManager::Clear() {
     ClearEmitters();
 }
 
-// v1.6.1 PSPParticleManager::ClearEmitters @0x0010e258 (thunk) — drain
+// v1.6.1 PSPParticleManager::ClearEmitters @0x0013c100 (thunk) — drain
 // m_pActiveEmitters to pool; rebuild free-list; zero every template's live-list head.
 // ASM-verified: ClearEmitters zeros per-template head at blob+0x04.
 void PSPParticleManager::ClearEmitters() {

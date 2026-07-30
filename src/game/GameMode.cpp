@@ -23,7 +23,7 @@ unsigned int ParseGameMode(unsigned long nameHash) {
     return 4u;
 }
 
-// ParseModeMask -- v1.6.1 ParseModeMask @0x00116674 (real body @0x0014f320).
+// ParseModeMask -- v1.6.1 ParseModeMask @0x0014f320.
 // Parses a comma-separated mode-name string into a bitmask.
 // Each recognized token ORs in its single mode bit. A non-empty token that
 // matches none of the four names (binary: ParseGameMode returns sentinel 4,

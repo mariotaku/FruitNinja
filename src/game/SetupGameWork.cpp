@@ -16,7 +16,7 @@ void SetupGameWork() {
     // Bump cumulative session count (key confirmed via decompile: "sessions", #335).
     save->AddToTotal("sessions", StringHash("sessions"), 1, true, true);
 
-    // 23 field stores (binary @ 0x0010ed34 disasm-confirmed):
+    // 23 field stores (binary @ 0x0011c06c disasm-confirmed):
 
     // +0x000: set task state to 2 (Game state; binary field is "m_GameMode" in spec,
     //         maps to taskStateIndex in port which is 0=Splash/1=Frontend/2=Game).

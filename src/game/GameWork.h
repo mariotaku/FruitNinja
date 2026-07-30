@@ -180,7 +180,9 @@ struct GameWork {
     uint8_t m_reserved1bc;         // +0x1BC: purpose unknown -- written-never-read (SetupGameWork@0x11c0f0 zeroes it; no reader found via xref)
 
     // +0x1BD..+0x5BC: four contiguous 256-byte state blocks (1024 bytes total).
-    // Binary @ 0x0010b66c (InitialiseData): four back-to-back memset(base+offset, 0, 0x100)
+    // TODO: InitialiseData -- address unresolved (0x0010b66c's PLT thunk resolves to the
+    // unrelated Mortar::CombinedDrawCacheList::Iterator::operator++, not this function).
+    // Four back-to-back memset(base+offset, 0, 0x100)
     // calls zero-init the whole region. All subsequent access is via runtime-computed
     // pointers (base + dynamic index) for keyed item/achievement total arrays populated
     // through ItemManager::LoadItemData / AchievementManager::LoadAchievementInfo.

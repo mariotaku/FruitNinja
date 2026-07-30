@@ -31,7 +31,7 @@ class TiXmlElement;
 class TiXmlDocument;
 
 // TiXmlAttribute — wraps tinyxml2::XMLAttribute* (read-only attribute cursor).
-// v1.6.1 TiXmlAttribute::Parse @0x00102d20
+// v1.6.1 TiXmlAttribute::Parse @0x0022311c
 // DIFFERS: binary TiXmlAttribute is a 32-byte node; port wraps void* handle.
 class TiXmlAttribute {
 public:
@@ -126,7 +126,7 @@ struct TiXmlDocumentView {};
 
 // TiXmlDocument — owns the underlying tinyxml2::XMLDocument.
 // v1.6.1 TiXmlDocument ctor @0x00110fc4
-// v1.6.1 TiXmlDocument::LoadFile @0x001157a4
+// v1.6.1 TiXmlDocument::LoadFile @0x00220730
 // DIFFERS: binary TiXmlDocument is an 80-byte linked node; port owns a
 // heap-allocated tinyxml2::XMLDocument stored as void* (new in ctor, delete in dtor).
 //

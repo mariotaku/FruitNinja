@@ -96,7 +96,7 @@ Mortar::SmartPtr<Mortar::Texture> FruitRay::RayTexture;
 //   m            = m * m_WorldMatrix
 //   m.GlobalTranslate44(pos)                                (Entity+0x10)
 // TODO: asm-inspect the Vec3-taking Scale44(Vec3*, Matrix44* out) overload
-// (binary @0x00102ec4 and siblings resolve to PLT thunks in the current
+// (binary @0x0015f518 and siblings resolve to PLT thunks in the current
 // Ghidra view, not an inline body) -- port uses Matrix44::MakeScale(scaledVec)
 // as the byte-faithful equivalent (diag(sx,sy,sz,1) from a Vec3), matching
 // every other MakeScale(Vec3) call site in the port, but the exact thunk

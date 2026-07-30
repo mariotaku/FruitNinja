@@ -77,9 +77,11 @@ const char* Game::GetPlayhavenToken() { return "FIX!"; }
 // slot 12 v1.6.1 Game::CreateFileSystems @0x00120704 — sets up FileSystem_Direct; args unused (root path from rodata)
 void Game::CreateFileSystems(const char* a, const char* b) {
     (void)a; (void)b;
-    // Binary @ 0x0010dca8: instantiate FileSystem_Direct(0x14 bytes),
-    // call Initialise(g_DataRoot, /*writable*/false), register with
-    // FileManager::AddSystem(fs, 0, 0). Port resolves data root via cwd
+    // TODO: Game::CreateFileSystems -- address unresolved (0x0010dca8 was cited for the
+    // inner FileSystem_Direct construction, but its PLT thunk resolves to an unrelated
+    // std::vector<Emmiter>::_M_allocate_and_copy; not this function's body): instantiate
+    // FileSystem_Direct(0x14 bytes), call Initialise(g_DataRoot, /*writable*/false),
+    // register with FileManager::AddSystem(fs, 0, 0). Port resolves data root via cwd
     // (empty string -> SDL backend cwd handling), matching binary intent.
     Mortar::FileSystem_Direct* fs = new Mortar::FileSystem_Direct();
     fs->Initialise(/*root*/ "", /*writable*/ false);

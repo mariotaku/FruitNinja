@@ -473,10 +473,12 @@ public:
 
     void Clear();
 
-    // v1.6.1 PSPParticleManager::ClearEmitters @0x0010e258 (thunk)
+    // v1.6.1 PSPParticleManager::ClearEmitters @0x0013c100 (thunk)
     void ClearEmitters();
 
-    // Binary @ 0x001148dc
+    // TODO: PSPParticleManager::EmitterExists -- address unresolved (0x001148dc's PLT thunk
+    // resolves to the unrelated Mortar::InitPlacementArrayCopy<_Vector3<float>>, not this
+    // function's body).
     bool EmitterExists(uint32_t hash);
 
     // v1.6.1 PSPEmitterTemplate::Ends @0x00114884 -- true if every set has a

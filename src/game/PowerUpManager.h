@@ -64,7 +64,7 @@ public:
     // v1.6.1 PowerUpManager::SetDefaults @0x0013feb8
     void SetDefaults();
 
-    // v1.6.1 PowerUpManager::ClearScoreMultipliers @0x00114900
+    // v1.6.1 PowerUpManager::ClearScoreMultipliers @0x001437f0
     void ClearScoreMultipliers();
 
     // v1.6.1 PowerUpManager::Reset @ 0x00142e08

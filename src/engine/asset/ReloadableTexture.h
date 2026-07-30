@@ -106,7 +106,7 @@ public:
     // v1.6.1 ReloadableTexture::Unload @0x0014f878: m_Texture.SetNull().
     void Unload() { m_Texture.SetNull(); }
 
-    // v1.6.1 ReloadableTexture::GetTexture @0x0011344c: return &m_Texture.
+    // v1.6.1 ReloadableTexture::GetTexture @0x0014a670: return &m_Texture.
     Mortar::SmartPtr<Mortar::Texture>* GetTexture() { return &m_Texture; }
 
     // Bind this texture for rendering (equivalent to Texture::Set()).

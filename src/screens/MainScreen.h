@@ -180,7 +180,7 @@ public:
     Mortar::SmartPtr<Mortar::Texture> m_TexSoundOn;   // +0xd4  sound.tex
     Mortar::SmartPtr<Mortar::Texture> m_TexSoundOff;  // +0xd8  sound_cross.tex
 
-    // +0xdc  SmartPtr<Model> m_Model (only Model SmartPtr ctor in binary @ 0x001158c4)
+    // +0xdc  SmartPtr<Model> m_Model (only Model SmartPtr ctor in binary @ 0x0019a4ec)
     Mortar::SmartPtr<Mortar::Model> m_Model;          // +0xdc
 
     // +0xe0  BakedStringBox* m_pSliceInstrBox (new(0xc8))
@@ -283,7 +283,7 @@ private:
     void CreateQuitButton();
     void RemoveButton(MenuButton*& btn);
 
-    // v1.6.1 MainScreen::DrawLoadingSymbol @ 0x001154d4
+    // v1.6.1 MainScreen::DrawLoadingSymbol @ 0x00198fd4
     // 8-segment radial loading spinner. Binary sig takes non-const float* (unused for
     // writes; port only reads through it, but matches binary ABI for symbol-diff pairing).
     void DrawLoadingSymbol(float* hudScale);

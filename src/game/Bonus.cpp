@@ -55,7 +55,9 @@ Bonus::Bonus(const Bonus& rhs)
     memcpy(m_DisplayName,  rhs.m_DisplayName,  sizeof(m_DisplayName));
 }
 
-// Binary @ 0x0010fa40
+// TODO: Bonus::~Bonus -- address unresolved (0x0010fa40's PLT thunk resolves to
+// std::list<Fruit*>::{dtor}, but Bonus has no std::list<Fruit*> member; not this
+// function's body).
 Bonus::~Bonus() {
     // Containers + SmartPtr release themselves.
 }
@@ -264,7 +266,9 @@ BonusType::BonusType()
 {
 }
 
-// Binary @ 0x0010df1c
+// TODO: BonusType::BonusType(const BonusType&) -- address unresolved (0x0010df1c's PLT
+// thunk resolves to std::list<Bonus>::_M_transfer, but BonusType holds std::vector<Bonus>,
+// not std::list; not this function's body).
 BonusType::BonusType(const BonusType& rhs)
     : m_RequiredHashes(rhs.m_RequiredHashes)
     , m_Bonuses(rhs.m_Bonuses)
