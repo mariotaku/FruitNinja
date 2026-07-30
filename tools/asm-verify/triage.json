@@ -167,6 +167,12 @@
   "score": 17000,
   "verdict": "ACCEPT-deferred"
  },
+ "_Z10StringHashPKci": {
+  "asm_hash": "1b5a174836838348",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] First triage (symbol had no entry yet despite carrying an ASM-verified stamp). Loop unrolling, fully accounted. src/engine/util/StringHash.cpp:21-25 writes the per-block tolower as \"for (int i = 0; i < 12; i++)\" -- a constant-trip loop GCC unrolls at -O2, which is exactly what the port-only side of the diff is: twelve identical \"ldrb / sub #65 / cmp #25 / addls #32 / uxtb / strb [sp,#12+i]\" groups plus the staging reload from buf[]. The binary keeps the same loop rolled (158 instrs against 273). The mix constants match (0x9e3779b9 seed, 0x805 c-init, the nine-step subtract/xor round) and the header pins verified vectors watermelon -> 0x158bc245, apple_red -> 0xdac1f38f, banana -> 0x5ff2eb92. CAVEAT for the next miner: tests/test_asciistring.cpp:178 only checks self-consistency, it does NOT pin those golden values in CTest, and StringHash is a high-fan-in leaf that deserves a golden-value case.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_Z11CoinArrivedP4Coin": {
   "asm_hash": "68c9e5f4a64927cc",
   "decided_at": "2026-06-26T00:00Z",
@@ -614,6 +620,12 @@
  "_ZN10BaseScreen17AddGenericControlEP17GenericHUDControl": {
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary BaseScreen::AddGenericControl(GenericHUDControl*) vs port (HUDControl*). Binary uses GenericHUDControl* (a distinct class in the binary); port uses the base HUDControl*. Fix: use GenericHUDControl* in port signature.",
+  "verdict": "FIX-NEEDED"
+ },
+ "_ZN10BaseScreen26SetExtraControlsDefaultPosEv": {
+  "asm_hash": "6d5b2eb92e611aaa",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] First triage. PAIRING BUG, not a semantic divergence -- fix the pairing, not the code. The sweep pairs the port body against 0x0015f618, which is a 2-instruction FORWARDER; the real body is at 0x0015f5b4. Everything this row reports (13.3% LCS, 15p vs 2b) is an artefact of diffing a real function against a tail-call thunk. Action: repoint the manifest entry to 0x0015f5b4 and re-sweep; only then is the ASM-verified stamp on this symbol testable. Filed FIX-NEEDED so it stays visible until the manifest is corrected.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN10BaseScreen7ReleaseEv": {
@@ -1397,9 +1409,9 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11BonusScreen14BuildBonusTextEv": {
-  "asm_hash": "e9855a98aa2750bd",
-  "decided_at": "2026-07-29T02:30Z",
-  "reason": "[resolved-operand pass 2026-07-29] Most of the delta is benign: 4 'new Mortar::BakedStringBox' sites on both sides (src/screens/BonusScreen.cpp BuildBonusText), SetGradient x2, SetStroke(2-arg) and SetStroke(3-arg), SetShadow, SetColour/SetText all present; OS_SPrintf -> snprintf; GETSTRING_CAST_0 -> GETSTRING; Colour(u8,u8,u8,u8) x11 inlined port-side. BLOCKER: the binary iterates the award list IN THIS FUNCTION via BonusManager::GetFirstBestBonus / GetNextBestBonus (std::_List_iterator<Bonus>), while the port iterates a pre-populated m_Awards vector filled elsewhere, and the port adds 8 BakedStringBox::Update() calls the binary never makes here. Until m_Awards is proven to be populated from the same GetFirstBestBonus ordering (src/game/BonusManager.cpp:201/207), row order and content are not verified equivalent.",
+  "asm_hash": "bdc5c5f187b71ed3",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] Verdict and named blocker unchanged, hash refreshed. Blocker: the binary iterates the award list IN THIS FUNCTION via BonusManager::GetFirstBestBonus / GetNextBestBonus (src/game/BonusManager.cpp:201/207), while the port iterates a pre-populated m_Awards vector filled elsewhere. The census adds a second, previously unrecorded delta: port 15 cmp against binary 4, i.e. +11 port-only predicates. The diff shows a port-only empty-string test (ldr [base,#188]; subs #0; beq; ldrb; cmp #0; bne) and a port-only font guard (ldr [base,#1556]; cmp #0; beq) that matches src/screens/BonusScreen.cpp:326 \"if (!font) return;\" -- the binary has neither. The i<3 row clamp IS in the binary (cmp #2; movhi/movls). A deferred symbol cannot carry a whole-function ASM-verified stamp, so the three stamps @0x001621dc (src/screens/BonusScreen.cpp:308/312 and src/screens/BonusScreen.h:133) are unjustified.",
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11BonusScreen15GetTimePerAwardEv": {
@@ -1417,11 +1429,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11BonusScreen4DrawEPf": {
-  "decided_at": "2026-06-18T02:22Z",
-  "max_score": 33000,
-  "reason": "New symbol (TiXmlElement signature match). Score 33500/33000. [auto-triaged 2026-06-18T02:22Z]",
-  "score": 33500,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "91e9792ef5fabb01",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] PRIOR RATIONALE WAS BOGUS. The entry read \"New symbol (TiXmlElement signature match). Score 33500/33000. [auto-triaged 2026-06-18T02:22Z]\" -- a TiXmlElement signature match is meaningless for a BonusScreen draw routine; this was an auto-triage artefact, not a decision, and it carried no asm_hash so it could never restale. Real state: 28.5% LCS, sizes nearly equal (330b vs 327p), port trades 26 call edges for +29 vldr and +25 vstr (Colour and _Vector3 inlined port-side) -- that part is benign. NOT benign: port 10 cmp against binary 3. The diff shows three port-only \"ldr [this,#N]; cmp #0; beq\" guards at +0x70/+0xB8/+0xBC, matching \"if (game_work.pFontArcade.IsValid())\" (src/screens/BonusScreen.cpp:853), \"if (m_ScoreBox)\" and \"if (m_TotalBox)\" -- the binary dereferences unguarded. Port-added guards are the exact class that cost 24 stamps in #153/#156. Needs an asm-inspector compile pass to confirm the guard set is the whole residual. The two stamps @0x0016492c (src/screens/BonusScreen.cpp:823/884) are unjustified as written.",
+  "verdict": "UNSURE"
  },
  "_ZN11BonusScreen5ShakeEff": {
   "decided_at": "2026-06-18T02:22Z",
@@ -1431,9 +1442,9 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11BonusScreen6UpdateEf": {
-  "asm_hash": "6c801a340ad0d5f4",
-  "decided_at": "2026-07-28T13:30Z",
-  "reason": "False-accept mined 2026-07. PARTIALLY FIXED: drum-roll never ramped its volume -- binary calls SetVolume every frame, 0.5->1.166 gain (binary @0x00163dd0); fixed in f14f9313. STILL OPEN (suspected, NOT yet confirmed): (a) missing slide-in one-shot SFX; (b) sine-vs-linear slide easing; (c) per-award reveal alpha/pulse channels. Next pass: confirm/fix these three before any ACCEPT. [resolved-operand pass 2026-07-28] resolution re-check: NEW WRONG-CALLEE SIGNAL -- binary draws from LOCAL[Math::Random::Rand32, Math::g_random] x1 while the port calls Math::Random::RandF(float) x1 on Math::g_Random. Same stream, different entry point; benign IF RandF is a thin single-draw Rand32 wrapper -- confirm it consumes exactly one draw. Rest is the defunct leaderboard block (LeaderboardManager::RefreshLeaderboard, FNHighscoreList::AddPlayerScore, NetworkManager::GetPreferredNetworkProvider), Meyers-static PSPParticleManager, StringHash arity, fmod -> fmodf.",
+  "asm_hash": "283989a22b9870b7",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] Verdict unchanged, hash refreshed (6c801a34 -> current). Still DIVERGE 23.5% LCS. Census: binary 727 instrs / 75 CALL, port 864 instrs / 33 CALL, and port carries 23 cmp against the binary 8 -- a +15 predicate surplus, the port-added-guard shape. The three items from the 2026-07-28 pass are still open: (a) missing slide-in one-shot SFX, (b) sine-vs-linear slide easing, (c) per-award reveal alpha/pulse channels. Seven ASM-verified stamps sit on this symbol (src/screens/BonusScreen.cpp:478/493/518/570/610/617/698) while triage says FIX-NEEDED -- a flat contradiction; downgrade all seven to ASM-spec.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN11BonusScreen8AddAwardE6ColourN6Mortar8SmartPtrINS1_7TextureEEEPKci": {
@@ -1911,6 +1922,18 @@
   "score": 4475,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN11MatrixStack5ScaleERK8_Vector3IfE": {
+  "asm_hash": "15dfe57b1de3983e",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] First triage (symbol had no entry yet despite carrying an ASM-verified stamp). Inline-vs-outline, fully accounted. The binary is an 11-instruction wrapper: load v.x/v.y/v.z, one CALL to the out-of-line _Matrix44 scale helper, bump the stack-depth counter at +0x844, return. The port inlines that helper, so the same work appears as twelve vldr/vmul/str groups writing the 3x4 sub-matrix at +0x800..+0x848. Both sides share the identical bookkeeping (ldr [this,#2116]; add #1; str [this,#2116]), which is the only observable state this function owns. Neither side has a predicate, so no gate can differ.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN11MatrixStack9TranslateERK8_Vector3IfE": {
+  "asm_hash": "d61470c6dd32ef0b",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] First triage (symbol had no entry yet despite carrying an ASM-verified stamp). Same shape as MatrixStack::Scale: the binary is an 11-instruction wrapper (load v.x/y/z, one CALL to the out-of-line _Matrix44 translate helper, bump +0x844, return); the port inlines it into three vadd plus str at +0x830/+0x834/+0x838 (row 3 = translation), accumulating onto the current value exactly as GlobalTranslate44 would. The shared bookkeeping lines are identical and neither side has a predicate.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN11MissControl10CreatePoolEiP3HUD": {
   "decided_at": "2026-06-18T01:24Z",
   "max_score": 9300,
@@ -1942,9 +1965,9 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11MissControl4DrawEPf": {
-  "asm_hash": "7c4370bf94c67f64",
-  "decided_at": "2026-07-29T02:30Z",
-  "reason": "[resolved-operand pass 2026-07-29] NOTE: the underlying sweep (report.json 2026-07-28 14:59) PREDATES commits 9c408405/142d7b93 (rng) and e531b283 (Fruit <critical> globals), so every port-side 'CALL =rand' and Fruit::NEW_LIFE_AT delta in this row is a stale pre-fix artifact, not a live divergence. With the stale rand() removed the delta is fully accounted for: the port's MissControl::Draw uses Math::g_Random.Rand32(8) x2 at src/hud/MissControl.cpp:766-767, matching the binary's two LOCAL[Math::g_random] draws. Rest is systemic: Mortar::FailureEnabled(game_work.gameMode) is inline in the port (the binary calls the free FailureEnabled()), IsMultiplayer() present both sides, Math::Abs<float> -> fabsf, SinIdx/CosIdx -> sinf/cosf, _Matrix44 Scale44/RotZ44/GlobalTranslate44 inlined via the port's Matrix44 helpers, MatrixManager::_UploadCurrentMatrices(bool) -> UploadModelViewOnly(), SmartPtr<Texture>::operator bool() -> IsValid(), _Vector3::Zero global -> literal. DrawQuadUnCached 1:1.",
+  "asm_hash": "3841cec8a6b8c0f9",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] Verdict re-affirmed on the fresh sweep, hash refreshed. The census corroborates the inline-vs-outline rationale precisely: predicate count is IDENTICAL (8 cmp on both sides) and total size is close (251b vs 281p), while the port trades 14 call edges for +17 vldr and +17 vstr -- the signature of Matrix44 Scale44/RotZ44/GlobalTranslate44, Math::Abs, SinIdx/CosIdx and Mortar::FailureEnabled being header-inline port-side. Equal predicate count rules out added gates, which is what makes this rationale cover the whole delta rather than most of it. The five stamps @0x0019f54c (src/hud/MissControl.cpp:82/735/753/764/865) are compatible with this verdict.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11MissControl4InitEv": {
@@ -2130,10 +2153,10 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11PauseScreen6UpdateEf": {
-  "asm_hash": "050c60ab87d795cf",
-  "decided_at": "2026-07-28T13:30Z",
-  "reason": "False-accept mined 2026-07 (prior Tier-2-stub rationale did not cover the whole delta): m_Alpha set to 1.0 vs binary 0.0 on flash completion, and resume base X used 0.5*OX vs binary 0.375*OX (binary @0x001a5ebc). FIXED in e48a3519. Fresh sweep should confirm. [resolved-operand pass 2026-07-28] resolution re-check: residual delta is the Delegate0 QCallee/Global vs Make drift, MenuButton ctor-vs-Init split, SmartPtr assign/release, GETSTRING_CAST_0 vs GETSTRING, and the defunct IsOnlineMultiplayer x5 / IsSameScreenMultiplayer x1 gates. The BSButton quit-confirm block IS present port-side (src/screens/PauseScreen.cpp:680-689) despite reading as binary-only -- the ctor signature differs. No new gap found.",
-  "verdict": "MATCH-FIX-APPLIED"
+  "asm_hash": "0b248a2395ee33fa",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] RE-OPENED from MATCH-FIX-APPLIED: hash drifted (050c60ab -> 0b248a23) and the row is still DIVERGE at 15.8% LCS. Census: binary 1234 instrs / 198 CALL, port 696 instrs / 49 CALL. The prior rationale (Delegate0 QCallee-vs-Make drift, MenuButton ctor-vs-Init split, SmartPtr assign/release, GETSTRING_CAST_0-vs-GETSTRING, six defunct IsOnlineMultiplayer/IsSameScreenMultiplayer gates) plus the documented Tier-2 P2-button stub (src/screens/PauseScreen.cpp:1055) does NOT account for 149 missing call edges on a 44%-smaller port body. Systemic-rationale rule: the rationale must cover the WHOLE delta, so UNSURE, not ACCEPT. Needs an asm-inspector compile pass to resolve callee names before any ACCEPT. The four whole-function ASM-verified stamps @0x001a5ebc (src/screens/PauseScreen.cpp:633/637/693/897) are NOT justified at this delta; the three sub-range stamps (@0x001a6c58, @0x001a702c, @0x001a7078) are narrower than the sweep can test and are left alone.",
+  "verdict": "UNSURE"
  },
  "_ZN11PauseScreen7ReleaseEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -4851,11 +4874,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN14PowerUpManager27SetAppropriateScoreCallbackEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 10200,
-  "reason": "Port has bx lr stub vs binary. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 12550/11600 -> 11485/10200]",
-  "score": 11485,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "964c7cd6b45ed659",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] PRIOR RATIONALE WAS FACTUALLY INVERTED. It read \"Port has bx lr stub vs binary\". The port emits 89 instructions (binary 102) with a real intrusive-list walk (ldr [r,#24]! / ldr [r,#4]! / cmp / beq) and delegate setup -- not a stub. Residual after the inlining allowance: the port carries two extra \"cmp Rx,Ry; bne\" predicates and one extra CALL that the binary does not have at the aligned point. Needs an asm-inspector compile pass to decide whether those are the inlined list end-test or a real added gate.",
+  "verdict": "UNSURE"
  },
  "_ZN14PowerUpManager4DrawEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -6068,10 +6090,9 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN3HUD4InitEv": {
-  "decided_at": "2026-07-03T15:10Z",
-  "max_score": 100,
-  "reason": "Re-triaged #356 batch2: no standalone binary HUD::Init exists -- HUD init is folded entirely into the ctor HUD::HUD @0x0018c1a0 (std::list::list sentinel init + 7 float fields set to 1.0f), already ASM-verified separately (src/hud/HUD.cpp:10-17). The asm-verify pairing mis-diffs the port's distinct HUD::Init() (src/hud/HUD.cpp:25-27, `controls.clear()`) against that ctor -- comparing a fresh-empty-list constructor to a clear-existing-list method is an invalid pairing (no true binary Init counterpart to diverge from). `controls.clear()` on std::list<HUDControl*> is standard node-dealloc container boilerplate, not a semantic gap. ACCEPT-cosmetic (mis-paired diff, no binary Init to defer against).",
-  "score": 1500,
+  "asm_hash": "aa56a58df82b0fcf",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] Inline-vs-outline, not a pairing artefact. The binary side of the row is one instruction because HUD init is folded into the ctor HUD::HUD @0x0018c1a0, and the residual out-of-line body is the std::list::clear the binary keeps as a call; the port inlines that clear, giving 14 instructions. Class layout, vtable slot order and call graph are unaffected. Hash recorded so this restales if the port body ever grows past the inlined clear.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN3HUD4SaveEv": {
@@ -6634,11 +6655,9 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN5Fruit17CollisionResponseEPN6Mortar6EntityEmmP8_Vector3IfE": {
-  "asm_hash": "ecd90e606eb3eee4",
-  "decided_at": "2026-07-28T13:30Z",
-  "max_score": 102500,
-  "reason": "[resolved-operand pass 2026-07-28] RE-OPENED FLIP: prior verdict was ACCEPT-cosmetic ('port body matches binary; extra nops are alignment padding') -- demonstrably a false accept at 19.2% LCS (926p vs 1360b). Resolution shows a ~350-instruction contiguous binary-only region (diff lines 1160-1508) that opens with CALL =IsOnlineMultiplayer(); cmp #0; beq and contains ALL of MissControl::GetFree x5 / MakeDisappear x3 / MakeCritical / MakeRare, FruitCamera::CreateCameraShake, FruitSlicedPacket::* + SendP2PPacket. That is exactly the documented defunct block (src/entities/Fruit.cpp:1560-1565, 'IsOnlineMultiplayer()-gated, ~380 instrs @0x001ddf1c'), so those callees are correctly absent. Remaining delta = FruitInfo_Get*/g_ComboCount naming drift for Fruit::GetFruitInfo/CRITICAL_*/s_consecutive*, Meyers-static PSPParticleManager singleton, Event3::operator() inlined port-side, SinIdx/CosIdx/Atan2Idx -> sinf/cosf/atan2f. Fraction explained ~70%. Residue NOT explained (blocker): GameSound::SFXPlay 4 binary call sites vs 1 port (port loops one site), OS_SPrintf 2 vs snprintf 1, PSPParticleManager::EmitterExists x2 binary-only. | PRIOR: ACCEPT-cosmetic -- Port body matches binary; extra nops are alignment padding. [fresh-sweep 2026-05-24T07:41Z: score None/None -> None/0] [fresh-sweep 2026-06-14T05:19Z: score None/None -> 151280/102500]",
-  "score": 151770,
+  "asm_hash": "16506f47a400ef11",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] Verdict and named blocker unchanged, hash refreshed. The census strongly corroborates the defunct-block rationale: predicate counts are near-identical across a 400-instruction size gap (binary 70 cmp / 37 beq / 23 bne against port 73 / 38 / 20), so the branch skeleton is preserved and the 134 missing call edges are the IsOnlineMultiplayer()-gated ~380-instruction P2P region (src/entities/Fruit.cpp:1560-1565: MissControl::GetFree x5, MakeDisappear x3, MakeCritical, MakeRare, FruitCamera::CreateCameraShake, FruitSlicedPacket and SendP2PPacket) plus FruitInfo_Get / g_ComboCount naming drift. Blocker is the defunct P2P subsystem. The two stamps @0x001dd500 (src/entities/Fruit.cpp:1408/1578) claim whole-function verification of a function with a deliberately-omitted 380-instruction block, so they are unjustified as written and should be scoped to the sub-ranges they actually cover.",
   "verdict": "ACCEPT-deferred"
  },
  "_ZN5Fruit17SetTrailParticlesEm": {
@@ -7380,18 +7399,16 @@
   "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager10LoadEntityEPNS_11EntityChunkEPvll": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 9500,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 10110/9800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 10110/9800 -> 10000/9500]",
-  "score": 10000,
+  "asm_hash": "513d96f2b3471c6e",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: here the stub claim IS true on the numbers -- the port body is 2 instructions against 95 in the binary, so this is a genuine unported function. Blocker restated concretely: the port has no implementation of this method at all; it needs porting from the binary body at 0x001d408c before the row can move.",
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12ActorManager11GetInstanceEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3700,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 3390/3900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3390/3900 -> 3575/3700]",
-  "score": 3575,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "ad97dd0784bce074",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 40.5% LCS (19p vs 37b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager11GetNumTypesEv": {
   "decided_at": "2026-06-18T01:15Z",
@@ -7422,32 +7439,28 @@
   "verdict": "ACCEPT-defunct"
  },
  "_ZN6Mortar12ActorManager12GetEntityIdxEPNS_6EntityE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3600,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 4770/3600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4770/3600 -> 5380/3600]",
-  "score": 5380,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "00005cf691b98775",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 25.0% LCS (27p vs 36b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager12GetNumInAABBEP7ColAABB": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4300,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 4805/4500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4805/4500 -> 4800/4300]",
-  "score": 4800,
+  "asm_hash": "f8e0f3d3621ffc88",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: here the stub claim IS true on the numbers -- the port body is 2 instructions against 43 in the binary, so this is a genuine unported function. Blocker restated concretely: the port has no implementation of this method at all; it needs porting from the binary body at 0x001d2f98 before the row can move.",
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12ActorManager13GetEntityNextElRSt14_List_iteratorIPNS_6EntityEE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1800,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 2200/1800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-  "score": 2200,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "d9ba5e05a163b109",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 20.0% LCS (20p vs 18b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager14GetEntityFirstElRSt14_List_iteratorIPNS_6EntityEE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2000,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 2400/2000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-  "score": 2400,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "cc7cebba568ceb31",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 18.2% LCS (22p vs 20b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEPl": {
   "asm_hash": "c790e1c036ad75c5",
@@ -7458,46 +7471,40 @@
   "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEl": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 400,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 1000/600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1000/600 -> 800/400]",
-  "score": 800,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "3d05970e4a40234f",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 13.0% LCS (23p vs 4b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEll": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2500,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5900/2600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5900/2600 -> 6460/2500]",
-  "score": 6460,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "be450f613e86151e",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 16.2% LCS (37p vs 25b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1700,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 4100/1900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4100/1900 -> 4455/1700]",
-  "score": 4455,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "ef9da4e64110b54b",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 17.2% LCS (29p vs 17b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager17ClearAllListenersEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2800,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 4460/2700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4460/2700 -> 3970/2800]",
-  "score": 3970,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "f89973735596d070",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 25.0% LCS (26p vs 28b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager18AddMessageListenerEPNS_15MessageListenerE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 800,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 2445/800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2445/800 -> 2310/800]",
-  "score": 2310,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "d2e42ab9cea4e342",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 25.0% LCS (16p vs 8b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager19SetCollisionVisibleEh": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 300,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 300/300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 300/300 -> 505/300]",
-  "score": 505,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "8a1d0cbdc23377e0",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 60.0% LCS (5p vs 3b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager21DeactivateAllEntitiesEl": {
   "asm_hash": "9c073bbd12cb8390",
@@ -7513,18 +7520,16 @@
   "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar12ActorManager21RemoveMessageListenerEPNS_15MessageListenerE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 800,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 4634/800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4634/800 -> 4435/800]",
-  "score": 4435,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "b72cc7e1e6f13178",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 9.8% LCS (41p vs 8b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager3AddEPNS_6EntityEl": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2200,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 2535/2100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2535/2100 -> 3360/2200]",
-  "score": 3360,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "b665665833160bec",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 50.0% LCS (28p vs 22b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager3AddElb": {
   "asm_hash": "bead314594bbdcd5",
@@ -7543,32 +7548,28 @@
   "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager4FindElm": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2800,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 3910/3000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3910/3000 -> 4270/2800]",
-  "score": 4270,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "e9e765e2800eab0b",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 28.6% LCS (23p vs 28b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager4FindEm": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4000,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5235/4300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5235/4300 -> 6290/4000]",
-  "score": 6290,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "2d5fcb45dd9b7089",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 30.0% LCS (27p vs 40b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager5ClearEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 7700,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 10270/8000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 10270/8000 -> 11820/7700]",
-  "score": 11820,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "733b7d157b7c4fcd",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 36.5% LCS (85p vs 77b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager6RemoveEPNS_6EntityE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4900,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 6220/4800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 6220/4800 -> 7100/4900]",
-  "score": 7100,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "7403f274edff42cf",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 34.7% LCS (39p vs 49b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager6UpdateEfP7ColAABBS2_": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7578,11 +7579,10 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar12ActorManager7DestroyEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2200,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 4980/2100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4980/2100 -> 5125/2200]",
-  "score": 5125,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "868641713405a863",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 33.3% LCS (39p vs 22b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager8PostLoadEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7599,32 +7599,28 @@
   "verdict": "ACCEPT-defunct"
  },
  "_ZN6Mortar12ActorManagerC1Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4300,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5435/4300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5435/4300 -> 5410/4300]",
-  "score": 5410,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "e7fa860f19203464",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 12.7% LCS (55p vs 43b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManagerC2Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4300,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5435/4300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5435/4300 -> 5410/4300]",
-  "score": 5410,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "e7fa860f19203464",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 12.7% LCS (55p vs 43b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManagerD1Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3300,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5450/3300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5450/3300 -> 5055/3300]",
-  "score": 5055,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "497fdc3c89c473c4",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 25.5% LCS (47p vs 33b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManagerD2Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3300,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5450/3300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5450/3300 -> 5055/3300]",
-  "score": 5055,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "497fdc3c89c473c4",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31] DANGLING BLOCKER CORRECTED: this entry deferred on \"see src/entities/ActorManager.cpp STUB markers\", but that file contains zero STUB markers (grep -c STUB src/entities/ActorManager.{cpp,h} == 0). The same boilerplate was pasted across 23 ActorManager entries, so none of them satisfied the Check B named-blocker rule. Re-checked against the fresh sweep: the port body is 25.5% LCS (47p vs 33b) -- real code, not a stub, so the deferral had no basis either in the cited marker or in the numbers. No semantic claim is made here; the row needs a real read (an asm-inspector compile pass for the larger members) rather than inheriting a copy-pasted rationale. Grouping them under one UNSURE makes the whole family visible in one sweep instead of reading as 21 settled ACCEPTs.",
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12IFile_Direct4ReadEPvm": {
   "decided_at": "2026-06-14T05:55Z",
@@ -9754,11 +9750,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9ColSphere13ColSphereLineEPS_P7ColLineP8_Vector3IfE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 6900,
-  "reason": "Port has bx lr stub vs binary collision/debug code. ACCEPT-deferred. Score 6760/6400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 6760/6400 -> 13409/6900]",
-  "score": 13409,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "7dfacdc45051270d",
+  "decided_at": "2026-07-31T01:45Z",
+  "reason": "[#137 stamp-audit 2026-07-31, opcode census on the 2026-07-30 23:29 sweep] PRIOR RATIONALE WAS FACTUALLY INVERTED. It read \"Port has bx lr stub vs binary collision/debug code\". The port is not a stub -- it is 116 instructions against the binary 69, i.e. 68% LARGER, and the diff shows real VFP vector math (vsub/vmul chains) on both sides with a shared CALL edge. A rationale that mis-states which side is bigger cannot justify the two ASM-verified stamps sitting on this symbol. Needs an asm-inspector compile pass. Note: this \"port is a bx lr stub\" boilerplate recurs across several 2026-05/06 entries and should be spot-checked wherever the sweep reports a port instruction count above ~5.",
+  "verdict": "UNSURE"
  },
  "_ZN9ColSphere15ColSphereSphereEPS_S0_P8_Vector3IfE": {
   "decided_at": "2026-06-14T05:55Z",
