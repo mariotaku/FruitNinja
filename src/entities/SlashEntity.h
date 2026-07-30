@@ -518,7 +518,8 @@ public:
     // ASM-spec v1.6.1 SlashEntity::TouchMoveY @0x001e77b4 -- writes pos.y.
     bool TouchMoveY(InputEvent* event);
 
-    // Binary @ 0x17D2E4 -- UpdateTouchDown: trail builder, forwards to OnTouchActive.
+    // v1.6.1 SlashEntity::UpdateTouchDown @0x001e9f08 (PLT thunk @0x00115da4) --
+    // trail builder, forwards to OnTouchActive.
     void UpdateTouchDown(InputEvent* event);
 
     // Port-only: explicit touch-release handler (SDL FINGERUP/MOUSEBUTTONUP).

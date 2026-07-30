@@ -250,7 +250,7 @@ MainScreen::~MainScreen() {
     Release();
 }
 
-// v1.6.1 MainScreen::Init @0x0014ac80
+// v1.6.1 MainScreen::Init @0x00195964: calls vtable slot 4 (Reset).
 void MainScreen::Init() {
     Reset();
 }

@@ -4746,7 +4746,7 @@
  "_ZN14PowerUpManager11SetDefaultsEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 3200,
-  "reason": "PowerUpManager::SetDefaults — binary inlines 6x vstr s16,[r3,#offset] for SlashEntity mod-scale fields; port calls SlashEntity::ResetModScales() which does exactly those 6 stores. Semantically identical. Remaining diff is PIC anchor + register choice. Score 3315/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3315/3400 -> 2860/3200]",
+  "reason": "PowerUpManager::SetDefaults — binary inlines 6x vstr s16,[r3,#offset] storing 1.0f into pHud->scales[0..5]; port (src/game/PowerUpManager.cpp:85-101, ASM-verified 2026-06-19) does the same 6 direct `pHud->scales[N] = 1.0f` stores inline. [2026-07-30: corrected stale rationale -- it previously claimed the port called a `SlashEntity::ResetModScales()` helper; no such call exists in the port body, and that symbol was a port invention with no binary counterpart, deleted from src/ earlier today. The two are semantically identical regardless; remaining diff is PIC anchor + register choice.] Score 3315/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3315/3400 -> 2860/3200]",
   "score": 2860,
   "verdict": "ACCEPT-cosmetic"
  },

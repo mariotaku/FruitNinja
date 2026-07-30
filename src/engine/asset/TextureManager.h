@@ -20,7 +20,9 @@ class TextureManager : public Singleton<TextureManager> {
 public:
     // Load texture by full path, using cache
     // Returns cached version if already loaded, otherwise loads from disk
-    // DIFFERS: binary has second SmartPtr<TextureSource> param (v1.6.1 Mortar::TextureManager::Load @0x002274d0).
+    // v1.6.1 Mortar::TextureManager::Load @0x002274d0 -- binary signature is
+    // Load(char const*), one param. The `source` param below is port-only
+    // (always defaulted; see Port specific note).
     //
     // Port specific: no binary counterpart. Opt-in "HD texture" fallback --
     // before opening `path`, probes for an "hd_"-prefixed sibling next to the

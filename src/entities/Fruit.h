@@ -218,7 +218,8 @@ public:
     // -- callers must set `vel` before calling.
     void Chuck(float delay);
 
-    // Matches Fruit::CheckHasGoneOffscreen (0x00175218). Returns true
+    // Matches v1.6.1 Fruit::CheckHasGoneOffsceen @0x001df304 (binary symbol
+    // is misspelled "Offsceen"; PLT thunk at 0x00110da4). Returns true
     // only when BOTH halves are past the offscreen boundary with outward
     // velocity. Also bounces sliced halves off the near edge.
     bool CheckHasGoneOffscreen();

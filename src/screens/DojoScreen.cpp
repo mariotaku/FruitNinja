@@ -753,7 +753,7 @@ void DojoScreen::PlayCallback() {
     }
 
     // 2. State 6 (quit fade-out)
-    LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 6, "PlayCallback @ 0x001389f4");
+    LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 6, "PlayCallback @ 0x0016b980");
     m_State = 6;
 
     // 3. Fling the back-bomb with random rightward velocity.
