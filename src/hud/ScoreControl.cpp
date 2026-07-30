@@ -71,8 +71,7 @@ static uint16_t s_BannerSinIdx = 0;     // sin-table idx for new-best colour pul
 // ASM-spec v1.6.1 GetCurrentScore @0x0011a0cc: body is `return game_work.currentScore;`
 // -- playerIdx is accepted and then ignored entirely; there is no per-player split.
 int GetCurrentScore(int /*playerIdx*/) {
-    Game* game = Game::GetInstance();
-    return game ? game_work.currentScore : 0;
+    return game_work.currentScore;
 }
 
 // GetScoreMultiplyer: returns PowerUpManager::GetScoreGainMultiplier().
@@ -81,12 +80,15 @@ int GetScoreMultiplyer(int /*playerIdx*/) {
     return PowerUpManager::GetInstance()->GetScoreGainMultiplier();
 }
 
-// ASM-verified: 2026-05-03T00:00 v1.6.1 GetCurrentModeHighscore @ 0x00119ee4 (asm-inspector)
-// Binary: GetCurrentModeHighscore @ 0x00119ee4.
+// ASM-spec v1.6.1 GetCurrentModeHighscore @ 0x00119ee4
+//   (downgraded from ASM-verified 2026-05-03: the stamp covered a body that
+//    carried a port-added `Game::GetInstance()` null guard the binary has not.)
 // pSaveData has highscore array at +0x44 (m_ModeHighScores[4]), indexed by gameMode (0..3).
+// NOTE: the m_SaveData null test IS in the binary here (0x00119ee4:
+// `if (gameMode < 4 && pM_SaveData != 0)`). Do not strip it -- unlike its
+// siblings in this file, this one is genuine.
 int GetCurrentModeHighscore() {
-    Game* gd = Game::GetInstance();
-    if (gd && game_work.gameMode < 4 && game_work.m_SaveData)
+    if (game_work.gameMode < 4 && game_work.m_SaveData)
         return game_work.m_SaveData->m_ModeHighScores[game_work.gameMode];
     return 0;
 }
@@ -209,13 +211,16 @@ void ScoreControl::Reset() {
     m_LayerFlags = 1 << m_PlayerIdx;
 }
 
-// ASM-verified: 2026-05-14T00:00 v1.6.1 ScoreControl::Skip @ 0x001abc6c (re-analyst)
+// ASM-spec v1.6.1 ScoreControl::Skip @ 0x001abc6c
+//   (downgraded from ASM-verified 2026-05-14: the stamp covered a body that
+//    carried port-added `Game::GetInstance()` + `m_SaveData` null guards.)
 // +0x4C (game_work.m_SaveData) + 300 (0x12C) = FruitSaveData::newBestThisGame (uint8_t).
 // Prior port incorrectly tested game_work.bM_bPaused (engine pause flag) instead.
 void ScoreControl::Skip() {
     m_DisplayedScore = GetCurrentScore(m_PlayerIdx);
-    Game* game = Game::GetInstance();
-    if (game && game_work.m_SaveData && game_work.m_SaveData->newBestThisGame != 0) {
+    // Binary derefs pM_SaveData with no null test here (unlike
+    // GetCurrentModeHighscore @0x00119ee4, which does test it).
+    if (game_work.m_SaveData->newBestThisGame != 0) {
         m_BannerScaleTime = 1.0f;
     }
 }
@@ -424,14 +429,11 @@ void ScoreControl::Draw(float* hudScaleRaw) {
     // Skip P1 in multiplayer
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     // g_GameData.someTimer >= -1.0f — uses m_TransitionTimer (+0x0C)
     if (game_work.m_PauseAmount < -1.0f) return;
 
     // Binary @0x1abce8: vldr.32 s15,[r3,#0x20] (HUD+0x20 = m_DrawAlpha, per-frame alpha).
-    float intensity = (game_work.mHud) ? game_work.mHud->m_DrawAlpha : 1.0f;
+    float intensity = game_work.mHud->m_DrawAlpha;   // binary derefs unguarded
     float alphaF = 255.0f * intensity;
     uint8_t alpha = (alphaF > 255.0f) ? 255 : (alphaF < 0.0f ? 0 : (uint8_t)alphaF);
     m_DrawColour.a = alpha;
@@ -441,13 +443,10 @@ void ScoreControl::Draw(float* hudScaleRaw) {
 
 // PreDraw @ 0x001ace80 (v1.6.1 ScoreControl::PreDraw) — main rendering (text, multiplier, highscore banner)
 void ScoreControl::PreDraw(float* /*hudScale*/) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
     if (m_PlayerIdx == 0 && IsMultiplayer()) return;
 
     // Binary @0x1aceac: vldr.32 s15,[r3,#0x20] (HUD+0x20 = m_DrawAlpha, per-frame alpha).
-    float cameraIntensity = (game_work.mHud) ? game_work.mHud->m_DrawAlpha : 1.0f;
+    float cameraIntensity = game_work.mHud->m_DrawAlpha;   // binary derefs unguarded
     uint8_t alpha = (uint8_t)std::min(255.0f, std::max(0.0f, 255.0f * cameraIntensity));
     float transTimer = game_work.m_PauseAmount;  // g_GameData.someTimer
 

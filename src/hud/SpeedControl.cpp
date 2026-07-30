@@ -84,7 +84,9 @@ SpeedControl::~SpeedControl() {
     }
 }
 
-// ASM-verified: 2026-05-17 v1.6.1 SpeedControl::Update @0x001b8290 (re-analyst)
+// ASM-spec v1.6.1 SpeedControl::Update @0x001b8290
+//   (downgraded from ASM-verified 2026-05-17: the stamp covered a body that
+//    carried port-added `Game::GetInstance()` + `mGameSound` null guards.)
 // Binary computes ducking + per-frame lerps for the Combo-Blitz speed
 // effect: master-volume duck (via GameSound::m_MasterVolume), looping
 // stream SFX gated on combo progression, fuse-style trail emitter
@@ -96,8 +98,9 @@ SpeedControl::~SpeedControl() {
 // The "Combo-Blitz-Backing-Light" looping sound is the constant SFX
 // name (.rodata @ 0x001bc258).
 void SpeedControl::Update(float dt) {
-    Game* g = Game::GetInstance();
-    if (!g || !game_work.mGameSound) return;
+    // Binary reads game_work straight from the GOT and derefs
+    // game_work.pM_pGameSound (+0x18c) with no null test (@0x001b8618,
+    // @0x001b851c). No Game::GetInstance call in the body.
     GameSound* gs = game_work.mGameSound;
 
     // ASM-spec v1.6.1 SpeedControl::Update @0x001b8290: one-shot "pulseTrigger"
@@ -303,22 +306,22 @@ void SpeedControl::Skip() {}
 bool SpeedControl::SoundNeedsLooping(Mortar::MortarSound* finished) {
     if (m_pSound != finished) return false;   // not our loop -- ignore
 
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001b8160 (re-analyst)
+    // ASM-spec v1.6.1 SpeedControl::SoundNeedsLooping @ 0x001b8160
+    //   (downgraded from ASM-verified 2026-05-18: the stamp covered a body that
+    //    carried a port-added `WaveManager::GetInstance()` null guard.)
     // After 6+ blitz tiers (WaveManager m_BlitzLevel +0x60), swap to the heavier stream variant.
-    WaveManager* wm = WaveManager::GetInstance();
-    if (wm && wm->m_BlitzLevel > 5) {
+    if (WaveManager::GetInstance()->m_BlitzLevel > 5) {
         m_SoundIdx = 1;
     }
 
     // Second SFX name confirmed from .rodata GOT[0x00160dac][1].
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x001b8160 (re-analyst)
     static const char* const kSfxNames[2] = {
         "Combo-Blitz-Backing-Light",
         "Combo-Blitz-Backing"
     };
     const char* const kStreamSfx = kSfxNames[m_SoundIdx];
-    Game* g = Game::GetInstance();
-    if (!g || !game_work.mGameSound) return false;
+    // Binary @0x001b8160 calls GameSound::SFXPlay unguarded -- no
+    // Game::GetInstance, no pM_pGameSound null test.
     Mortar::Delegate1<bool, Mortar::MortarSound*> loopCb =
         Mortar::Delegate1<bool, Mortar::MortarSound*>::Make(
             this, &SpeedControl::SoundNeedsLooping);

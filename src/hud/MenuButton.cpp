@@ -302,12 +302,18 @@ void MenuButton::CreateFruit() {
     // rolled purely to keep the RNG draw sequence faithful.
     m_BackdropOffsetX = (float)(uint32_t)(Math::g_Random.Rand32(0x28) - 0x14);
 
-    Game* game = Game::GetInstance();
-    if (!game || !game->actorManager) return;
+    // v1.6.1 MenuButton::CreateFruit @0x0019b634 reaches the pool through
+    // Mortar::ActorManager::GetInstance() (a function-local static, never null),
+    // NOT through Game::GetInstance()->actorManager. No null test on either.
+    Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
 
     int bombThreshold = g_FruitInfoCount;
     int entityType = (bombThreshold <= m_FruitType) ? 1 : 0;
-    Mortar::Entity* e = game->actorManager->Add(entityType, true);
+    Mortar::Entity* e = am->Add(entityType, true);
+    // DIFFERS: original = unguarded deref of the Add() result (v1.6.1
+    // MenuButton::CreateFruit @0x0019b634), using an early-out because the port's
+    // ActorManager::Add returns nullptr on pool exhaustion (ActorManager.cpp:166)
+    // where the binary's caller would fault.
     if (!e) return;
 
     // Binary MenuButton::CreateFruit @0x0019b608: pos = GetAdjustedPos(), then
@@ -536,10 +542,10 @@ bool MenuButton::TouchReleased() {
     if (m_FruitType < 0 && m_bRespondsToBackKey) {
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
-        Game* game = Game::GetInstance();
-        if (game && game_work.m_TutorialControl) {
-            game_work.m_TutorialControl->ButtonPressedAtPos(this);
-        }
+        // v1.6.1 MenuButton::TouchReleased @0x0019a7f8 calls
+        // TutorialControl::ButtonPressedAtPos(game_work.pM_pTutorialControl, this)
+        // with no null test on the pointer.
+        game_work.m_TutorialControl->ButtonPressedAtPos(this);
     }
     m_DeletedCallback();
     return true;
@@ -1215,10 +1221,9 @@ void MenuButton::AddPiece(Mortar::SmartPtr<Mortar::Texture> tex, _Vector2<float>
     c->m_Timer = initialTimer;
     c->size  = size;
 
-    Game* game = Game::GetInstance();
-    if (game && game_work.mHud) {
-        game_work.mHud->AddControl(c, false);
-    }
+    // v1.6.1 MenuButton::AddPiece @0x0019cd34: HUD::AddControl(game_work.pM_pHud, c, false)
+    // -- unguarded, no Game::GetInstance in the body.
+    game_work.mHud->AddControl(c, false);
 
     MenuButtonAddOn addOn;
     addOn.m_pControl      = c;

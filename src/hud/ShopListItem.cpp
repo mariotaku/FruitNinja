@@ -111,8 +111,9 @@ ShopListItem::~ShopListItem() {
 // ---------------------------------------------------------------------------
 void ShopListItem::Move(_Vector3<float> v) {
     const float x = v.x, y = v.y, z = v.z;
-    Game* g = Game::GetInstance();
-    const float dt = g ? game_work.dt : 0.0f;
+    // Binary reads game_work.dt (+0x38) straight from the GOT (@0x001b5538,
+    // @0x001b55a8, ...). No Game::GetInstance call in Move.
+    const float dt = game_work.dt;
 
 #ifdef __bada__
     // (1) Sin-jitter when selected -- binary advances this inline in Move at

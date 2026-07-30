@@ -71,11 +71,11 @@ void ScreenFadeControl::Draw(float* hudScaleRaw)
 
     if (!m_bVisible) return;
 
+    // DIFFERS: original = unguarded `(*m_FadeTexture->vtbl[0xc])()` (v1.6.1
+    // ScreenFadeControl::Draw @0x001aed74 has no SmartPtr validity test), using an
+    // early-out because the port can reach Draw before the fade texture loads.
     Mortar::Texture* tex = m_FadeTexture.Get();
     if (!tex) return;
-
-    Game* game = Game::GetInstance();
-    if (!game) return;
 
     tex->Set();
 
@@ -88,7 +88,7 @@ void ScreenFadeControl::Draw(float* hudScaleRaw)
     mm.UploadModelViewOnly();
 
     // Binary: Mortar::Mesh::DrawQuadUnCached(m_Colour, ...)
-    game->renderer.DrawQuad(m_Colour, 0.0f, 1.0f, 0.0f, 1.0f);
+    Game::GetInstance()->renderer.DrawQuad(m_Colour, 0.0f, 1.0f, 0.0f, 1.0f);
 
     tex->UnSet();
 }

@@ -102,26 +102,24 @@ void TutorialControl::Reset() {
 }
 
 // ===================================================================
-// Matches TutorialControl::CanShowTute @ 0x00162fb8
-// Returns true during slow-motion or screen transitions.
+// ASM-spec v1.6.1 TutorialControl::CanShowTute @ 0x001c2734:
+//   if (Math::Abs(game_work.m_PauseAmount) > 0.99f) return true;
+//   if (game_work.pGameOverScreen == 0 || game_work.mHud == 0) return false;
+//   return *(float*)(mHud + 0x20) < 1.0f;
+// NOTE: the pGameOverScreen (+0x168) and mHud (+0x40) null tests ARE in the
+// binary (@0x001c2764 / @0x001c2770) -- do not strip them. There is no
+// Game::GetInstance call in the body.
 // ===================================================================
-// Matches TutorialControl::CanShowTute @ 0x00162fb8.
-// pGameOverScreen guard is binary-faithful: slow-mo branch cannot trigger
-// until the player has died at least once (GameOverScreen allocated).
 bool TutorialControl::CanShowTute() {
-    Game* game = Game::GetInstance();
-    if (!game) return false;
-
-    // Binary @ 0x00162fce: DAT = 0x3F7D70A4 (0.99f).
+    // Binary @0x001c2750: DAT = 0x3F7D70A4 (0.99f).
     if (fabsf(game_work.m_PauseAmount) > 0.99f)
         return true;
 
-    // Binary checks pGameOverScreen (+0x164): null -> return false.
     if (!game_work.pGameOverScreen) return false;
-
     if (!game_work.mHud) return false;
-    // TODO: v1.6.1 -- verify HUD alpha read +0x20 vs +0x24 (slow-mo) against the binary
-    return game_work.mHud->m_globalTimeScale < 1.0f;
+    // Binary @0x001c2780: vldr.32 s14,[r3,#0x20] -- HUD+0x20 is m_DrawAlpha,
+    // NOT m_globalTimeScale (+0x24). Settles the prior +0x20-vs-+0x24 TODO.
+    return game_work.mHud->m_DrawAlpha < 1.0f;
 }
 
 // ===================================================================

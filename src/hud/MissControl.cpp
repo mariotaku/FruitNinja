@@ -490,10 +490,8 @@ void MissControl::MakeCombo(_Vector3<float> pos, int comboCount, int entityType)
     // Arcade-mode override: after storing caller's comboCount and picking texture,
     // binary overrides m_ComboCount with (int)(WaveManager::GetSpeed(0) + 0.65f).
     // v1.6.1 MakeCombo @0x0019e630 (AFTER m_ComboCount = comboCount, AFTER texture lookup)
-    Game* g = Game::GetInstance();
-    if (g && game_work.gameMode == GAME_MODE_ARCADE) {
-        WaveManager* wm = WaveManager::GetInstance();
-        if (wm) m_ComboCount = (int)(wm->GetSpeed(0) + 0.65f);
+    if (game_work.gameMode == GAME_MODE_ARCADE) {
+        m_ComboCount = (int)(WaveManager::GetInstance()->GetSpeed(0) + 0.65f);
     }
     m_DrawColour.a = 0xff;
     m_LifeTimer    = MISS_FADE_INIT;  // DAT_00151740 = 1.81f
@@ -597,16 +595,18 @@ void MissControl::MakeDisappear(_Vector3<float> inPos, int sizeMult,
 
 // --- Update ----------------------------------------------------------------
 
-// ASM-verified: 2026-05-24 v1.6.1 MissControl::Update @ 0x0019e15c (re-analyst)
-// v1.6.1 MissControl::Update @0x0019e15c
+// ASM-spec v1.6.1 MissControl::Update @ 0x0019e15c
+//   (downgraded from ASM-verified 2026-05-24: the stamp covered a body that
+//    carried port-added `Game::GetInstance()` + `mGameSound` null guards.)
 void MissControl::Update(float dt) {
     // Passive miss-counter path: 3 GameInit-spawned widgets at top of HUD.
     // Their m_AnimState is 0/1/2 (slot index); m_Active stays 0.
     // Toggle m_bFlashing based on game_work.missCount vs m_AnimState -- when the
     // player has missed at least (m_AnimState + 1) fruits, the X marker
     // turns red. v1.6.1 MissControl::Update @0x0019e15c lines 1-10.
-    Game* game = Game::GetInstance();
-    uint8_t missCount = (game ? game_work.missCount : 0);
+    // Binary reads game_work straight from the GOT: `ldrb r9,[r3,#0x14]`
+    // @0x0019e180. No Game::GetInstance call anywhere in Update.
+    uint8_t missCount = game_work.missCount;
     if (!m_bFlashing && m_AnimState < missCount) {
         m_FlashTimer  = 0x1e;
         m_DrawColour.a = 0xff;
@@ -685,8 +685,8 @@ void MissControl::Update(float dt) {
     }
 
     // Pause guard: binary reads game_work.bM_Mode (+0x2), NOT bM_bPaused (+0x5).
-    // binary @ 0x00151c18..0x00151c20
-    if (game && game_work.bM_Mode) return;
+    // v1.6.1 MissControl::Update @0x0019e3ac-0x0019e3bc (ldrb [r3,#0x2]).
+    if (game_work.bM_Mode) return;
 
     pos.z = 0.0f;
 
@@ -694,7 +694,6 @@ void MissControl::Update(float dt) {
     m_LifeTimer -= dt;
 
     // Sound trigger on 1.66 crossing. v1.6.1 MissControl::Update @0x0019e15c sound block
-    // ASM-verified: 2026-05-18 v1.6.1 v1.6.1 MissControl::Update @0x0019e15c (re-analyst)
     if (wasAboveThresh && m_LifeTimer < SOUND_THRESH && m_bComboActive && m_bPlaySound) {
         char buf[0x40];
         bool altPlayed = false;
@@ -714,11 +713,10 @@ void MissControl::Update(float dt) {
                 // NOTE: binary uses "%i" not "%d" (rodata @ 0x001bbdc3, DAT_00151d84)
                 std::snprintf(buf, sizeof(buf), "combo-%i", n);
             }
-            if (game && game_work.mGameSound) {
-                // binary SFXPlay args: vol=0.25f (s0=0x3e800000), pitch=1.0f (s1=0x3f800000)
-                // binary @ 0x00151cd4/cda: vmov.f32 s0,0x3e800000; vmov.f32 s1,0x3f800000
-                game_work.mGameSound->SFXPlay(buf, /*vol*/0.25f, /*pitch*/1.0f);
-            }
+            // binary SFXPlay args: vol=0.25f (s0=0x3e800000), pitch=1.0f (s1=0x3f800000)
+            // v1.6.1 @0x0019e488 loads pM_pGameSound (+0x18c) and calls @0x0019e4d4
+            // with no null test.
+            game_work.mGameSound->SFXPlay(buf, /*vol*/0.25f, /*pitch*/1.0f);
         }
     }
 

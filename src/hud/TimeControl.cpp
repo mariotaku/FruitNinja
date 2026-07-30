@@ -57,9 +57,9 @@ TimeControl::TimeControl() {
     Reset();
 }
 
+// v1.6.1 IsTimedGame @0x0011a060: `return (uint8_t)(game_work.gameMode - 2) < 2;`
+// -- a free function, whole body is the range test. No Game::GetInstance.
 bool TimeControl::IsTimedGame() const {
-    Game* game = Game::GetInstance();
-    if (!game) return false;
     return game_work.gameMode == GAME_MODE_ARCADE || game_work.gameMode == GAME_MODE_ZEN;
 }
 
@@ -78,16 +78,16 @@ void TimeControl::Reset() {
     if (startSecs < 0.0f) startSecs = 0.0f;
     m_TimeRemaining = startSecs;
 
-    Game* game = Game::GetInstance();
-    bool arcadeOrMP = game && (game_work.gameMode == GAME_MODE_ARCADE || IsMultiplayer());
-    if (arcadeOrMP) {
+    // v1.6.1 TimeControl::Reset @0x001c0930: no Game::GetInstance, no pM_SaveData
+    // null test, and the camera term is game_work.m_PauseAmount read directly
+    // (NOT MainScreen::GetCameraTransition()).
+    if (game_work.gameMode == GAME_MODE_ARCADE || IsMultiplayer()) {
         m_TimeRemaining = ARCADE_START_TIME;
 
-        // Binary @ 0x001621ac: first-boot save-slot seed.
-        if (game_work.m_SaveData &&
-            game_work.m_SaveData->m_TimeRemainingSave == 0.0f &&
-            game_work.mMainScreen && game_work.mMainScreen->GetCameraTransition() < 0.0f) {
-            game_work.m_SaveData->m_TimeRemainingSave = 60.9f;   // DAT_001621ec
+        // First-boot save-slot seed.
+        if (game_work.m_SaveData->m_TimeRemainingSave == 0.0f &&
+            game_work.m_PauseAmount < 0.0f) {
+            game_work.m_SaveData->m_TimeRemainingSave = 60.9f;
         }
     }
     m_SlowClockPhase = 0.0f;
@@ -126,31 +126,25 @@ bool TimeControl::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// ASM-verified: 2026-06-24 v1.6.1 TimeControl::Update @ 0x001c0a48 (asm-inspector)
+// ASM-spec v1.6.1 TimeControl::Update @ 0x001c0a48
+//   (downgraded from ASM-verified 2026-06-24: the stamp covered a body that
+//    carried port-added `Game::GetInstance()`, `m_SaveData` and
+//    `PowerUpManager::GetInstance()` null guards the binary has not.)
 //   Count-down branch: two independent PowersEnabled gates @0x001c0afc/@0x001c0b80 with
 //   IsInSuperFruitState between them overriding dt to 0.0 (DAT_001c0e54) @0x001c0b70 (true
 //   freeze); m_StopClockAccum +0x68, m_SlowClockMult +0x6c. Gate structure + field offsets
 //   instruction-faithful.
 void TimeControl::Update(float dt) {
     // 0x001c0a48
-    float entrySizeX = size.x;   // cached before GetInstance call (binary s16)
-    Game* game = Game::GetInstance();
-    if (!game) {
-        m_LayerFlags = Mortar::HUD_LAYER_NONE;
-#ifndef __bada__
-        if (game_work.mMainScreen) game_work.mMainScreen->m_TimeRemainingDisplay = -1.0f;
-#endif // !defined(__bada__)
-        return;
-    }
+    float entrySizeX = size.x;   // cached before the IsTimedGame call (binary s16)
     // Non-timed-mode early return: hide HUD, stamp sentinel into save slot,
-    // and skip the LAB_00162818 timed-mode block entirely. Other subsystems
+    // and skip the LAB_001c0f00 timed-mode block entirely. Other subsystems
     // (Fruit::Chuck power-fruit abort gate) read -1.0f to detect "no time
     // limit" and skip the abort condition.
+    // Binary stores through pM_SaveData unguarded (@0x001c0a48 entry block).
     if (!IsTimedGame()) {
         m_LayerFlags = Mortar::HUD_LAYER_NONE;
-        if (game_work.m_SaveData) {
-            game_work.m_SaveData->m_TimeRemainingSave = -1.0f;
-        }
+        game_work.m_SaveData->m_TimeRemainingSave = -1.0f;
         return;
     }
     m_LayerFlags = Mortar::HUD_LAYER_DEFAULT;
@@ -188,7 +182,7 @@ void TimeControl::Update(float dt) {
 
             if (PowersEnabled()) {
                 PowerUpManager* pum = PowerUpManager::GetInstance();
-                if (pum && pum->m_StopClockAccum > 0.0f) {
+                if (pum->m_StopClockAccum > 0.0f) {
                     m_DrawColour = Colour(255, 100, 100, 255);
                     snprintf(m_PowerupOverlay, sizeof(m_PowerupOverlay),
                              "+%i", (int)pum->m_StopClockAccum + 1);
@@ -207,7 +201,7 @@ void TimeControl::Update(float dt) {
             // v1.6.1 @0x001c0b80 -- second, INDEPENDENT PowersEnabled() gate (separate call).
             if (PowersEnabled()) {
                 PowerUpManager* pum2 = PowerUpManager::GetInstance();
-                m_TimeRemaining -= effDt * (pum2 ? pum2->m_SlowClockMult : 1.0f);
+                m_TimeRemaining -= effDt * pum2->m_SlowClockMult;
             } else {
                 m_TimeRemaining -= effDt;
             }
@@ -270,9 +264,8 @@ void TimeControl::Update(float dt) {
     // Mirror live time to game_work.m_SaveData->m_TimeRemainingSave so other
     // subsystems (e.g. Fruit::Chuck power-fruit abort gate) can read the
     // remaining wave time without a TimeControl pointer.
-    if (game_work.m_SaveData) {
-        game_work.m_SaveData->m_TimeRemainingSave = m_TimeRemaining;
-    }
+    // Binary @0x001c0f00 stores through pM_SaveData unguarded.
+    game_work.m_SaveData->m_TimeRemainingSave = m_TimeRemaining;
 
     // pos.y re-anchor every timed frame based on camera transition. Non-MP branch:
     //   tiltMix = 1.0 - |cameraTransition|
@@ -286,12 +279,9 @@ void TimeControl::Update(float dt) {
     pos.y = size.y * -2.0f * tiltMix + (size.y * 2.0f + 320.0f) * 0.5f;
 }
 
+// v1.6.1 TimeControl::Draw @0x001c12d4
 void TimeControl::Draw(float* hudScaleRaw) {
-    // 0x001628d8
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
-
-    Game* game = Game::GetInstance();
-    if (!game) return;
 
     // Guard: camera fully transitioned to menu -> skip
     if (game_work.mMainScreen) {

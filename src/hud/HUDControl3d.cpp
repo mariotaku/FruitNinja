@@ -25,7 +25,9 @@ static const float HUD_SCREEN_W = 480.0f;
 static const float HUD_SCREEN_H = 320.0f;
 static const float HUD_SCREEN_Z = 0.0f;
 
-// ASM-verified: 2026-05-24 v1.6.1 HUDControl3d::Draw @ 0x0018b544 (re-analyst)
+// ASM-spec v1.6.1 HUDControl3d::Draw @ 0x0018b544
+//   (downgraded from ASM-verified 2026-05-24: the stamp covered a body that
+//    carried a port-added `Game::GetInstance()` null guard the binary has not.)
 //   - texture validity gate, m_DrawColour.a gate
 //   - Scale44(size) -> optional RotZ44(SinIdx, CosIdx) -> GlobalTranslate44
 //   - translate = pos + Vec3(480, 320, 0) * m_HudScale  (screen-anchor offset)
@@ -38,9 +40,6 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
         return;
     }
     if (m_DrawColour.a == 0) return;
-
-    Game* game = Game::GetInstance();
-    if (!game) return;
 
     m_Texture->Set();
 
@@ -68,7 +67,7 @@ void HUDControl3d::Draw(float* hudScaleRaw) {
     // v1.6.1 HUDControl3d::Draw @0x0018b544: TintColour(m_DrawColour, hudScale) then DrawQuad.
     const float tintRGB[3] = { hudScale.x, hudScale.y, hudScale.z };
     Colour tinted = Colour::TintColour(m_DrawColour, tintRGB);
-    game->renderer.DrawQuad(tinted, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
+    Game::GetInstance()->renderer.DrawQuad(tinted, m_UVLeft, m_UVRight, m_UVTop, m_UVBottom);
 
     m_Texture->UnSet();
 }

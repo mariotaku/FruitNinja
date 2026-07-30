@@ -72,15 +72,14 @@ NotificationControl::NotificationControl(const char* name, int points,
 
     // Type_Named: play "achievement" SFX
     if (type == NotificationControl::Type_Named) {
-        Game* g = Game::GetInstance();
-        if (g && game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
-        }
+        // v1.6.1 NotificationControl::NotificationControl @0x001a4428: unguarded
+        // GameSound::SFXPlay("achievement", 1.0, 1.0).
+        game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
     }
 
-    // Measure text width and scale down if exceeds maxWidth
-    Game* g = Game::GetInstance();
-    if (g && game_work.pFontMain.IsValid()) {
+    // Measure text width and scale down if exceeds maxWidth.
+    // Binary reads game_work.pM_Fonts[1] unguarded @0x001a4428.
+    if (game_work.pFontMain.IsValid()) {
         float measured = game_work.pFontMain->MeasureWidth(m_TextScale, m_DisplayName);
         if (measured > maxWidth) {
             m_TextScale *= maxWidth / measured;
@@ -188,8 +187,10 @@ void NotificationControl::Update(float dt) {
 void NotificationControl::Draw(float* hudScaleRaw) {
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
+    // Binary @0x001a4860 has no Game::GetInstance in the body; the port needs the
+    // singleton only to reach the port-side Renderer (Mortar::Mesh::DrawQuadUnCached
+    // in the binary).
     Game* g = Game::GetInstance();
-    if (!g) return;
 
     MatrixManager& mm = MatrixManager::GetInstance();
 
