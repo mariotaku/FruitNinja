@@ -519,7 +519,8 @@ void ShopListItem::DrawDividers() {
         if (ShopScreen::s_TexScratch.IsValid()) {
             ShopScreen::s_TexScratch->Set();
             Mortar::Mesh::DrawQuadUnCached(dividerColour, NULL);
-            ShopScreen::s_TexScratch->UnSet();
+            // v1.6.1 DrawDividers @0x001b1bd8: `mov r1,#1` before the vtable +0x10 call.
+            ShopScreen::s_TexScratch->UnSet(true);
         }
     }
 
@@ -533,21 +534,34 @@ void ShopListItem::DrawDividers() {
         if (ShopScreen::s_TexScratch.IsValid()) {
             ShopScreen::s_TexScratch->Set();
             Mortar::Mesh::DrawQuadUnCached(colGrey, NULL);
-            ShopScreen::s_TexScratch->UnSet();
+            // v1.6.1 DrawDividers @0x001b1ccc: `mov r1,#1` before the vtable +0x10 call.
+            ShopScreen::s_TexScratch->UnSet(true);
         }
     }
 }
 
 // ---------------------------------------------------------------------------
 // ShopListItem::DrawIcon @ v1.6.1 0x001b578c
+// ASM-spec v1.6.1 ShopListItem::DrawIcon @0x001b578c:
+//   if (!SmartPtr::operator bool(&m_pIconTex)) return;          // +0x274, the ONLY guard
+//   Matrix44 mat = Scale44(Vec3(64,64,0));
+//   mat.GlobalTranslate44(Vec3::Zero + m_IconPos);              // +0x268
+//   mm.GetWorldStack().Reset(); SetCurrentMatrix(mat); UploadModelViewOnly();
+//   tex = ItemInfo::IsLocked(m_pItemInfo /*+0x278*/) ? lockedStrokeTexture : m_pIconTex;
+//   tex->Set();                                                 // vtable +0x0c
+//   Mesh::DrawQuadUnCached(Colour::White, NULL);
+//   tex->UnSet(true);                                           // vtable +0x10, r1 = 1
+//
+// Vtable-offset note: the binary dispatches Set at +0x0c and UnSet at +0x10 because
+// Mortar::ReferenceCounter carries GetRefCounter() in slot 2, which the port omits
+// on purpose (see the DIFFERS block in engine/util/ReferenceCounter.h). Every port
+// Texture vtable index is therefore one slot lower than the binary's -- expected,
+// not a slot-order bug.
 // ---------------------------------------------------------------------------
 void ShopListItem::DrawIcon() {
     if (!m_pIconTex.IsValid()) return;
-    if (!m_pItemInfo) return;
 
-    bool isLocked = (m_pItemInfo->IsLocked() != 0);
     MatrixManager& mm = MatrixManager::GetInstance();
-    const Colour colWhite(255, 255, 255, 255);
 
     // Binary: scale 64x64, translate = Vec3(0,0,0) + m_IconPos.
     Matrix44 mat = Matrix44::MakeScale(64.0f, 64.0f, 0.0f);
@@ -556,15 +570,25 @@ void ShopListItem::DrawIcon() {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
+    // Binary reads m_pItemInfo AFTER the matrix upload (0x001b581c), not before.
+    bool isLocked = (m_pItemInfo->IsLocked() != 0);
+
+    // UnSet(true) -- v1.6.1 0x001b58b4 `mov r1,#1` before the vtable +0x10 call.
+    // Texture2D_Bada::UnSet @0x002296ac only runs glState<GL_TEXTURE_2D,false>()
+    // (i.e. glDisable(GL_TEXTURE_2D)) when the flag is set, so UnSet() would leave
+    // texturing enabled for whatever draws next.
     if (!isLocked) {
         m_pIconTex->Set();
-        Mortar::Mesh::DrawQuadUnCached(colWhite, NULL);
-        m_pIconTex->UnSet();
+        Mortar::Mesh::DrawQuadUnCached(Colour::White, NULL);
+        m_pIconTex->UnSet(true);
     } else {
+        // Port specific: the binary dereferences the locked-stroke texture global
+        // unguarded (`ldr r0,[got+0x48]` @0x001b5834). The port keeps a null guard so
+        // a failed texture load degrades to "icon not drawn" instead of a crash.
         if (ShopScreen::s_TexLockedStroke.IsValid()) {
             ShopScreen::s_TexLockedStroke->Set();
-            Mortar::Mesh::DrawQuadUnCached(colWhite, NULL);
-            ShopScreen::s_TexLockedStroke->UnSet();
+            Mortar::Mesh::DrawQuadUnCached(Colour::White, NULL);
+            ShopScreen::s_TexLockedStroke->UnSet(true);
         }
     }
 }
