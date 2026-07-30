@@ -299,8 +299,10 @@ int AchievementManager::AchievementExists(uint32_t hash) {
 }
 
 // ---------------------------------------------------------------------------
-// QueAchievement  (Binary @ 0x0011750c)
-// ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x0011750c (re-analyst)
+// QueAchievement
+// ASM-spec v1.6.1 AchievementManager::QueAchievement @ 0x0011750c
+// (Downgraded from ASM-verified: the stamp survived a port-added
+//  Game::GetInstance + m_SaveData null guard being inserted into the body.)
 // ---------------------------------------------------------------------------
 
 int AchievementManager::QueAchievement(AchievementInfo* info,
@@ -310,11 +312,12 @@ int AchievementManager::QueAchievement(AchievementInfo* info,
     // on success pre-advance caller's iterator, then erase from m_ByType[typeIdx].
     // Pre-advance before erase so callers iterating m_All or m_ByType[x]
     // can unconditionally continue without using the erased iterator.
+    // ASM-spec v1.6.1 QueAchievement @0x0011750c: `subs r4,r1,#0; beq ret0` is the
+    // only guard (the info arg). m_SaveData then comes from
+    // `ldr r3,[r3,r2]; ldr r0,[r3,#0x50]` -- game_work off the GOT, no
+    // Game::GetInstance and no null test before AddToQue.
     if (!info) return 0;
-    FruitSaveData* sd = 0;
-    Game* g = Game::GetInstance();
-    if (g) sd = game_work.m_SaveData;
-    if (!sd) return 0;
+    FruitSaveData* sd = game_work.m_SaveData;
 
     int result = sd->AddToQue(info->m_Name, info->m_NameHash);
     if (result != 0) {
@@ -375,9 +378,12 @@ int AchievementManager::UnlockAchievementInNetwork(const char* /*name*/) {
 // Binary: tests (1 << gameMode) & m_ModeBitmask
 // ---------------------------------------------------------------------------
 
+// TODO: v1.6.1 0x00117d48 (UnlockTotalFruitAchievement) -- that caller has NO mode
+// gate in v1.6.1: its loop is only `info->m_Total(+0x8c) <= total` then a straight
+// QueAchievement call. Re-check which Unlock* paths really carry the bitmask test
+// before keeping this helper on all of them.
+// Every peer reads game_work straight off the GOT with no null test, so no guard here.
 static int ModeBitmaskAllows(uint32_t bitmask) {
-    Game* g = Game::GetInstance();
-    if (!g) return 0;
     uint8_t gm = game_work.gameMode & 0x03;
     return (bitmask & (1u << gm)) ? 1 : 0;
 }
@@ -654,7 +660,6 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x0011750c (re-analyst)
         // (IsGameOver gate is a mid-function range within QueAchievement; exact offset unverified -- asm-inspector to pin)
         if (info->m_IsGameOver) {
-            Game* g = Game::GetInstance();
             if (game_work.mCountDown == NULL) { ++it; continue; }
             if (comboLen <= 2)        { ++it; continue; }
             if (game_work.mCountDown->m_TimeRemaining > 0.0f) { ++it; continue; }

@@ -177,9 +177,10 @@ void BonusManager::SetUpBonusScreen(BonusScreen* screen) {
 void BonusManager::AddCombo(int comboLen) {
     if (comboLen < 3) return;
 
-    Game* game = Game::GetInstance();
-    if (!game || !game_work.m_SaveData) return;
-
+    // ASM-spec v1.6.1 BonusManager::AddCombo @0x0012e570: entry is
+    // `ldr r3,[r4,r3]; ldr r7,[r3,#0x50]` -- game_work from the GOT and m_SaveData
+    // loaded straight into r7 for the AddToTotal calls. No Game::GetInstance and
+    // no null test on either.
     FruitSaveData* sd = game_work.m_SaveData;
 
     static const uint32_t hComboBonus = StringHash("combo_bonus");

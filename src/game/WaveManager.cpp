@@ -647,8 +647,8 @@ GlobalProbabilityOveride* WaveManager::CheckForGlobalProbabilityOveride(int& out
 
 void WaveManager::Reset(bool fullReset) {
     // v1.6.1 WaveManager::Reset @ 0x0012ba78
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // NOTE: the binary loads game_work straight from the GOT (ldr r3,[r5,r3] @0x0012bac0)
+    // and never calls Game::GetInstance -- there is no null guard here.
 
     // ASM-spec v1.6.1 WaveManager::Reset @ 0x0012ba78: when not online-multiplayer,
     // unconditionally reseeds this WaveManager's own RNG from a fresh
@@ -809,9 +809,9 @@ void WaveManager::Resume() {
     // Resume is only called on restore-from-save, never on cold boot.
     // Cold boot uses WaveManager::NewGame() -> Reset(true) -> GetNextWave(0).
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
+    // NOTE: the binary has no Game / m_SaveData null guard -- it dereferences
+    // game_work.pM_SaveData straight away (SetScore((game_work.pM_SaveData)->m_CurrentScore,-1)
+    // is the first statement of v1.6.1 WaveManager::Resume @0x0012bf58).
     FruitSaveData* sd = game_work.m_SaveData;
     if (!sd) return;
 
@@ -1033,8 +1033,8 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 
     sd->m_WaveStates.clear();
 
-    Game* game = Game::GetInstance();
-    if (!game) return 0;
+    // NOTE: no Game guard in the binary -- game_work comes straight from the GOT
+    // (ldr r3,[r6,r3] @0x00125504) and m_bSplitPlayerWaves is read unguarded.
 
     // Sentinel: only save if single-player (m_bSplitPlayerWaves == 0 or waveCount < 0)
     // and waves are loaded for this mode.
@@ -1156,10 +1156,9 @@ void WaveManager::ResetGlobalDt(float dt) {
 
 void WaveManager::ResetWaveChances() {
     // Reset m_CurrentChance (+0x40) back to m_Chance (+0x3c) for each wave in current mode.
-    // Binary @ 0x001249d0: also resets m_CurrentRegrowth (+0x48) = m_ChanceRegrowth (+0x44)
-    // and m_RevisitCounter (revisit counter) = 1.0.
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // v1.6.1 WaveManager::ResetWaveChances @0x0012b87c: also resets
+    // m_CurrentRegrowth (+0x48) = m_ChanceRegrowth (+0x44) and m_RevisitCounter = 1.0.
+    // No Game guard: game_work is a GOT load (ldr r7,[r4,r3] @0x0012b898).
     for (std::vector<WAVE_INFO*>::iterator it = m_WaveInfo[game_work.gameMode].begin();
          it != m_WaveInfo[game_work.gameMode].end(); ++it) {
         WAVE_INFO* wi = *it;
@@ -1174,8 +1173,8 @@ void WaveManager::ResetWaveChances() {
 // ----------------------------------------------------------------------------
 
 void WaveManager::Update(float dt) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // No Game guard: v1.6.1 WaveManager::Update @0x001267a0 loads game_work from the
+    // GOT (ldr r3,[r5,r3] @0x001267e4) and dereferences it unguarded.
 
     // Reset per-frame multipliers.
     // v1.6.1 WaveManager::Update @0x001267a0
@@ -1617,7 +1616,10 @@ epilogue:
 
 void WaveManager::UpdateComboSpeed(float dtIn) {
     // v1.6.1 WaveManager::UpdateComboSpeed @0x001238dc
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00122f5e (re-analyst). DUAL gate:
+    // ASM-spec v1.6.1 WaveManager::UpdateComboSpeed @0x001238dc (downgraded from
+    // ASM-verified 2026-05-20: the stamp cited 0x00122f5e, which is SPAWNER_INFO's
+    // ctor, and the body it covered carried a port-added Game::GetInstance guard).
+    // DUAL gate:
     //   (game_work.m_PauseAmount == 0.0f) AND (gameMode == ARCADE)
     // game_work.m_PauseAmount (+0x0C) is the pause/fade indicator: 0.0f during
     // active gameplay, non-zero during pause/gameover/quit transitions
@@ -1626,8 +1628,7 @@ void WaveManager::UpdateComboSpeed(float dtIn) {
     // Without the m_PauseAmount == 0 half, quit-to-main from Arcade leaves
     // gameMode==ARCADE and the body lazy-recreates SpeedControl in the
     // menu HUD, leaking the empty-gauge frame.
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // No Game guard: game_work is a GOT load (ldr r3,[r5,r3] @0x001238fc).
     if (game_work.m_PauseAmount != 0.0f) return;
     if (game_work.gameMode != GAME_MODE_ARCADE) return;
 
@@ -1694,10 +1695,10 @@ void WaveManager::GetNextWave(int playerIdx) {
     float& delay = m_NextWaveDelay_P0;     // SP only (SSM would need array)
     float& wait = m_NextWaveDelay_P1;      // SP only (SSM would need array)
 #endif
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // No Game guard: v1.6.1 WaveManager::GetNextWave @0x0012573c reaches game_work
+    // through the GOT (ldr r7,[r6,r3] @0x00125760) and derefs pM_SaveData unguarded.
 
-    // ASM-spec v1.6.1 WaveManager::GetNextWave @ 0x00125790 (head, before wave-select logic):
+    // ASM-spec v1.6.1 WaveManager::GetNextWave @ 0x0012573c (head, before wave-select logic):
     //   AchievementManager* am = AchievementManager::GetInstance();
     //   game_work.m_SaveData->UnlockTotals();                 // FruitSaveData::UnlockTotals
     //   int score = GetCurrentScore(0);
@@ -2208,8 +2209,9 @@ void WaveManager::SpawnBomb(long count, SPAWNER_INFO* spawner, int playerIdx) {
         if (spawner == nullptr && playerIdx > 0)
             b->MakeFat(false);
 
-        Game* game = Game::GetInstance();
-        if (game && game_work.gameMode == GAME_MODE_ARCADE)
+        // v1.6.1 WaveManager::SpawnBomb @0x001247c4 tail (0x00124eb8): game_work comes
+        // from the GOT and gameMode is read unguarded -- no Game::GetInstance here.
+        if (game_work.gameMode == GAME_MODE_ARCADE)
             b->SetForPlayer(1);  // arcade single-player
     }
 }
@@ -2342,9 +2344,9 @@ void WaveManager::ResetSpeed(int playerIdx) {
     static uint32_t s_blitzBonusHash = 0;
     if (s_blitzBonusHash == 0)
         s_blitzBonusHash = StringHash("blitz_bonus");
-    Game* game = Game::GetInstance();
-    if (game && game_work.m_SaveData)
-        game_work.m_SaveData->ClearTotal(s_blitzBonusHash);
+    // v1.6.1 WaveManager::ResetSpeed @0x001237f4 (0x0012387c): loads game_work from the
+    // GOT, then ldr r0,[r3,#0x50] (pM_SaveData) -> ClearTotal with no null test on either.
+    game_work.m_SaveData->ClearTotal(s_blitzBonusHash);
 
     m_BlitzLevel = 0;   // +0x60
     m_ColdTimer  = 0.0f;  // +0x64

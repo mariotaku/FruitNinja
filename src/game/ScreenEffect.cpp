@@ -22,12 +22,12 @@
 
 using namespace Mortar;
 
-// v1.6.1 ScreenEffect::Parse @0x00149800 area — check particle hardware flag.
-// Port: always return true (all hardware considered "fast").
+// Particle hardware flag, read by ScreenEffect::Parse (v1.6.1 @0x00149800 area).
+// ASM-spec v1.6.1 IsFastHardware @0x0011f394: loads the MortarGame singleton from
+// the GOT and tail-dispatches vtable slot +0xc (Mortar::MortarGame::IsFastHardware
+// @0x0011fb88 = `ldrb r0,[r0,#0xf4]`). No null test.
 static bool IsFastHardware() {
-    Game* g = Game::GetInstance();
-    if (g) return g->IsFastHardware();
-    return true;
+    return Game::GetInstance()->IsFastHardware();
 }
 
 // ---- Emmiter::Parse (v1.6.1 Emmiter::Parse @0x00148458) ----------------------

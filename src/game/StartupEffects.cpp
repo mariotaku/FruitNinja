@@ -47,8 +47,11 @@ void DrawStartFade() {
     const float t = ts->splashFadeTimer;
     if (t <= 0.0f) return;
 
+    // ASM-spec v1.6.1 DrawStartFade @0x001cd4fc: after the splashFadeTimer > 0 gate
+    // the binary goes straight to `ldr r3,[r4,r3]; ldr r0,[r3,#0x4c]` -- game_work
+    // from the GOT, m_FruitCamera loaded and passed to SetupPerspective unguarded.
+    // No Game::GetInstance, no null test.
     Game* game = Game::GetInstance();
-    if (!game) return;
 
     // Binary calls FruitCamera::SetupPerspective(camera, 3, 1) to switch to ortho/screen mode.
     // TODO: v1.6.1 DrawStartFade @0x001cd4fc calls SetupPerspective with mode 4 (mov r1,#0x4); port passes PT_GENERIC(3). Mode-4 semantics unresolved -- verify before changing.
@@ -161,6 +164,8 @@ void PrepareForLevelStart() {
     // ASM-spec v1.6.1 PrepareForLevelStart @0x001cb3e8: snapshot coin balance before Reset
     game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
     WaveManager::GetInstance()->Reset(false);
-    Game* game = Game::GetInstance();
-    if (game) game_work.bM_bPaused = 1;
+    // ASM-spec v1.6.1 PrepareForLevelStart @0x001cb3e8: the whole body is
+    // `ldr r3,[r4,#0x20]; str r3,[r4,#0x28]` (coin snapshot), WaveManager::GetInstance,
+    // Reset(0), then `mov r3,#1; strb r3,[r4,#5]`. No Game::GetInstance, no null test.
+    game_work.bM_bPaused = 1;
 }

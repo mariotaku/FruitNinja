@@ -251,10 +251,12 @@ void PowerUpManager::Reset(bool fullReset) {
 
     ClearScreenEffects();
 
-    // Zen mode (gameMode==2 + fullReset): re-activate all m_bIsSpecial templates.
+    // Arcade mode (gameMode==2 + fullReset): re-activate all m_bIsSpecial templates.
+    // ASM-spec v1.6.1 PowerUpManager::Reset @0x00142e08 tail (0x00142fc8):
+    // `cmp r7,#0; beq end; ldr r3,[r5,r3]; ldrb r3,[r3,#0x4]; cmp r3,#0x2; bne end`
+    // -- game_work from the GOT, no Game::GetInstance, no null test.
     if (fullReset) {
-        Game* game = Game::GetInstance();
-        if (game && game_work.gameMode == GAME_MODE_ARCADE) {
+        if (game_work.gameMode == GAME_MODE_ARCADE) {
             for (std::map<uint32_t, PowerUp*>::iterator it2 = m_AllPowerUps.begin();
                  it2 != m_AllPowerUps.end(); ++it2) {
                 PowerUp* tpl = it2->second;

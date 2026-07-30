@@ -140,8 +140,9 @@ void UpdateMusic(float dt) {
     // Save old volume for change-detection at end
     float oldVol = g_currentVolume;   // 0x0016a6ac
 
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // ASM-spec v1.6.1 UpdateMusic @0x001cc18c: entry loads g_currentVolume and
+    // game_work from the GOT (`ldr r3,[r4,r3]; vldr.32 s15,[r3,#0xc]`).
+    // No Game::GetInstance, no null test.
 
     // -----------------------------------------------------------------------
     // BLOCK 1: Arm preload-ingame-sounds countdown

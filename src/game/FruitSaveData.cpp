@@ -202,9 +202,13 @@ void FruitSaveData::RestoreComboState() {
 // The tiered improvement gate (currentHigh/2 < score) lives in the caller
 // (GameOverScreen::Update case 6) -- that is a separate task (#50).
 // Returns true iff the stored highscore was actually replaced.
+// ASM-spec v1.6.1 SetCurrentModeHighscore @0x00119f24 (thunk @0x0011297c):
+// game_work from the GOT, `ldrb r3,[r2,#0x4]; cmp r3,#0x3; bhi ret0` (mode gate),
+// then `ldr r2,[r2,#0x50]; cmp r2,#0; beq ret0` -- the binary's ONE real null test
+// is on game_work.m_SaveData, not on Game. It then indexes m_SaveData+0x44+mode*4.
+// The port made this a FruitSaveData member so `this` is the save data and the
+// m_SaveData test has no analogue. No Game::GetInstance in the binary.
 bool FruitSaveData::SetCurrentModeHighscore(int newScore) {
-    Game* g = Game::GetInstance();
-    if (!g) return false;
     int mode = (int)game_work.gameMode;
     if (mode < 0 || mode >= 4) return false;
     if (m_ModeHighScores[mode] < newScore) {
@@ -1009,9 +1013,9 @@ bool* GetIsSavingBool() {
 // in-memory state survives the save.
 // ----------------------------------------------------------------------
 void SaveCurrentData(bool fullSave) {
-    Game* g = Game::GetInstance();
-    if (!g || !game_work.m_SaveData) return;
-
+    // ASM-spec v1.6.1 SaveCurrentData @0x001cde20: game_work comes off the GOT and
+    // `ldr r6,[r4,r3]; ldr r1,[r6,#0x50]` feeds the snapshot copy-ctor unguarded --
+    // no Game::GetInstance and no m_SaveData null test anywhere in the body.
     *GetIsSavingBool() = true;
 
     // ItemSave.xml is always written (coin balance + bought/equipped).
@@ -1035,8 +1039,9 @@ void SaveCurrentData(bool fullSave) {
     // false (PauseScreen retry/quit, GameOverScreen retry) are discarding the
     // in-progress run, so the wave state they'd persist is stale/irrelevant.
     if (fullSave) {
-        WaveManager* wm = WaveManager::GetInstance();
-        if (wm) wm->SaveWaveInfo(&snapshot);
+        // Binary @0x001ce070: `bl WaveManager::GetInstance; add r1,sp,#0x8;
+        // bl SaveWaveInfo` -- no null test on the returned singleton.
+        WaveManager::GetInstance()->SaveWaveInfo(&snapshot);
     }
 
     // Binary does NOT update +0x40 in SaveCurrentData; it is rebuilt as the

@@ -55,9 +55,9 @@ void FlashTexture_UnloadStatics() {
 
 // Matches GameTaskUpdate (v1.6.1 @ 0x0011a290, 87 lines)
 void GameTaskUpdate(float rawDt) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
+    // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: entry is
+    // `ldr r3,[r4,r3]; vstr.32 s16,[r3,#0x3c]` -- game_work from the GOT, written
+    // before anything else. No Game::GetInstance, no null test.
     while (true) {
         // Clamp dt (matches original logic)
         float dt;
@@ -115,9 +115,9 @@ void GameTaskUpdate(float rawDt) {
 // The dt param is ignored (matches binary -- Game::Draw's dt is discarded); the
 // accumulated s_drawDt is used and reset instead. See s_drawDt comment above.
 void GameTaskDraw(float /*dt*/) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
-
+    // ASM-spec v1.6.1 GameTaskDraw @0x00119dfc: 23 instructions, entry is
+    // `ldr r3,[r4,r3]; vstr.32 s0,[r3,#0x38]; ldrb r3,[r3,#0x0]` -- game_work from
+    // the GOT. No Game::GetInstance, no null test.
     uint8_t stateIdx = game_work.taskStateIndex;
     // ASM-verified: 2026-07-03T00:00Z v1.6.1 GameTaskDraw @ 0x00119dfc (asm-inspector)
     // flM_Dt assign and drawDt reset are UNCONDITIONAL -- only the draw dispatch itself

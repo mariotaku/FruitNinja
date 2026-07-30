@@ -125,24 +125,27 @@ bool PointerMoveCallback(InputEvent* /*ev*/) {
     return false;  // pass-through; per-finger handlers do the real work
 }
 
-// PointerDownCallback -- v1.6.1 @ 0x001ca2bc -- Game[+0x9c]=1, Game[+0x9e]=1.
+// ASM-spec v1.6.1 PointerDownCallback @ 0x001ca2bc -- 7 instructions:
+// game_work from the GOT, `strb r0,[r3,#0xa2]` then `strb r0,[r3,#0xa0]`, `bx lr`.
+// No Game::GetInstance, no null test, and the ev arg is never read.
 // Both fields are per-frame "pointer-down-this-frame" flags consumed
 // elsewhere (binary readers not RE'd; cleared per frame somewhere in
 // GameUpdate). Wiring them keeps the call-graph binary-faithful.
+// TODO: v1.6.1 0x001ca2bc (PointerDownCallback) -- binary returns 1 (r0 is left
+// holding the stored 1); the port returns false. Confirm no caller depends on the
+// consumed/handled return before flipping it.
 bool PointerDownCallback(InputEvent* /*ev*/) {
-    Game* g = Game::GetInstance();
-    if (!g) return false;
-    game_work.m_bTouchDownThisFrame = 1;
-    game_work.m_bPointerActive = 1;
+    game_work.m_bTouchDownThisFrame = 1;   // +0xa0
+    game_work.m_bPointerActive = 1;        // +0xa2
     return false;
 }
 
-// PointerUpCallback -- v1.6.1 @ 0x001ca2e4 -- Game[+0x9d]=1, Game[+0x9e]=0.
+// ASM-spec v1.6.1 PointerUpCallback @ 0x001ca2e4 -- 8 instructions:
+// game_work from the GOT, `strb r0,[r3,#0xa1]` (1) then `strb r2,[r3,#0xa2]` (0),
+// `bx lr`. No Game::GetInstance, no null test. Binary returns 1; see the TODO above.
 bool PointerUpCallback(InputEvent* /*ev*/) {
-    Game* g = Game::GetInstance();
-    if (!g) return false;
-    game_work.m_bTouchUpThisFrame = 1;
-    game_work.m_bPointerActive = 0;
+    game_work.m_bTouchUpThisFrame = 1;     // +0xa1
+    game_work.m_bPointerActive = 0;        // +0xa2
     return false;
 }
 
@@ -153,11 +156,12 @@ bool PointerUpCallback(InputEvent* /*ev*/) {
 // TouchDown on the matching per-finger entity. Port covers the
 // TouchDown dispatch via per-finger SlashEntity callbacks bound in
 // SlashEntity::Init -- so just the Game-field writes here.
+// ASM-spec v1.6.1 PointerDownXboxCallback @ 0x001cbec8: game_work from the GOT,
+// `strb r4,[r2,#0xa2]` / `strb r4,[r2,#0xa0]`, then the per-zone dispatch and
+// `cpy r0,r4` (returns 1). No Game::GetInstance, no null test.
 bool PointerDownXboxCallback(InputEvent* /*ev*/) {
-    Game* g = Game::GetInstance();
-    if (!g) return false;
-    game_work.m_bTouchDownThisFrame = 1;
-    game_work.m_bPointerActive = 1;
+    game_work.m_bTouchDownThisFrame = 1;   // +0xa0
+    game_work.m_bPointerActive = 1;        // +0xa2
     return false;
 }
 
@@ -166,11 +170,15 @@ bool PointerDownXboxCallback(InputEvent* /*ev*/) {
 // GameTaskInitInput -- see TODO above Section C.
 // Binary: if (ev != NULL) { if (g_GameData[+2] == 0) PauseGame(); else UnpauseGame(); }
 // g_GameData[+2] = pausedFlag in port (false=running, true=paused).
-// ASM-spec v1.6.1 PauseGameCallback @ 0x001a5978: pending re-verification
+// TODO: v1.6.1 0x001a5978 (PauseGameCallback) -- Ghidra types this as
+// `__thiscall PauseGameCallback(PauseScreen* this)`, and the body is nothing like
+// the port's: it gates on this+0xb4 == 0.0f, branches on the this+0xd8 state
+// (0 -> arm the pause SFX path and set state 2; 3 -> set this+0xd0 = 2.0f, clear
+// this->[+0x98]+0x149, set state 4), and reads game_work+0x18c (mGameSound) from
+// the GOT with no null test. Re-RE the whole body against 0x001a5978; the pause /
+// unpause dispatch below is a port-side approximation.
 static bool PauseGameCallback(InputEvent* ev) {
     if (!ev) return true;
-    Game* game = Game::GetInstance();
-    if (!game) return true;
     if (!game_work.bM_Mode) {
         PauseGame();
     } else {
@@ -179,31 +187,28 @@ static bool PauseGameCallback(InputEvent* ev) {
     return true;
 }
 
-// RegressMenuCallback -- v1.6.1 @ 0x001ca350
-// Binary: g_GameData[+0x604] = 1; (unconditional)
-// +0x604 is m_bFrameDirty in port (same slot ShowPauseMenuCallback writes
+// ASM-spec v1.6.1 RegressMenuCallback @ 0x001ca350 -- 6 instructions:
+// game_work from the GOT, `strb r0,[r3,#0x610]` = 1, `bx lr` (returns 1).
+// Unconditional: no Game::GetInstance, no null test, ev never read.
+// +0x610 is m_bFrameDirty in the port (same slot ShowPauseMenuCallback writes
 // when its gate passes -- both actions flip the same "menu input pending"
 // latch consumed downstream).
-// ASM-spec v1.6.1 RegressMenuCallback @ 0x001ca350: pending re-verification
 bool RegressMenuCallback(InputEvent* ev) {
     (void)ev;
-    Game* g = Game::GetInstance();
-    if (!g) return true;
-    game_work.m_bFrameDirty = 1;
+    game_work.m_bFrameDirty = 1;   // +0x610
     return true;
 }
 
-// ShowPauseMenuCallback -- v1.6.1 @ 0x001ca310
-// Binary: if (m_TransitionTimer == 0.0f && pausedFlag == 0)
-//             g_GameData[+0x604] = 1;
-// +0x604 is m_bFrameDirty -- same field as RegressMenuCallback.
-// ASM-spec v1.6.1 ShowPauseMenuCallback @ 0x001ca310: pending re-verification
+// ASM-spec v1.6.1 ShowPauseMenuCallback @ 0x001ca310 -- 14 instructions:
+// game_work from the GOT, then
+//   if (game_work[+0x0c] == 0.0f && game_work[+0x02] == 0) game_work[+0x610] = 1;
+//   return 1;
+// No Game::GetInstance, no null test, ev never read.
+// +0x610 is m_bFrameDirty -- same field as RegressMenuCallback.
 bool ShowPauseMenuCallback(InputEvent* ev) {
     (void)ev;
-    Game* g = Game::GetInstance();
-    if (!g) return true;
     if (game_work.m_PauseAmount == 0.0f && !game_work.bM_Mode) {
-        game_work.m_bFrameDirty = 1;
+        game_work.m_bFrameDirty = 1;   // +0x610
     }
     return true;
 }

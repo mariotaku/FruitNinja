@@ -17,10 +17,10 @@
 
 void SplashInit(unsigned long) {
     LOG_INFO("SPLASH", "SplashInit: transitioning to State 2 (Game)");
-    Game* game = Game::GetInstance();
-    if (game) {
-        game_work.taskStateIndex = 2;  // auto-transition to Game state
-    }
+    // Port shim: v1.6.1 SplashInit @0x001d2768 is a different (unreachable) body --
+    // see the file header. Unconditional assignment; Game::GetInstance is a
+    // function-local static and can never be null, so the old `if (game)` was dead.
+    game_work.taskStateIndex = 2;  // auto-transition to Game state
 }
 
 void SplashUpdate(float dt, bool active) {

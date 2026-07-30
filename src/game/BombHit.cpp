@@ -70,17 +70,18 @@ void SetBombHitPos(const _Vector3<float>& pos) {
 void CriticalFlash(_Vector3<float> pos, Colour colour) {
     (void)pos;
     s_CritFlashColour = colour;
-    if (Game* game = Game::GetInstance()) {
-        game_work.m_CritTimer = CRITICAL_FLASH_TIME;
-    }
+    // Binary tail is `ldr r3,[r4,r3]; ldr r2,[r4,r2]; vldr.32 s15,[r2]; vstr.32
+    // s15,[r3,#0x2c]` -- game_work from the GOT, unconditional store. No null test.
+    game_work.m_CritTimer = CRITICAL_FLASH_TIME;
 }
 
 namespace FN {
 // Matches the Game::m_CritTimer decrement in the binary's main update
 // loop — runs every frame, clamps at 0.
 void UpdateCriticalFlash(float dt) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // Port helper: the binary inlines this decrement in GameUpdate; every peer that
+    // touches game_work.m_CritTimer (CriticalFlash @0x001cca50, DrawCritHit
+    // @0x001ccfa0) loads game_work straight from the GOT with no null test.
     if (game_work.m_CritTimer > 0.0f) {
         game_work.m_CritTimer -= dt;
         if (game_work.m_CritTimer < 0.0f) game_work.m_CritTimer = 0.0f;
@@ -104,8 +105,9 @@ void UpdateCriticalFlash(float dt) {
 //            drew a textured quad. Fixed below (task #316 / drain #39).
 //   Bug 3 — scale constant: 15002.0f -> 15000.0f (stale DAT_0016b714 comment).
 void DrawCritHit() {
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // ASM-spec v1.6.1 DrawCritHit @0x001ccfa0: after the lazy flash.tex load the
+    // binary reads `ldr r3,[r4,r3]; vldr.32 s13,[r3,#0x2c]` -- game_work from the
+    // GOT. No Game::GetInstance, no null test.
     const float t = game_work.m_CritTimer;
 
     if (t <= 0.0f || t >= CRITICAL_FLASH_TIME) return;
@@ -196,7 +198,8 @@ static const float DIST_SQ_THRESH =  400.0f;  // DAT_0016a198
 static const float IMPULSE_LEN    =   20.0f;
 
 void ResetGameEntities(bool killAll) {
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016a058 (asm-inspector)
+    // ASM-spec v1.6.1 ResetGameEntities @ 0x001cb9c0 (thunk @ 0x001083b4).
+    // (The old ASM-verified stamp cited the v1.5.1 address 0x0016a058.)
     // Binary entry loop: iVar4 = 0; do { iVar4 += 4;
     // g_pSlashEntities[iVar4>>2 - 1]->Reset(); } while (iVar4 != 0x40);
     // 16 iterations. Drops every live blade trail (m_NumPoints = 0) so
@@ -219,7 +222,7 @@ void ResetGameEntities(bool killAll) {
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
     if (!am) return;
 
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016a0e4 reads game+0x6 (retryFlag).
+    // ASM-spec v1.6.1 ResetGameEntities @ 0x001cb9c0 reads game_work+0x6 (retryFlag).
     // DIFFERS: prior port code read gameMode as 'zen'; actual binary reads retryFlag.
     const bool forceSliceAll = (game_work.retryFlag != 0) || killAll;
 
@@ -309,45 +312,57 @@ void ResetGameEntities(bool killAll) {
     // multiplayer so we skip — splats fade naturally.
 }
 
-// ASM-verified: 2026-05-20T00:00:00Z v1.6.1 binary @ 0x0016a208 (asm-inspector)
+// ASM-spec v1.6.1 EndRetryLevel @ 0x001cbc24 (thunk @ 0x00103dc0).
 // (previously implemented as a file-static in PauseScreen.cpp; moved here
 //  so GameUpdate can call it from the retry dispatch tail)
+// Binary body, in order: [block+0x1c]->+0x11c = 0.5f and ->+0x118 = 0;
+// SetScore(0,-1); m_SaveData +0x128/+0x124/+0x11c/+0x120 = -1; coin re-snapshot
+// (game_work+0x28 = +0x20); ResetGameEntities(0); RemoveFlashEntities();
+// WaveManager::GetInstance()->Reset(true); game_work+0x5 = 0; game_work+0xc = 0.0f;
+// mainScreen(+0x164)->+0x118 = 0x11; game_work+0x6 = 0; tail-call
+// RetryOnlineMultiplayerGame when game_work+0x174 != 0.
+// game_work comes straight off the GOT and m_SaveData / mMainScreen are
+// dereferenced unguarded -- there is no Game::GetInstance call and no null test.
+// (Downgraded from ASM-verified: the old stamp cited the v1.5.1 address 0x0016a208
+//  and survived a port-added `if (!game) return;` guard, so it described neither
+//  this body nor v1.6.1.)
 void EndRetryLevel() {
-    LOG_INFO("BOMBHIT", "%s (%s)", "EndRetryLevel enter", "binary @ 0x0016a208");
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    LOG_INFO("BOMBHIT", "%s (%s)", "EndRetryLevel enter", "v1.6.1 @ 0x001cbc24");
 
-    // Binary @ 0x0016a220 / 0x0016a226: writes to GameTaskState+0x110 (0.5f)
-    // and GameTaskState+0x10c (0). NOT MainScreen -- decompiler misdirected
-    // these to mainScreen method calls in the prior port.
+    // TODO: v1.6.1 0x001cbc24 (EndRetryLevel) -- the 0.5f / 0 pair goes to
+    // [block+0x1c]->+0x11c / ->+0x118, and SaveCurrentData @0x001cdf00 reads the
+    // SAME [block+0x1c]->+0x118 and compares it to 0x11 (STATE_CAMERA_FADE), so
+    // block+0x1c is a cached MainScreen pointer, not GameTaskState. The port writes
+    // GameTaskState+0x110/+0x10c instead. Re-target once MainScreen +0x118/+0x11c
+    // are mapped.
     GameTaskState* ts = GetTaskState();
     if (ts) {
-        ts->m_ScoreStateField_0x110 = 0.5f;            // 0x16a220 [GTS+0x110]
-        ts->m_TimedModeAccumulator  = 0;               // 0x16a226 [GTS+0x10c]
+        ts->m_ScoreStateField_0x110 = 0.5f;            // 0x001cbc4c
+        ts->m_TimedModeAccumulator  = 0;               // 0x001cbc50
     }
 
-    SetScore(0, -1);                               // 0x16a22a
+    SetScore(0, -1);                               // 0x001cbc54
 
     if (game_work.m_SaveData) {
         FruitSaveData* sd = game_work.m_SaveData;
-        sd->m_GameOverField2 = -1;                     // 0x16a23a [+0x120]
-        sd->m_GameOverField4 = -1;                     // 0x16a23e [+0x128]
-        sd->m_GameOverField3 = -1;                     // 0x16a242 [+0x124]
-        sd->m_GameOverField1 = -1;                     // 0x16a246 [+0x11c]
+        sd->m_GameOverField2 = -1;                     // 0x001cbc78 [+0x120]
+        sd->m_GameOverField4 = -1;                     // 0x001cbc6c [+0x128]
+        sd->m_GameOverField3 = -1;                     // 0x001cbc70 [+0x124]
+        sd->m_GameOverField1 = -1;                     // 0x001cbc74 [+0x11c]
     }
 
-    // Binary @ 0x0016a24a: m_CoinsAtGameStart re-snapshot so the retried
+    // Binary @ 0x001cbc7c: m_CoinsAtGameStart re-snapshot so the retried
     // run's "YOU JUST EARNT %i COINS" delta starts from zero.
     // (game+0x28) = (game+0x20).
     game_work.m_CoinsAtGameStart = game_work.m_CoinsBalance;
 
-    ResetGameEntities(false);                      // 0x16a24e
-    RemoveFlashEntities();                             // 0x16a252 v1.6.1 @ 0x001cb4b0
-    WaveManager::GetInstance()->Reset(true);           // 0x16a25c
+    ResetGameEntities(false);                      // 0x001cbc84
+    RemoveFlashEntities();                             // 0x001cbc88
+    WaveManager::GetInstance()->Reset(true);           // 0x001cbc8c / 0x001cbc94
 
-    game_work.retryFlag            = 0;                // 0x16a26e [+0x06]
-    game_work.m_PauseAmount             = 0.0f;             // 0x16a270 [+0x0c] DAT_0016a284=0.0f
-    game_work.bM_bPaused = 0;               // 0x16a274 [+0x05]
+    game_work.retryFlag            = 0;                // 0x001cbcb4 [+0x06]
+    game_work.m_PauseAmount             = 0.0f;             // 0x001cbca8 [+0x0c] const @0x001cbcc8 = 0.0f
+    game_work.bM_bPaused = 0;               // 0x001cbca4 [+0x05]
 
     // ASM-spec: GameInit binary @ 0x0016ca7c steps 11/13 creates a fresh
     // MainScreen (m_State=0) and sets m_PauseAmount = -1.0f. Port collapses
@@ -363,10 +378,12 @@ void EndRetryLevel() {
     }
 
     if (game_work.mMainScreen) {
-        game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x16a276 -- 0x11
+        game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x001cbcac -- 0x11
     }
 
-    RetryOnlineMultiplayerGame();  // Defunct: P2P multiplayer -- no-op stub; v1.6.1 @0x0016a27e
+    // Defunct: P2P multiplayer -- no-op stub; v1.6.1 EndRetryLevel @ 0x001cbc24
+    // (gate on game_work+0x174 @0x001cbcb0, tail-call @0x001cbcc4)
+    RetryOnlineMultiplayerGame();
 }
 
 static void RetryShrinkSplat(SplatEntity* s, void* /*ctx*/) {
@@ -374,7 +391,8 @@ static void RetryShrinkSplat(SplatEntity* s, void* /*ctx*/) {
     s->m_DecayRate = 0.25f;
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b008 (re-analyst)
+// ASM-spec v1.6.1 RetryLevel @ 0x001cf124 (thunk @ 0x00115930).
+// (The old ASM-verified stamp cited the v1.5.1 address 0x0016b008.)
 void RetryLevel() {
     // game+0x08 = retryTimer: 0.1f initial countdown window.
     game_work.retryTimer = 0.1f;
@@ -387,7 +405,7 @@ void RetryLevel() {
     // v1.6.1 RetryLevel @0x001cf124: clamp m_Life<=0.15 + m_DecayRate=0.25 on all pooled splats
     SplatEntity::ForEachInPool(&RetryShrinkSplat, NULL);
 
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b0c4 (re-analyst)
+    // ASM-spec v1.6.1 RetryLevel @ 0x001cf124.
     // Mute the persistent looping Bomb-Fuse handle for the 0.1s retry-shrink window.
     // Binary path: *(GameTaskState*)(GOT+0x452d4) +0xD8 = m_pBombFuseSound; SetVolume(0).
     // NOT ambient music -- the prior TODO label was wrong.
@@ -397,7 +415,7 @@ void RetryLevel() {
         }
     }
 
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x0016b0f8 (re-analyst)
+    // ASM-spec v1.6.1 RetryLevel @ 0x001cf124.
     // Play the retry whoosh -- string at rodata 0x001B96AF resolves to "Game-start"
     // (same SFX as level-start; already used by GameOverScreen / GameModeScreen).
     // Binary calls MakeSFXDelegate_GT to build a stock complete-handler delegate;

@@ -23,8 +23,9 @@
 
 // v1.6.1 GameOver @ 0x001cb788
 void GameOver(int endReason, float endScore, int endParam) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // ASM-spec v1.6.1 GameOver @0x001cb788: entry loads game_work straight from the
+    // GOT (ldr r7,[r4,r3]) and reads [r7,#0x5]. No Game::GetInstance call, no null
+    // test -- and m_SaveData at [r7,#0x50] is dereferenced unguarded too.
 
     // re-entry guard: levelTransitionFlag at g_GameData+0x05
     if (game_work.bM_bPaused != 0) return;
@@ -112,8 +113,9 @@ void GameOver(int endReason, float endScore, int endParam) {
 // so normal fruit gains are unchanged. DefaultScoreDelegate multiplies negative
 // deltas by GetScoreLossMultiplier() so bomb penalty magnitude is delegate-controlled.
 void AddToCurrentScore(int points, int param1, bool param2, bool /*param3*/) {
-    Game* game = Game::GetInstance();
-    if (!game) return;
+    // ASM-spec v1.6.1 AddToCurrentScore @0x0011a4c0: entry is
+    // `ldr r7,[r4,r3]; ldr r11,[r7,#0x18]` -- game_work straight from the GOT,
+    // no Game::GetInstance, no null test.
     int oldScore = game_work.currentScore;
     int mult  = PowerUpManager::GetInstance()->GetScoreGainMultiplier();
     int delta = g_ScoreDelegate(points * mult);
@@ -144,17 +146,23 @@ void AddToCurrentScore(int points, int param1, bool param2, bool /*param3*/) {
 
 // Binary free functions @ 0x0011a0ec / 0x0011a12c.
 // Defunct sig: playerIdx ignored (online MP scrubbed) — binary v1.6.1 SetScore @0x0011a0ec / v1.6.1 SetMissCount @0x0011a12c.
-// ASM-verified: 2026-05-10 v1.6.1 SetScore @ 0x0011a0ec (asm-inspector). Writes
-// score to Game+0x18 (the live `currentScore` that ScoreControl reads),
-// NOT to pSaveData->m_CurrentScore (which earlier port had wrong --
-// game-start SetScore(0,-1) failed to reset the live score, so the
-// previous run's final score persisted into the new game).
+// ASM-spec v1.6.1 SetScore @ 0x0011a0ec. Writes score to Game+0x18 (the live
+// `currentScore` that ScoreControl reads), NOT to pSaveData->m_CurrentScore
+// (which earlier port had wrong -- game-start SetScore(0,-1) failed to reset the
+// live score, so the previous run's final score persisted into the new game).
+// The whole body is 6 instructions: load game_work via the GOT, `str r0,[r3,#0x18]`,
+// `bx lr`. No Game::GetInstance call and no null test.
+// (Downgraded from ASM-verified: the stamp survived a later port-side
+//  `if (game) ...` guard being added, so it no longer described this body.)
 void SetScore(int score, int /*playerIdx*/) {
-    Game* game = Game::GetInstance();
-    if (game) game_work.currentScore = score;
+    game_work.currentScore = score;
 }
 
-// ASM-verified: 2026-05-22 v1.6.1 SetMissCount @ 0x0011a12c (re-analyst).
+// ASM-spec v1.6.1 SetMissCount @ 0x0011a12c. Same 6-instruction shape as SetScore:
+// load game_work via the GOT, `strb r0,[r3,#0x14]`, `bx lr`. No Game::GetInstance,
+// no null test.
+// (Downgraded from ASM-verified: the stamp survived a later port-side
+//  `if (game) ...` guard being added, so it no longer described this body.)
 // Binary writes `strb r0, [game_work + 0x14]` -- the LIVE missCount that
 // MissControl::Update reads. Prior port wrote to m_SaveData->m_CurrentMissCount
 // (FruitSaveData+0x68, the persisted snapshot) which is a DIFFERENT field.
@@ -164,7 +172,6 @@ void SetScore(int score, int /*playerIdx*/) {
 // the live counter. FruitSaveData snapshot writes already happen elsewhere
 // (FruitSaveData.cpp:671 mirrors game_work.missCount on save).
 void SetMissCount(int n, int /*playerIdx*/) {
-    Game* game = Game::GetInstance();
-    if (game) game_work.missCount = (uint8_t)n;
+    game_work.missCount = (uint8_t)n;
 }
 

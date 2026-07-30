@@ -286,8 +286,10 @@ int WaveQueItem::PerformCatchup(int leftCount, int rightCount) {
     if (diff < 0) diff = -diff;
     if (diff <= 5) return 0;
 
+    // No null guard in the binary: bl WaveManager::GetInstance @0x0012cdd8 is followed
+    // straight by ldr r0,[r0,#0x20] (m_Random). GetInstance @0x00123fa4 is a
+    // function-local static, so it can never return null.
     WaveManager* wm = WaveManager::GetInstance();
-    if (!wm) return 0;
     if (wm->GetRandom().Rand32(100) >= 60u) return 0;
 
     // The side with more spawns is reduced; the other grows.
