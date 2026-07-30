@@ -539,6 +539,31 @@ def _demangle(mangled: str) -> str:
     return mangled
 
 
+def _strip_template_args(s: str) -> str:
+    """Remove ALL template argument lists from a name, including NESTED ones
+    (e.g. 'Read<SmartPtr<Effect>,allocator>' -> 'Read').
+
+    A single-level regex (r'<[^>]*>') stops at the FIRST '>', so on a nested
+    template it only strips up to the inner close -- 'Read<SmartPtr<Effect>'
+    becomes 'Read' but leaves the dangling ',allocator>' behind, corrupting
+    the comparison and producing a false STALE verdict (task #149: this hid
+    the correct 'Mortar::Read<SmartPtr<Effect>,allocator>' marker in
+    Effect.cpp/.h). A depth-counting scan strips the whole balanced <...>
+    span regardless of nesting depth.
+    """
+    out = []
+    depth = 0
+    for ch in s:
+        if ch == '<':
+            depth += 1
+        elif ch == '>':
+            if depth > 0:
+                depth -= 1
+        elif depth == 0:
+            out.append(ch)
+    return ''.join(out)
+
+
 def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
     """Return True if the cited symbol is a reasonable match for binary_sym.
 
@@ -562,7 +587,7 @@ def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
 
     def _last_segment(s: str) -> str:
         """Extract the last :: segment, stripping template params."""
-        s = re.sub(r'<[^>]*>', '', s)  # strip template args
+        s = _strip_template_args(s)  # strip template args (handles nesting)
         parts = s.rsplit('::', 1)
         return parts[-1].strip()
 
@@ -598,7 +623,7 @@ def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
             if len(dem_parts) >= 2:
                 dem_class = dem_parts[-2].strip()
                 # Strip template params from class name
-                dem_class = re.sub(r'<[^>]*>', '', dem_class).strip()
+                dem_class = _strip_template_args(dem_class).strip()
                 if dem_class == class_name or dem_class.endswith('::' + class_name):
                     return True
 
@@ -632,7 +657,7 @@ def _symbol_matches_strict(cited_sym: str, binary_sym: str, demangled: str) -> b
     dem_base   = re.sub(r'\(.*', '', dem_clean).strip()
 
     def _last_segment(s):
-        s = re.sub(r'<[^>]*>', '', s)
+        s = _strip_template_args(s)
         return s.rsplit('::', 1)[-1].strip()
 
     cited_last = _last_segment(cited_base)
@@ -652,7 +677,7 @@ def _symbol_matches_strict(cited_sym: str, binary_sym: str, demangled: str) -> b
         if class_name and 'dtor' in dem_last:
             dem_parts = re.sub(r'\(.*', '', dem_clean).rsplit('::', 2)
             if len(dem_parts) >= 2:
-                dem_class = re.sub(r'<[^>]*>', '', dem_parts[-2].strip()).strip()
+                dem_class = _strip_template_args(dem_parts[-2].strip()).strip()
                 if dem_class == class_name or dem_class.endswith('::' + class_name):
                     return True
     # 4. Compiler temp.
@@ -1736,7 +1761,7 @@ def _ctor_matches(cited_sym: str, demangled: str) -> bool:
     dem_base   = re.sub(r'\(.*', '', demangled).strip()
     if 'ctor' not in dem_base:
         return False
-    strip_t = lambda s: re.sub(r'<[^>]*>', '', s)
+    strip_t = _strip_template_args
     cited_parts = strip_t(cited_base).split('::')
     dem_parts   = strip_t(dem_base).split('::')
     if len(cited_parts) < 2 or len(dem_parts) < 2:
