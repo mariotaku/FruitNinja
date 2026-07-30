@@ -94,6 +94,19 @@ void GameTaskInitInput() {
 
     // --- Section C: 6 global named callbacks, v1.6.1 GameTaskInitInput @ 0x001cae0c ---
     // Binary RegisterInputCallback(hash, fnPtr) is 2-arg (no actionFlags param).
+    //
+    // What actually raises each of these in v1.6.1 (via Data/input/input.txt ->
+    // InputManager::LoadConfigFile @0x002442fc -> InputActionMapper):
+    //   PointerMove      <- MouseAxisX/Y (0x74/0x75), action "move"     -- LIVE
+    //   PointerPressed   <- MouseButton1 (0x6c), action "pressed"       -- LIVE
+    //   PointerReleased  <- MouseButton1 (0x6c), action "released"      -- LIVE
+    //   PointerPressedX  <- X360_A, action "down"        -- DEAD (ParseKey has no
+    //                       X360_* name -> returns 0 -> no mapper is created)
+    //   RegressMenu      <- escape, action "released"    -- DEAD (ParseKey has no
+    //   ShowPauseMenu    <- AppMenu/escape, "released"      keyboard names either)
+    // All three LIVE ones come from InputDeviceBada::Update @0x00242f40; see the
+    // header comment in src/engine/input/InputDeviceBada.cpp for the full chain
+    // and for the port's substitute emitter.
     im->RegisterInputCallback(StringHash("PointerMove"),     PointerMoveCallback);       // v1.6.1 @ 0x001cbfcc
     im->RegisterInputCallback(StringHash("PointerPressed"),  PointerDownCallback);       // v1.6.1 @ 0x001ca2bc
     im->RegisterInputCallback(StringHash("PointerReleased"), PointerUpCallback);         // v1.6.1 @ 0x001ca2e4
@@ -105,64 +118,127 @@ void GameTaskInitInput() {
     // in v1.6.1 GameTaskInitInput -- PauseScreen::Update wires it directly.
 }
 
-// --- Input callback stubs ---
-// Full bodies require InputEvent struct shape + Game field offsets.
-// TODO: v1.6.1 -- the 6 addresses below were resolved but bodies not
-// re-decompiled against v1.6.1 in this pass (only GameTaskInitInput's call
-// sites were corrected); re-verify each body against its v1.6.1 address.
+// --- Input callbacks ---
+// PointerMoveCallback / PointerDownCallback / PointerUpCallback /
+// PointerDownXboxCallback below were re-decompiled against v1.6.1.
+// TODO: v1.6.1 0x001cbf18 (TouchDownCallback) -- body still not re-decompiled
+// against v1.6.1; re-verify before trusting the pass-through stub at the bottom
+// of this file.
 
-// PointerMoveCallback -- v1.6.1 @ 0x001cbfcc
-// DIFFERS: binary multiplexes by event action ID (0x74/0x75/0xCC/0xCD +
-// zone ranges 0x99..0xA8/0xA9..0xB8), writing Game.worldPos.x/y,
-// per-zone Entity pos.y/z, and dispatching SlashEntity::TouchMoveX/Y
-// on the matching slot. Port has no action-ID byte on its InputEvent
-// (different ABI than binary; port uses SDL's per-finger TouchMove_n
-// callbacks bound to each SlashEntity directly in SlashEntity::Init).
-// The per-finger path already covers TouchMoveX/Y dispatch, so this
-// global hook stays a no-op pass-through. The worldPos.x/y writes are
-// also handled by InputTranslatorSDL on the SDL backend.
-bool PointerMoveCallback(InputEvent* /*ev*/) {
-    return false;  // pass-through; per-finger handlers do the real work
+// ASM-spec v1.6.1 PointerMoveCallback @ 0x001cbfcc:
+//   uint  kc  = ev->keycode;            // binary InputEvent +0x06 (ushort)
+//   float v   = ev->axisValue;          // binary InputEvent +0x08 (float)
+//   Vector2 dim = DisplayManager::GetInstance()->vtable[+0x40](&rect);  // screen w/h
+//   float px  =   v - dim.x * 0.5f;
+//   float py  = -(v - dim.y * 0.5f);
+//   if      (kc == 0x74) game_work.m_WorldPos.x = px;   // MouseAxisX
+//   else if (kc == 0x75) game_work.m_WorldPos.y = py;   // MouseAxisY
+//   if ((ushort)(kc - 0x99) < 0x10) {                   // TouchAxisX1..16
+//       n = kc - 0x99;
+//       if (game_work.m_pActiveTouchSink) InputSink::TouchMoveX(sink, ev, &m_FingerSpawnPos[n]);
+//       else                              SlashEntity::TouchMoveX(inputEnts[n], ev);
+//       game_work.m_FingerSpawnPos[n].x = px;
+//   }
+//   if ((ushort)(kc - 0xa9) < 0x10) { ... same for TouchMoveY, .y = py; }
+//   return 1;
+//
+// Registered on BOTH "PointerMove" (the global pointer, keycodes 0x74/0x75) and
+// the per-finger "TouchMove_X<i>"/"TouchMove_Y<i>" hashes -- one function, three
+// keycode ranges.
+//
+// DIFFERS: the per-finger half is not reproduced here. The port binds
+//   SlashEntity::TouchMoveX/Y directly to the TouchMove_X<i>/Y<i> hashes in
+//   SlashEntity::Init, and InputTranslatorSDL::DispatchForSimTick writes
+//   game_work.m_FingerSpawnPos[] from the drained Mortar::Touch state. The
+//   InputTranslatorSDL per-finger dispatch leaves InputEvent::keycode at 0, so
+//   neither keycode branch below fires on that path.
+//
+// DIFFERS: the binary re-centres the raw device pixel coordinate here
+//   (px = v - W/2, py = H/2 - v, from GlesForm's top-left Y-down 480x320
+//   space). The port's touch coordinates are already centred and Y-up by the
+//   time they reach Mortar::Touch (Layout::TouchToGame -- see
+//   InputTranslatorSDL::TransformTouchNormalized), so re-applying the centring
+//   would double-transform. The value is assigned straight through.
+//
+// MUST return false. Unlike the binary -- where this function IS the per-finger
+// TouchMoveX/Y dispatcher and returning 1 is correct -- the port has
+// SlashEntity::TouchMoveX/Y registered on the same TouchMove_X<i>/Y<i> hashes,
+// AFTER this one. InputDeviceBada::DispatchEvent stops the chain on a true
+// return, so returning true here consumes the move event and kills slicing
+// outright.
+bool PointerMoveCallback(InputEvent* ev) {
+    if (!ev) return false;
+
+    // Binary InputEvent +0x08 -- the single axis-value word. See
+    // InputDevice::AxisEvent @0x0027582c and the emitter in InputDeviceBada.cpp.
+    const float value = ev->x;
+
+    if (ev->keycode == 0x74) {          // MouseAxisX
+        game_work.worldPos.x = value;
+    } else if (ev->keycode == 0x75) {   // MouseAxisY
+        game_work.worldPos.y = value;
+    }
+
+    return false;  // see the MUST-return-false note above
 }
 
 // ASM-spec v1.6.1 PointerDownCallback @ 0x001ca2bc -- 7 instructions:
-// game_work from the GOT, `strb r0,[r3,#0xa2]` then `strb r0,[r3,#0xa0]`, `bx lr`.
-// No Game::GetInstance, no null test, and the ev arg is never read.
-// Both fields are per-frame "pointer-down-this-frame" flags consumed
-// elsewhere (binary readers not RE'd; cleared per frame somewhere in
-// GameUpdate). Wiring them keeps the call-graph binary-faithful.
-// TODO: v1.6.1 0x001ca2bc (PointerDownCallback) -- binary returns 1 (r0 is left
-// holding the stored 1); the port returns false. Confirm no caller depends on the
-// consumed/handled return before flipping it.
+//   ldr r3,[GOT]; mov r0,#1; strb r0,[r3,#0xa2]; strb r0,[r3,#0xa0]; bx lr
+// No Game::GetInstance, no null test, and the ev arg is never read. Returns 1
+// (r0 still holds the stored 1).
+//
+// Raised on the frame the global pointer is acquired: InputDeviceBada::Update
+// @0x00242f40 -> ButtonPressed(MouseButton1 0x6c, mask 1) -> input.txt's
+// `PointerPressed: MouseButton1; pressed` mapper.
+//
+// m_bTouchDownThisFrame (+0xa0) is a per-frame edge flag, cleared at the top of
+// GameUpdate @0x001cf644 and consumed by IsSingleTouchPressed @0x001ca6f8.
+// m_bPointerActive (+0xa2) is a level flag, cleared by PointerUpCallback.
+//
+// "PointerPressed" has exactly one registered handler (this one), so returning
+// true consumes nothing else -- no chain-consume hazard.
 bool PointerDownCallback(InputEvent* /*ev*/) {
     game_work.m_bTouchDownThisFrame = 1;   // +0xa0
     game_work.m_bPointerActive = 1;        // +0xa2
-    return false;
+    return true;
 }
 
 // ASM-spec v1.6.1 PointerUpCallback @ 0x001ca2e4 -- 8 instructions:
-// game_work from the GOT, `strb r0,[r3,#0xa1]` (1) then `strb r2,[r3,#0xa2]` (0),
-// `bx lr`. No Game::GetInstance, no null test. Binary returns 1; see the TODO above.
+//   ldr r3,[GOT]; mov r0,#1; mov r2,#0; strb r0,[r3,#0xa1]; strb r2,[r3,#0xa2]; bx lr
+// No Game::GetInstance, no null test. Returns 1.
+//
+// Raised on the frame the global pointer is lost: InputDeviceBada::Update
+// @0x00242f40 -> ButtonPressed(MouseButton1 0x6c, mask 4) -> input.txt's
+// `PointerReleased: MouseButton1; released` mapper.
+//
+// "PointerReleased" has exactly one registered handler (this one) -- no
+// chain-consume hazard.
 bool PointerUpCallback(InputEvent* /*ev*/) {
     game_work.m_bTouchUpThisFrame = 1;     // +0xa1
     game_work.m_bPointerActive = 0;        // +0xa2
-    return false;
+    return true;
 }
 
-// PointerDownXboxCallback -- v1.6.1 @ 0x001cbec8
-// Despite the "Xbox" name this is the down-edge handler used when the
-// input config supplies a "PointerPressedX" action. Binary writes same
-// Game fields as PointerDownCallback then dispatches SlashEntity::
-// TouchDown on the matching per-finger entity. Port covers the
-// TouchDown dispatch via per-finger SlashEntity callbacks bound in
-// SlashEntity::Init -- so just the Game-field writes here.
 // ASM-spec v1.6.1 PointerDownXboxCallback @ 0x001cbec8: game_work from the GOT,
-// `strb r4,[r2,#0xa2]` / `strb r4,[r2,#0xa0]`, then the per-zone dispatch and
-// `cpy r0,r4` (returns 1). No Game::GetInstance, no null test.
+// `strb r4,[r2,#0xa2]` / `strb r4,[r2,#0xa0]`, then
+// SlashEntity::TouchDown(inputEnts[ev->word1], ev) and `cpy r0,r4` (returns 1).
+// No Game::GetInstance, no null test. Port covers the TouchDown dispatch via the
+// per-finger SlashEntity callbacks bound in SlashEntity::Init, so only the
+// game_work writes remain here.
+//
+// DEAD IN v1.6.1 -- registered but never dispatched, and the port keeps it that
+// way. Data/input/input.txt binds `PointerPressedX: X360_A; down`, but
+// InputManager::ParseKey @0x002438c8 knows only 61 key names (MouseButton1..8,
+// MouseAxisX/Y, Touch1..16, TouchAxisX/Y1..16, AccelAxisX/Y/Z) -- no X360_* name
+// -- so it returns 0 and InputManager::LoadConfigFile @0x002442fc skips the
+// mapper on its `if (key != 0 && action != 0)` guard. Bada has no gamepad, so
+// nothing ever raises this. The registration in GameTaskInitInput is kept for
+// call-graph fidelity; InputDeviceBada.cpp deliberately does NOT emit
+// "PointerPressedX".
 bool PointerDownXboxCallback(InputEvent* /*ev*/) {
     game_work.m_bTouchDownThisFrame = 1;   // +0xa0
     game_work.m_bPointerActive = 1;        // +0xa2
-    return false;
+    return true;
 }
 
 // v1.6.1 PauseScreen::PauseGameCallback @ 0x001a5978 (thunk @ 0x0010d2ec).

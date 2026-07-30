@@ -7,9 +7,151 @@
 // see newMissingPorts. Binary: Acceleration::GetInstance, GetAccelAbs @
 // 0x001955e0, GetAccelDelta @ 0x001955fc.
 #include "input/Acceleration.h"
+#include "util/StringHash.h"
 #include <cstring>
 
 namespace Mortar {
+
+// ---------------------------------------------------------------------------
+// Global-pointer action dispatch (PointerMove / PointerPressed / PointerReleased)
+// ---------------------------------------------------------------------------
+//
+// How v1.6.1 raises these, end to end:
+//
+//   InputDeviceBada::Update @0x00242f40 tracks ONE global pointer (the
+//   most-recent touch, else any touch) and emits, per frame:
+//     AxisEvent(0x74 MouseAxisX, 0x20, posX, dX, stamp, 0)
+//     AxisEvent(0x75 MouseAxisY, 0x20, posY, dY, stamp, 0)
+//     ButtonPressed(0x6c MouseButton1, mask, 1.0f, stamp, 0)
+//       mask 1 on the acquire frame, 2 while held,
+//       mask 4 then 8 on the frame the pointer is lost, 8 while idle.
+//   InputDevice::AxisEvent @0x0027582c / InputDevice::ButtonPressed @0x00275864
+//   pack a 0x14-byte InputEvent (word0 = mask | 0x20000 / | 0x10000, keycode at
+//   +0x06, axis value or keycode at +0x08) and call InputDevice::CheckActions
+//   @0x002757fc -> InputActionMapper::ProcessEvent @0x00275728, which fires the
+//   callback bound to the matching action.
+//
+//   The mappers come from InputManager::LoadConfigFile @0x002442fc parsing
+//   Data/input/input.txt. Key names resolve through InputManager::ParseKey
+//   @0x002438c8 (MouseButton1 = 0x6c, MouseAxisX/Y = 0x74/0x75) and action names
+//   through InputManager::ParseAction @0x00244060 (pressed=0x01, down=0x02,
+//   released=0x04, up=0x08, active=0x10, move=0x20, dead=0x40).
+//
+//   The shipped input.txt binds the mouse keys to exactly three actions:
+//     PointerMove:      MouseAxisX,MouseAxisY;   move
+//     PointerPressed:   MouseButton1;            pressed
+//     PointerReleased:  MouseButton1;            released
+//   so mask 1 raises PointerPressed, mask 4 raises PointerReleased, and masks 2
+//   ("down") and 8 ("up") raise NOTHING -- input.txt has no MouseButton1 line for
+//   either. Per frame the global pointer actions therefore fire BEFORE the
+//   per-finger Touch* actions, which Touch::SendIndividualTouchCallbacks
+//   @0x00242bc4 emits afterwards from the tail of the same Update().
+//
+//   input.txt's two remaining Pointer lines are DEAD in v1.6.1:
+//     PointerMove:     X360_LStick_AxisX/Y;  active
+//     PointerPressedX: X360_A;               down
+//   ParseKey's 61-entry table holds only MouseButton1..8, MouseAxisX/Y,
+//   Touch1..16, TouchAxisX/Y1..16 and AccelAxisX/Y/Z -- no X360_* name -- so it
+//   returns 0 and LoadConfigFile's `if (key != 0 && action != 0)` guard skips the
+//   mapper entirely. PointerDownXboxCallback @0x001cbec8 never runs on Bada, so
+//   the port must not dispatch "PointerPressedX" either.
+//
+// DIFFERS: original = keycode -> InputActionMapper -> action hash, with the
+//   mappers built by InputManager::LoadConfigFile @0x002442fc. LoadConfigFile is
+//   a Defunct stub in the port (see InputManager.cpp), so m_ActionMappers is
+//   permanently empty and InputDevice::AxisEvent/ButtonPressed are dead ends.
+//   These two helpers collapse that indirection into a direct action-hash
+//   dispatch through the port's InputDeviceBinding substitute, using the exact
+//   (keycode, mask) -> action bindings the shipped Data/input/input.txt
+//   declares. They are deleted together with m_bindings when LoadConfigFile is
+//   ported.
+//
+// NOTE: ONLY the global pointer keycodes (0x6c / 0x74 / 0x75) are translated
+//   here. The per-finger keycodes that Touch::SendIndividualTouchCallbacks emits
+//   (Touch1..16 = 0x89..0x98, TouchAxisX1..16 = 0x99..0xa8, TouchAxisY1..16 =
+//   0xa9..0xb8) are ALREADY dispatched as TouchDown_n / TouchMove_Xn /
+//   TouchMove_Yn / TouchUp_n by InputTranslatorSDL::DispatchForSimTick.
+//   Translating them here too would dispatch every per-finger event twice per
+//   tick and double-feed the blade.
+
+#if defined(__bada__)
+
+// Cross-build: the mapper chain is live, so no substitute is needed. Empty
+// bodies inline away and leave InputDeviceBada::Update byte-comparable.
+static inline void EmitPointerAxisAction(InputDeviceBada*, unsigned long, float) {}
+static inline void EmitPointerButtonAction(InputDeviceBada*, unsigned long, float, float) {}
+
+#else
+
+namespace {
+
+// StringHash of the three live pointer actions in Data/input/input.txt.
+// Built once; StringHash is the binary-faithful Jenkins lookup3 with
+// case-folding (util/StringHash.h), the same hash LoadConfigFile feeds ParseKey
+// and ParseAction.
+unsigned long s_hashPointerMove     = 0;
+unsigned long s_hashPointerPressed  = 0;
+unsigned long s_hashPointerReleased = 0;
+bool          s_pointerHashesReady  = false;
+
+void EnsurePointerActionHashes() {
+    if (s_pointerHashesReady) return;
+    s_hashPointerMove     = StringHash("PointerMove");
+    s_hashPointerPressed  = StringHash("PointerPressed");
+    s_hashPointerReleased = StringHash("PointerReleased");
+    s_pointerHashesReady  = true;
+}
+
+}  // namespace
+
+// Stands in for AxisEvent(0x74/0x75, ...) -> "PointerMove".
+// `value` is the binary's single axis-value word (InputEvent +0x08); the port
+// carries it in InputEvent::x and names the axis in InputEvent::keycode, which
+// is what PointerMoveCallback @0x001cbfcc branches on.
+static void EmitPointerAxisAction(InputDeviceBada* dev, unsigned long keycode,
+                                  float value) {
+    EnsurePointerActionHashes();
+
+    InputEvent ie;
+    memset(&ie, 0, sizeof(ie));
+    ie.actionHash  = (uint32_t)s_hashPointerMove;
+    // Binary word0 = ParseAction("move") | 0x20000.
+    ie.actionFlags = INPUT_ACTION_MOVE | 0x20u;
+    ie.fingerId    = -1;              // global pointer, not a finger slot
+    ie.keycode     = (uint32_t)keycode;
+    ie.x           = value;
+    dev->DispatchEvent(&ie);
+}
+
+// Stands in for ButtonPressed(0x6c, mask, ...) -> "PointerPressed" (mask 1) /
+// "PointerReleased" (mask 4). Masks 2 and 8 dispatch nothing -- input.txt has no
+// MouseButton1 line bound to "down" or "up".
+static void EmitPointerButtonAction(InputDeviceBada* dev, unsigned long mask,
+                                    float x, float y) {
+    EnsurePointerActionHashes();
+
+    unsigned long hash;
+    if (mask & 0x01) {              // ParseAction("pressed")
+        hash = s_hashPointerPressed;
+    } else if (mask & 0x04) {       // ParseAction("released")
+        hash = s_hashPointerReleased;
+    } else {
+        return;                     // mask 2 ("down") / 8 ("up"): unbound
+    }
+
+    InputEvent ie;
+    memset(&ie, 0, sizeof(ie));
+    ie.actionHash  = (uint32_t)hash;
+    // Binary word0 = mask | 0x10000.
+    ie.actionFlags = INPUT_ACTION_DOWN | (uint32_t)mask;
+    ie.fingerId    = -1;            // global pointer, not a finger slot
+    ie.keycode     = 0x6c;          // MouseButton1
+    ie.x           = x;
+    ie.y           = y;
+    dev->DispatchEvent(&ie);
+}
+
+#endif  // __bada__
 
 // ASM-spec v1.6.1 InputDeviceBada::InputDeviceBada @ 0x002427e0 — ctor: call InputDevice ctor at base, write
 // InputDeviceBada vtable (fns*) at +0x00, zero four uint32_t fields.
@@ -57,6 +199,11 @@ void InputDeviceBada::Destroy() {
 //   +0x10 m_LastTouchX    = last touch X
 //   +0x14 m_LastTouchY    = last touch Y
 //   +0x18 m_EventStamp    = event stamp counter
+//
+// The EmitPointerAxisAction / EmitPointerButtonAction calls interleaved with the
+// AxisEvent / ButtonPressed calls below are the port's substitute for the
+// Input/Input.txt mapper chain -- see the long comment at the top of this file.
+// They are compiled out on the cross-build.
 void InputDeviceBada::Update(float /*dt*/) {
     Touch& touch = Touch::GetInstance();
 
@@ -75,16 +222,20 @@ void InputDeviceBada::Update(float /*dt*/) {
             // Nothing pressed: emit "up" (mask 8) and fall through to the
             // callbacks/accelerometer tail.
             ButtonPressed(0x6c, 8, 1.0f, m_EventStamp, 0);
+            EmitPointerButtonAction(this, 8, posX, posY);   // unbound -- no-op
             goto callbacks;
         }
         // Freshly acquired touch -> emit current position (press-edge).
         touch.GetTouchPos(m_ActiveTouchId, posX, posY);
         AxisEvent(0x74, 0x20, posX,
                   posX - (float)m_LastTouchX, m_EventStamp, 0);
+        EmitPointerAxisAction(this, 0x74, posX);            // -> PointerMove
         AxisEvent(0x75, 0x20, posY,
                   posY - (float)m_LastTouchY, m_EventStamp, 0);
+        EmitPointerAxisAction(this, 0x75, posY);            // -> PointerMove
         // mask 1 = press-edge.
         ButtonPressed(0x6c, 1, 1.0f, m_EventStamp, 0);
+        EmitPointerButtonAction(this, 1, posX, posY);       // -> PointerPressed
         m_LastTouchX = (uint32_t)posX;
         m_LastTouchY = (uint32_t)posY;
     } else {
@@ -102,17 +253,22 @@ void InputDeviceBada::Update(float /*dt*/) {
             // Lost/changed touch: emit release (mask 4) then up (mask 8),
             // clear the tracked id, and skip position events this frame.
             ButtonPressed(0x6c, 4, 1.0f, m_EventStamp, 0);
+            EmitPointerButtonAction(this, 4, posX, posY);   // -> PointerReleased
             ButtonPressed(0x6c, 8, 1.0f, m_EventStamp, 0);
+            EmitPointerButtonAction(this, 8, posX, posY);   // unbound -- no-op
             m_ActiveTouchId = 0;
             goto callbacks;
         }
         touch.GetTouchPos(m_ActiveTouchId, posX, posY);
         AxisEvent(0x74, 0x20, posX,
                   posX - (float)m_LastTouchX, m_EventStamp, 0);
+        EmitPointerAxisAction(this, 0x74, posX);            // -> PointerMove
         AxisEvent(0x75, 0x20, posY,
                   posY - (float)m_LastTouchY, m_EventStamp, 0);
+        EmitPointerAxisAction(this, 0x75, posY);            // -> PointerMove
         // mask 2 = held/move.
         ButtonPressed(0x6c, 2, 1.0f, m_EventStamp, 0);
+        EmitPointerButtonAction(this, 2, posX, posY);       // unbound -- no-op
         m_LastTouchX = (uint32_t)posX;
         m_LastTouchY = (uint32_t)posY;
     }

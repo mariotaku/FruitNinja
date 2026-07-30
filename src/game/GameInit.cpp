@@ -442,6 +442,10 @@ void GameUpdate(float dt, bool active) {
         // binary's single ring drain lives in FruitNinja::Draw. So dropping the drain
         // here makes GameUpdate MATCH the binary (no asm-verify divergence), not diverge
         // from it -- hence no __bada__ guard is warranted.
+        // The InputManager::Update call itself is NOT here: in the binary it sits at
+        // 0x001cf6cc, i.e. AFTER the m_bTouchDownThisFrame clear and the
+        // pM_FingerSpawnPos.z aging loop. See the "Per-frame input-device poll" block
+        // further down, which is where the port places it for the same reason.
     }
 
     // --- Common update block: sound + music (0x001cf6b8..0x001cf7d0) ---
@@ -474,6 +478,31 @@ void GameUpdate(float dt, bool active) {
             z = -1.0f;
         }
         // z < 0.0f (i.e., -1.0f): left unchanged
+    }
+
+    // --- Per-frame input-device poll (0x001cf6ac..0x001cf6d0) ---
+    // ASM-spec v1.6.1 GameUpdate @0x001cf6cc:
+    //   vldr s15,[splashTimer]; vcmpe s15,#0; bhi <skip>   @0x001cf6b4..0x001cf6c0
+    //   bl InputManager::GetInstance  @0x001053f8
+    //   vmov.f32 s0, s17              (literal 0.0f @0x001cf85c)
+    //   bl InputManager::Update       @0x001070a0
+    // i.e. when the splash timer is NOT > 0, GameUpdate polls the input devices
+    // with dt = 0.0f. InputManager::Update @0x00243838 broadcasts to
+    // InputDeviceBada::Update @0x00242f40, which runs the global-pointer state
+    // machine and raises PointerMove / PointerPressed / PointerReleased.
+    //
+    // Placement is load-bearing: the binary calls this AFTER the
+    // m_bTouchDownThisFrame / m_bTouchUpThisFrame clear above (strb @0x001cf644 /
+    // @0x001cf648) and BEFORE the main dispatch that consumes them (via
+    // IsSingleTouchPressed @0x001ca6f8). It cannot be hosted by
+    // InputTranslatorSDL::DispatchForSimTick, which runs in stepUpdate BEFORE
+    // GameTaskUpdate -- the clear would wipe the flags before any reader sees
+    // them. Keep this call between the clear and the dispatch.
+    //
+    // No null test: the binary has none, and GameInitialise step 10 constructs
+    // the InputManager before any GameUpdate can run.
+    if (splashTs->splashFadeTimer <= 0.0f) {
+        Mortar::InputManager::GetInstance()->Update(0.0f);
     }
 
     // --- Main active/inactive dispatch (0x001cf7d4) ---
