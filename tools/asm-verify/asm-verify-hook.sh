@@ -9,7 +9,15 @@
 # One-time prereq: bash tools/asm-verify/setup.sh (builds the fnverify image).
 set -u
 
-PROJ="$(cd "$(dirname "$0")/.." && pwd)"
+PROJ="$(cd "$(dirname "$0")/../.." && pwd)"   # script is tools/asm-verify/ -> repo root is two up
+# This said "/.." (one up), so PROJ was <repo>/tools: $PROJ/src never existed, the
+# change-detect find matched nothing, and the dispatcher exit 0'd on every single
+# invocation. Guard the assumption instead of trusting it -- a hook whose only
+# failure mode is "silently does nothing" is indistinguishable from "up to date".
+if [ ! -d "$PROJ/src" ]; then
+    echo "[asm-verify] repo source dir missing: $PROJ/src (bad PROJ resolution)" >&2
+    exit 1
+fi
 TMP="$PROJ/tmp/asm-verify"
 REPORT="$TMP/report.json"
 LOG="$TMP/hook.log"
