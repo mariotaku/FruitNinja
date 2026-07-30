@@ -117,9 +117,9 @@ MissControl::MissControl()
     // by HUDControl::SetToMultiplayerState() on Game::TellGameToStart.
     m_Singular      = 1;
     // Binary lazy-loads the shared textures inline here, gated on s_refCount==0.
-    // The port keeps the load body in LoadContent() (guarded by s_TexturesLoaded)
-    // so GameInitialise's Step-25 pre-warm call and this ctor path don't
-    // double-load; the ctor gate mirrors the binary's s_refCount==0 check.
+    // The port keeps the load body in LoadContent() (guarded by s_TexturesLoaded).
+    // Task #147 removed a GameInitialise boot pre-warm call that ran with no
+    // MissControl instance alive yet, leaking the textures on a splash-only exit.
     if (s_refCount == 0) {
         LoadContent();
     }
@@ -132,9 +132,17 @@ MissControl::MissControl()
     // m_bNoDestructor == 1 before the first Update tick).
 }
 
-// ASM-spec v1.6.1 MissControl::~MissControl @0x0019f198
+// ASM-spec v1.6.1 MissControl::~MissControl @0x0019f198: read directly from Ghidra
+// disassembly (not yet asm-inspector-diffed). Binary order: MissControl::Release(this)
+// @0x0019f1b8 (nulls m_Texture) -> --s_refCount
+// -> explicit SmartPtr<Texture>::SetPtr(&m_Texture, NULL) @0x0019f1d4 (redundant with
+// Release's own null-out, but binary-faithful; SmartPtr::SetPtr(NULL) is idempotent, no
+// double-release) -> if (s_refCount<1) release the 4 shared statics.
 MissControl::~MissControl() {
-    if (--s_refCount <= 0) {
+    Release();
+    --s_refCount;
+    m_Texture.SetNull();
+    if (s_refCount <= 0) {
         s_TexCritical.SetNull();
         s_TexRare.SetNull();
         s_TexCross.SetNull();

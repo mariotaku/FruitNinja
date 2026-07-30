@@ -20,7 +20,6 @@
 #include "entities/SuperFruitControl.h"
 #include "FruitSaveData.h"
 #include "audio/GameSound.h"
-#include "hud/MissControl.h"
 #include "screens/GameOverScreen.h"
 #include "screens/PowerUpShop.h"
 #include "screens/DojoScreen.h"
@@ -485,7 +484,16 @@ void GameInitialise(void* window, const char* config) {
     // Deferred to BlockLoader::PreloadBlock(RES_BLOCK_INGAME) -- task #59
     // (gameplay-only: combo/critical/rare overlays, never shown at menu time)
 #else
-    MissControl::LoadContent();     // load critical / rare / cross overlays -- fidelity: host/web/binary load at boot
+    // Removed (task #147): this pre-warmed MissControl::LoadContent() with no
+    // MissControl instance yet in existence, so its 11 shared textures had no
+    // owner and no destructor to release them if the app quit before GameInit
+    // ever ran (splash-only exit, no CleanPool) -- a leak-to-atexit window the
+    // binary doesn't have. The binary's v1.6.1 GameInitialise (0x0010bdfc) has
+    // no MissControl call at all in this sequence -- it loads these lazily,
+    // inline in the first MissControl ctor gated on s_refCount==0 (see
+    // MissControl::MissControl @0x0019ed44), which GameInit's CreatePool
+    // triggers. The port's ctor mirrors the same gate (MissControl.cpp), so
+    // removing this call cannot leave the textures unloaded.
 #endif
     // Pool allocation + HUD registration happens in GameInit (which
     // runs AFTER the HUD is created).

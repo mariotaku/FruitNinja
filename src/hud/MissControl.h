@@ -124,8 +124,14 @@ public:
 
     // Shared texture load, idempotent (guarded by s_TexturesLoaded). The
     // binary loads these inline in the ctor gated on s_refCount==0; the port
-    // ctor calls this under the same gate. GameInitialise Step 25 also calls
-    // it as a boot-time pre-warm (cache hit for the later ctor path).
+    // ctor calls this under the same gate. Task #147 removed a GameInitialise
+    // boot-time pre-warm call that ran with no MissControl instance alive yet
+    // (s_refCount never left 0, so a splash-only exit before GameInit ran left
+    // these 11 textures with no owner and no destructor to release them). The
+    // Wii FN_BLOCK_PRELOAD path (BlockLoader.cpp) still calls this directly,
+    // but only from RES_BLOCK_INGAME preload, well after GameInit's CreatePool
+    // has already constructed the pool (s_refCount>0), so it's a cache hit,
+    // never a pre-warm-before-any-instance.
     static void LoadContent();
 
     // Allocate the pool, construct each slot, register all with the HUD,
