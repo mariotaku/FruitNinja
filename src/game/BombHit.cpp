@@ -315,11 +315,11 @@ void ResetGameEntities(bool killAll) {
 // ASM-spec v1.6.1 EndRetryLevel @ 0x001cbc24 (thunk @ 0x00103dc0).
 // (previously implemented as a file-static in PauseScreen.cpp; moved here
 //  so GameUpdate can call it from the retry dispatch tail)
-// Binary body, in order: [block+0x1c]->+0x11c = 0.5f and ->+0x118 = 0;
+// Binary body, in order: mainScreen(+0x11c) = 0.5f and mainScreen(+0x118) = 0;
 // SetScore(0,-1); m_SaveData +0x128/+0x124/+0x11c/+0x120 = -1; coin re-snapshot
 // (game_work+0x28 = +0x20); ResetGameEntities(0); RemoveFlashEntities();
 // WaveManager::GetInstance()->Reset(true); game_work+0x5 = 0; game_work+0xc = 0.0f;
-// mainScreen(+0x164)->+0x118 = 0x11; game_work+0x6 = 0; tail-call
+// game_work(+0x164)->+0x118 = 0x11; game_work+0x6 = 0; tail-call
 // RetryOnlineMultiplayerGame when game_work+0x174 != 0.
 // game_work comes straight off the GOT and m_SaveData / mMainScreen are
 // dereferenced unguarded -- there is no Game::GetInstance call and no null test.
@@ -329,17 +329,12 @@ void ResetGameEntities(bool killAll) {
 void EndRetryLevel() {
     LOG_INFO("BOMBHIT", "%s (%s)", "EndRetryLevel enter", "v1.6.1 @ 0x001cbc24");
 
-    // TODO: v1.6.1 0x001cbc24 (EndRetryLevel) -- the 0.5f / 0 pair goes to
-    // [block+0x1c]->+0x11c / ->+0x118, and SaveCurrentData @0x001cdf00 reads the
-    // SAME [block+0x1c]->+0x118 and compares it to 0x11 (STATE_CAMERA_FADE), so
-    // block+0x1c is a cached MainScreen pointer, not GameTaskState. The port writes
-    // GameTaskState+0x110/+0x10c instead. Re-target once MainScreen +0x118/+0x11c
-    // are mapped.
-    GameTaskState* ts = GetTaskState();
-    if (ts) {
-        ts->m_ScoreStateField_0x110 = 0.5f;            // 0x001cbc4c
-        ts->m_TimedModeAccumulator  = 0;               // 0x001cbc50
-    }
+    // 0x001cbc44 loads the MainScreen pointer from 0x0031671c -- the same pointer
+    // GameInit @0x001ce82c stores into game_work+0x164 (str r5,[r6,#0x1c] then
+    // ldr r3,[r6,#0x1c] / str r3,[r2,#0x164]), and the one SaveCurrentData
+    // @0x001cdf00 reads as [block+0x1c]->+0x118 to compare against 0x11.
+    game_work.mMainScreen->SetIntroHoldTimer(0.5f);          // 0x001cbc4c [+0x11c]
+    game_work.mMainScreen->SetState(STATE_CAMERA_ZOOM);      // 0x001cbc50 [+0x118] = 0
 
     SetScore(0, -1);                               // 0x001cbc54
 
@@ -373,13 +368,9 @@ void EndRetryLevel() {
     // fires). Reach the binary's same end-state by resetting here.
     // re-analyst RE: 2026-05-20.
     game_work.m_PauseAmount = -1.0f;
-    if (game_work.mMainScreen) {
-        game_work.mMainScreen->ResetTimers();  // GameInit step 11: fresh ctor values
-    }
+    game_work.mMainScreen->ResetTimers();  // GameInit step 11: fresh ctor values
 
-    if (game_work.mMainScreen) {
-        game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x001cbcac -- 0x11
-    }
+    game_work.mMainScreen->SetState(STATE_CAMERA_FADE); // 0x001cbcac -- 0x11
 
     // Defunct: P2P multiplayer -- no-op stub; v1.6.1 EndRetryLevel @ 0x001cbc24
     // (gate on game_work+0x174 @0x001cbcb0, tail-call @0x001cbcc4)

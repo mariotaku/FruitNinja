@@ -378,10 +378,13 @@ int AchievementManager::UnlockAchievementInNetwork(const char* /*name*/) {
 // Binary: tests (1 << gameMode) & m_ModeBitmask
 // ---------------------------------------------------------------------------
 
-// TODO: v1.6.1 0x00117d48 (UnlockTotalFruitAchievement) -- that caller has NO mode
-// gate in v1.6.1: its loop is only `info->m_Total(+0x8c) <= total` then a straight
-// QueAchievement call. Re-check which Unlock* paths really carry the bitmask test
-// before keeping this helper on all of them.
+// UnlockTotalFruitAchievement @0x00117d48 does NOT use this helper -- its loop has
+// no GetModeBitMask call at all. UnlockScoreAchievement @0x00117bd0 does. The
+// remaining call sites below are still unconfirmed against their binary bodies.
+// TODO: v1.6.1 0x00117bd0 (UnlockScoreAchievement) -- the binary gate is
+// `GetModeBitMask(game_work+0x4) & info->+0x98`, a real function call. This helper
+// models it as `1u << (gameMode & 3)`, which folds modes 4+ onto 0..3. RE
+// GetModeBitMask and port it as its own function.
 // Every peer reads game_work straight off the GOT with no null test, so no guard here.
 static int ModeBitmaskAllows(uint32_t bitmask) {
     uint8_t gm = game_work.gameMode & 0x03;
@@ -392,17 +395,20 @@ static int ModeBitmaskAllows(uint32_t bitmask) {
 // UnlockTotalFruitAchievement  (v1.6.1 @0x00117d48)
 // ---------------------------------------------------------------------------
 
+// ASM-spec v1.6.1 AchievementManager::UnlockTotalFruitAchievement @ 0x00117d48:
+// iterates m_ByType[TOTAL]; the ONLY test is `info->m_Total(+0x8c) <= total`,
+// then a straight QueAchievement call. No GetModeBitMask anywhere in the loop --
+// unlike UnlockScoreAchievement @0x00117bd0, which does gate on it. Returns a 0/1
+// "queued something" flag, not a count.
 int AchievementManager::UnlockTotalFruitAchievement(int total) {
-    // Binary: iterates m_ByType[TOTAL]; for each entry whose threshold <= total,
-    // and whose mode bitmask allows current mode, calls QueAchievement.
     int unlocked = 0;
     std::map<uint32_t, AchievementInfo*>& bucket = m_ByType[ACHIEVEMENT_TYPE_TOTAL];
     for (std::map<uint32_t, AchievementInfo*>::iterator it = bucket.begin(); it != bucket.end(); ) {
         AchievementInfo* info = it->second;
         if (!info) { ++it; continue; }
-        if (info->m_Total <= total && ModeBitmaskAllows(info->m_ModeBitmask)) {
+        if (info->m_Total <= total) {
             if (QueAchievement(info, it)) {
-                ++unlocked;
+                unlocked = 1;
                 // it was pre-advanced by QueAchievement; don't ++it
             } else {
                 ++it;  // binary always advances, even when QueAchievement fails

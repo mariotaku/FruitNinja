@@ -135,6 +135,8 @@ public:
     int  UnlockScoreUnsulliedAchievement(int score);
     int  UnlockSpecificFruitAchievement(int fruitTypeHash, unsigned int count);
     int  UnlockSpecificOrderAchievement(uint32_t newFruitHash);
+    // v1.6.1 @0x00117d48 — threshold test only, NO mode-bitmask gate (unlike
+    // UnlockScoreAchievement). Returns 0/1 "queued something", not a count.
     int  UnlockTotalFruitAchievement(int total);
 
     // v1.6.1 AchievementManager::UnlockedAchievement @0x001180a8 — show popup via
