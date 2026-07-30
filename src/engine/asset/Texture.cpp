@@ -10,6 +10,12 @@
 #include "util/Endian.h"
 #include <cstring>
 #include <vector>
+#ifndef __bada__
+#include <set>
+#include <map>
+#include <algorithm>
+#include <string>
+#endif
 
 #if defined(FRUIT_PLATFORM_WII)
 // Port specific: pre-tiled "GXT1" textures (all transcodable Tex1 game art +
@@ -103,7 +109,21 @@ namespace Bada {
 // Port specific: GameDestroy teardown leak guard -- see debug/GLHandleLeakCheck.h
 // for the invariant and why this is __bada__-gated. STATIC storage: Texture2D_Bada
 // is size-pinned by `operator new(100)` and must not grow an instance member.
-static int s_LiveTexture2D = 0;
+//
+// Registry (not a member) backs both the live count and the identity dump in
+// GLLiveLog_Texture2D -- insert/erase are O(log n), fine for bulk load/teardown.
+//
+// DELIBERATELY LEAKED (heap, never deleted), and this is the whole point: as a
+// plain file-static std::set it was itself destroyed at atexit, and then
+// ~Texture2D_Bada -- which runs LATER, from other atexit dtors such as
+// s_FruitInfos' -- called erase() on the destroyed container and segfaulted
+// 202 tests. That is exactly the static-destruction-order bug this guard exists
+// to detect, so the detector must not be able to have it. A never-destructed
+// heap container makes erase-after-atexit safe by construction.
+static std::set<Texture2D_Bada*>& LiveTexture2DSet() {
+    static std::set<Texture2D_Bada*>* p = new std::set<Texture2D_Bada*>();
+    return *p;
+}
 #endif
 
 // Port specific: no binary counterpart (used by the UploadTex1ToGL DIFFERS load path).
@@ -114,7 +134,7 @@ Texture2D_Bada::Texture2D_Bada()
     , m_Source()
 {
 #ifndef __bada__
-    ++s_LiveTexture2D;
+    LiveTexture2DSet().insert(this);
 #endif
 }
 
@@ -126,7 +146,7 @@ Texture2D_Bada::Texture2D_Bada(const Mortar::SmartPtr<TextureSource>& src, unsig
     , m_Source()
 {
 #ifndef __bada__
-    ++s_LiveTexture2D;
+    LiveTexture2DSet().insert(this);
 #endif
     SetSource(src, param2);
 }
@@ -134,7 +154,7 @@ Texture2D_Bada::Texture2D_Bada(const Mortar::SmartPtr<TextureSource>& src, unsig
 // Binary dtor @0x00229b8c (in-place).
 Texture2D_Bada::~Texture2D_Bada() {
 #ifndef __bada__
-    --s_LiveTexture2D;
+    LiveTexture2DSet().erase(this);
 #endif
     ReleaseCache();
 }
@@ -354,9 +374,84 @@ void Texture2D_Bada::SetSource(const Mortar::SmartPtr<TextureSource>& src, unsig
 } // namespace Mortar
 
 #ifndef __bada__
-namespace FN {
-int GLLiveCount_Texture2D() { return Mortar::Bada::s_LiveTexture2D; }
+namespace {
+
+// One row of the identity dump: a name (m_Path, or "<unnamed>" when the
+// texture was loaded via LoadFromMemory/ParseTexBuffer and never got a path
+// -- see Texture2D_Bada::Debug_ToString's own limits below) plus how many
+// live instances share it and a capped sample of their m_TexId's.
+struct GLTexGroupEntry {
+    std::string name;
+    int count;
+    std::vector<GLuint> sampleIds;
+    GLTexGroupEntry() : count(0) {}
+};
+
+bool GLTexGroupCountDesc(const GLTexGroupEntry& a, const GLTexGroupEntry& b) {
+    if (a.count != b.count) return a.count > b.count;
+    return a.name < b.name;
 }
+
+}  // namespace
+
+namespace FN {
+
+int GLLiveCount_Texture2D() { return (int)Mortar::Bada::LiveTexture2DSet().size(); }
+
+// Identity dump for the leak guard. Texture2D_Bada carries no name of its own
+// (m_PrimType/m_TexId/m_Pad5c/m_Source are all it has past the Texture2D base
+// -- see Texture.h); the only identifying string reachable from a live
+// instance is the base class's port-side m_Path (set by Texture::Load after a
+// successful file load; left empty by the LoadFromMemory/ParseTexBuffer path,
+// which is why some groups below print as "<unnamed>"). Debug_ToString()
+// (vtable slot 6) is no help either -- it always returns the literal
+// "Texture2D_Bada" (see the override above), not a per-instance name.
+// Grouped by name because a pathological run can hold hundreds of instances
+// of the same leaked path; a per-instance line would flood the log without
+// adding information the group ID doesn't already carry.
+void GLLiveLog_Texture2D(int maxLines) {
+    std::map<std::string, GLTexGroupEntry> groups;
+    std::set<Mortar::Bada::Texture2D_Bada*>::const_iterator it;
+    for (it = Mortar::Bada::LiveTexture2DSet().begin();
+         it != Mortar::Bada::LiveTexture2DSet().end(); ++it) {
+        Mortar::Bada::Texture2D_Bada* tex = *it;
+        std::string name = tex->m_Path.empty() ? std::string("<unnamed>") : tex->m_Path;
+        GLTexGroupEntry& e = groups[name];
+        e.name = name;
+        e.count += 1;
+        if (e.sampleIds.size() < 5) {
+            e.sampleIds.push_back(tex->m_TexId);
+        }
+    }
+
+    std::vector<GLTexGroupEntry> sorted;
+    sorted.reserve(groups.size());
+    std::map<std::string, GLTexGroupEntry>::const_iterator git;
+    for (git = groups.begin(); git != groups.end(); ++git) {
+        sorted.push_back(git->second);
+    }
+    std::sort(sorted.begin(), sorted.end(), GLTexGroupCountDesc);
+
+    LOG_ERROR("GAMEINIT", "Texture2D_Bada leak identities: %d live instance(s), %d distinct name(s)",
+              (int)Mortar::Bada::LiveTexture2DSet().size(), (int)sorted.size());
+
+    int printed = 0;
+    for (size_t i = 0; i < sorted.size() && printed < maxLines; ++i, ++printed) {
+        const GLTexGroupEntry& e = sorted[i];
+        std::string ids;
+        for (size_t j = 0; j < e.sampleIds.size(); ++j) {
+            if (j != 0) ids += ",";
+            ids += std::to_string((unsigned)e.sampleIds[j]);
+        }
+        const char* more = (e.count > (int)e.sampleIds.size()) ? ",..." : "";
+        LOG_ERROR("GAMEINIT", "  %s x%d (texId: %s%s)", e.name.c_str(), e.count, ids.c_str(), more);
+    }
+    if ((int)sorted.size() > printed) {
+        LOG_ERROR("GAMEINIT", "  ... %d more distinct name(s) truncated", (int)sorted.size() - printed);
+    }
+}
+
+}  // namespace FN
 #endif
 
 // ---------------------------------------------------------------------------

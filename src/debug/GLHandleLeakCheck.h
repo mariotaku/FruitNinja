@@ -12,11 +12,13 @@
 //   Mortar::Geometry              -- m_Vbo / m_Ibo        (asset/Geometry.cpp)
 //   Mortar::FontInterface         -- atlas page textures  (render/FontInterface.cpp)
 //
-// Each of the three .cpp files defines a file-static live-instance counter,
-// bumped in every ctor and dropped in the dtor, and exposes it through the
-// matching accessor below. STATIC storage only -- no instance member is added,
+// Each of the three .cpp files defines file-static live-instance tracking,
+// updated in every ctor and dropped in the dtor, and exposes it through the
+// matching accessor(s) below. STATIC storage only -- no instance member is added,
 // because Texture2D_Bada's size is pinned by `operator new(100)` (Texture.h) and
-// must not grow.
+// must not grow. Texture2D_Bada additionally keeps a static std::set<Texture2D_Bada*>
+// registry (not a member) so the leak report can name identities, not just a count --
+// see GLLiveLog_Texture2D below.
 //
 // The whole facility is `#ifndef __bada__`-gated -- both this header and the
 // counter/hook code in the three .cpp files. Under __bada__ the hooks would add
@@ -36,6 +38,14 @@ namespace FN {
 
 // Live Mortar::Bada::Texture2D_Bada instances (each may own a GL texture name).
 int GLLiveCount_Texture2D();
+
+// Logs the identities of every live Texture2D_Bada -- grouped by name (its
+// port-side m_Path, or "<unnamed>" when none was ever set) with a live count
+// and a capped sample of m_TexId's per group, sorted by count descending.
+// `maxLines` caps how many distinct-name groups get printed; any remainder is
+// summarised as a single truncation count so a pathological run can't flood
+// the log. LOG_ERROR only -- never an assert (see the invariant note above).
+void GLLiveLog_Texture2D(int maxLines);
 
 // Live Mortar::Geometry instances (each may own a VBO and an IBO).
 int GLLiveCount_Geometry();

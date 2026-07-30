@@ -732,6 +732,9 @@ void GameDestroy() {
             LOG_ERROR("GAMEINIT",
                       "GameDestroy: GL-handle leak -- Texture2D_Bada=%d Geometry=%d FontInterface=%d still alive",
                       liveTex, liveGeom, liveFont);
+            if (liveTex != 0) {
+                FN::GLLiveLog_Texture2D(40);
+            }
         } else {
             LOG_INFO("GAMEINIT",
                      "GameDestroy: GL-handle leak check clean -- Texture2D_Bada=0 Geometry=0 FontInterface=0");
