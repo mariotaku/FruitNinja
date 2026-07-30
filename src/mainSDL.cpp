@@ -13,6 +13,11 @@
 #include "platform/SaveDirSDL.h"
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
+#if defined(_WIN32) && defined(_MSC_VER)
+#include <crtdbg.h> // _CrtSetReportMode / _CrtSetReportFile
+#include <windows.h> // SetErrorMode
+#endif
 
 // Port specific: SDL's default log output function writes to stderr on every
 // platform. On Emscripten, stderr maps to console.error, which prints a full
@@ -112,6 +117,24 @@ int main(int argc, char* argv[]) {
     // the process crashes (SEGV doesn't flush). Critical for debugging.
     setvbuf(stdout, nullptr, _IONBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
+
+    // Port specific: an unattended/remote run (CI, overnight, webosbrew user
+    // running headless) has nobody there to click a dialog. A crash/assert/
+    // abort() must terminate the process, never HANG it behind an invisible
+    // "Microsoft Visual C++ Runtime Library" modal. Route the Debug CRT's
+    // error/assert/warn reports to stderr instead of a MessageBox, and stop
+    // the OS's own WER crash dialog too. Do NOT remove this to "restore" the
+    // dialogs -- a hang is worse than a visible crash for unattended runs.
+#if defined(_WIN32) && defined(_MSC_VER)
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR,  _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_WARN,   _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_WARN,   _CRTDBG_FILE_STDERR);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
 
     // Win32 + _DEBUG only: register an unhandled-SEH filter that prints
     // exception code, faulting address, and a symbolised stack trace

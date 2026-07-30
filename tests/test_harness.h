@@ -71,6 +71,10 @@
 #ifdef _WIN32
 #  include <direct.h>
 #  include <process.h>  // _getpid
+#  if defined(_MSC_VER)
+#    include <crtdbg.h> // _CrtSetReportMode / _CrtSetReportFile
+#    include <windows.h> // SetErrorMode
+#  endif
 #else
 #  include <unistd.h>   // getpid
 #endif
@@ -144,6 +148,37 @@ struct TestHarness {
         // in the ctor rather than Init(): the ctor always runs first.
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
+
+        // Port specific: an unattended ctest run has nobody there to click a
+        // dialog. A crash/assert/abort() must FAIL the test, never HANG the
+        // whole suite behind an invisible "Microsoft Visual C++ Runtime
+        // Library" modal (observed: test_screenshot.exe sat on one after the
+        // GameDestroy GL-leak guard's std::abort(), and ctest just stalled).
+        // Route the Debug CRT's error/assert/warn reports to stderr instead of
+        // a MessageBox, and stop the OS's own WER crash dialog too. Do NOT
+        // remove this to "restore" the dialogs -- a hang is worse than a
+        // visible failure for CI/overnight runs.
+#if defined(_WIN32) && defined(_MSC_VER)
+        _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+        _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ERROR,  _CRTDBG_FILE_STDERR);
+        _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+        _CrtSetReportMode(_CRT_WARN,   _CRTDBG_MODE_FILE);
+        _CrtSetReportFile(_CRT_WARN,   _CRTDBG_FILE_STDERR);
+        SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+
+        // SDL_assert has its OWN modal dialog, independent of the CRT settings
+        // above -- default it to abort (fail loud, don't prompt) unless a
+        // developer already chose a mode (e.g. SDL_ASSERT=break under a
+        // debugger). Set through the CRT (_putenv_s), matching the FN_RNG_SEED
+        // pattern below: SDL_setenv writes the Win32 env block while
+        // std::getenv (which SDL_assert's internals read via the C runtime)
+        // reads the CRT's own copy -- an SDL_setenv here would be invisible.
+        if (!std::getenv("SDL_ASSERT")) {
+            _putenv_s("SDL_ASSERT", "abort");
+        }
+#endif
     }
 
     // Port specific: standalone scene tool.
