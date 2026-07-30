@@ -303,7 +303,10 @@ void MainScreen::Update(float dt) {
     // layer=8 (HUD_LAYER_BUTTONS), SetSingular.
     // v1.6.1 @0x00197188-0x001971c4: sound toggle -> +0xb4 (pSoundToggle),
     // music toggle -> +0xb8 (pMusicToggle).
-    if (pSoundToggle == nullptr && game_work.mHud) {
+    // v1.6.1 MainScreen::Update @0x00196e1c: the only test before each block is on the toggle
+    // pointer itself (0x00196e38 `cmp r6,#0x0` / 0x00196fe4 `cmp r6,#0x0`); the
+    // HUD::AddControl at 0x00196fcc / 0x0019716c loads game_work+0x40 and calls with no cmp.
+    if (pSoundToggle == nullptr) {
         pSoundToggle = new MenuButton();
         // DIFFERS: opt-in widescreen -- MapX the initial-creation X; Update()'s
         // per-frame positioning block below (top-right corner branch) re-applies
@@ -315,7 +318,7 @@ void MainScreen::Update(float dt) {
         pSoundToggle->m_LayerFlags = Mortar::HUD_LAYER_BUTTONS;
         pSoundToggle->SetSingular();
     }
-    if (pMusicToggle == nullptr && game_work.mHud) {
+    if (pMusicToggle == nullptr) {
         pMusicToggle = new MenuButton();
         // DIFFERS: opt-in widescreen -- see pSoundToggle note above.
         pMusicToggle->Init(_Vector3<float>(MapX(POS_MUSIC_TOGGLE.x, "menu.music"), POS_MUSIC_TOGGLE.y, POS_MUSIC_TOGGLE.z),
@@ -1214,8 +1217,9 @@ void MainScreen::CreateButtons() {
 #endif
     m_ButtonsCreatedFlag = 1;
 
-    if (!game_work.mHud) return;
-
+    // v1.6.1 MainScreen::CreateButtons @0x001961f8: after the flag write at 0x0019620c the only
+    // early-out is the m_BombHitTimer compare at 0x00196228 (`vcmpe s14,s15` / `bgt 0x00196e10`).
+    // There is no game_work.pM_pHud test -- every HUD::AddControl loads game_work+0x40 raw.
     if (game_work.m_BombHitTimer >= 1.45f) return;
 
     if (m_pGameModeButton == nullptr) {
@@ -1284,7 +1288,8 @@ void MainScreen::CreateButtons() {
 }
 
 void MainScreen::CreateQuitButton() {
-    if (!game_work.mHud) return;
+    // v1.6.1 folds this into MainScreen::CreateButtons @0x001961f8 (third block, m_pQuitButton at
+    // +0xa8): no game_work.pM_pHud early-out -- HUD::AddControl @0x00196b40 loads game_work+0x40 raw.
 
     // ASM-spec v1.6.1 MainScreen::CreateButtons @0x001961f8: ring = m_RingTex[16] + SetText(GETSTRING(0x35f))
     Mortar::SmartPtr<Mortar::Texture> texQuit = game_work.m_RingTex[16];
@@ -1350,19 +1355,19 @@ void MainScreen::GameModeCallback() {
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
-// Defunct: orphaned callback in shipping binary -- v1.6.1 @0x0014c384
+// Defunct: orphaned callback in shipping binary -- v1.6.1 MainScreen::NewGameCallback @0x001960d4
 // ZERO inbound xrefs. STATE_GAME_START is genuinely unreachable in shipping FruitNinja.exe.
 // Body retained for vtable / layout fidelity.
 void MainScreen::NewGameCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_GAME_START), "NewGameCallback");
     m_State = STATE_GAME_START;
-    // ASM-verified: 2026-05-08 v1.6.1 binary @ 0x0014c3ce (re-analyst).
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay(
-            "Game-start", 1.0f, 1.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>());
-    }
+    // ASM-spec v1.6.1 MainScreen::NewGameCallback @0x001960d4: GameSound::SFXPlay runs on the
+    // raw game_work+0x18C load with no null test. (Previous marker cited 0x0014c3ce, a stale
+    // v1.5.x address that lands in an unrelated function -- replaced, not annotated.)
+    game_work.mGameSound->SFXPlay(
+        "Game-start", 1.0f, 1.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*>());
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 

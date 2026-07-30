@@ -411,11 +411,11 @@ void ShopScreen::Release() {
     MenuButton* buy = m_pBuyButton;
     MenuButton* eq  = m_pEquipButton;
 
-    if (buy && game_work.mHud) {
+    if (buy) {
         game_work.mHud->RemoveControl(buy);  // fires DeletedMenuItem -> nulls m_pBuyButton
         if (!buy->m_bNoDestructor) delete buy;
     }
-    if (eq && game_work.mHud) {
+    if (eq) {
         game_work.mHud->RemoveControl(eq);   // fires DeletedMenuItem -> nulls m_pEquipButton
         if (!eq->m_bNoDestructor) delete eq;
     }
@@ -426,7 +426,7 @@ void ShopScreen::Release() {
         // SetPendingRemoval() deferred this, giving the ScrollingMenu one more HUD Update/Draw pass
         // AFTER ~ShopScreen freed the screen -> ShopListItem::Move derefed the freed ShopScreen
         // (m_pShopScreen->GetSelectedItem()) = heap-use-after-free (ASan-confirmed on wasm).
-        if (game_work.mHud) game_work.mHud->RemoveControl(m_pShopList);
+        game_work.mHud->RemoveControl(m_pShopList);
         if (!m_pShopList->m_bNoDestructor) delete m_pShopList;
         m_pShopList = nullptr;
     }
@@ -551,9 +551,9 @@ void ShopScreen::CreateShopList() {
     }
     m_pShopList->m_Velocity.y = s_ScrollOffset;
 
-    if (game_work.mHud) {
-        game_work.mHud->AddControl(m_pShopList);
-    }
+    // v1.6.1 ShopScreen::Init @0x001b42ac: HUD::AddControl(game_work.pM_pHud, ...) is
+    // unconditional -- game_work is a GOT-resolved static, never null-tested.
+    game_work.mHud->AddControl(m_pShopList);
 }
 
 // ---------------------------------------------------------------------------
@@ -785,9 +785,9 @@ void ShopScreen::ClickedOnShopItem(ScrollingMenuItem* item) {
 
     if (!si->m_pItemInfo || si->m_pItemInfo->IsLocked() != 0) {
         // Binary: GameSound::SFXPlay(gameSound, "equip-locked", 1.0, 1.0)
-        if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay("equip-locked", 1.0f, 1.0f);
-        }
+        // v1.6.1 ClickedOnShopItem @0x001b2df4 (0x1b2ec0 `ldr r7,[r3,#0x18c]` -> bl SFXPlay,
+        // no cmp): the mGameSound load is not null-tested.
+        game_work.mGameSound->SFXPlay("equip-locked", 1.0f, 1.0f);
         si->m_LockFlashAlpha = 0.25f;   // 0x3e800000 in binary; offset +0x264
     } else {
         if (m_pEquipButton) {
@@ -821,9 +821,9 @@ void ShopScreen::QuitShopCallback() {
     ShrinkBuyButton();
 
     // Binary: GameSound::SFXPlay(gameSound, "menu-bomb", 1.0, 1.0)
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
-    }
+    // v1.6.1 ShopScreen::QuitShopCallback @0x001b2ef0 (0x1b2f18 `ldr r7,[r3,#0x18c]`,
+    // 0x1b2f48 `bl SFXPlay`, no cmp): the mGameSound load is not null-tested.
+    game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
 
     // Set state to transition-out (state 2)
     m_State = 2;
@@ -932,18 +932,21 @@ void ShopScreen::EquipCallback() {
         // Binary: SFX depends on item type:
         //   type == 0 (blade):      SFXPlay("equip-new-sword")
         //   type == 1 (background): SFXPlay("equip-new-wallpaper")
-        if (game_work.mGameSound) {
-            const char* sfxName = (info->m_Type == ITEM_TYPE_BLADE)
-                                  ? "equip-new-sword"
-                                  : "equip-new-wallpaper";
-            game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
-        }
+        // v1.6.1 ShopScreen::EquipCallback @0x001b3008: both SFXPlay arms call through the
+        // raw game_work.mGameSound load with no null test.
+        const char* sfxName = (info->m_Type == ITEM_TYPE_BLADE)
+                              ? "equip-new-sword"
+                              : "equip-new-wallpaper";
+        game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
     }
 }
 
 // ---------------------------------------------------------------------------
 // ShopScreen::Update(float) @ 0x001b321c (387 lines)
-// ASM-verified: 2026-07-14T21:20Z v1.6.1 ShopScreen::Update @ 0x001b321c..0x001b3f8b (asm-inspector)
+// ASM-spec v1.6.1 ShopScreen::Update @ 0x001b321c..0x001b3f8b: downgraded from ASM-verified
+// (2026-07-14T21:20Z) -- the stamp covered a body that still carried three port-added
+// `if (game_work.mHud)` guards around the binary's unconditional HUD::AddControl calls, so the
+// ASM diff cannot have been clean. Guards removed; re-stamp only after a fresh asm-inspector run.
 // ---------------------------------------------------------------------------
 void ShopScreen::Update(float dt) {
     float prevAlpha = m_TransitionAlpha;
@@ -1054,7 +1057,7 @@ void ShopScreen::Update(float dt) {
                 // Binary: m_bRespondsToBackKey = 1.
                 m_pBuyButton->m_bRespondsToBackKey = 1;
                 m_pBuyButton->m_bBackdropActive = 1; // v1.6.1 ShopScreen::Update @0x001b3570
-                if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
+                game_work.mHud->AddControl(m_pBuyButton, false);
                 // Binary: register DeletedMenuItem as m_RemoveCallback
                 m_pBuyButton->m_RemoveCallback =
                     Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
@@ -1171,7 +1174,7 @@ void ShopScreen::Update(float dt) {
                         m_pEquipButton->m_bClearsMenuItems = 0;
                         // Binary (0x001b38e0): SetSelected(m_pSelectedItem) — update fruit type
                         SetSelected(m_pSelectedItem);
-                        if (game_work.mHud) game_work.mHud->AddControl(m_pEquipButton, false);
+                        game_work.mHud->AddControl(m_pEquipButton, false);
                         // Binary (0x001b392c-0x001b3950): register DeletedMenuItem as m_RemoveCallback
                         m_pEquipButton->m_RemoveCallback =
                             Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);
@@ -1299,7 +1302,7 @@ void ShopScreen::Update(float dt) {
             m_pBuyButton->Init(POS_BACK_BUTTON_NEW,
                 Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                 backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
-            if (game_work.mHud) game_work.mHud->AddControl(m_pBuyButton, false);
+            game_work.mHud->AddControl(m_pBuyButton, false);
             // Binary (0x001b3c10..0x001b3c20): register DeletedMenuItem as m_RemoveCallback
             m_pBuyButton->m_RemoveCallback =
                 Mortar::Delegate1<void, HUDControl*>::Make(this, &ShopScreen::DeletedMenuItem);

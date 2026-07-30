@@ -655,9 +655,9 @@ void GameModeScreen::Update(float dt) {
             game_work.mMainScreen->SetCameraTransition(camT);
 
             if (fabsf(camT) < ALPHA_OUT_DONE) {
-                if (game_work.mGameSound) {
-                    game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
-                }
+                // v1.6.1 GameModeScreen::Update @0x00182a48 (`ldr r7,[r6,#0x18c]`) -> 0x00182a84
+                // (`bl SFXPlay`): the mGameSound load is not null-tested.
+                game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f);
                 // ASM-spec v1.6.1 GameModeScreen::Update @0x1829e4 cases 3-6: GameModeScreen is the sole NewGame owner on the mode-select start path.
                 game_work.mMainScreen->SetCameraTransition(0.0f);
                 game_work.bM_bPaused = 0;
@@ -943,9 +943,9 @@ void GameModeScreen::QuitCallback() {
     fn::wii::SetCurrentBlock(fn::wii::RES_BLOCK_MENU);
 #endif
     // 1. SFX
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
-    }
+    // v1.6.1 GameModeScreen::QuitCallback @0x00181884 (0x001818ac `ldr r7,[r3,#0x18c]`,
+    // 0x001818dc `bl SFXPlay`, no cmp): the mGameSound load is not null-tested.
+    game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
 
     // 2. Enter back-out state
     m_State = 0xf;
@@ -1063,11 +1063,15 @@ void GameModeScreen::SetIsChallenge(int challengeId, int data) {
     m_pChallengeData = data;
 }
 
-// Binary @ 0x0013e124 — coming_soon tile callback: bump save-stat counter + reset tutorial.
-// (typo "Commings" preserved from binary symbol)
+// v1.6.1 GameModeScreen::CommingsSoonCallback @0x001812b0 -- coming_soon tile callback:
+// bump save-stat counter + reset tutorial. (typo "Commings" preserved from binary symbol)
 void GameModeScreen::CommingsSoonCallback() {
-    // Binary @ 0x0013e124: FruitSaveData::AddToTotal("modeS_pcoming_soon", hash, 1, true, true).
-    if (game_work.m_SaveData) {
+    // v1.6.1 @0x001812b0: FruitSaveData::AddToTotal(game_work.pM_SaveData, "coming_soon", hash,
+    // 1, true, true) -- called on the raw game_work+0x50 load, no null test.
+    // TODO: v1.6.1 0x001812b0 (GameModeScreen::CommingsSoonCallback) -- binary key is
+    // "coming_soon" with a function-local __cxa_guard'd cached StringHash; port uses
+    // "modeS_pcoming_soon" and rehashes every call.
+    {
         const char* key = "modeS_pcoming_soon";
         game_work.m_SaveData->AddToTotal(key, ::StringHash(key), 1, true, true);
     }
@@ -1128,13 +1132,17 @@ void GameModeScreen::BuyNow() {
     // Defunct: m_State=0xd transition omitted (UpsellScreen is Phantom)
 }
 
-// Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 binary @ 0x001811c8 sets m_State=10 + bumps modeS_p* counters
+// Defunct: upsell glue -- UpsellScreen never instantiated; v1.6.1 GameModeScreen::SwitchToUpsell
+// @0x001811c8 sets m_State=10 + bumps modeS_p* counters
 void GameModeScreen::SwitchToUpsell(int idx) {
-    // Binary @ 0x001811c8: FruitSaveData::AddToTotal for the matching
-    // modeS_p* counter. Per-idx key is "modeS_p<n>" where <n> is the
-    // tile slot. Stat tracking happens even though the UpsellScreen
-    // transition itself is defunct (UpsellScreen is Phantom in this build).
-    if (game_work.m_SaveData) {
+    // v1.6.1 @0x001811c8: FruitSaveData::AddToTotal(game_work.pM_SaveData, key, hash, 1, true,
+    // true) for the matching modeS_p* counter, on the raw game_work+0x50 load with no null test.
+    // Stat tracking happens even though the UpsellScreen transition itself is defunct
+    // (UpsellScreen is Phantom in this build).
+    // TODO: v1.6.1 0x001811c8 (GameModeScreen::SwitchToUpsell) -- binary indexes a 4-entry
+    // literal string table (C_322/DAT_002c9a74/78/7c) rather than formatting "modeS_p%d", and
+    // additionally bumps "learnings" when AddToTotal returns < 2.
+    {
         char key[16];
         snprintf(key, sizeof(key), "modeS_p%d", idx);
         game_work.m_SaveData->AddToTotal(key, ::StringHash(key), 1, true, true);

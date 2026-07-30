@@ -169,7 +169,9 @@ DojoScreen::DojoScreen()
         }
         btn->m_DrawRotation.x = -7.17f;
         m_pBSButton0 = btn;
-        if (game_work.mHud) game_work.mHud->AddControl(btn, false);
+        // v1.6.1 DojoScreen::DojoScreen @0x0016bad8: HUD::AddControl(game_work.pM_pHud, ...)
+        // is unconditional -- game_work is a GOT-resolved static, never null-tested.
+        game_work.mHud->AddControl(btn, false);
     }
 
     // --- m_pBSButton1: Twitter defunct visible stub ---
@@ -197,7 +199,7 @@ DojoScreen::DojoScreen()
         }
         btn->m_DrawRotation.x = -7.17f;
         m_pBSButton1 = btn;
-        if (game_work.mHud) game_work.mHud->AddControl(btn, false);
+        game_work.mHud->AddControl(btn, false);
     }
 }
 
@@ -316,7 +318,8 @@ void DojoScreen::ButtonDeleted(HUDControl* ctrl) {
 // null guards. Called from Reset() (v1.6.1 binary pattern).
 // ===================================================================
 void DojoScreen::CreateButtons() {
-    if (!game_work.mHud) return;
+    // v1.6.1 DojoScreen::CreateButtons @0x0016ad9c has no game_work.pM_pHud early-out --
+    // each of the three blocks ends with an unconditional HUD::AddControl.
 
     // ASM-spec v1.6.1 CreateButtons @0x0016ad9c: button m_Texture = generic ring
     //   game_work.m_RingTex[16/7/12]; baked swag/about tex loaded-but-not-drawn;
@@ -444,7 +447,10 @@ void DojoScreen::CreateButtons() {
 
 // ===================================================================
 // Matches DojoScreen::Update @ 0x0016b6a4
-// ASM-verified: 2026-07-15T00:00Z v1.6.1 DojoScreen::Update @ 0x0016b6a4..0x0016b968 (asm-inspector)
+// ASM-spec v1.6.1 DojoScreen::Update @ 0x0016b6a4..0x0016b968: downgraded from ASM-verified
+// (2026-07-15T00:00Z) -- the stamp covered a body that still wrapped the binary's unconditional
+// FruitSaveData::CheckDatesHaveChanged(game_work.pM_SaveData) in a port-added
+// `if (game_work.m_SaveData)`. Guard removed; re-stamp only after a fresh asm-inspector run.
 // ===================================================================
 void DojoScreen::Update(float dt) {
 #ifndef __bada__
@@ -588,7 +594,7 @@ void DojoScreen::Update(float dt) {
                     // Binary: FruitSaveData::CheckDatesHaveChanged(game->save), then
                     //   ShopScreen* shop = operator_new(0xbc); ShopScreen::ShopScreen(shop, this);
                     //   HUD::AddControl(hud, shop, false); shop->Init();
-                    if (game_work.m_SaveData) game_work.m_SaveData->CheckDatesHaveChanged();
+                    game_work.m_SaveData->CheckDatesHaveChanged();
                     ShopScreen* shop = new ShopScreen(this);
                     game_work.mHud->AddControl(shop, false);
                     shop->Init();
@@ -748,9 +754,9 @@ void DojoScreen::PlayCallback() {
     // Guard prevents the crash the binary's allocator layout avoids.
     if (m_State != 0 && m_State != 1) return;
     // 1. SFX
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
-    }
+    // v1.6.1 DojoScreen::QuitCallback @0x0016b980 (0x16b9a8 `ldr r7,[r3,#0x18c]`,
+    // 0x16b9f8 `bl SFXPlay`, no cmp): the mGameSound load is not null-tested.
+    game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
 
     // 2. State 6 (quit fade-out)
     LOG_INFO("SCREEN/DojoScreen", "%d -> %d (%s)", (int)(m_State), 6, "PlayCallback @ 0x0016b980");
