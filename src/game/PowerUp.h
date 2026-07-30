@@ -13,8 +13,8 @@
 //   dtor            0x001186bc / 0x00118ba0
 //   Parse           0x001194f0
 //   Activate        0x00141e60   (v1.6.1)
-//   Deactivate      0x00117f18
-//   Update          0x00117f90
+//   Deactivate      0x00140530   (v1.6.1)
+//   Update          0x00140600   (v1.6.1)
 //   Clone           (vtable; various)
 //   DrawBar         0x001191f8
 //   IsPurchaseable  0x00117a44

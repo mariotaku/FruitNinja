@@ -216,7 +216,12 @@ void PowerUp::Activate(bool showPopup, bool isPurchased, _Vector3<float> pos, fl
     }
 }
 
-// Step 5: Deactivate (binary @ 0x00117f18)
+// Step 5: Deactivate (v1.6.1 PowerUp::Deactivate @0x00140530) -- drains m_ModList
+// (RemoveModifier when !m_bApplied || removeAll, then the deleting dtor), then
+// ScreenEffect::Deactivate + ~ScreenEffect + operator delete on m_pScreenEffect.
+// That last step is the ONLY path in v1.6.1 that frees an active clone's
+// EffectImage SmartPtrs; PowerUpManager::UnloadTextures @0x00140b10 reaches
+// templates only (m_AllPowerUps + m_ScreenEffectPool) and has zero xrefs.
 int PowerUp::Deactivate(bool removeAll) {
     std::list<GameModifier*>::iterator it = m_ModList.begin();
     while (it != m_ModList.end()) {

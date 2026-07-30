@@ -14,7 +14,9 @@
 // "GO!!" for elapsed in [1.2,2.0]s. Unlike the other combos, we do NOT pin the
 // timer -- we drive real dt so the two images cross their real windows, and
 // screenshot at t=0.5s and t=1.5s (tmp/test/screenshots/powerup/intro_60seconds.png,
-// powerup/intro_go.png).
+// powerup/intro_go.png). After both captures are written it keeps ticking to
+// t=2.25s so the clone actually expires -- see the comment at that call for why
+// teardown needs it.
 //
 // The three arcade "banana" powerups are activated by StringHash of their XML
 // name (FruitNinjaBada/Data/xml/poweruplist.xml):
@@ -182,6 +184,31 @@ int main(int argc, char* argv[]) {
         if (h.IsScreenshot()) {
             if (!h.ScreenshotPng("powerup/intro_go")) return 2;
         }
+
+        // Task #144: both captures are already written to PNG above, so these
+        // extra frames change nothing that this test exists to produce -- they
+        // exist to run the clone off the end of its life so teardown sees the
+        // production steady state instead of a frozen mid-intro one.
+        //
+        // ready_set_go is a clone in PowerUpManager::m_ActivePowerUps and its
+        // <effect> EffectImages (arcade_60seconds/arcade_go) are owned by the
+        // CLONE's m_pScreenEffect. PowerUpManager::UnloadTextures @0x00140b10
+        // walks m_AllPowerUps + m_ScreenEffectPool only -- it drops the
+        // TEMPLATE's copies, never a clone's -- and has zero xrefs in v1.6.1
+        // anyway. The only path that frees a clone's ScreenEffect is expiry:
+        // PowerUpManager::Update @0x00141484 -> PowerUp::Deactivate(false)
+        // @0x00140530, which deletes m_pScreenEffect.
+        // Stopping at t=1.5s (m_LongestRemaining=0.50) parks the clone alive
+        // forever, so its two textures survive GameDestroy and leak their GL
+        // names once SDL_GL_DeleteContext runs.
+        //
+        // 45 frames = 0.75s covers it with margin: the 2.0s time_mod expires
+        // 0.5s (30 frames) from here, then PowerUp::Update ramps m_BarRamp down
+        // at 12/s (1/12s = 5 frames) before returning 1.
+        h.RunComponentHeadlessHooked(45, IntroPreFrame, NULL, pum);
+        std::printf("[%s] t=2.25s expired -- active powers=%d screen effects=%d\n",
+                    label.c_str(), (int)pum->m_ActivePowerUps.size(),
+                    (int)pum->m_ActiveScreenEffects.size());
 
         std::printf("PASS: %s rendered\n", label.c_str());
         return h.Shutdown();
