@@ -94,13 +94,11 @@ void TimeControl::Reset() {
     m_DrawColour = Colour(255, 255, 255, 255);
 }
 
-// ASM-verified: 2026-05-03 v1.6.1 TimeControl::Skip @ 0x001c089c (re-analyst)
+// ASM-verified: 2026-07-30 v1.6.1 TimeControl::Skip @ 0x001c089c (asm-inspector)
+//   Straight-line, no branches: unconditional m_TimeRemaining = game_work.m_SaveData->m_TimeRemainingSave
+//   (no Game::GetInstance() call, no m_SaveData null check in the binary), then m_SlowClockPhase = 0.
 void TimeControl::Skip() {
-    // Binary @ 0x001c089c: restore from save.
-    Game* game = Game::GetInstance();
-    if (game && game_work.m_SaveData) {
-        m_TimeRemaining = game_work.m_SaveData->m_TimeRemainingSave;
-    }
+    m_TimeRemaining = game_work.m_SaveData->m_TimeRemainingSave;
     m_SlowClockPhase = 0.0f;
 }
 

@@ -1111,12 +1111,12 @@ void WaveManager::GameOver() {
 }
 
 void WaveManager::NewGame() {
-    // ASM-verified: 2026-05-02 v1.6.1 WaveManager::NewGame @ 0x0012b860 -- ResetGlobalDt first, then PowerUpManager::Reset.
-    WaveManager* self = GetInstance();
-    if (self) self->ResetGlobalDt(1.0f);
-    if (PowersEnabled()) {
-        PowerUpManager::GetInstance()->Reset(true);
-    }
+    // ASM-verified: 2026-07-30 v1.6.1 WaveManager::NewGame @ 0x0012b860 -- ResetGlobalDt then
+    // PowerUpManager::Reset(true), both called unconditionally: the binary has NO self-null-check
+    // and NO PowersEnabled gate here (contrast GameOver @ 0x0012b838, which DOES gate
+    // PowerUpManager::Reset behind PowersEnabled -- NewGame always resets power-ups).
+    GetInstance()->ResetGlobalDt(1.0f);
+    PowerUpManager::GetInstance()->Reset(true);
 }
 
 // ASM-verified: 2026-06-24 v1.6.1 PowersEnabled @ 0x0011a034 (thunk 0x001069e0) (asm-inspector)
