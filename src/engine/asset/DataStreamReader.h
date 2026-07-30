@@ -14,9 +14,11 @@
 //     On the LE-only port the swap path is compiled but never executes.
 //   - Read(std::string&): reads a uint32 length prefix then assigns that many
 //     bytes as the string value; advances cursor.
-//   - MakeSubReader(source): initialises this reader starting at source's
-//     current cursor with its remaining byte count, same endianness. The source
-//     cursor is NOT advanced (caller is responsible for advancing if needed).
+//   - MakeSubReader(count): initialises a new reader starting at this reader's
+//     current cursor, covering exactly `count` bytes (an explicit byte count
+//     supplied by the caller, NOT the remaining bytes in the buffer), same
+//     endianness. This reader's cursor is NOT advanced (caller advances it
+//     separately if needed).
 //   - m_Error is sticky: once set it is never cleared within the session.
 //
 // Struct layout (0x14 = 20 bytes, ARM32):
@@ -54,7 +56,7 @@ public:
     // "::" pins it to the global one.
     void SetSource(const void* data, unsigned long size, ::Endian::Endianness e);
 
-    // Default ctor: uninitialized state. Used as target for MakeSubReader.
+    // Default ctor: uninitialized state.
     DataStreamReader();
 
     // ASM-spec v1.6.1 DataStreamReader(void const*, unsigned long, Mortar::Endian::Endianness) @0x00250bf4:
@@ -63,14 +65,17 @@ public:
     //   mangles it as the global one (N6Endian10EndiannessE) -- see util/Endian.h.
     DataStreamReader(const void* data, unsigned long size, Mortar::Endian::Endianness e);
 
-    // ASM-spec v1.6.1 DataStreamReader::MakeSubReader @0x00250c08:
-    //   Initialises *this from source.m_pCursor, remaining bytes, source.m_Endian.
-    //   Source cursor is NOT modified.
-    // DIFFERS: binary MakeSubReader @0x00250c08 takes unsigned long (a 32-bit source
-    // POINTER, ARM32). On host x64 an unsigned long (4 bytes) can't hold an 8-byte
-    // pointer, so this takes DataStreamReader& instead -- the symbol won't pair on
-    // x64, which is unavoidable (the ABI encodes a pointer in a 32-bit int).
-    void MakeSubReader(DataStreamReader& source);
+    // ASM-spec v1.6.1 DataStreamReader::MakeSubReader @0x00250c08
+    // (_ZN6Mortar16DataStreamReader13MakeSubReaderEm): member of the SOURCE
+    // reader. Ghidra mis-signatures this (this, ulong) with the ulong shown as
+    // "undefined4 in_r2" -- classic hidden-retptr-swallowed-a-param artifact: the
+    // return type is a non-trivial class returned by value, so r0 is the hidden
+    // return pointer, r1 is `this`, and r2 is the real (mangled) `unsigned long`
+    // param -- an explicit byte COUNT, NOT a pointer-encoded source and NOT a
+    // remaining-bytes computation. Body is exactly:
+    //   return DataStreamReader(this->m_pCursor, count, this->m_Endian);
+    // this->m_pCursor is read only -- never advanced.
+    DataStreamReader MakeSubReader(unsigned long count) const;
 
     // ASM-spec v1.6.1 DataStreamReader::Read(std::string&) @0x00250c28:
     //   ReadBasicType<unsigned long>(len); out.assign((char*)m_pCursor, len); m_pCursor += len.

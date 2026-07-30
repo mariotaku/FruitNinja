@@ -10,7 +10,7 @@
 //   - ReadRaw<T> -- always raw bytes, no swap (identical to ReadBasicType on LE host)
 //   - Underflow sets m_Error and yields 0; cursor at end
 //   - Sequential reads advance cursor correctly
-//   - MakeSubReader starts at parent cursor, same endianness
+//   - MakeSubReader(count) sizes to the explicit count, not remaining bytes
 //
 // Pure in-process: no GPU, no SDL, no audio.
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
@@ -224,16 +224,22 @@ static void test_sequential_reads() {
 
 // ---------------------------------------------------------------------------
 // test_makeSubReader
-// MakeSubReader: sub-reader starts at parent's current cursor, has remaining
-// bytes, same endianness. Parent cursor is unchanged.
-// Buffer: uint32(skip) + uint32(target)
+// MakeSubReader(count) v1.6.1 @0x00250c08: sub-reader starts at the source's
+// current cursor, covers EXACTLY `count` bytes (an explicit caller-supplied
+// byte count -- not the remaining bytes in the buffer), same endianness.
+// Source cursor is unchanged.
+//
+// The block is deliberately SMALLER than what remains in the buffer, so
+// m_Size == count is distinguishable from a (wrong) m_Size == remaining.
+// Buffer: uint32(skip) + uint32(sub block, count=4) + uint32(trailing, past sub)
 // ---------------------------------------------------------------------------
 static void test_makeSubReader() {
     static const uint8_t kData[] = {
         0x01, 0x00, 0x00, 0x00,   // skip: uint32 = 1
-        0x02, 0x00, 0x00, 0x00    // target: uint32 = 2
+        0x02, 0x00, 0x00, 0x00,   // sub block payload: uint32 = 2 (count = 4 bytes)
+        0x03, 0x00, 0x00, 0x00    // trailing bytes, NOT part of the sub block
     };
-    Mortar::DataStreamReader parent(kData, 8, Mortar::Endian::LITTLE);
+    Mortar::DataStreamReader parent(kData, 12, Mortar::Endian::LITTLE);
 
     // Advance parent past the first uint32.
     uint32_t skip = 0;
@@ -241,27 +247,32 @@ static void test_makeSubReader() {
     CHECK(skip == 1u);
     CHECK(parent.m_pCursor == (void*)(kData + 4));
 
-    // Create sub-reader at parent's current cursor. Binary signature takes the
-    // source reader's address encoded as unsigned long (MakeSubReaderEm, ARM32
-    // pointer==4 bytes); port takes DataStreamReader& since host x64 unsigned
-    // long can't hold a pointer (see DataStreamReader.h DIFFERS marker).
-    Mortar::DataStreamReader sub;
-    sub.MakeSubReader(parent);
+    // Remaining bytes at this point is 8, but the sub-reader must be sized to
+    // the explicit count (4), not the remaining bytes -- this is the bug the
+    // old test could not catch (count == remaining there).
+    Mortar::DataStreamReader sub = parent.MakeSubReader(4);
 
-    // Sub-reader starts at kData+4, covers 4 bytes, same endianness.
     CHECK(sub.m_pStart  == (void*)(kData + 4));
     CHECK(sub.m_pCursor == (void*)(kData + 4));
-    CHECK(sub.m_Size    == 4u);
+    CHECK(sub.m_Size    == 4u);              // == count, NOT remaining (8)
     CHECK(sub.m_Endian  == (uint32_t)Endian::LITTLE);
     CHECK(sub.m_Error   == false);
 
-    // Read from sub-reader.
+    // Read the payload back.
     uint32_t target = 0;
     sub.ReadBasicType<uint32_t>(target);
     CHECK(target == 2u);
     CHECK(sub.m_Error == false);
+    CHECK(sub.m_pCursor == (void*)(kData + 8));
 
-    // Parent cursor must be unchanged by MakeSubReader.
+    // A further read past `count` (into what would be the trailing bytes if
+    // m_Size had been sized to `remaining`) must underflow and set m_Error.
+    uint32_t past = 0;
+    sub.ReadBasicType<uint32_t>(past);
+    CHECK(sub.m_Error == true);
+    CHECK(past == 0u);
+
+    // Source (parent) cursor must be unchanged by MakeSubReader.
     CHECK(parent.m_pCursor == (void*)(kData + 4));
     CHECK(parent.m_Error   == false);
 }

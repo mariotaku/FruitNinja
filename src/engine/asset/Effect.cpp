@@ -108,6 +108,9 @@ int EffectGroup::MergeProperties(
 // Binary body: if (tag != 0x31534569u) return; else Read<Effect_GLES1::Pass,alloc>(reader, m_Passes).
 // Port is a no-op: GLES1 pass data is defunct in the SDL2 port. The Read(SmartPtr<Effect>&)
 // caller advances the main reader cursor by dataSize bytes externally, so the stub is correct.
+// Prerequisite for un-stubbing: DataStreamReader::MakeSubReader now correctly sizes `reader`
+// to exactly `dataSize` bytes (see DataStreamReader.h) -- before that fix `reader` here could
+// span past this platform block into the next one / trailing debug-info bytes.
 void Effect::LoadPlatformData(unsigned long tag, DataStreamReader& reader) {
     (void)tag;
     (void)reader;
@@ -217,8 +220,7 @@ void Read(DataStreamReader& reader, SmartPtr<Effect>& sp) {
         reader.ReadRaw<unsigned long>(platformID);
         unsigned long dataSize = 0;
         reader.ReadBasicType<unsigned long>(dataSize);
-        DataStreamReader subReader;
-        subReader.MakeSubReader(reader);
+        DataStreamReader subReader = reader.MakeSubReader(dataSize);
         effect->LoadPlatformData(platformID, subReader);
         reader.m_pCursor = (uint8_t*)reader.m_pCursor + dataSize;
     }

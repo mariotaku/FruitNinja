@@ -29,19 +29,9 @@ DataStreamReader::DataStreamReader(const void* data, unsigned long size, Mortar:
     SetSource(data, size, (::Endian::Endianness)e);
 }
 
-// ASM-spec v1.6.1 DataStreamReader::MakeSubReader @0x00250c08
-// Binary mangled: _ZN6Mortar16DataStreamReader13MakeSubReaderEm -- source is
-// encoded as unsigned long (DataStreamReader* reinterpreted), since ARM32
-// unsigned long == pointer == 4 bytes. Body: DataStreamReader(this,
-// source.m_pCursor, remaining, source.m_Endian) i.e. initialises *this from
-// source.m_pCursor with the remaining byte count. Source cursor is NOT modified.
-// DIFFERS: see header -- takes DataStreamReader& here, not unsigned long,
-// because host x64 unsigned long can't hold a pointer.
-void DataStreamReader::MakeSubReader(DataStreamReader& source) {
-    const uint8_t* cursor = (const uint8_t*)source.m_pCursor;
-    const uint8_t* end    = (const uint8_t*)source.m_pStart + source.m_Size;
-    unsigned long remaining = (end > cursor) ? (unsigned long)(end - cursor) : 0UL;
-    SetSource(cursor, remaining, (::Endian::Endianness)source.m_Endian);
+// ASM-spec v1.6.1 DataStreamReader::MakeSubReader @0x00250c08 -- see header.
+DataStreamReader DataStreamReader::MakeSubReader(unsigned long count) const {
+    return DataStreamReader(m_pCursor, count, (Mortar::Endian::Endianness)m_Endian);
 }
 
 // ASM-spec v1.6.1 DataStreamReader::Read(std::string&) @0x00250c28
