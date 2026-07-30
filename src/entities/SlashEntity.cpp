@@ -593,7 +593,9 @@ float SlashEntity::GetHeadThicknessScale() const {
 // ported, so this stays a no-op stub. Ghost API for the port:
 //   StartEffect @0x001eb048, Update @0x001eaf4c, Draw @0x001eb0f8,
 //   Reset @0x001eaaec, Release @0x001eaf10.
-// ASM-verified: 2026-05-18 v1.6.1 SlashEntity::CreateGhost @ 0x001e67f4 (re-analyst)
+// ASM-spec v1.6.1 SlashEntity::CreateGhost @ 0x001e67f4: body is the two-line
+// ring-advance + StartEffect call described above; ported as a no-op stub
+// since SlashEntityGhost is not ported (see TODO above).
 void SlashEntity::CreateGhost() {
 }
 

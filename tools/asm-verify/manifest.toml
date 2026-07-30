@@ -796,6 +796,55 @@ mangled      = "_ZN6Mortar12ActorManager13GetEntityNextElRSt14_List_iteratorIPNS
 port_mangled = "_ZN6Mortar12ActorManager13GetEntityNextEiRSt14_List_iteratorIPNS_6EntityEE"
 notes        = "real body is the (int, iterator&) overload"
 
+# Mortar::ActorManager::Add(long, bool) @0x001d3fac (224 B)
+#   port: Mortar::ActorManager::Add(int, bool)
+[[symbol]]
+mangled      = "_ZN6Mortar12ActorManager3AddElb"
+port_mangled = "_ZN6Mortar12ActorManager3AddEib"
+notes        = "real body is the (int, bool) overload; (long, bool) at ActorManager.cpp:608 is a 2-instruction forwarder"
+
+# Mortar::ActorManager::Initialise(long, long) @0x001d3ca4
+#   port: Mortar::ActorManager::Initialise(int, int)
+[[symbol]]
+mangled      = "_ZN6Mortar12ActorManager10InitialiseEll"
+port_mangled = "_ZN6Mortar12ActorManager10InitialiseEii"
+notes        = "real body is the (int, int) overload; (long, long) at ActorManager.cpp:652 is a 2-instruction forwarder"
+
+# Mortar::ActorManager::DeactivateAllEntities(long) @0x001d2e94 (108 B)
+#   port: Mortar::ActorManager::DeactivateAllEntities(int)
+[[symbol]]
+mangled      = "_ZN6Mortar12ActorManager21DeactivateAllEntitiesEl"
+port_mangled = "_ZN6Mortar12ActorManager21DeactivateAllEntitiesEi"
+notes        = "real body is the (int) overload; (long) at ActorManager.cpp:613 is a 1-instruction forwarder"
+
+# Mortar::ActorManager::GetNumEntities(long) @0x001d3544 (16 B)
+#   port: Mortar::ActorManager::GetNumEntities(int)
+[[symbol]]
+mangled      = "_ZN6Mortar12ActorManager14GetNumEntitiesEl"
+port_mangled = "_ZN6Mortar12ActorManager14GetNumEntitiesEi"
+notes        = "real body is the (int) overload; (long) at ActorManager.cpp:642 is a 1-instruction forwarder"
+
+# Mortar::ActorManager::GetNumEntities(long*) @0x001d349c (68 B)
+#   port: Mortar::ActorManager::GetNumEntities(const long*)
+[[symbol]]
+mangled      = "_ZN6Mortar12ActorManager14GetNumEntitiesEPl"
+port_mangled = "_ZN6Mortar12ActorManager14GetNumEntitiesEPKl"
+notes        = "real body is the (const long*) overload (-1L-terminated scan); (long*) at ActorManager.cpp:647 is a non-const forwarder"
+
+# Mortar::ActorManager::Draw() @0x001d3380 (212 B)
+#   port: Mortar::ActorManager::Draw(Renderer&)
+[[symbol]]
+mangled      = "_ZN6Mortar12ActorManager4DrawEv"
+port_mangled = "_ZN6Mortar12ActorManager4DrawER8Renderer"
+notes        = "real body is Draw(Renderer&); no-arg Draw() at ActorManager.cpp:621 resolves Renderer::GetInstance() and forwards"
+
+# Mortar::ActorManager::Update(float, ColAABB*, ColAABB*) @0x001d38f0 (339 B)
+#   port: Mortar::ActorManager::Update(float)
+[[symbol]]
+mangled      = "_ZN6Mortar12ActorManager6UpdateEfP7ColAABBS2_"
+port_mangled = "_ZN6Mortar12ActorManager6UpdateEf"
+notes        = "real body is the dt-only overload; the two ColAABB* bounds are dead in the binary body, so the (float,ColAABB*,ColAABB*) at ActorManager.cpp:659 is a 1-instruction forwarder"
+
 # --- SIGNATURE drift the automatic write-back deliberately refuses (param COUNT
 # differs, param TYPE differs, or a template) but that a source read confirmed
 # is a genuine 1:1 pair. Reviewed individually -- do not widen the auto rule.

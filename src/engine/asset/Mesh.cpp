@@ -377,7 +377,6 @@ void Mesh::DrawQuadUnCached(Colour colour, DrawEffectContainer* fx) {
 }
 
 // Binary @ 0x00240a70
-// ASM-verified: 2026-05-24 v1.6.1 Mesh::DrawQuadUnCached @0x00240a70 (re-analyst)
 // ASM-spec v1.6.1 Mesh::DrawQuadUnCached @0x00240a70: args are (colour,uMin,uMax,vMin,vMax,fx).
 void Mesh::DrawQuadUnCached(Colour colour, float uMin, float uMax, float vMin, float vMax,
                              DrawEffectContainer* /*fx*/) {
@@ -407,7 +406,9 @@ void Mesh::DrawTriStrip(QUADCUSTOMVERTEX const* verts, long count,
 }
 
 // Binary @ 0x00240c30
-// ASM-verified: 2026-05-24 v1.6.1 Mesh::DrawTris @ 0x00240c30 (re-analyst)
+// ASM-spec v1.6.1 Mesh::DrawTris @ 0x00240c30: fixed-function glState<3042> blend
+// gate + glTexEnvf(GL_MODULATE) as detailed below; ES1 fixed-function body cannot
+// match the port's GLES2 shader path by design.
 void Mesh::DrawTris(QUADCUSTOMVERTEX const* verts, long count, int primType,
                     bool /*blend*/, DrawEffectContainer* /*fx*/, TextureAtlasPage* /*atlas*/) {
     // Port specific: binary @ 0x00240c30 gates GL_BLEND via fixed-function glState<3042>:
