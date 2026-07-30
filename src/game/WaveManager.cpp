@@ -1102,16 +1102,23 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::GameOver() {
-    // ASM-verified: 2026-05-02 v1.6.1 WaveManager::GameOver @ 0x0012b838 -- ResetGlobalDt first, then PowerUpManager::Reset.
-    WaveManager* self = GetInstance();
-    if (self) self->ResetGlobalDt(1.0f);
+    // ASM-spec v1.6.1 WaveManager::GameOver @ 0x0012b838: ResetGlobalDt(this, 1.0f)
+    // FIRST and UNCONDITIONALLY, then PowersEnabled() gates PowerUpManager::Reset(false).
+    // Binary body is exactly: vmov s0,#1.0 / bl ResetGlobalDt / bl PowersEnabled / cmp #0 / popeq
+    // / bl PowerUpManager::GetInstance / mov r1,#0 / b PowerUpManager::Reset. There is NO
+    // self-null-check (a null WaveManager faults inside ResetGlobalDt, loudly). The PowersEnabled
+    // gate IS genuine here -- contrast NewGame @ 0x0012b860, which has no gate.
+    // Residual divergence: the binary's GameOver/NewGame are __thiscall MEMBERS (this arrives
+    // in r0); the port declares them static, so it emits an extra bl WaveManager::GetInstance
+    // the binary does not have. Not a guard -- a call-shape gap, tracked separately.
+    GetInstance()->ResetGlobalDt(1.0f);
     if (PowersEnabled()) {
         PowerUpManager::GetInstance()->Reset(false);
     }
 }
 
 void WaveManager::NewGame() {
-    // ASM-verified: 2026-07-30 v1.6.1 WaveManager::NewGame @ 0x0012b860 -- ResetGlobalDt then
+    // ASM-spec v1.6.1 WaveManager::NewGame @ 0x0012b860 -- ResetGlobalDt then
     // PowerUpManager::Reset(true), both called unconditionally: the binary has NO self-null-check
     // and NO PowersEnabled gate here (contrast GameOver @ 0x0012b838, which DOES gate
     // PowerUpManager::Reset behind PowersEnabled -- NewGame always resets power-ups).
@@ -1132,15 +1139,14 @@ void WaveManager::ResetGlobalDt(float dt) {
     // with m_SelectedType >= 0; advances past those with m_SelectedType < 0.
     // DIVERGES fix: binary checks *(it+0x74) = m_SelectedType, not m_PerWaveCount (+0x70).
     // Binary @ 0x00121ee8 confirms ldr from offset +0x74 of PROBABILITY_OVERIDE.
-    Game* game = Game::GetInstance();
-    if (game) {
-        std::vector<PROBABILITY_OVERIDE>& vec = m_ProbabilityOverride[game_work.gameMode];
-        for (std::vector<PROBABILITY_OVERIDE>::iterator it = vec.begin(); it != vec.end(); ) {
-            if (it->m_SelectedType < 0) {
-                ++it;
-            } else {
-                it = vec.erase(it);
-            }
+    // The binary walks the vector unconditionally -- there is no Game::GetInstance()
+    // guard around the loop (decompile @0x0012b770 goes straight to vector::begin).
+    std::vector<PROBABILITY_OVERIDE>& vec = m_ProbabilityOverride[game_work.gameMode];
+    for (std::vector<PROBABILITY_OVERIDE>::iterator it = vec.begin(); it != vec.end(); ) {
+        if (it->m_SelectedType < 0) {
+            ++it;
+        } else {
+            it = vec.erase(it);
         }
     }
     // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
@@ -2291,11 +2297,13 @@ float WaveManager::GetComboBonusProgression(int /*playerIdx*/) {
 }
 
 PROBABILITY_OVERIDE* WaveManager::GetCurrentOverideList(int playerIdx) {
-    // Binary @ 0x0012180c. Returns pointer to the vector header at
+    // v1.6.1 WaveManager::GetCurrentOverideList @ 0x001231f0. Returns pointer to the vector header at
     // this+0x1fc + gameMode*0xc + playerIdx*0x30 (callers cast to vector<PROBABILITY_OVERIDE>*).
     // Port uses m_ProbabilityOverride[gameMode] directly; playerIdx 0 is the primary slot.
-    Game* game = Game::GetInstance();
-    if (!game || m_ProbabilityOverride[game_work.gameMode].empty()) return nullptr;
+    // Binary is pure address arithmetic -- no Game::GetInstance() guard and no
+    // empty()/null early-out (decompile @0x001231f0 is a single return expression).
+    // vector::data() already yields nullptr for an empty list, so the dropped
+    // .empty() branch was redundant as well as unfaithful.
     (void)playerIdx;  // port has single-player override list only
     return m_ProbabilityOverride[game_work.gameMode].data();
 }
@@ -2509,19 +2517,18 @@ int COIN_CHANCEINATOR::GetCoins() {
 // If that yields > 0, done. Else: advance RNG via fallback m_CoinChanceinator[idx].
 // The fallback byte index comes from the current game-mode coin-table slot.
 void WaveManager::RequestCoins() {
+    // ASM-spec v1.6.1 WaveManager::RequestCoins @ 0x001233b0: the binary dereferences
+    // m_pCurrentWave[0] UNCONDITIONALLY (ldr r3,[this,#564] ; ldr r3,[r3,#0x6c]) -- there is
+    // no curWave null-check, and no bounds check on the gameMode fallback index either.
     WaveManager* self = GetInstance();
     WAVE_INFO* curWave = self->m_pCurrentWave[0];
-    if (curWave) {
-        COIN_CHANCEINATOR* primary = static_cast<COIN_CHANCEINATOR*>(curWave->m_pCoinChance);
-        if (primary && primary->GetCoins() > 0)
-            return;
-    }
+    COIN_CHANCEINATOR* primary = static_cast<COIN_CHANCEINATOR*>(curWave->m_pCoinChance);
+    if (primary && primary->GetCoins() > 0)
+        return;
     // Fallback: RNG-advance only — return value discarded (binary behaviour).
-    // ASM-verified: 2026-05-20 v1.6.1 WaveManager::RequestCoins @ 0x001233b0 — coinChance index = game_work.gameMode
-    // (uint8 @ +0x04). Per-mode table at WaveManager+0x1dc, stride 8.
-    int idx = game_work.gameMode;
-    if (idx >= 0 && idx < 4)
-        self->m_CoinChanceinator[idx].GetCoins();
+    // coinChance index = game_work.gameMode (uint8 @ +0x04). Per-mode table at
+    // WaveManager+0x1dc, stride 8.
+    self->m_CoinChanceinator[game_work.gameMode].GetCoins();
 }
 
 // ASM-spec v1.6.1 GetRandomPowerSpawner @0x0012403c
