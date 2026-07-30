@@ -328,16 +328,24 @@ void GameInitialise(void* window, const char* config) {
         pm.LoadFile("particles", "particles/particles_fast.xml");
     }
 
-    // Step 13: TutorialControl (matches binary: operator_new(0xa0), Init, AddControl)
-    game_work.m_TutorialControl = new TutorialControl();
-    game_work.m_TutorialControl->Init();
-    if (game_work.mHud) game_work.mHud->AddControl(game_work.m_TutorialControl);
+    // TutorialControl is NOT constructed here. Both this block and the -1.0f
+    // seed below were transcribed from GameInit (@0x001ce1c0 steps 8 + 11 + the
+    // tail write), and GameInit.cpp already ports them faithfully -- same
+    // duplicated-call-site shape as ActorManager::Initialise (see the DIFFERS
+    // block in ActorManager.cpp). Constructing one here was strictly a leak:
+    // game_work.mHud is still null at this point in boot (zeroed at the top of
+    // this file; the HUD is created by GameInit), so the AddControl this block
+    // used to attempt never ran, GameInit step 8 then overwrote
+    // game_work.m_TutorialControl, and the orphan kept hd_swipe_fruit_begin +
+    // press_indicate alive past GameDestroy into atexit -- after the GL context
+    // is gone. Nothing between here and GameInit step 8 touches
+    // m_TutorialControl (no screen exists yet).
 
     // Binary GameInit @ 0x0016cb2a: writes -1.0f to g_GameData+0x0c
-    // (m_TransitionTimer) immediately after the TutorialControl block.
-    // This is the seed value that puts UpdateMusic into the transition
-    // branch on its first eligible frame, so SongPlay("Music-menu") fires
-    // first instead of SongPlay("background").
+    // (m_TransitionTimer). This is the seed value that puts UpdateMusic into the
+    // transition branch on its first eligible frame, so SongPlay("Music-menu")
+    // fires first instead of SongPlay("background"). GameInit step 10 writes the
+    // same value; kept here because boot-time music state is read before it.
     game_work.m_PauseAmount = -1.0f;
 
     // Note: PowerUpManager::Load is called above (step 11). LeaderboardManager is defunct.
@@ -694,9 +702,10 @@ void GameDestroy() {
     // the end of this function), same ordering constraint as the block above.
     MainScreen_UnloadStatics();      // s_blurTex / m_fruitTex / m_ninjaTex
     UnloadBackground();              // g_BackgroundTexture -- also called from GameExit
-                                     // @0x001cfed4 step 1, but Game::shutdown() calls
-                                     // GameDestroy and NOT GameTaskExit (mainSDL.cpp), so
-                                     // on a normal quit GameExit never runs.
+                                     // @0x001cfed4 step 1, which Game::shutdown() now
+                                     // reaches via End() -> GameTaskExit(). Kept here
+                                     // because GameExit only runs when a task state was
+                                     // live (quitting on the splash runs SplashExit).
     PauseScreen_UnloadStatics();     // s_FlashTex (lazy, flash.tex)
     FruitFactPage_UnloadStatics();   // g_SenseisHeadTex -- the 4th slot that
                                      // FruitFactControl::UnLoadContent @0x00171a4c misses
