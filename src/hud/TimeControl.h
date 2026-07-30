@@ -54,7 +54,7 @@ private:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(TimeControl) == 0x108, "TimeControl size mismatch"); // v1.6.1 TimeControl @0x1ce558
+static_assert(sizeof(TimeControl) == 0x108, "TimeControl size mismatch"); // v1.6.1 GameInit @0x001ce558 -- operator new(0x108) sizes TimeControl
 #endif
 
 #endif

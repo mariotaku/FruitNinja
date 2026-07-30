@@ -88,7 +88,7 @@ public:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(Mortar::MortarSound) == 0x10, "Mortar::MortarSound size mismatch"); // v1.6.1 MortarSound @0x2304a4
+static_assert(sizeof(Mortar::MortarSound) == 0x10, "Mortar::MortarSound size mismatch"); // v1.6.1 SoundManager::CreateNewSound @0x002304a4 -- operator new(0x10) sizes MortarSound
 #endif
 
 #endif

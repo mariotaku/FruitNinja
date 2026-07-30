@@ -103,7 +103,7 @@ private:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(TutorialControl) == 0xa0, "TutorialControl size mismatch"); // v1.6.1 TutorialControl @0x1ce7d0
+static_assert(sizeof(TutorialControl) == 0xa0, "TutorialControl size mismatch"); // v1.6.1 GameInit @0x001ce7d0 -- operator new(0xa0) sizes TutorialControl
 #endif
 
 #endif

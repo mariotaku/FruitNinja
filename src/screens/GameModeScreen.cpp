@@ -402,7 +402,7 @@ void GameModeScreen::CreateControls() {
     // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
     // Marks this button as the screen's hardware Back-key handler.
     m_pBackButton->m_bRespondsToBackKey = 1;
-    m_pBackButton->m_bBackdropActive = 1; // v1.6.1 GameModeScreen::CreateMenuItems @0x00181bac
+    m_pBackButton->m_bBackdropActive = 1; // v1.6.1 GameModeScreen::CreateControls @0x00181bac (strb #1, [btn,#0x150])
     m_pBackButton->SetText(
         GETSTRING_CAST_0(LSTR_DJ_BACK_BUTTON),
         game_work.m_RingColours[0],

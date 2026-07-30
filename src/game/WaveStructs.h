@@ -507,7 +507,7 @@ struct WaveQue {
 
 #ifdef __bada__
 static_assert(sizeof(WaveQue) == 0x0c, "WaveQue size mismatch");
-static_assert(sizeof(SPAWNER_INFO) == 0x64, "SPAWNER_INFO size mismatch"); // v1.6.1 SPAWNER_INFO @0x14be2c
+static_assert(sizeof(SPAWNER_INFO) == 0x64, "SPAWNER_INFO size mismatch"); // v1.6.1 SpawnModifier::Clone @0x0014be2c -- operator new(0x64) sizes SPAWNER_INFO
 static_assert(sizeof(WaveInfo) == 0x7c, "WaveInfo size mismatch"); // v1.6.1 WaveInfo @0x122800 (MEDIUM confidence)
 static_assert(offsetof(WaveInfo, m_ExclusiveTag) == 0x78, "WaveInfo m_ExclusiveTag offset mismatch");
 #endif

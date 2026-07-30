@@ -925,7 +925,7 @@ void MenuButton::UpdateRealtime(float dtSeconds) {
 }
 #endif
 
-// v1.6.1 MenuButton::UpdateTouchPosition @0x0019a6d0
+// v1.6.1 MenuButton::UpdateTouchPosition @0x0019a518
 void MenuButton::UpdateTouchPosition() {
     if (m_TouchSlot < 0) return;
     const Mortar::TouchState* s =

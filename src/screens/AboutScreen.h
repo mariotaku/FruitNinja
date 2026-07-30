@@ -81,7 +81,7 @@ public:
 
     ~AboutScreen() override;
 
-    // v1.6.1 AboutScreen::LoadContent @ 0x0015b6d4
+    // v1.6.1 AboutScreen::LoadContent @ 0x0015a548
     // Loads haikus.tex, credits.tex, sensei.tex into static storage.
     // Called from ctor; binary has no early-return guard.
     static void LoadContent();

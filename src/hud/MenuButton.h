@@ -366,7 +366,7 @@ public:
     // alignSigned is fixed at -1 inside so all 3 arc layers share the same m_Weight.
     void SetInnerGlow(const char* text, Colour colour, float radius, float fontScale, float effectSize);
 
-    // v1.6.1 MenuButton::Remove @0x0019d148: release fruit piece with upward fling
+    // v1.6.1 MenuButton::Remove @0x0019b448: release fruit piece with upward fling
     void Remove();
 
     // v1.6.1 MenuButton::TouchReleased @0x0019a7f8: fires m_ClickCallback (toggles only) + m_DeletedCallback (always)
@@ -399,7 +399,7 @@ public:
     // Replaces m_ClickCallback. Used by ScreenButton::ShrinkButtonCall.
     void SetCallback(const Mortar::Delegate0<void>& cb) { m_ClickCallback = cb; }
 
-    // v1.6.1 MenuButton::LoadContent @0x0019d640: loads 3 shared textures into class statics.
+    // v1.6.1 MenuButton::LoadContent @0x0019c1a0: loads 3 shared textures into class statics.
     static void LoadContent();
     static void UnLoadContent();
 
@@ -411,7 +411,7 @@ public:
     static Mortar::SmartPtr<Mortar::Texture>& GetSparkleRingTex();
 
 private:
-    // v1.6.1 MenuButton::UpdateTouchPosition @0x0019a6d0: copies x/y/phase from tracked Touch slot into m_TouchX/Y/Phase.
+    // v1.6.1 MenuButton::UpdateTouchPosition @0x0019a518: copies x/y/phase from tracked Touch slot into m_TouchX/Y/Phase.
     void UpdateTouchPosition();
 };
 

@@ -35,7 +35,7 @@ private:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(Mortar::IFile_Direct) == 0x14, "Mortar::IFile_Direct size mismatch"); // v1.6.1 IFile_Direct @0x2511ac
+static_assert(sizeof(Mortar::IFile_Direct) == 0x14, "Mortar::IFile_Direct size mismatch"); // v1.6.1 FileSystem_Direct::OpenFile @0x002511ac -- operator new(0x14) sizes IFile_Direct
 #endif
 
 #endif // FN_ENGINE_ASSET_IFILE_DIRECT_H

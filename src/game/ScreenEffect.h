@@ -275,7 +275,7 @@ public:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(ScreenEffect) == 0x50, "ScreenEffect size mismatch"); // v1.6.1 ScreenEffect @0x141c48
+static_assert(sizeof(ScreenEffect) == 0x50, "ScreenEffect size mismatch"); // v1.6.1 PowerUp::{ctor} @0x00141c48 -- operator new(0x50) sizes ScreenEffect
 #endif
 
 #endif // FN_GAME_SCREEN_EFFECT_H

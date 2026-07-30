@@ -48,7 +48,7 @@ private:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(SpecificOrder) == 0x1c0, "SpecificOrder size mismatch"); // v1.6.1 SpecificOrder @0x118728
+static_assert(sizeof(SpecificOrder) == 0x1c0, "SpecificOrder size mismatch"); // v1.6.1 AchievementManager::LoadAchievementInfo @0x00118728 -- operator new(0x1c0) sizes SpecificOrder
 #endif
 
 #endif // FN_GAME_SPECIFIC_ORDER_H

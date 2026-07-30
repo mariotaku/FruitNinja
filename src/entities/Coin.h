@@ -209,7 +209,7 @@ private:
 
 #ifdef __bada__
 #include <cstddef>
-static_assert(sizeof(Coin) == 0x94, "Coin size mismatch"); // v1.6.1 Coin @0x1d90b8
+static_assert(sizeof(Coin) == 0x94, "Coin size mismatch"); // v1.6.1 CreateEntity @0x001d90b8 -- operator new(0x94) sizes Coin
 #endif
 
 // v1.6.1 AddToScoreOnArrival @0x162ab8

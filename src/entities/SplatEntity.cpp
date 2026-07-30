@@ -141,7 +141,7 @@ static int          s_CurrentFree = 0;
 
 static Mortar::SmartPtr<Mortar::Texture>       s_SplatTex;
 
-// v1.6.1 static-init @0x001eca34: default-constructed alongside s_SplatTex (BSS+0x2c,
+// v1.6.1 _GLOBAL__I_Splat.cpp @0x001eca34 (static-init): default-constructed alongside s_SplatTex (BSS+0x2c,
 // immediately after s_SplatTex's BSS+0x28) and nulled by CleanUpSplat @0x001ec88c.
 // Confirmed via Ghidra xrefs: zero write sites anywhere in the binary besides its own
 // ctor/dtor and CleanUpSplat -- a genuinely dead/unassigned texture slot, not a gap in

@@ -416,7 +416,7 @@ void PowerUpManager::ClearScreenEffects() {
     m_ActiveScreenEffects.clear();
 }
 
-// v1.6.1 SaveActivePowerUps @ 0x00117df8 — save active power-up state to XML
+// v1.6.1 PowerUpManager::SaveActivePowerUps @ 0x001403a0 — save active power-up state to XML
 void PowerUpManager::SaveActivePowerUps(TiXmlElement* parent) {
     for (std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();
          it != m_ActivePowerUps.end(); ++it) {

@@ -262,11 +262,11 @@ void MainScreen::Init() {
     Reset();
 }
 
-// v1.6.1 MainScreen::Reset @0x0014ac8c: no-op
+// v1.6.1 MainScreen::Reset @0x00195978: no-op
 void MainScreen::Reset() {
 }
 
-// v1.6.1 MainScreen::Release @0x0014cd20
+// v1.6.1 MainScreen::Release @0x00197aa8
 void MainScreen::Release() {
     m_pGameModeButton    = nullptr;
     m_pStoreButton    = nullptr;
@@ -1170,7 +1170,7 @@ void MainScreen::DeleteMenuButtons() {
 #endif // !defined(__bada__)
 }
 
-// v1.6.1 MainScreen::Hide @0x0014ad04
+// v1.6.1 MainScreen::Hide @0x00195a10
 void MainScreen::Hide() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_CAMERA_FADE), "Hide");
     m_State = STATE_CAMERA_FADE;
@@ -1328,7 +1328,7 @@ void MainScreen::CreateQuitButton() {
     game_work.mHud->AddControl(m_pQuitButton);
 }
 
-// v1.6.1 MainScreen::ButtonDeleted @0x0014acc0
+// v1.6.1 MainScreen::ButtonDeleted @0x001959b0
 void MainScreen::ButtonDeleted(HUDControl* ctrl) {
     if (ctrl == m_pStoreButton)    m_pStoreButton    = nullptr;
     if (ctrl == m_pGameModeButton)    m_pGameModeButton    = nullptr;
@@ -1338,7 +1338,7 @@ void MainScreen::ButtonDeleted(HUDControl* ctrl) {
 
 // --- Callbacks ---
 
-// v1.6.1 MainScreen::GameModeCallback @0x0014b068
+// v1.6.1 MainScreen::GameModeCallback @0x00195e84
 void MainScreen::GameModeCallback() {
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MODE_SELECT), "GameModeCallback");
     m_State = STATE_MODE_SELECT;
@@ -1366,7 +1366,7 @@ void MainScreen::NewGameCallback() {
     Math::SeedGlobalRng((uint32_t)game_work.m_FrameTimer);
 }
 
-// v1.6.1 MainScreen::AboutCallback @0x0014afc4
+// v1.6.1 MainScreen::AboutCallback @0x00195d88
 void MainScreen::AboutCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_DOJO_WAIT_B), "AboutCallback");
@@ -1398,14 +1398,14 @@ void MainScreen::SettingsCallback() {
 }
 #endif // !defined(__bada__)
 
-// v1.6.1 MainScreen::LeaderboardsCallback @0x0014b010
+// v1.6.1 MainScreen::LeaderboardsCallback @0x00195df0
 void MainScreen::LeaderboardsCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_LEADERBOARD), "LeaderboardsCallback");
     m_State = STATE_LEADERBOARD;
 }
 
-// v1.6.1 MainScreen::MoreGamesCallback @0x0014b000
+// v1.6.1 MainScreen::MoreGamesCallback @0x00195dd8
 void MainScreen::MoreGamesCallback() {
     CancelNews();  // defunct stub
     LOG_INFO("SCREEN/MainScreen", "%d -> %d (%s)", (int)(m_State), (int)(STATE_MORE_GAMES), "MoreGamesCallback");

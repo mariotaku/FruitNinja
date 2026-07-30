@@ -738,7 +738,7 @@ Mortar::SmartPtr<Model> MeshManager::LoadMeshInternal(const AsciiString& path) {
 
 namespace Mortar {
 
-// v1.6.1 MeshManager::Destroy @0x002368b8 (D1 dtor path) -- calls ReleaseAll (-> List::Clear).
+// v1.6.1 MeshManager::Destroy @0x002368a0 -- 4-byte veneer: tail-calls ReleaseAll (-> List::Clear).
 void MeshManager::Destroy() {
     ReleaseAll();
 }
@@ -771,7 +771,7 @@ Mortar::SmartPtr<Model> MeshManager::Find(SmartPtr<Model> const& model) const {
     return Mortar::SmartPtr<Model>();
 }
 
-// v1.6.1 InitialiseInternal @0x001A74B8 -- empty in the binary (one-time hook, no body).
+// v1.6.1 MeshManager::InitialiseInternal @0x00238198 -- empty in the binary (bare 'bx lr').
 void MeshManager::InitialiseInternal() {
 }
 
