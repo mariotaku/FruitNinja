@@ -108,9 +108,9 @@ void TimeControl::CountDown(float startSeconds) {
 }
 
 float TimeControl::GetCountDown() const {
-    // v1.6.1 TimeControl::GetCountDown @ 0x001c08e8
-    Game* game = Game::GetInstance();
-    if (!game) return m_CountdownStart;
+    // ASM-spec v1.6.1 TimeControl::GetCountDown @ 0x001c08e8: 13 instructions total --
+    // ldrb game_work.gameMode / cmp #2 / beq const / bl IsMultiplayer / cmp #0 /
+    // vldreq s0,[this,#0xc0] / vldr s0,[pc]. No Game::GetInstance() call and no null guard.
     if (game_work.gameMode == GAME_MODE_ARCADE || IsMultiplayer())
         return ARCADE_START_TIME;    // DAT_001c0924 = 60.9
     return m_CountdownStart;
