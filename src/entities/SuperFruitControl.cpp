@@ -373,7 +373,8 @@ void SuperFruitControl::Update(float dt)
             }
             // v1.6.1 SuperFruitControl::Update @0x001bca10: FruitCamera::TransitionOut(game+0x4c).
             //   Port method is StartZoomOut() (binary symbol FruitCamera::TransitionOut @0x1bede8).
-            if (game_work.m_FruitCamera) game_work.m_FruitCamera->StartZoomOut();
+            //   Binary passes game_work.pM_FruitCamera unguarded.
+            game_work.m_FruitCamera->StartZoomOut();
             StopAllFruit();
             UnpauseSlices();
             if (m_pLinkedSlasher) {
@@ -401,7 +402,8 @@ void SuperFruitControl::Update(float dt)
             if (m_Timer >= m_Lifetime + 0.5f) {
                 // one-shot: the actual blast
                 // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: blast CreateCameraShake(pos, 1.0, 2.0).
-                if (game_work.m_FruitCamera) game_work.m_FruitCamera->CreateCameraShake(pos, 1.0f, 2.0f);
+                //   Binary loads game_work.pM_FruitCamera and calls through it unguarded.
+                game_work.m_FruitCamera->CreateCameraShake(pos, 1.0f, 2.0f);
                 ExplodeSuperFruit();
                 SpawnJibs();
                 StopRays();
@@ -419,15 +421,15 @@ void SuperFruitControl::Update(float dt)
             float tLateShake = m_Lifetime + 0.5f + 0.35f + 0.4f;  // DAT_001bcd9c=0.35, DAT_001bcd90=0.4
             if (m_PrevTimer < tLateShake && tLateShake <= m_Timer) {
                 // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: late CreateCameraShake(pos, 1.6, 2.0).
-                if (game_work.m_FruitCamera) game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
+                //   Binary loads game_work.pM_FruitCamera and calls through it unguarded.
+                game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
             }
             // ease global time-scale back toward 1.0: ts = (ts-1)*pow(0.75, dt*60) + 1
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
             //   (HUD+0x24); pre-roll ts*=pow(0.75,dt*60); post-blast ts=(ts-1)*pow(0.75,dt*60)+1; end ts=1.
-            if (game_work.mHud) {
-                float& ts = game_work.mHud->m_globalTimeScale;
-                ts = (ts - 1.0f) * powf(0.75f, dt * 60.0f) + 1.0f;
-            }
+            //   Binary read-modify-writes HUD+0x24 through game_work.pM_pHud with no null test.
+            float& ts = game_work.mHud->m_globalTimeScale;
+            ts = (ts - 1.0f) * powf(0.75f, dt * 60.0f) + 1.0f;
         }
 
         // (d) score payoff window: Lifetime+0.5+0.35+0.55+0.1
@@ -436,9 +438,8 @@ void SuperFruitControl::Update(float dt)
             if (game_work.gameMode == 0) {
                 // persist stat (gameMode 0 only)
                 uint32_t statHash = StringHash("super_fruit_gp_classic");
-                if (game_work.m_SaveData) {
-                    game_work.m_SaveData->AddToTotal("super_fruit_gp_classic", statHash, m_SliceCount, false, false);
-                }
+                // Binary passes game_work.pM_SaveData straight to AddToTotal -- no null test.
+                game_work.m_SaveData->AddToTotal("super_fruit_gp_classic", statHash, m_SliceCount, false, false);
             }
             AddToCurrentScore(m_SliceCount, 0, false, true);  // flag4=true; raw m_SliceCount
         }
@@ -471,8 +472,8 @@ void SuperFruitControl::Update(float dt)
             PSPParticleManager::GetInstance().m_GlobalPullRadius = 0.0f;
             PSPParticleManager::GetInstance().m_GlobalPullStrength = 1.0f;
             // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
-            //   (HUD+0x24); end ts=1.
-            if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
+            //   (HUD+0x24); end ts=1. Binary stores 0x3f800000 to HUD+0x24 unguarded.
+            game_work.mHud->m_globalTimeScale = 1.0f;
             m_bPendingRemoval = 1;                  // +0x33 = 1: HUD::Update removes this control
         }
     } else {
@@ -505,10 +506,8 @@ void SuperFruitControl::Update(float dt)
 
         // global time-scale pre-roll: ts = 0.0 + ts*pow(0.75, dt*60)
         // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: slow-mo = game_work.mHud->m_globalTimeScale
-        //   (HUD+0x24); pre-roll ts*=pow(0.75,dt*60) (eases to 0).
-        if (game_work.mHud) {
-            game_work.mHud->m_globalTimeScale *= powf(0.75f, dt * 60.0f);
-        }
+        //   (HUD+0x24); pre-roll ts*=pow(0.75,dt*60) (eases to 0). Unguarded in the binary.
+        game_work.mHud->m_globalTimeScale *= powf(0.75f, dt * 60.0f);
 
         // v1.6.1 @0x001bca10 throw phase (every frame): re-target the zoom to the orbiting fruit.
         float a = -HUDControl::m_Timer;                       // HUDControl::m_Timer (+0x2c)
@@ -526,10 +525,9 @@ void SuperFruitControl::Update(float dt)
             if (scaleClamped > 1.0f) scaleClamped = 1.0f;
             m_TintCurrent = m_TintA + (m_TintB - m_TintA) * SinTransition(scaleClamped, 105.0f);
             camTgt += m_TintCurrent;
-            if (game_work.m_FruitCamera) {
-                game_work.m_FruitCamera->StartZoomIn(camTgt, 0.625f, a,
-                    Mortar::Delegate0<void>::Make(this, &SuperFruitControl::TransitionFin));
-            }
+            // Binary: FruitCamera::Transition(game_work.pM_FruitCamera, ...) -- unguarded.
+            game_work.m_FruitCamera->StartZoomIn(camTgt, 0.625f, a,
+                Mortar::Delegate0<void>::Make(this, &SuperFruitControl::TransitionFin));
 
             // recompute pos from host + scaled dir
             pos = _Vector3<float>(m_pHostFruit->pos.x, m_pHostFruit->pos.y, 0.0f);
@@ -540,16 +538,15 @@ void SuperFruitControl::Update(float dt)
     // tail: LAB_001bd0ac -- runs every frame.
     // HUD scale-fade (was MISLABELED "ray-entity"): while Timer < Lifetime+0.5, fade
     // the three HUD scales[3..5] (HUD+0x14/+0x18/+0x1c) toward 0.3 by the phase progress.
+    // Binary walks HUD+0x14/+0x18/+0x1c off game_work.pM_pHud with no null test.
     if (m_Timer < m_Lifetime + 0.5f) {
-        if (game_work.mHud) {
-            float prog = 1.0f - m_Timer / m_Lifetime;   // DAT_001bd4a0=0.3 (the T_1629 floor)
-            if (prog < 0.0f) prog = 0.0f;
-            else if (prog > 1.0f) prog = 1.0f;
-            float f = T_1629(0.3f, prog);
-            game_work.mHud->scales[3] *= f;
-            game_work.mHud->scales[4] *= f;
-            game_work.mHud->scales[5] *= f;
-        }
+        float prog = 1.0f - m_Timer / m_Lifetime;   // DAT_001bd4a0=0.3 (the T_1629 floor)
+        if (prog < 0.0f) prog = 0.0f;
+        else if (prog > 1.0f) prog = 1.0f;
+        float f = T_1629(0.3f, prog);
+        game_work.mHud->scales[3] *= f;
+        game_work.mHud->scales[4] *= f;
+        game_work.mHud->scales[5] *= f;
     }
 
     // fade-in accumulator: += dt*3, clamp 1
@@ -1132,18 +1129,17 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
     {
         const char* kSpawnedKey  = "super_pomegranates_spawned";
         uint32_t    spawnedHash  = StringHash(kSpawnedKey);
-        if (game_work.m_SaveData)
-            game_work.m_SaveData->AddToTotal(kSpawnedKey, spawnedHash, 1, false, false);
+        // Binary passes game_work.pM_SaveData straight to AddToTotal -- no null test.
+        game_work.m_SaveData->AddToTotal(kSpawnedKey, spawnedHash, 1, false, false);
     }
 
     // Binary @ 0x001bbf48 spawns the glow halo (new 0x8c) at throw time and adds it
     // to the HUD. The SuperFruitControl itself is NOT created here -- it is born on
     // the first slice (SuperFruitSliced @0x001be630). The glow is self-managed:
     // it tracks the host fruit and fades + self-removes when the fruit is killed.
+    // Binary: HUD::AddControl(game_work.pM_pHud, glow, false) -- unguarded.
     SuperFruitGlow* glow = new SuperFruitGlow(fruit);
-    if (game_work.mHud) {
-        game_work.mHud->AddControl(glow, false);
-    }
+    game_work.mHud->AddControl(glow, false);
 }
 
 // v1.6.1 SuperFruitControl::LoadContent @0x001bda74: subscribes the slice/throw
@@ -1204,10 +1200,9 @@ void SuperFruitControl::SuperFruitSliced(Fruit* fruit, int /*idx*/, Mortar::Enti
         // register it with the HUD so HUD::Update ticks it / HUD::Draw draws it.
         // The ctor IS the first hit (m_SliceCount=1) -- do NOT call Sliced() here
         // (that would double-count the slice).
+        // Binary: HUD::AddControl(game_work.pM_pHud, ctrl, false) -- unguarded.
         SuperFruitControl* ctrl = new SuperFruitControl(fruit);
-        if (game_work.mHud) {
-            game_work.mHud->AddControl(ctrl, false);
-        }
+        game_work.mHud->AddControl(ctrl, false);
         SuperFruitControls[fruit] = ctrl;
     }
 }
@@ -1219,8 +1214,13 @@ bool SuperFruitControl::IsInSuperFruitState()
     return !SuperFruitControls.empty();
 }
 
-// Binary @ 0x001b98c0. Reads FruitSaveData::GetTotal(game_work.m_SaveData, "super_pomegranates_spawned").
+// v1.6.1 SuperFruitControl::NumPomegranatesSpawnedThisGame @0x001b98c0. Reads
+// FruitSaveData::GetTotal(game_work.m_SaveData, "super_pomegranates_spawned").
 // There is no BSS counter; the value comes directly from the persistent save-data total.
+// NOTE: this game_work.m_SaveData null test is GENUINE -- the binary really does
+// `if (game_work.pM_SaveData == 0) return;` before the GetTotal call. Do not strip it
+// when sweeping port-added guards; the sibling SuperFruitControl entry points do NOT
+// have it, so the check has to be read per function.
 int SuperFruitControl::NumPomegranatesSpawnedThisGame()
 {
     if (!game_work.m_SaveData) return 0;
@@ -1231,12 +1231,12 @@ int SuperFruitControl::NumPomegranatesSpawnedThisGame()
 // ASM-spec v1.6.1 SuperFruitControl::CanSpawnFinalPomegranate @0x001b99d4: same
 // powerup-progression gate idiom as GlobalProbabilityOveride::CanSpawn @0x00120d2c --
 // if no powerup-flagged fruit is currently active, gate on progression >= 2.0.
+// Binary calls PowerUpManager::GetInstance() ONCE and dereferences it unguarded
+// (bl 0x0010aca0 / vldr s0,#0.0 / bl GetActiveProgression / vcmpe s0,#2.0).
 bool SuperFruitControl::CanSpawnFinalPomegranate()
 {
     if (Fruit::NumberOfPowerupFruits() < 1) {
-        return PowerUpManager::GetInstance()
-            ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f) >= 2.0f
-            : false;
+        return PowerUpManager::GetInstance()->GetActiveProgression(0.0f) >= 2.0f;
     }
     return false;
 }
@@ -1256,24 +1256,24 @@ bool SuperFruitControl::CanSpawnFinalPomegranate()
 //   FruitSaveData = game_work.m_SaveData (binary: *(*(GameWork_glob)+0x50)).
 bool SuperFruitControl::SpawnFinalPomegranate()
 {
-    // Two random decoy fruits, chucked near-instantly.
+    // Two random decoy fruits, chucked near-instantly. The binary feeds SpawnFruit's
+    // return value straight into Fruit::Chuck with no null test, and passes
+    // game_work.pM_SaveData straight to AddToTotal.
     Mortar::Entity* e0 = WaveManager::GetInstance()->SpawnFruit(1, -1, NULL, 0);
-    if (e0) static_cast<Fruit*>(e0)->Chuck(0.01f);   // DAT_001b99bc
+    static_cast<Fruit*>(e0)->Chuck(0.01f);   // DAT_001b99bc
 
     Mortar::Entity* e1 = WaveManager::GetInstance()->SpawnFruit(1, -1, NULL, 0);
-    if (e1) static_cast<Fruit*>(e1)->Chuck(0.01f);   // DAT_001b99bc
+    static_cast<Fruit*>(e1)->Chuck(0.01f);   // DAT_001b99bc
 
     // Increment the persistent "super_pomegranates_spawned" stat.
     const char* kStatKey = "super_pomegranates_spawned";
     uint32_t statHash = StringHash(kStatKey);
-    if (game_work.m_SaveData) {
-        game_work.m_SaveData->AddToTotal(kStatKey, statHash, 1, false, false);
-    }
+    game_work.m_SaveData->AddToTotal(kStatKey, statHash, 1, false, false);
 
     // The actual super pomegranate, chucked slightly later.
     int superType = Fruit::FruitType("super_pomegranate", false);
     Mortar::Entity* e2 = WaveManager::GetInstance()->SpawnFruit(1, superType, NULL, 0);
-    if (e2) static_cast<Fruit*>(e2)->Chuck(0.1f);    // DAT_001b99c0
+    static_cast<Fruit*>(e2)->Chuck(0.1f);    // DAT_001b99c0
 
     return true;
 }
@@ -1327,14 +1327,18 @@ void SuperFruitControl::ResetAll()
     PSPParticleManager::GetInstance().m_GlobalPullRadius = 0.0f;
     PSPParticleManager::GetInstance().m_GlobalPullStrength = 1.0f;
     // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: slow-mo = game_work.mHud->m_globalTimeScale
-    //   (HUD+0x24); restore to 1.0.
-    if (game_work.mHud) game_work.mHud->m_globalTimeScale = 1.0f;
+    //   (HUD+0x24); restore to 1.0. The binary loads game_work.pM_pHud into a register and stores
+    //   0x3f800000 to +0x24 with NO null test -- a guard here would silently leave the world in
+    //   slow-motion instead of faulting.
+    game_work.mHud->m_globalTimeScale = 1.0f;
     // v1.6.1 SuperFruitControl::Reset @0x001bb52c: FruitCamera::TransitionOut(game+0x4c).
     //   Port method is StartZoomOut() (binary symbol FruitCamera::TransitionOut @0x1bede8).
-    if (game_work.m_FruitCamera) game_work.m_FruitCamera->StartZoomOut();
+    //   Binary passes game_work.pM_FruitCamera straight through, unguarded.
+    game_work.m_FruitCamera->StartZoomOut();
     // ASM-spec v1.6.1 SuperFruitControl::Reset @0x001bb52c: StackAllocatedPointer<Delegate0>::
     //   Delete((game+0x4c)+0x184) -- frees/clears the camera's zoom-done callback (FruitCamera+0x184).
-    if (game_work.m_FruitCamera) game_work.m_FruitCamera->m_OnZoomDone = Mortar::Delegate0<void>();
+    //   Also unguarded in the binary.
+    game_work.m_FruitCamera->m_OnZoomDone = Mortar::Delegate0<void>();
     UnpauseSlices();
 
     // Walk ActorManager type 6, OR 0x10 (ENT_KILLED) into each entity's flags(+0x0c)
