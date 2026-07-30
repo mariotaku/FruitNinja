@@ -13,6 +13,8 @@
 #include "util/StringHash.h"
 #include "game/EntityTypes.h"
 #include "util/Utf8Encode.h"
+#include "math/Math.h"
+#include "math/_Vector3.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -186,6 +188,53 @@ static void test_encodeutf8_mixed()
 // main
 // ---------------------------------------------------------------------------
 
+// Math::LineIntersect @ 0x002752cc..0x0027542b -- 2D segment-segment intersection.
+//
+// Regression pin. The port shipped three sign errors against the binary: denom
+// used dyA*dxB + dyB*dxA instead of dxA*dyB - dyA*dxB, S_B had a flipped sign AND
+// mixed B2.x with B1.y, and the Y numerator was negated. The denom bug alone made
+// the canonical X-crossing below produce denom == 0, so LineIntersect returned
+// false for two segments that plainly cross.
+//
+// Expected values are the BINARY's, decoded from the vmul/vnmls pairs at
+// 0x2752f8/0x275304 (denom), 0x275314/0x27531c (S_B) and 0x275364 (Y):
+// denom = -200 and out = (5,5) for this input.
+static void test_lineintersect_crossing()
+{
+    _Vector3<float> A1(0.0f, 0.0f, 0.0f), A2(10.0f, 10.0f, 0.0f);
+    _Vector3<float> B1(0.0f, 10.0f, 0.0f), B2(10.0f, 0.0f, 0.0f);
+    _Vector3<float> out(-1.0f, -1.0f, 42.0f);
+
+    CHECK(Math::LineIntersect(A1, A2, B1, B2, out));
+    CHECK(out.x > 4.999f && out.x < 5.001f);
+    CHECK(out.y > 4.999f && out.y < 5.001f);
+    // The binary writes only x and y on success; z is left untouched.
+    CHECK(out.z > 41.999f && out.z < 42.001f);
+}
+
+// Parallel segments share no point: denom == 0 is the binary's only early-out
+// before the bounds tests, and it must still reject.
+static void test_lineintersect_parallel_rejects()
+{
+    _Vector3<float> A1(0.0f, 0.0f, 0.0f), A2(10.0f, 0.0f, 0.0f);
+    _Vector3<float> B1(0.0f, 5.0f, 0.0f), B2(10.0f, 5.0f, 0.0f);
+    _Vector3<float> out(0.0f, 0.0f, 0.0f);
+
+    CHECK(!Math::LineIntersect(A1, A2, B1, B2, out));
+}
+
+// Infinite lines cross at (20,20), but that point is outside both segments'
+// XY bounding boxes, so the containment tests must reject it. Guards against a
+// "fix" that gets denom right but drops the bounds checks.
+static void test_lineintersect_out_of_span_rejects()
+{
+    _Vector3<float> A1(0.0f, 0.0f, 0.0f), A2(10.0f, 10.0f, 0.0f);
+    _Vector3<float> B1(30.0f, 10.0f, 0.0f), B2(40.0f, 0.0f, 0.0f);
+    _Vector3<float> out(0.0f, 0.0f, 0.0f);
+
+    CHECK(!Math::LineIntersect(A1, A2, B1, B2, out));
+}
+
 int main(int /*argc*/, char** /*argv*/)
 {
     std::printf("test_math_utils: start\n");
@@ -219,6 +268,15 @@ int main(int /*argc*/, char** /*argv*/)
 
     test_encodeutf8_mixed();
     std::printf("  EncodeUTF8FromUCS: mixed 'A'+U+00E9 -> 3 bytes: OK\n");
+
+    test_lineintersect_crossing();
+    std::printf("  LineIntersect: X-crossing -> (5,5), z untouched: OK\n");
+
+    test_lineintersect_parallel_rejects();
+    std::printf("  LineIntersect: parallel (denom==0) -> false: OK\n");
+
+    test_lineintersect_out_of_span_rejects();
+    std::printf("  LineIntersect: crossing outside both spans -> false: OK\n");
 
     std::printf("test_math_utils: PASS\n");
     return 0;

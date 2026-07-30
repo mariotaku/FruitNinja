@@ -28,7 +28,7 @@ void ClosestPointOnLine(_Vector3<float>& A, _Vector3<float>& B, _Vector3<float>&
     out.z = 0.0f;
 }
 
-// ASM-verified: 2026-05-06T15:30 v1.6.1 binary @ 0x001b30f8 (re-analyst)
+// ASM-verified: 2026-07-31T00:40Z v1.6.1 Math::LineIntersect @ 0x002752cc..0x0027542b (asm-inspector)
 // 2D segment-segment intersection via determinant + AABB containment.
 // Returns false if denom==0 OR the intersection point falls outside either
 // segment's XY bounding box. On success writes only out.x and out.y -- out.z
@@ -39,20 +39,26 @@ bool LineIntersect(_Vector3<float>& A1, _Vector3<float>& A2, _Vector3<float>& B1
     float dyA = A2.y - A1.y;
     float dxB = B2.x - B1.x;
     float dyB = B2.y - B1.y;
-    // Binary's sign convention: denom = dyA*dxB + dyB*dxA (with one factor
-    // entered as -dxA = A1.x-A2.x); algebraically dxA*dyB - dyA*dxB.
-    float denom = dyA * dxB + dyB * (-(A1.x - A2.x));
+    // Binary @0x2752f8: vmul s6,s2,s7 (dyB * -dxA) then @0x275304 vnmls s6,s3,s1
+    // (s6 = -s6 + dyA*-dxB), i.e. dxA*dyB - dyA*dxB. The port had a PLUS here and
+    // a comment asserting the minus, so the comment described correct algebra the
+    // code did not implement.
+    float denom = dxA * dyB - dyA * dxB;
     if (denom == 0.0f) return false;
 
     float S_A = dyA * A1.x - dxA * A1.y;
-    float S_B = dxB * B1.y + dyB * B2.x;
+    // Binary @0x275314/0x27531c: dyB*B1.x - dxB*B1.y. The port had the sign
+    // flipped AND mixed B2.x with B1.y.
+    float S_B = dyB * B1.x - dxB * B1.y;
     float X   = (dxA * S_B - dxB * S_A) / denom;
 
     float minAx = A1.x < A2.x ? A1.x : A2.x;
     float maxAx = A1.x > A2.x ? A1.x : A2.x;
     if (X < minAx || X > maxAx) return false;
 
-    float Y = (dyB * S_A - dyA * S_B) / denom;
+    // Binary @0x275364: vmul s12,s2,s4 then vnmls s12,s3,s5 -> dyA*S_B - dyB*S_A.
+    // The port had this negated.
+    float Y = (dyA * S_B - dyB * S_A) / denom;
     float minAy = A1.y < A2.y ? A1.y : A2.y;
     float maxAy = A1.y > A2.y ? A1.y : A2.y;
     if (Y < minAy || Y > maxAy) return false;
