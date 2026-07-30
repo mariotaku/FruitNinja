@@ -433,6 +433,40 @@ struct TestHarness {
         return true;
     }
 
+    // Enter the Game task state (game_work.taskStateIndex == 2) through the REAL
+    // dispatcher, instead of hand-calling GameInit(0).
+    //
+    // WHY THIS EXISTS (task #144 group 2). A bare `GameInit(0);` runs the state-2
+    // INIT handler without ever telling GameTaskState that state 2 was entered:
+    // s_taskState.initialized stays false and s_taskState.prevState stays 0
+    // (Splash). Shutdown() -> game.shutdown() -> Game::End() -> GameTaskExit()
+    // then self-guards on `initialized` (GameTaskState.cpp:136, matching v1.6.1
+    // GameTaskExit @0x00119e84) and dispatches NOTHING -- so GameExit
+    // (v1.6.1 @0x001cfed4) never runs, and the objects it is the only owner of
+    // survive into GameDestroy: `delete game_work.mMainScreen` (11 instance
+    // textures) and MissControl::CleanPool() (11 combo/critical textures) plus
+    // verdana_0 = the 23 textures the GameDestroy leak guard reported.
+    //
+    // GameTaskUpdate's !initialized branch (GameTaskState.cpp:84-93) is the only
+    // place that pairs s_initFuncs[2] with prevState/initialized bookkeeping, so
+    // one frame with taskStateIndex pre-set to 2 is the production registration
+    // minus the splash hop (SplashUpdate @ SplashTask.cpp:22 is what sets
+    // taskStateIndex=2 in the real boot).
+    //
+    // Frame-observable behaviour is unchanged for callers that previously used
+    // GameInit(0) + SetInitFrames(0): the !initialized branch RETURNS right after
+    // the init handler, so GameUpdate does not run, and GameTaskDraw gates on
+    // s_updated (still false) so GameDraw does not dispatch either. The frame is
+    // a clear + swap around GameInit, nothing more -- no entity Update tick has
+    // run when this returns.
+    //
+    // Must be called after Init(). Idempotent-ish: a second call re-enters the
+    // same state and GameInit's own ts->initComplete guard early-returns.
+    void EnterGameState() {
+        game_work.taskStateIndex = 2;
+        game.runFrames(1);
+    }
+
     // -------- Component-isolation mode --------
     //
     // InitComponent() boots SDL+GL+game.init() identically to Init(), then

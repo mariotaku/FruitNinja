@@ -192,7 +192,9 @@ int main(int argc, char* argv[]) {
     // GameInit creates the SlashEntity[16] array, registers input callbacks
     // (GameTaskInitInput), and wires touch->slash dispatch.
     // The initComplete guard inside GameInit prevents double-init.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
 
     if (!g_pSlashEntity) {
         fprintf(stderr, "[scene_slash] FAIL: g_pSlashEntity is null after GameInit\n");

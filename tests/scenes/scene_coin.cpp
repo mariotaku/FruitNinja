@@ -291,7 +291,9 @@ int main(int argc, char* argv[]) {
     if (!h.Init())       return 1;
 
     // GameInit wires ActorManager pools (incl. type 2 = Coin) + FruitCamera.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
     Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
 
     Mortar::ActorManager* am = h.game.actorManager;

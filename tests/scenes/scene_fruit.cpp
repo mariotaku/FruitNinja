@@ -275,9 +275,11 @@ int main(int argc, char* argv[]) {
     // GameInit (state-2 task handler) sets up MainScreen, HUD, SlashEntities.
     // For the fruit scene we need: actorManager (GameInitialise), FruitCamera
     // (GameInitialise), and a Fruit factory (GameInitialise step 28 RegisterFactory).
-    // Call GameInit directly so prespawn pools and the factory delegate are wired.
+    // Enter state 2 through the task dispatcher so prespawn pools and the factory
+    // delegate are wired AND GameTaskExit dispatches GameExit at teardown (a bare
+    // GameInit(0) leaves the task state unregistered) -- see EnterGameState().
     // The initComplete guard inside GameInit prevents double-initialisation.
-    GameInit(0);
+    h.EnterGameState();
 
     Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
 

@@ -228,7 +228,9 @@ int main(int argc, char* argv[]) {
 
     // GameInit wires ActorManager pools, FruitCamera, FruitInfo tables, and
     // Fruit / Bomb factory delegates. Needed before any am->Add() call.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
     Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
 
     Mortar::ActorManager* am = h.game.actorManager;

@@ -223,7 +223,12 @@ int main(int argc, char* argv[]) {
     // tick has ever run in this process, so the shared g_ModColourOut global
     // is guaranteed to still be at its BSS-zero default -- required to
     // reproduce the bug's exact trigger window.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    // Still no SlashEntity::Update tick: GameTaskUpdate's !initialized branch
+    // returns right after the init handler, and GameTaskDraw's s_updated gate
+    // is still false, so the g_ModColourOut BSS-zero window above is preserved.
+    h.EnterGameState();
     if (!g_pSlashEntities[0]) {
         fprintf(stderr, "FAIL: g_pSlashEntities[0] null after GameInit(0)\n");
         h.Shutdown();

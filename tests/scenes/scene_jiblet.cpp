@@ -206,7 +206,9 @@ int main(int argc, char* argv[]) {
 
     // GameInit wires ActorManager pools (incl. type 5 = Jiblet), FruitCamera,
     // and the FruitInfo tables.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
     Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
 
     Mortar::ActorManager* am = h.game.actorManager;

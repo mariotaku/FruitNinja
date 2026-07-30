@@ -160,7 +160,9 @@ int main(int argc, char* argv[]) {
 
     // GameInit sets up the factory delegates, ActorManager pools, FruitCamera,
     // FruitInfo tables (bomb size), and calls Bomb::LoadContent.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
     Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
 
     // Verify bomb model loaded.

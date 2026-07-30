@@ -186,7 +186,9 @@ static int RunCriticalFlashScene(fn::TestHarness& h) {
     // GameInitialise (inside game.init) handles SplatEntity::LoadContent
     // AND Fruit::LoadInfo (step 24) -- CRITICAL_COLOUR is valid by the
     // time h.Init() returns.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
     Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
 
     int fruitType = Fruit::FruitType("orange", false);
@@ -331,7 +333,9 @@ int main(int argc, char* argv[]) {
     // GameInit wires: ActorManager pools, FruitCamera, FruitInfo tables,
     // SplatEntity pool (CreatePool), SlashEntities.
     // GameInitialise (inside game.init) handles SplatEntity::LoadContent.
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
     Mortar::SoundManager::GetInstance().SetSFXVolume(0.0f);
 
     // --- Pick fruit type (prefer watermelon; accept any type 0+) ---

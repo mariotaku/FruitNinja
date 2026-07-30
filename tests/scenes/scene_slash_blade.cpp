@@ -525,7 +525,9 @@ int main(int argc, char* argv[]) {
     if (!h.ParseFlags()) return 1;
     if (!h.Init())       return 1;
 
-    GameInit(0);
+    // Entered through the task dispatcher (NOT a bare GameInit(0)) so
+    // GameTaskExit dispatches GameExit at teardown -- see EnterGameState().
+    h.EnterGameState();
     if (!g_pSlashEntity) {
         fprintf(stderr, "[blade_skin] FAIL: g_pSlashEntity null after GameInit\n");
         return 1;
