@@ -626,9 +626,9 @@ void PowerUpShop::ButtonSliced() {
         Fruit* fruit = m_BuyButton->m_pTrackedFruit;
         if (fruit == NULL) return;
         // 3-float ldmia/stmia copy block: freeze both halves at current position.
-        fruit->m_SecondPos = fruit->pos;       // +0xB8 <- +0x10
+        fruit->m_SecondPos = fruit->pos;       // +0xC8 <- +0x10
         fruit->vel         = g_Origin;         // +0x1C
-        fruit->m_SecondVel = g_Origin;         // +0xC4
+        fruit->m_SecondVel = g_Origin;         // +0xD4
         fruit->m_Gravity   = g_Origin;         // +0xA0
         return;
     }
@@ -669,6 +669,14 @@ void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
         // Kick the falling buy-fruit piece off-screen:
         //   vstr s15(-480), [r5,#0xbc] -> m_SecondPos.y (+0xBC)
         //   vstr s15(-480), [r5,#0x14] -> pos.y         (+0x14)
+        // TODO: v1.6.1 PowerUpShop::Update - re-read this disassembly quote. The
+        // #0xbc/#0xc8 operands put m_SecondPos.y at +0xBC and m_SecondVel.y at
+        // +0xC8, but Fruit.h's __bada__ assert pins m_SecondPos at +0xC8 (.y =
+        // +0xCC) and m_SecondVel at +0xD4 (.y = +0xD8) -- a uniform -16 across
+        // all four operands, the signature of a v1.5.1-era quote. The two plain
+        // offset labels above were corrected; these are QUOTED INSTRUCTIONS, so
+        // they get re-read against the binary rather than silently renumbered.
+        // The code itself writes named fields and is correct either way.
         fruit->m_SecondPos.y = -480.0f;  // +0xBC, 0xc3f00000
         fruit->pos.y         = -480.0f;  // +0x14, 0xc3f00000
 
