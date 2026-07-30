@@ -80,6 +80,13 @@ static Mortar::SmartPtr<Mortar::Texture> s_blurTex;
 static Mortar::SmartPtr<Mortar::Texture> m_fruitTex;
 static Mortar::SmartPtr<Mortar::Texture> m_ninjaTex;
 
+// See MainScreen.h for why this port-only hook exists (binary defers to atexit).
+void MainScreen_UnloadStatics() {
+    s_blurTex.SetNull();
+    m_fruitTex.SetNull();
+    m_ninjaTex.SetNull();
+}
+
 // Button positions (verified from read_memory, docs/screens/main.md)
 // ASM-spec v1.6.1 @0x00196264: NEW GAME pos.x = 24.0f
 static const _Vector3<float> POS_PLAY_BUTTON(24.0f, -66.0f, 0.0f);

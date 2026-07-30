@@ -17,8 +17,9 @@
 #include <cstddef>
 
 // Owning Font handle for the shared localized TTF face (game_work.m_pTTFFontMain).
-// Kept alive for the process lifetime once PreloadFontsTTF populates it.
-// Reassigned on each PreloadFontsTTF call (handles language-switch or re-init).
+// Reassigned on each PreloadFontsTTF call (handles language-switch or re-init) and
+// released by UnloadFontsTTF() from GameDestroy -- see the header for why the release
+// must happen there and not at atexit.
 static Mortar::SmartPtr<Mortar::Font> s_TTFFontMain;
 
 // ASM-spec v1.6.1 PreloadFontsTTF @0x0011c1fc:
@@ -34,6 +35,17 @@ void PreloadFontsTTF() {
     }
     game_work.m_pTTFFontMain =
         Mortar::FontTTFRegistry::GetInstance().Lookup(s_TTFFontMain.Get());
+}
+
+// ASM-spec v1.6.1 GameDestroy @0x0011d20c:
+//   ~FontCacheObjectTTF(game_work.m_pTTFFontMain); operator delete; slot = 0;
+//   FontInterface::GetInstance(); FontInterface::Shutdown();
+// The port reaches the same two destructions through the owning Font handle: the
+// FontCacheObjectTTF and its FontInterface atlas hang off s_TTFFontMain via
+// FontTTFRegistry, so dropping the last Font ref runs
+// ~Font -> FontTTFRegistry::Unregister -> ~FontCacheObjectTTF -> ~FontInterface.
+void UnloadFontsTTF() {
+    s_TTFFontMain.SetNull();
 }
 
 // Port specific: task #28 boot-time glyph-cache warm. See PreloadFontsTTF.h for the

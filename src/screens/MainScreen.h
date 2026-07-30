@@ -27,6 +27,19 @@ class GameModeScreen;
 // MenuButton class definition.
 void ClearMenuItems();
 
+// Port specific: releases MainScreen.cpp's three file-scope texture globals
+// (s_blurTex / m_fruitTex / m_ninjaTex, the port's mirrors of the binary's
+// MainScreen.cpp GOT globals). v1.6.1 has NO MainScreen::UnLoadContent -- the
+// binary defers these to atexit via __aeabi_atexit(&MainScreen::m_fruitTex,
+// ~SmartPtr) registered by global.constructors.keyed.to.MainScreen.cpp
+// @0x00199a24. The port cannot follow that: its atexit runs after
+// SDL_GL_DeleteContext, so the GL texture names would leak. Called from
+// GameDestroy instead, before MeshManager::Destroy().
+//
+// The three textures are loaded unconditionally in the MainScreen ctor, so they
+// are live on every boot. Idempotent; a later MainScreen ctor re-loads them.
+void MainScreen_UnloadStatics();
+
 // State enum (verified from v1.6.1 binary; Update @0x00196e1c)
 enum MainScreenState {
     STATE_CAMERA_ZOOM      = 0,    // Camera zoom-in, create toggles + play/dojo

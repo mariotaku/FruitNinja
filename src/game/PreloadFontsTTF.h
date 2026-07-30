@@ -9,6 +9,24 @@
 // bitmap font block and before MenuButton::LoadContent.
 void PreloadFontsTTF();
 
+// UnloadFontsTTF -- inverse of PreloadFontsTTF; counterpart of the binary's
+// GameDestroy @0x0011d20c font-TTF block (~FontCacheObjectTTF + operator delete +
+// slot = 0, then FontInterface::Shutdown).
+//
+// Releases the owning Mortar::SmartPtr<Font> that PreloadFontsTTF holds. That drop
+// cascades: ~Font -> FontTTFRegistry::Unregister -> delete FontCacheObjectTTF ->
+// delete its FontInterface atlas -> FontInterface::Clear() -> glDeleteTextures on
+// every atlas page.
+//
+// MUST be called from GameDestroy, while the GL context is still current. If the
+// handle is instead left to atexit, the whole chain above runs after
+// SDL_GL_DeleteContext and every atlas page texture leaks.
+//
+// The caller is responsible for also nulling the non-owning raw pointer
+// game_work.m_pTTFFontMain (+0x614), which dangles once this returns.
+// Safe to call when nothing was ever loaded.
+void UnloadFontsTTF();
+
 // Port specific: task #28 first-screen-open frame-spike mitigation. The binary
 // lazy-bakes each TTF glyph on first use (FontCacheObjectTTF::GetGlyph ->
 // FT_Load_Glyph, amplified 9x in HD builds by kFontSupersample=3 -- 1x when

@@ -102,6 +102,11 @@ static const float FLASH_SCALE_MUL  = 10000.0f;
 // Lazy-loaded flash.tex (shared with DrawBombHit)
 static Mortar::SmartPtr<Mortar::Texture> s_FlashTex;
 
+// See PauseScreen.h for why this port-only hook exists (binary defers to atexit).
+void PauseScreen_UnloadStatics() {
+    s_FlashTex.SetNull();
+}
+
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------

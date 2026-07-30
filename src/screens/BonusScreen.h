@@ -17,6 +17,19 @@
 
 namespace Mortar { class MortarSound; }
 
+// Port specific: releases BonusScreen.cpp's file-scope s_bonusScreenBacking global
+// ("arcade_diolog_box.tex"). That cache IS binary-faithful -- v1.6.1
+// BonusScreen::BonusScreen @0x00162d1c guards it with a plain !IsValid() test and
+// copies it into m_Texture (+0x74) -- and BonusScreen::UnLoadContent @0x0016200c is
+// `bx lr`, so the binary never releases it either; it leaves the slot to
+// __aeabi_atexit. The port cannot, because its atexit runs after
+// SDL_GL_DeleteContext and the GL texture name would leak. Called from GameDestroy,
+// before MeshManager::Destroy().
+//
+// Do NOT fold this into BonusScreen::UnLoadContent -- that body is empty in the
+// binary and must stay empty. Idempotent; the ctor re-loads on demand.
+void BonusScreen_UnloadStatics();
+
 // BonusAwardHud -- per-award data block. Binary size 0x60.
 // v1.6.1 BonusScreen::Draw @0x0016492c reads these fields per-award.
 struct BonusAwardHud {

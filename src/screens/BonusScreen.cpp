@@ -44,6 +44,12 @@ static Mortar::FontCacheObjectTTF* GetBonusTTFFont() {
 // SmartPtr (plain !IsValid() guard, not __cxa_guard); every ctor copies it into m_Texture.
 static Mortar::SmartPtr<Mortar::Texture> s_bonusScreenBacking;
 
+// See BonusScreen.h for why this port-only hook exists (BonusScreen::UnLoadContent
+// @0x0016200c is `bx lr`; the binary defers the slot to atexit).
+void BonusScreen_UnloadStatics() {
+    s_bonusScreenBacking.SetNull();
+}
+
 // Phase-timer rodata constants — binary @ GOT_DAT_00162cdc area.
 // REVEAL_END / FINALE_HOLD / DISMISS_BUFFER removed: superseded by the memory-verified
 // revealEnd formula and m_bPendingRemoval latch below (v1.6.1 BonusScreen::Update @0x00163dd0).

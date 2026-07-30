@@ -31,6 +31,18 @@
 #include "screens/LeaderboardScreen.h"
 #include "hud/FruitFactControl.h"   // FruitFactControl::UnLoadContent
 #include "hud/TutorialControl.h"
+// GameDestroy teardown: static/file-scope texture release hooks.
+#include "screens/MainScreen.h"          // MainScreen_UnloadStatics
+#include "screens/PauseScreen.h"         // PauseScreen_UnloadStatics
+#include "screens/BonusScreen.h"         // BonusScreen_UnloadStatics
+#include "screens/FruitFactPage.h"       // FruitFactPage_UnloadStatics
+#include "screens/FruitFactZenPage.h"    // FruitFactZenPage::UnloadContent
+#include "engine/MenuBackground.h"       // UnloadBackground
+#include "hud/ComboBox.h"
+#include "hud/ListBox.h"
+#include "hud/SliderControl.h"
+#include "hud/VerticalScroller.h"
+#include "hud/CheckBox.h"
 #include "entities/Coin.h"
 #include "entities/SlashEntity.h"
 #include "BonusManager.h"
@@ -582,9 +594,17 @@ void GameDestroy() {
     // SmartPtr assignment to null handles this correctly for non-aliases.
     // For aliases: SmartPtr operator= already handles ref-count safely.
     //
-    // +0x614 m_pTTFFontMain: binary GameDestroy @0x0011d20c clears the raw ptr.
-    // Port: null the raw ptr. The owning s_TTFFontMain SmartPtr lives in
-    // PreloadFontsTTF.cpp and is released at process exit / next PreloadFontsTTF call.
+    // +0x614 m_pTTFFontMain: binary GameDestroy @0x0011d20c destroys the
+    // FontCacheObjectTTF (~FontCacheObjectTTF + operator delete), nulls the raw
+    // slot, then runs FontInterface::GetInstance() + FontInterface::Shutdown().
+    // Port: UnloadFontsTTF() releases the owning s_TTFFontMain handle in
+    // PreloadFontsTTF.cpp, which cascades ~Font -> FontTTFRegistry::Unregister ->
+    // delete FontCacheObjectTTF -> delete its FontInterface atlas ->
+    // FontInterface::Clear() (the glDeleteTextures on every atlas page). That has
+    // to happen HERE, not at atexit: the port's atexit runs after
+    // SDL_GL_DeleteContext. The raw slot dangles once UnloadFontsTTF returns, so
+    // null it immediately after, matching the binary's order.
+    UnloadFontsTTF();
     game_work.m_pTTFFontMain = 0;
     game_work.pFontGold.SetNull();
     game_work.pFontSilver.SetNull();
@@ -653,6 +673,40 @@ void GameDestroy() {
     }
     // TODO: v1.6.1 0x001df1c0 (Fruit::DestroyFruitModels) -- ported but has no port call
     // site; s_sliceModel[4] refs are never dropped. Needs an RE pass on the binary's call sites.
+
+    // Port specific: file-scope texture globals the binary genuinely leaves to
+    // atexit rather than to any UnLoadContent. This is NOT a set of missing
+    // faithful calls -- global.constructors.keyed.to.MainScreen.cpp @0x00199a24
+    // shows the binary itself doing __aeabi_atexit(&MainScreen::m_fruitTex,
+    // ~SmartPtr, ...) for exactly these slots. The only divergence is WHEN atexit
+    // fires: on Bada it still has a live GL context, whereas the port's atexit
+    // runs after SDL_GL_DeleteContext, so every handle released there leaks its GL
+    // name. Releasing them here is the minimum change that preserves the binary's
+    // ownership shape. Each hook is idempotent and reloads on demand.
+    //
+    // MUST stay before MeshManager::Destroy() (and before the leak-check report at
+    // the end of this function), same ordering constraint as the block above.
+    MainScreen_UnloadStatics();      // s_blurTex / m_fruitTex / m_ninjaTex
+    UnloadBackground();              // g_BackgroundTexture -- also called from GameExit
+                                     // @0x001cfed4 step 1, but Game::shutdown() calls
+                                     // GameDestroy and NOT GameTaskExit (mainSDL.cpp), so
+                                     // on a normal quit GameExit never runs.
+    PauseScreen_UnloadStatics();     // s_FlashTex (lazy, flash.tex)
+    FruitFactPage_UnloadStatics();   // g_SenseisHeadTex -- the 4th slot that
+                                     // FruitFactControl::UnLoadContent @0x00171a4c misses
+    BonusScreen_UnloadStatics();     // s_bonusScreenBacking (BonusScreen::UnLoadContent
+                                     // @0x0016200c is `bx lr`)
+
+    // Faithful counterparts that simply had no port call site. FruitFactZenPage's
+    // is binary-exact (@0x0017fb00 = 2 SmartPtr nulls + guard byte); the five
+    // widget UnloadContents were reachable only from tests. All are static; the
+    // widget ones fire whenever the Settings screen was opened.
+    FruitFactZenPage::UnloadContent();   // v1.6.1 @0x0017fb00
+    ComboBox::UnloadContent();
+    ListBox::UnloadContent();
+    SliderControl::UnloadContent();
+    VerticalScroller::UnloadContent();
+    CheckBox::UnloadContent();
 
     Mortar::MeshManager::GetInstance()->Destroy();   // v1.6.1 GameDestroy @0x0011cea4
     // Note: Mortar::TextureManager::Destroy (binary calls twice) -- same as above.

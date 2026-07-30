@@ -40,6 +40,12 @@ static Mortar::FontCacheObjectTTF* GetPageTTFFont() {
 // LoadContent for FruitFactControl populates it; here we load on demand.
 static Mortar::SmartPtr<Mortar::Texture> g_SenseisHeadTex;
 
+// See FruitFactPage.h for why this port-only hook exists (the binary's
+// FruitFactControl::UnLoadContent @0x00171a4c does not cover this fourth slot).
+void FruitFactPage_UnloadStatics() {
+    g_SenseisHeadTex.SetNull();
+}
+
 // Binary @ 0x0017c214 / 0x0017c250
 FruitFactPage::FruitFactPage(FruitFactControl* pCtrl)
     : BaseScreen()

@@ -45,8 +45,16 @@ Mortar::Texture* GetCurrentBackground();
 void UpdateBackground();
 
 // UnloadBackground — port-only cleanup hook. Nulls the file-static
-// g_BackgroundTexture SmartPtr. Called from GameDestroy so the GL
-// resource is released on shutdown.
+// g_BackgroundTexture SmartPtr so its GL texture name is released while the GL
+// context is still current.
+//
+// Called from BOTH:
+//   - GameExit (v1.6.1 GameExit @0x001cfed4 step 1) -- the per-session teardown.
+//   - GameDestroy -- required because Game::shutdown() calls GameDestroy and NOT
+//     GameTaskExit (see mainSDL.cpp), so on a normal quit GameExit never runs and
+//     the background texture would otherwise survive into atexit, i.e. past
+//     SDL_GL_DeleteContext.
+// Idempotent; ChangeBackground re-loads on demand.
 void UnloadBackground();
 
 #endif // FN_MENU_BACKGROUND_H
