@@ -110,11 +110,13 @@ int GlobalProbabilityOveride::PickFruit()
     return 0;
 }
 
-// ASM-verified: 2026-06-26 v1.6.1 GlobalProbabilityOveride::CanSpawn @0x00120d2c (asm-inspector)
+// ASM-spec v1.6.1 GlobalProbabilityOveride::CanSpawn @0x00120d2c
+// Binary dereferences WaveManager::GetInstance()'s result unguarded (bl 0x0010d064 ;
+// ldr r3,[r0,#0x234]) and calls PowerUpManager::GetInstance() once, also unguarded
+// (bl 0x0010aca0 ; bl GetActiveProgression). Neither null-check exists in the binary.
 bool GlobalProbabilityOveride::CanSpawn()
 {
     WaveManager* wm = WaveManager::GetInstance();
-    if (!wm) return false;
     WAVE_INFO* wave = wm->m_pCurrentWave[0];
     // If current wave has GamesMin==0 (no game-count requirement), allow immediately.
     if (wave && wave->m_GamesMin == 0) return true;
@@ -123,9 +125,7 @@ bool GlobalProbabilityOveride::CanSpawn()
     if (m_MinFruitCount < wm->m_SavedWaveDelay) {
         if (m_AlwaysAllow) return true;
         if (Fruit::NumberOfPowerupFruits() < 1)
-            return PowerUpManager::GetInstance()
-                ? PowerUpManager::GetInstance()->GetActiveProgression(0.0f) >= 2.0f
-                : false;
+            return PowerUpManager::GetInstance()->GetActiveProgression(0.0f) >= 2.0f;
     }
     return false;
 }
@@ -136,10 +136,12 @@ void GlobalProbabilityOveride::ParseSpecific(TiXmlElement* /*e*/)
     // Defunct: base ParseSpecific — no-op stub; v1.6.1 GlobalProbabilityOveride::ParseSpecific @0x00121c78
 }
 
-// ASM-verified: 2026-06-26 v1.6.1 GlobalProbabilityOveride::CheckForOverride @0x001211cc (asm-inspector)
+// ASM-spec v1.6.1 GlobalProbabilityOveride::CheckForOverride @0x001211cc
+// (downgraded from ASM-verified 2026-06-26: that pass missed a port-added
+// game_work.m_SaveData null guard the binary does not have -- the binary enters
+// GetModeBitMask directly and passes game_work.pM_SaveData to GetTotal unguarded.)
 bool GlobalProbabilityOveride::CheckForOverride(int& out)
 {
-    if (!game_work.m_SaveData) return false;
     if (!(GetModeBitMask((GAME_MODE)game_work.gameMode) & m_ModeMask)) return false;
 
     int n = game_work.m_SaveData->GetTotal(m_SaveSubId);
@@ -162,9 +164,10 @@ bool GlobalProbabilityOveride::CheckForOverride(int& out)
 }
 
 // ASM-spec v1.6.1 GlobalProbabilityOveride::PushbackSpawn @0x00120b70 (slot3)
+// Binary body is a single unguarded tail call:
+//   FruitSaveData::SetTotal(game_work.pM_SaveData, m_SaveKey, 3, true, true)
 void GlobalProbabilityOveride::PushbackSpawn()
 {
-    if (!game_work.m_SaveData) return;
     game_work.m_SaveData->SetTotal(m_SaveKey, 3, true, true);
 }
 
@@ -226,14 +229,15 @@ void GlobalProbabilityOveridePointBased::ParseSpecific(TiXmlElement* e)
     e->QueryIntAttribute("fromMax",  &m_FromMax);
 }
 
-// ASM-verified: 2026-06-26 v1.6.1 GlobalProbabilityOveridePointBased::CheckForOverride @0x00121320 (asm-inspector)
+// ASM-spec v1.6.1 GlobalProbabilityOveridePointBased::CheckForOverride @0x00121320
+// (downgraded from ASM-verified 2026-06-26: that pass missed a port-added
+// game_work.m_SaveData null guard the binary does not have.)
 // Score-based gate: fires when saved score threshold n <= current game score
 // and CanSpawn(). NewGameStarted seeds n = T_877(from, fromMax) as initial
 // score milestone. After firing, rearms by adding T_877(every, everyMax) to n.
 // When PushbackSpawn deferred (n < 0), restores to positive and skips.
 bool GlobalProbabilityOveridePointBased::CheckForOverride(int& out)
 {
-    if (!game_work.m_SaveData) return false;
     if (!(GetModeBitMask((GAME_MODE)game_work.gameMode) & m_ModeMask)) return false;
 
     int n = game_work.m_SaveData->GetTotal(m_SaveSubId);
@@ -256,9 +260,9 @@ bool GlobalProbabilityOveridePointBased::CheckForOverride(int& out)
 
 // ASM-spec v1.6.1 GlobalProbabilityOveridePointBased::PushbackSpawn @0x00120bf4 (slot3)
 // If GetTotal > 0, set negative (defer until next time); else no-op.
+// Binary calls GetTotal(game_work.pM_SaveData, ...) unguarded -- no null check.
 void GlobalProbabilityOveridePointBased::PushbackSpawn()
 {
-    if (!game_work.m_SaveData) return;
     int n = game_work.m_SaveData->GetTotal(m_SaveSubId);
     if (n > 0)
         game_work.m_SaveData->SetTotal(m_SaveKey, -n, false, false);
@@ -266,9 +270,9 @@ void GlobalProbabilityOveridePointBased::PushbackSpawn()
 
 // ASM-spec v1.6.1 GlobalProbabilityOveridePointBased::NewGameStarted @0x0012140c (slot4)
 // Sets the initial score threshold via T_877(m_From, m_FromMax).
+// Binary loads game_work.pM_SaveData into r0 and calls SetTotal unguarded.
 void GlobalProbabilityOveridePointBased::NewGameStarted()
 {
-    if (!game_work.m_SaveData) return;
     game_work.m_SaveData->SetTotal(m_SaveKey, T_877(m_From, m_FromMax), false, false);
 }
 
@@ -294,9 +298,9 @@ void GlobalProbabilityOverideTimed::ParseSpecific(TiXmlElement* /*e*/)
 
 // ASM-spec v1.6.1 GlobalProbabilityOverideTimed::CheckForOverride @0x00120e90 (slot2)
 // Fires when saved time n >= 0 and (float)n < game_work.m_ElapsedGameTime and CanSpawn.
+// Binary enters GetModeBitMask directly; no game_work.m_SaveData null guard.
 bool GlobalProbabilityOverideTimed::CheckForOverride(int& out)
 {
-    if (!game_work.m_SaveData) return false;
     if (!(GetModeBitMask((GAME_MODE)game_work.gameMode) & m_ModeMask)) return false;
 
     int n = game_work.m_SaveData->GetTotal(m_SaveSubId);
@@ -312,16 +316,16 @@ bool GlobalProbabilityOverideTimed::CheckForOverride(int& out)
 
 // ASM-spec v1.6.1 GlobalProbabilityOverideTimed::PushbackSpawn @0x00120bac (slot3)
 // Adds m_AmountMax*2 to the timer total (push forward).
+// Binary body is a single unguarded tail call to FruitSaveData::AddToTotal.
 void GlobalProbabilityOverideTimed::PushbackSpawn()
 {
-    if (!game_work.m_SaveData) return;
     game_work.m_SaveData->AddToTotal(m_SaveKey, m_SaveSubId, m_AmountMax * 2, false, false);
 }
 
 // ASM-spec v1.6.1 GlobalProbabilityOverideTimed::NewGameStarted @0x0012145c (slot4)
 // Sets the initial time target via T_877(m_AmountMin, m_AmountMax).
+// Binary loads game_work.pM_SaveData into r0 and calls SetTotal unguarded.
 void GlobalProbabilityOverideTimed::NewGameStarted()
 {
-    if (!game_work.m_SaveData) return;
     game_work.m_SaveData->SetTotal(m_SaveKey, T_877(m_AmountMin, m_AmountMax), false, false);
 }
