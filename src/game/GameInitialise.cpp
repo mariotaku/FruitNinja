@@ -544,8 +544,14 @@ void GameDestroy() {
     LeaderboardScreen::UnLoadContent();
     SuperFruitControl::UnLoadContent();
 
-    // --- 2.5. Ingame popups (v1.6.1 @0x0016db38 DeleteAllPopups) ---
+    // --- 2.5. Ring textures + ingame popups + back icon ---
+    // ASM-spec v1.6.1 GameDestroy @0x0011cea4: UnloadRings() call site @0x0011d164,
+    // immediately before DeleteAllPopups (@0x0016db38).
+    UnloadRings();
     DeleteAllPopups();
+    // ASM-spec v1.6.1 GameDestroy @0x0011cea4: m_BackIconTex SetPtr<Texture>(NULL)
+    // @0x0011d170-74, immediately after DeleteAllPopups.
+    game_work.m_BackIconTex.SetNull();
 
     // --- 3. Data managers ---
     // v1.6.1 GameDestroy @0x0011cea4 calls UnLoadAchievementInfo here, immediately
@@ -755,13 +761,13 @@ void InitialiseStrings() {
 // ASM-spec v1.6.1 UnloadRings @0x11cdc8
 // Binary: inverse of PreloadRings — nulls the 17 ring textures in binary order.
 // The null order matches the binary's free sequence (NOT load order):
-//   {0,1,3,4,2,5,6,7,8,9,10,11,12,13,14,16,15}
+//   {0,1,2,4,3,5,6,7,8,9,10,11,12,13,14,16,15}
 void UnloadRings() {
     game_work.m_RingTex[ 0].SetNull();
     game_work.m_RingTex[ 1].SetNull();
-    game_work.m_RingTex[ 3].SetNull();
-    game_work.m_RingTex[ 4].SetNull();
     game_work.m_RingTex[ 2].SetNull();
+    game_work.m_RingTex[ 4].SetNull();
+    game_work.m_RingTex[ 3].SetNull();
     game_work.m_RingTex[ 5].SetNull();
     game_work.m_RingTex[ 6].SetNull();
     game_work.m_RingTex[ 7].SetNull();
