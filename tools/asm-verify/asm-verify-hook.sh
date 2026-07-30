@@ -18,7 +18,12 @@ LOCK="$TMP/hook.lock"
 CLS="$TMP/.changed-classes"
 
 command -v docker >/dev/null 2>&1 || exit 0
-docker image inspect fnverify >/dev/null 2>&1 || exit 0   # setup.sh not run -> no-op
+# Image name MUST track run.sh's default (ASM_VERIFY_IMAGE:-fnverify-bada). This
+# gate said "fnverify" while the image setup.sh builds -- and run.sh uses -- is
+# "fnverify-bada", so the inspect always failed and this hook silently exit 0'd:
+# it had never actually run. Honour the same override so the two cannot drift.
+ASM_VERIFY_IMAGE="${ASM_VERIFY_IMAGE:-fnverify-bada}"
+docker image inspect "$ASM_VERIFY_IMAGE" >/dev/null 2>&1 || exit 0   # setup.sh not run -> no-op
 
 # --- worker: run the actual cross-build diff (launched detached) ---
 if [ "${1:-}" = "--worker" ]; then
