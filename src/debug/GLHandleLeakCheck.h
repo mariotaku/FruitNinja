@@ -27,12 +27,20 @@
 // and leaves asm-verify untouched. Callers must gate their use the same way.
 //
 // GameDestroy (game/GameInitialise.cpp) reads all three after
-// MeshManager::Destroy() and reports them with LOG_ERROR -- deliberately NOT an
-// assert, because an abort there would kill the test suite before the rest of
-// the teardown backlog is drained. Once the counts reach zero the LOG_ERROR is
-// meant to be promoted to a hard assert; treat a non-zero count as a bug.
+// MeshManager::Destroy(). Task #144 promoted this from LOG_ERROR to a hard
+// failure (LOG_ERROR identity dump, then abort()) now that the teardown
+// backlog is drained: Geometry and FontInterface must be exactly 0 in every
+// scenario, and every live Texture2D_Bada must resolve to a name on the
+// drained-backlog allow-list (kExpectedLeakedTextureNames in asset/Texture.cpp) -- see
+// FN::GLLiveTexture2D_AllExpected below. The check is on the IDENTITY SET, not
+// a count: a bare `count <= 9` would pass if one expected texture stopped
+// leaking while an unexpected one started, exactly the failure this guard
+// exists to catch.
 
 #ifndef __bada__
+
+#include <string>
+#include <vector>
 
 namespace FN {
 
@@ -44,7 +52,9 @@ int GLLiveCount_Texture2D();
 // and a capped sample of m_TexId's per group, sorted by count descending.
 // `maxLines` caps how many distinct-name groups get printed; any remainder is
 // summarised as a single truncation count so a pathological run can't flood
-// the log. LOG_ERROR only -- never an assert (see the invariant note above).
+// the log. This function only logs -- it does not decide pass/fail; GameDestroy
+// calls it for the dump, then hard-fails separately via
+// GLLiveTexture2D_AllExpected (see below).
 void GLLiveLog_Texture2D(int maxLines);
 
 // Live Mortar::Geometry instances (each may own a VBO and an IBO).
@@ -52,6 +62,15 @@ int GLLiveCount_Geometry();
 
 // Live Mortar::FontInterface instances (each owns its atlas pages' GL textures).
 int GLLiveCount_FontInterface();
+
+// Task #144 hard-fail gate. Checks every live Texture2D_Bada's identity
+// (m_Path) against the drained-backlog allow-list -- not just the live count
+// -- so a new leak can't hide behind an old one shrinking. Returns true iff
+// every live name is allow-listed; false and (if outUnexpected is non-NULL)
+// the distinct unexpected names otherwise. Call this instead of
+// GLLiveCount_Texture2D() for the pass/fail decision; GLLiveCount_Texture2D
+// and GLLiveLog_Texture2D remain for the raw count and the full identity dump.
+bool GLLiveTexture2D_AllExpected(std::vector<std::string>* outUnexpected);
 
 }  // namespace FN
 

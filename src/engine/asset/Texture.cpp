@@ -392,6 +392,47 @@ bool GLTexGroupCountDesc(const GLTexGroupEntry& a, const GLTexGroupEntry& b) {
     return a.name < b.name;
 }
 
+// Task #144 drained-backlog allow-list for the GameDestroy hard-fail gate
+// (see FN::GLLiveTexture2D_AllExpected below and debug/GLHandleLeakCheck.h).
+// Every entry is a Texture2D_Bada that legitimately survives to GameDestroy
+// because the binary function that WOULD release it is dead code (zero
+// call-site xrefs in v1.6.1) and defers the release to atexit -- see the
+// PowerUpManager::UnloadTextures @0x00140b10 walk documented in GameDestroy
+// (game/GameInitialise.cpp) for the full chain. Names are the exact
+// Texture2D_Bada::m_Path value ("textures/<name>.tex", set by Texture::Load;
+// TextureManager::LoadLocalisedTexture only prepends a "textures/<lang>/"
+// dir when a localised file actually exists, which none of these have).
+// A name dropping off this list because a future fix releases it faithfully
+// is fine -- shrink the list, don't paper over a shrinking one with a count.
+const char* const kExpectedLeakedTextureNames[] = {
+    // PowerUp::m_Texture1 ("bar" attr, meter icon) -- PowerUp::UnloadTextures
+    // @0x00118350 only null-guards m_pScreenEffect/m_pPurchaseInfo; it never
+    // touches m_Texture1/m_Texture2.
+    "textures/arcade_banana_meter_freeze.tex",
+    "textures/arcade_banana_meter_frenzy.tex",
+    "textures/arcade_banana_meter_scorex2.tex",
+    // PowerUp::m_Texture2 ("popup" attr, word overlay) -- same reason.
+    "textures/word_freeze.tex",
+    "textures/word_frenzy.tex",
+    "textures/word_scorex2.tex",
+    // ScreenEffect clone images (EffectImage) cloned into a live
+    // m_ActivePowerUps entry -- PowerUpManager::UnloadTextures walks only
+    // m_AllPowerUps + m_ScreenEffectPool, and that walk has zero call-site
+    // xrefs in v1.6.1 anyway, so a live clone's images are never released.
+    "textures/clock_freeze.tex",
+    "textures/ice_cover.tex",
+    "textures/hud_x2_sign.tex",
+};
+const size_t kExpectedLeakedTextureCount =
+    sizeof(kExpectedLeakedTextureNames) / sizeof(kExpectedLeakedTextureNames[0]);
+
+bool IsExpectedLeakedTextureName(const std::string& name) {
+    for (size_t i = 0; i < kExpectedLeakedTextureCount; ++i) {
+        if (name == kExpectedLeakedTextureNames[i]) return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 namespace FN {
@@ -449,6 +490,28 @@ void GLLiveLog_Texture2D(int maxLines) {
     if ((int)sorted.size() > printed) {
         LOG_ERROR("GAMEINIT", "  ... %d more distinct name(s) truncated", (int)sorted.size() - printed);
     }
+}
+
+// Task #144 hard-fail gate: the identity-set check GameDestroy asserts on.
+// A bare count would pass if one allow-listed texture stopped leaking while
+// an unrelated one started -- this checks every live name individually
+// against kExpectedLeakedTextureNames above instead. Unnamed (m_Path-empty)
+// instances are never expected, and are reported as "<unnamed>".
+bool GLLiveTexture2D_AllExpected(std::vector<std::string>* outUnexpected) {
+    std::set<std::string> unexpected;
+    std::set<Mortar::Bada::Texture2D_Bada*>::const_iterator it;
+    for (it = Mortar::Bada::LiveTexture2DSet().begin();
+         it != Mortar::Bada::LiveTexture2DSet().end(); ++it) {
+        Mortar::Bada::Texture2D_Bada* tex = *it;
+        const std::string& name = tex->m_Path;
+        if (!IsExpectedLeakedTextureName(name)) {
+            unexpected.insert(name.empty() ? std::string("<unnamed>") : name);
+        }
+    }
+    if (outUnexpected) {
+        outUnexpected->assign(unexpected.begin(), unexpected.end());
+    }
+    return unexpected.empty();
 }
 
 }  // namespace FN
