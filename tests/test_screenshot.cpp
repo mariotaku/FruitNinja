@@ -318,6 +318,12 @@ static int RunBonus(fn::TestHarness& h) {
         // Interactive: advance timer via tick callback, draw only BonusScreen.
         h.RunComponentInteractive(BonusTick, bs, /*maxFrames=*/-1,
                                   Mortar::HUD_LAYER_POST_ACTOR);
+        // Drop the award-icon refs BEFORE Shutdown(): GameDestroy's GL-handle
+        // leak check runs inside game.shutdown(), and these locals would still
+        // be strong refs at that point (they only die when RunBonus returns).
+        icon0.SetNull();
+        icon1.SetNull();
+        icon2.SetNull();
         return h.Shutdown();
     }
 
@@ -394,6 +400,11 @@ static int RunBonus(fn::TestHarness& h) {
     }
 
     std::printf("PASS: %s screenshot complete\n", h.label);
+    // See the interactive path above: the leak check lives inside Shutdown(),
+    // so the icon refs must be gone before it runs.
+    icon0.SetNull();
+    icon1.SetNull();
+    icon2.SetNull();
     return h.Shutdown();
 }
 

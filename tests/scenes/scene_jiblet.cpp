@@ -284,6 +284,11 @@ int main(int argc, char* argv[]) {
             RenderJibletFrame(h);
             SDL_GL_SwapWindow(static_cast<SDL_Window*>(h.window));
         }
+        // Drop the mesh ref BEFORE Shutdown(): GameDestroy's GL-handle leak
+        // check runs inside game.shutdown(), and this local would still be a
+        // strong ref on the Model's Geometry at that point (the jibs themselves
+        // are released with the ActorManager earlier in GameDestroy).
+        jibletModel.SetNull();
         return h.Shutdown();
     }
 
@@ -326,6 +331,9 @@ int main(int argc, char* argv[]) {
            alivePass ? "PASS" : "FAIL",
            drawPass ? "PASS" : "FAIL");
 
+    // See the interactive path above: the leak check lives inside Shutdown(),
+    // so the mesh ref must be gone before it runs.
+    jibletModel.SetNull();
     h.Shutdown();
     return overallPass ? 0 : 1;
 }

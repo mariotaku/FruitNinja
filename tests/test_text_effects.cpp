@@ -707,6 +707,16 @@ int main(int argc, char* argv[]) {
     std::free(cellPixels);
     cfbo.Destroy();
     delete verdanaFont;
+    verdanaFont = NULL;
+
+    // Drop the TTF Font handles BEFORE Shutdown(): GameDestroy's GL-handle leak
+    // check runs inside game.shutdown(), and these statics would still hold the
+    // FontCacheObjectTTF (and its FontInterface atlas pages) at that point.
+    // gangFont / arabicFont dangle from here on and must not be used again.
+    s_GangFont.SetNull();
+    s_ArabicFont.SetNull();
+    gangFont = NULL;
+    arabicFont = NULL;
 
     if (h.IsScreenshot() && !saved) {
         h.Shutdown();

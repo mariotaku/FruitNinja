@@ -614,6 +614,13 @@ int main(int argc, char* argv[]) {
 
     Localisation::Unload();
 
+    // Drop the TTF Font handle BEFORE Shutdown(): GameDestroy's GL-handle leak
+    // check runs inside game.shutdown(), and this static would still hold the
+    // FontCacheObjectTTF (and its FontInterface atlas pages) at that point.
+    // ttfFont dangles from here on and must not be used again.
+    s_TTFFont.SetNull();
+    ttfFont = NULL;
+
     if (h.IsScreenshot() && !saved) {
         h.Shutdown();
         return 1;

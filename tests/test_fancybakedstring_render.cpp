@@ -536,6 +536,14 @@ int main(int argc, char* argv[]) {
     std::free(cellPixels);
     cfbo.Destroy();
     delete verdanaFont;
+    verdanaFont = NULL;
+
+    // Drop the TTF Font handle BEFORE Shutdown(): GameDestroy's GL-handle leak
+    // check runs inside game.shutdown(), and this static would still hold the
+    // FontCacheObjectTTF (and its FontInterface atlas pages) at that point.
+    // gangFont dangles from here on and must not be used again.
+    s_GangFont.SetNull();
+    gangFont = NULL;
 
     if (failCount > 0) {
         fprintf(stderr, "FAIL: test_fancybakedstring_render (%d failure(s))\n", failCount);

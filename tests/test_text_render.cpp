@@ -678,6 +678,15 @@ int main(int argc, char* argv[]) {
     delete verdanaFont;
     verdanaFont = NULL;
 
+    // Drop the TTF Font handles BEFORE Shutdown(): GameDestroy's GL-handle leak
+    // check runs inside game.shutdown(), and these statics would still hold the
+    // FontCacheObjectTTF (and its FontInterface atlas pages) at that point.
+    // ttfFont / arabicFont dangle from here on and must not be used again.
+    s_TTFFont.SetNull();
+    s_ArabicFont.SetNull();
+    ttfFont = NULL;
+    arabicFont = NULL;
+
     if (h.IsScreenshot() && !saved) {
         h.Shutdown();
         return 1;
