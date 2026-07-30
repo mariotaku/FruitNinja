@@ -2322,10 +2322,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SlashEntity11CreateGhostEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2200,
-  "reason": "Score 3200/2900. Port stub -- s_Ghosts ring not yet ported. See src/entities/SlashEntity.cpp:340. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3200/2900 -> 2700/2200]",
-  "score": 2700,
+  "asm_hash": "7b8cbab403c7dae1",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 22,
+  "reason": "Blocker: SlashEntityGhost is not ported, so SlashEntity::CreateGhost is an intentional empty stub. TODO spec at src/entities/SlashEntity.cpp:592-595, which names the unported ring API (StartEffect @0x001eb048, Update @0x001eaf4c, Draw @0x001eb0f8, Reset @0x001eaaec, Release @0x001eaf10). Binary body is 22 instructions doing s_currentSlashIdx = (s_currentSlashIdx+1) % 8; s_ghosts[idx].StartEffect(&m_pLeftBuffer, m_PointCount). Previous reason cited src/entities/SlashEntity.cpp:340, the wrong line. SEPARATE ACTION: the '// ASM-verified:' marker at src/entities/SlashEntity.cpp:596 is a HOLLOW marker -- it sits on an empty body, so it documents the BINARY's behaviour rather than port/binary equivalence, and should be downgraded to '// ASM-spec'.",
+  "score": 22000,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SlashEntity11LoadContentEv": {
@@ -3906,11 +3907,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN13ScoreModifier14RemoveModifierEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2700,
-  "reason": "Port calls SetDefaultScoreDelegate (b.w tail-call); binary constructs string args to pass to GOT-resolved call. TODO at src/game/ScoreModifier.cpp:51-55 (SetScoreDelegate restore). Score 5100/4400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5100/4400 -> 3600/2700]",
-  "score": 3600,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "bb92c636332aa074",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 27,
+  "reason": "Out-of-lining, not a mispairing (task #137). Port (src/game/ScoreModifier.cpp:56-60) is ldrb [+52] / cmp #0 / bxeq lr / b <SetDefaultScoreDelegate>; the binary INLINES that helper (its address is unresolved in the v1.6.1 .symtab, i.e. it has no out-of-line body), so the binary's 27 instructions are the same m_bDeferPoints gate plus the inlined Global<int,int>(&DefaultScoreDelegate) construction and store. The port keeps it out-of-line at src/game/ScoreDelegate.cpp:28. The gate matches operand-for-operand (same [+52] byte load, same early return) and the entire residual delta is inlined-vs-called delegate build -- nothing else. NOTE: detect-forwarders.py flags this as FORWARDER, which is a false positive (the callee is a real separate port function the binary chose to inline, not a misplaced body), so asm-verify's pairing guard will keep suppressing this sticky verdict until the detector learns the inlined-callee case. Previous reason cited a nonexistent TODO at src/game/ScoreModifier.cpp:51-55 and wrongly described the binary as constructing string args.",
+  "score": 23999,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN13ScoreModifier14UpdateSpecificEf": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7370,11 +7372,12 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar12ActorManager10InitialiseEll": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4700,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5300/4900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5300/4900 -> 5100/4700]",
-  "score": 5100,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "81fe06abab369643",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 47,
+  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager10InitialiseEii. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager10InitialiseEii\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:75 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:74 is NOT contradicted; the contradiction was an artifact of the void pairing.",
+  "score": 46000,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager10LoadEntityEPNS_11EntityChunkEPvll": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7447,11 +7450,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEPl": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1700,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 2200/1800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2200/1800 -> 2100/1700]",
-  "score": 2100,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "c790e1c036ad75c5",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 17,
+  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager14GetNumEntitiesEPKl. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager14GetNumEntitiesEPKl\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:348 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:347 is NOT contradicted; the contradiction was an artifact of the void pairing.",
+  "score": 16000,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEl": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7496,11 +7500,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12ActorManager21DeactivateAllEntitiesEl": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2700,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 3100/2700. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-  "score": 3100,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "9c073bbd12cb8390",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 27,
+  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager21DeactivateAllEntitiesEi. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager21DeactivateAllEntitiesEi\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:234 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:233 is NOT contradicted; the contradiction was an artifact of the void pairing.",
+  "score": 26000,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager21RegisterHashConverterENS_9Delegate2IlmRbEE": {
   "decided_at": "2026-07-01T00:00Z",
@@ -7522,18 +7527,20 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12ActorManager3AddElb": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 5600,
-  "reason": "ActorManager stub/partial-impl; see src/entities/ActorManager.cpp STUB markers. Score 5900/5500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5900/5500 -> 6000/5600]",
-  "score": 6000,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "bead314594bbdcd5",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 56,
+  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager3AddEib. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager3AddEib\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:139 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:138 is NOT contradicted; the contradiction was an artifact of the void pairing.",
+  "score": 55000,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager4DrawEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 5300,
-  "reason": "Port has bx lr stub vs binary has draw loop. STUB: ActorManager::Draw. See src/entities/ActorManager.cpp:534. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5900/5400 -> 6080/5300]",
-  "score": 6080,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "9caffb75536eccc5",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 53,
+  "reason": "PAIRING VOID (task #137): classed SMALLER (10p vs 53b) but functionally a FORWARDER. The port's no-arg Draw() (src/entities/ActorManager.h:343) only does ldr GOT / ldr Renderer::GetInstance singleton / cmp / bxeq lr / b <Draw(Renderer&)> -- visible in the diff. The real body (type-list walk, ENT_SKIP_MASK 'tst #17', vtable[20] Draw, m_DebugDraw gate) is _ZN6Mortar12ActorManager4DrawER8Renderer at src/entities/ActorManager.cpp:281. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager4DrawER8Renderer\" to tools/asm-verify/manifest.toml, then re-triage. Previous reason (\"Port has bx lr stub vs binary has draw loop. STUB: ActorManager::Draw. See src/entities/ActorManager.cpp:534\") was FALSE -- Draw is fully implemented and the cited line is wrong. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:280 is NOT contradicted.",
+  "score": 50000,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager4FindElm": {
   "decided_at": "2026-06-14T05:55Z",
@@ -8657,11 +8664,12 @@
   "verdict": "ACCEPT-defunct"
  },
  "_ZN6Mortar4Mesh16DrawQuadUnCachedE6ColourffffPNS_19DrawEffectContainerE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 9300,
-  "reason": "Mesh::DrawQuadUnCached(Colour,u0,v0,u1,v1,fx) -- Defunct DrawEffectContainer system. Score improved 9812->9705/9700 [refreshed 2026-05-24 post R8]. Very near pass. See src/engine/asset/Mesh.cpp:410. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 9705/9700 -> 9325/9300]",
-  "score": 9325,
-  "verdict": "ACCEPT-defunct"
+  "asm_hash": "f8014d468946921b",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 93,
+  "reason": "ES1 fixed-function -> ES2 shader migration (documented project-wide '// Port specific:' deviation, CLAUDE.md \"Rendering\"). Binary gates GL_BLEND through glState<3042> off a render-mode singleton (DAT_0019417c) and drives glVertexPointer / glTexCoordPointer / glColorPointer + glDrawArrays directly. The port relocates all of that into Renderer::DrawQuad, a port-only symbol with no binary counterpart, which is why the port side is a 16-instruction stub that resolves Renderer::GetInstance and delegates. The binary-side minus-lines account for the WHOLE delta and are individually identifiable as fixed-function GL calls -- no unexplained residue, no missing gate or store on the port side. Rationale documented in-source at src/engine/asset/Mesh.cpp:384-390. RESIDUAL ASSUMPTION (the one thing this diff cannot prove): the source comment asserts the atlas bind/unbind path (page->GetTexture()->vtable[0xc]/[0x10]) is dead because every port call site passes fx==NULL. That is a static liveness claim about call sites, not something the sweep verifies; worth one grep to re-confirm. Previous verdict was ACCEPT-defunct with reason \"Defunct DrawEffectContainer system\" citing src/engine/asset/Mesh.cpp:410 -- both wrong: this is the LIVE 2D-quad draw path behind every quad in the game, not a defunct subsystem, and the cited line points at DrawTris. Re-bucketed to ACCEPT-cosmetic. SEPARATE ACTION: src/engine/asset/Mesh.cpp:380 carries '// ASM-verified: ... (re-analyst)' immediately above an '// ASM-spec' line for the same function; since the port asm can never match the ES1 body and the stamp is re-analyst-sourced rather than asm-diffed, drop the ASM-verified line and keep the ASM-spec.",
+  "score": 83000,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar4Mesh16GenerateBindingsERKNS_11AsciiStringES3_RSt6vectorINS_12AnimBindings6Vector7BindingESaIS7_EE": {
   "decided_at": "2026-06-14T05:55Z",
@@ -8711,8 +8719,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar4Mesh8DrawTrisEPK16QUADCUSTOMVERTEXlibPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary DrawTris has trailing TextureAtlasPage* param; port drops it. Same documented renderer difference as DrawTriList.",
+  "asm_hash": "9d6392b18e3b596d",
+  "decided_at": "2026-07-30T00:00Z",
+  "max_score": 120,
+  "reason": "ES1 fixed-function -> ES2 shader migration (documented project-wide '// Port specific:' deviation, CLAUDE.md \"Rendering\"). Binary body is visibly the ES1 vertex-array setup: glTexEnvf(GL_MODULATE), glVertexPointer / glTexCoordPointer / glColorPointer (the 'movw #5126'=GL_FLOAT, 'movw #5121'=GL_UNSIGNED_BYTE, 'mov #36'=stride, 'mov #2'/'mov #3'/'mov #4'=component counts, 'movw #32886'=GL_TEXTURE_COORD_ARRAY operands present in the diff), the glState<3042> blend gate off [+44], plus the DrawEffectContainer / TextureAtlasPage bind path. The port relocates all of that into Renderer::DrawTriList / Renderer::DrawTriStrip, a port-only symbol with no binary counterpart, which is why the port side is a 22-instruction stub that resolves Renderer::GetInstance and delegates. The binary-side minus-lines account for the WHOLE delta and are individually identifiable as fixed-function GL calls -- no unexplained residue, no missing gate or store on the port side. Rationale documented in-source at src/engine/asset/Mesh.cpp:413-421. RESIDUAL ASSUMPTION (the one thing this diff cannot prove): the source comment asserts the atlas bind/unbind path (page->GetTexture()->vtable[0xc]/[0x10]) is dead because every port call site passes fx==NULL. That is a static liveness claim about call sites, not something the sweep verifies; worth one grep to re-confirm. Previous reason (\"binary DrawTris has trailing TextureAtlasPage* param; port drops it\") was FALSE -- the port signature at src/engine/asset/Mesh.cpp:411-412 does declare TextureAtlasPage*; the signature matches and the param is merely unused. SEPARATE ACTION: downgrade the re-analyst-sourced '// ASM-verified:' marker at src/engine/asset/Mesh.cpp:410 to '// ASM-spec' -- port asm cannot match the ES1 body by design.",
+  "score": 104000,
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar4Mesh8SetBonesEPKNS0_11BoneBindingEm": {
