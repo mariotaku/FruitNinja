@@ -703,6 +703,28 @@ void GameDestroy() {
     BonusScreen_UnloadStatics();     // s_bonusScreenBacking (BonusScreen::UnLoadContent
                                      // @0x0016200c is `bx lr`)
 
+    // Port specific: same "binary defers it to atexit" class as the block above,
+    // but here the binary HAS a full release chain -- it is simply UNREFERENCED.
+    // PowerUpManager::UnloadTextures @0x00140b10 walks m_AllPowerUps (+0x30) and
+    // m_ScreenEffectPool (+0x38, ScreenEffects stored BY VALUE) into
+    // PowerUp::UnloadTextures @0x00140ae4 -> ScreenEffect::UnloadTextures (walks
+    // m_Images, each an EffectImage whose SmartPtr lives in its
+    // Mortar::ReloadableTexture base at +0x00) and PurchaseInfo::UnloadTextures
+    // @0x00118334 (+0xa8 / +0xb0 / +0xb8). That top-level call has ZERO xrefs in
+    // v1.6.1: PowerUpManager is a singleton, so the ~12 screen-effect textures
+    // (blitz_1..6, arcade_*, clock_freeze, ice_cover, hud_x2_sign) plus the
+    // buynow icons are dropped by the singleton's destructor in the
+    // static-dtor/atexit chain. Harmless on Bada (GL context still live at
+    // atexit); here atexit runs after SDL_GL_DeleteContext, so each handle would
+    // leak its GL name. Idempotent -- LoadTextures() reloads on demand.
+    PowerUpManager::GetInstance()->UnloadTextures();
+
+    // Port specific: bonus_icon_* (12) in BonusManager::m_AllBonuses. Unlike the
+    // above there is no dead binary chain to borrow -- v1.6.1 has no unload path
+    // for m_AllBonuses at all (ClearBestBonuses @0x000feb20 only clears
+    // m_BestBonuses), so the singleton hands them to atexit. See BonusManager.h.
+    BonusManager_UnloadTextures();
+
     // Faithful counterparts that simply had no port call site. FruitFactZenPage's
     // is binary-exact (@0x0017fb00 = 2 SmartPtr nulls + guard byte); the five
     // widget UnloadContents were reachable only from tests. All are static; the

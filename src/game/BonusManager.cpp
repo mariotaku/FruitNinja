@@ -85,6 +85,24 @@ void BonusManager::ClearBestBonuses() {
 }
 
 // ---------------------------------------------------------------------------
+// BonusManager_UnloadTextures -- Port specific, no binary counterpart.
+// See the contract note in BonusManager.h: v1.6.1 has no m_AllBonuses unload
+// path at all, so the bonus_icon_* SmartPtrs reach atexit; the port's atexit is
+// past SDL_GL_DeleteContext, so they must be dropped in GameDestroy instead.
+// ---------------------------------------------------------------------------
+void BonusManager_UnloadTextures() {
+    BonusManager* bm = BonusManager::GetInstance();
+    bm->ClearBestBonuses();
+    for (std::vector<BonusType>::iterator bt = bm->m_AllBonuses.begin();
+         bt != bm->m_AllBonuses.end(); ++bt) {
+        for (std::vector<Bonus>::iterator b = bt->m_Bonuses.begin();
+             b != bt->m_Bonuses.end(); ++b) {
+            b->m_StarTexture.SetNull();
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SetUpBonusScreen -- v1.6.1 BonusManager::SetUpBonusScreen @0x0012ede8
 //
 // Binary flow:

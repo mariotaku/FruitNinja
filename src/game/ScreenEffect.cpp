@@ -843,3 +843,15 @@ void ScreenEffect::LoadTextures() {
     for (size_t i = 0; i < m_Images.size(); ++i)
         m_Images[i].LoadTextures();
 }
+
+// ---- ScreenEffect::UnloadTextures --------------------------------------------
+// Counterpart of LoadTextures, reached from PowerUp::UnloadTextures @0x00140ae4.
+// EffectImage derives from Mortar::ReloadableTexture, whose m_Texture SmartPtr is
+// at base offset +0x00 -- so the release goes through the base's Unload()
+// (v1.6.1 ReloadableTexture::Unload @0x0014f878), not through any
+// EffectImage-specific field.
+
+void ScreenEffect::UnloadTextures() {
+    for (size_t i = 0; i < m_Images.size(); ++i)
+        m_Images[i].Unload();
+}

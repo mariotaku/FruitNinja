@@ -34,6 +34,24 @@ private:
     ~BonusManager();
 };
 
+// Port specific: releases the 12 bonus_icon_* textures held by
+// BonusManager::m_AllBonuses (+0x00) -- each Bonus owns m_StarTexture at +0xD0,
+// loaded in Bonus::Parse / BonusType::Parse. v1.6.1 has NO unload path for
+// m_AllBonuses: ClearBestBonuses @0x000feb20 only clears m_BestBonuses (+0x0C),
+// and BonusManager is a singleton, so the SmartPtrs are dropped by the
+// singleton's destructor in the static-dtor/atexit chain. That is harmless on
+// Bada (GL context still live at atexit) but leaks the GL texture names here,
+// because the port's atexit runs after SDL_GL_DeleteContext. Called from
+// GameDestroy, before MeshManager::Destroy().
+//
+// Also drops m_BestBonuses via the faithful ClearBestBonuses(), since those are
+// by-value Bonus copies that each hold their own m_StarTexture reference.
+//
+// Not idempotency-safe for reuse: BonusManager::Init() must run again (it
+// re-parses bonusAwards.xml) before the icons are available. Only call at
+// shutdown.
+void BonusManager_UnloadTextures();
+
 // Layout asserts: ARM32 sizes only. GCC 4.4.1 excluded (std::vector/list sizes differ).
 #ifdef __bada__
 static_assert(sizeof(BonusManager) == 0x20, "BonusManager size mismatch");

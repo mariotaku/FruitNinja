@@ -265,9 +265,12 @@ public:
     void Deactivate();
     // Binary @ 0x0011d1ec
     void LoadTextures();
-    // Binary addr TBD — called by PowerUp::UnloadTextures and PowerUpManager::UnloadTextures
-    // TODO: implement when ScreenEffect texture unload addr is RE'd
-    void UnloadTextures() {}
+    // Called by PowerUp::UnloadTextures @0x00140ae4 and, transitively, by
+    // PowerUpManager::UnloadTextures @0x00140b10. Mirror of LoadTextures: walk
+    // m_Images and Unload() each EffectImage's ReloadableTexture base (the
+    // SmartPtr lives in the BASE at +0x00, not at an EffectImage-specific
+    // offset). Idempotent -- LoadTextures()/Parse re-loads on demand.
+    void UnloadTextures();
 };
 
 #ifdef __bada__
