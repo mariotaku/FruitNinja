@@ -270,6 +270,28 @@ void GameExit(); // v1.6.1 GameExit @0x001cfed4
 // wooden dojo panel behind an effect without running the full GameDraw path.
 void DrawBackground();
 
+// ASM-spec v1.6.1 s_flashTexture @0x00316790: ONE shared file-static
+// SmartPtr<Texture> ("flash.tex") in GameTask.cpp's global block
+// (base 0x00316700), lazily loaded by whichever consumer draws first.
+// All three port-side flash overlays share this single instance:
+//   - BombHit.cpp DrawCritHit      (v1.6.1 @0x001ccfa0)
+//   - Bomb.cpp DrawBombHit         (v1.6.1 @0x001cd1a0)
+//   - PauseScreen.cpp PreDraw      (v1.6.1 @0x001cd35c)
+// Previously ported as three independent statics that never released their
+// GL texture name (task #141).
+extern Mortar::SmartPtr<Mortar::Texture> g_FlashTexture;
+
+// Port specific: releases g_FlashTexture. v1.6.1 has no dedicated unload
+// entry point for this global -- the binary leaves it to two
+// __aeabi_atexit-registered SmartPtr dtors (global.constructors.keyed.to.
+// GameTask.cpp @0x001cec1c/0x001cec2c). The port cannot rely on its own
+// atexit for this because it runs after SDL_GL_DeleteContext and the GL
+// texture name would leak. Called from GameDestroy, before
+// MeshManager::Destroy() -- a pre-GL-teardown backstop, distinct from (and
+// in addition to) the explicit release GameExit performs at 0x001cff88
+// (see GameInit.cpp). No-op when no flash overlay ever drew; idempotent.
+void FlashTexture_UnloadStatics();
+
 // v1.6.1 CleanupAndReturnToMainMenu @ 0x00157620 -- bx lr (empty body in v1.6.1).
 // Called from GameUpdate quit-transition timer path.
 void CleanupAndReturnToMainMenu();

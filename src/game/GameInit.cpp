@@ -1151,6 +1151,11 @@ void GameExit() {
     Coin::ClearCoins(true);  // v1.6.1 GameExit @0x001cfed4 passes r0=1 (true), not false
     SaveCurrentData();           // writes FruitSaveData XML; v1.6.1 GameExit @0x001cfed4
     WaveManager::GetInstance()->Destroy();  // frees per-session wave state; v1.6.1 WaveManager::Destroy @0x001c1be8
+    // ASM-spec v1.6.1 GameExit @0x001cff88: `add r0,r5,#0x90; bl 0x001cf52c` --
+    // releases the shared s_flashTexture (SmartPtr<Texture>::SetPtr(nullptr)).
+    // Distinct from FlashTexture_UnloadStatics (GameDestroy's pre-GL-teardown
+    // backstop, mirroring the binary's separate atexit dtor) -- task #141.
+    g_FlashTexture.SetNull();
     PSPParticleManager::GetInstance().ClearEmitters();
     {
         Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();

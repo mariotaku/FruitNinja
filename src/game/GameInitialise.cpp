@@ -33,7 +33,7 @@
 #include "hud/TutorialControl.h"
 // GameDestroy teardown: static/file-scope texture release hooks.
 #include "screens/MainScreen.h"          // MainScreen_UnloadStatics
-#include "screens/PauseScreen.h"         // PauseScreen_UnloadStatics
+#include "screens/PauseScreen.h"
 #include "screens/BonusScreen.h"         // BonusScreen_UnloadStatics
 #include "screens/FruitFactPage.h"       // FruitFactPage_UnloadStatics
 #include "screens/FruitFactZenPage.h"    // FruitFactZenPage::UnloadContent
@@ -706,7 +706,7 @@ void GameDestroy() {
                                      // reaches via End() -> GameTaskExit(). Kept here
                                      // because GameExit only runs when a task state was
                                      // live (quitting on the splash runs SplashExit).
-    PauseScreen_UnloadStatics();     // s_FlashTex (lazy, flash.tex)
+    FlashTexture_UnloadStatics();    // g_FlashTexture (shared flash.tex; task #141)
     FruitFactPage_UnloadStatics();   // g_SenseisHeadTex -- the 4th slot that
                                      // FruitFactControl::UnLoadContent @0x00171a4c misses
     BonusScreen_UnloadStatics();     // s_bonusScreenBacking (BonusScreen::UnLoadContent

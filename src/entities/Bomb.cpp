@@ -704,8 +704,6 @@ static const float BOMB_FLASH_MAX_SCALE = 20000.0f;   // v1.6.1 @0x001cd344
 static const float BOMB_FLASH_ALPHA_MUL = 255.0f;     // v1.6.1 @0x001cd348
 static const float BOMB_FLASH_THRESHOLD = 2.0f;
 
-static Mortar::SmartPtr<Mortar::Texture> s_BombFlashTex;
-
 // ASM-spec v1.6.1 DrawBombHit @0x001cd1a0
 // GameDraw @0x001cdc98 gates this call on (0.0 < m_BombHitTimer), between
 // HUD::Draw(0x100) and HUD::Draw(0x200) -- already matched by the port's call site.
@@ -713,9 +711,9 @@ void DrawBombHit() {
     const float timer = game_work.m_BombHitTimer;
     if (timer <= 0.0f || timer >= BOMB_FLASH_THRESHOLD) return;
 
-    if (!s_BombFlashTex.IsValid()) {
-        s_BombFlashTex = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
-        if (!s_BombFlashTex.IsValid()) return;
+    if (!g_FlashTexture.IsValid()) {
+        g_FlashTexture = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
+        if (!g_FlashTexture.IsValid()) return;
     }
 
     const float t = (timer - BOMB_FLASH_START) / BOMB_FLASH_DUR_RECIP + 1.0f;
@@ -738,9 +736,12 @@ void DrawBombHit() {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    s_BombFlashTex->Set();
+    g_FlashTexture->Set();
     Mortar::Mesh::DrawQuadUnCached(tint, NULL);
-    s_BombFlashTex->UnSet();
+    // ASM-spec v1.6.1 DrawBombHit @0x001cd1a0: binary passes 1 (true) to
+    // vtable+0x10 UnSet(bool) (Ghidra decompile: `(**(...+0x10))(s_flashTexture,1)`),
+    // matching the other two shared-flash-texture call sites (task #141).
+    g_FlashTexture->UnSet(true);
 }
 
 static const float BOMB_BLAST_PURGE_THR = 1.55f;  // DAT_0016a1fc

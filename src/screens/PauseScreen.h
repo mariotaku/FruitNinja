@@ -31,17 +31,6 @@ class MenuButton;
 class BSButton;
 namespace Mortar { class BakedStringBox; }
 
-// Port specific: releases PauseScreen.cpp's file-scope s_FlashTex global
-// ("flash.tex", loaded lazily on the first bomb-flash draw). v1.6.1 has no
-// PauseScreen unload entry point -- the binary leaves such file-scope
-// SmartPtr globals to __aeabi_atexit. The port cannot, because its atexit runs
-// after SDL_GL_DeleteContext and the GL texture name would leak. Called from
-// GameDestroy, before MeshManager::Destroy().
-//
-// No-op when the pause overlay never reached the flash draw. Idempotent; the
-// draw path re-loads on demand.
-void PauseScreen_UnloadStatics();
-
 // PauseScreen state machine. m_State is `int` (binary +0xd8 layout); values
 // are 0..6. ABI-compatible -- enum integer rank is int by default.
 enum PauseScreenState {

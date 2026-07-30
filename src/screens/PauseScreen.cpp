@@ -99,14 +99,6 @@ static const float FLASH_ALPHA_MUL  = 1000.0f;
 static const float FLASH_ALPHA_MAX  = 128.0f;
 static const float FLASH_SCALE_MUL  = 10000.0f;
 
-// Lazy-loaded flash.tex (shared with DrawBombHit)
-static Mortar::SmartPtr<Mortar::Texture> s_FlashTex;
-
-// See PauseScreen.h for why this port-only hook exists (binary defers to atexit).
-void PauseScreen_UnloadStatics() {
-    s_FlashTex.SetNull();
-}
-
 // -------------------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------------------
@@ -449,9 +441,9 @@ void PauseScreen::PreDraw(float* /*hudScale*/) {
 
     if (m_Alpha <= 0.0f) return;
 
-    if (!s_FlashTex.IsValid()) {
-        s_FlashTex = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
-        if (!s_FlashTex.IsValid()) return;
+    if (!g_FlashTexture.IsValid()) {
+        g_FlashTexture = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
+        if (!g_FlashTexture.IsValid()) return;
     }
 
     float alphaF = m_Alpha * FLASH_ALPHA_MUL;
@@ -470,12 +462,15 @@ void PauseScreen::PreDraw(float* /*hudScale*/) {
     mm.GetWorldStack().SetCurrentMatrix(mat);
     mm.UploadModelViewOnly();
 
-    s_FlashTex->Set();
+    g_FlashTexture->Set();
     Game* game = Game::GetInstance();
     if (game) {
         game->renderer.DrawQuad(tint);
     }
-    s_FlashTex->UnSet();
+    // ASM-spec v1.6.1 PauseScreen::PreDraw @0x001cd35c: binary passes 1 (true) to
+    // vtable+0x10 UnSet(bool), matching the other two shared-flash-texture call
+    // sites (task #141).
+    g_FlashTexture->UnSet(true);
 }
 
 // -------------------------------------------------------------------------

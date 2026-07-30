@@ -45,6 +45,14 @@ static float s_drawDt = 0.0f;
 
 GameTaskState* GetTaskState() { return &s_taskState; }
 
+// ASM-spec v1.6.1 s_flashTexture @0x00316790 (see GameTaskState.h for the
+// merge rationale -- task #141).
+Mortar::SmartPtr<Mortar::Texture> g_FlashTexture;
+
+void FlashTexture_UnloadStatics() {
+    g_FlashTexture.SetNull();
+}
+
 // Matches GameTaskUpdate (v1.6.1 @ 0x0011a290, 87 lines)
 void GameTaskUpdate(float rawDt) {
     Game* game = Game::GetInstance();

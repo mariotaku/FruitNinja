@@ -47,10 +47,6 @@
 // and fades to zero in (0.4, 0.5).
 static Colour s_CritFlashColour(255, 255, 255, 255);
 
-// Lazy-loaded "flash.tex" — BSS global; NULL until first DrawCritHit call.
-// Binary: file-static SmartPtr<Texture> at BSS (v1.6.1 DrawCritHit @ 0x001ccfa0).
-static Mortar::SmartPtr<Mortar::Texture> s_flashTexture;
-
 static const float CRITICAL_FLASH_TIME       = 0.5f;   // Fruit::CRITICAL_FLASH_TIME @ 0x001f3e3c
 static const float CRITICAL_FLASH_FULL       = 0.4f;   // Fruit::CRITICAL_FLASH_FULL @ 0x001f3e40
 static const float CRITICAL_FLASH_START_FADE = 0.3f;   // Fruit::CRITICAL_FLASH_START_FADE @ 0x001f3e44
@@ -148,13 +144,13 @@ void DrawCritHit() {
                       (uint8_t)alpha);
 
     // Lazy-load "flash.tex" (shared static; only ever bound elsewhere).
-    if (!s_flashTexture.Get()) {
-        s_flashTexture = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
+    if (!g_FlashTexture.Get()) {
+        g_FlashTexture = Mortar::TextureManager::LoadLocalisedTexture("flash.tex");
     }
 
     // Bug 2 fix: vtable slot 4 = UnSet(bool), called BOTH times -- texturing off.
-    if (s_flashTexture.Get()) {
-        s_flashTexture.Get()->UnSet(true);
+    if (g_FlashTexture.Get()) {
+        g_FlashTexture.Get()->UnSet(true);
     }
 
     MatrixManager& mm = MatrixManager::GetInstance();
@@ -165,8 +161,8 @@ void DrawCritHit() {
 
     Mortar::Mesh::DrawQuadUnCached(tint, NULL);
 
-    if (s_flashTexture.Get()) {
-        s_flashTexture.Get()->UnSet(true);
+    if (g_FlashTexture.Get()) {
+        g_FlashTexture.Get()->UnSet(true);
     }
 }
 
