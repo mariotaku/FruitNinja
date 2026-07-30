@@ -466,6 +466,19 @@ Mortar::Texture* FruitInfo_GetShadowTex()
     return g_FruitShadowTex.IsValid() ? g_FruitShadowTex.Get() : nullptr;
 }
 
+// Port specific: see the contract block in FruitInfo.h for why the port needs
+// an explicit release where the binary gets it from the heap-block free in
+// CleanupFruit @0x001defd4 step 6. Walks the same [0, g_FruitInfoCount) range
+// the binary's backward ~FruitInfo walk covers.
+void FruitInfo_UnloadTextures()
+{
+    for (int i = 0; i < g_FruitInfoCount; ++i) {
+        s_FruitInfos[i].m_HudTexture.SetNull();   // +0x300 (binary m_pFruitTexture)
+        s_FruitInfos[i].m_ZenTexture.SetNull();   // +0x304 (binary m_pFruitTexture2)
+    }
+    g_FruitShadowTex.SetNull();                   // FRUIT_INFO_HEADER+0xC0 equivalent
+}
+
 #if defined(FN_BLOCK_PRELOAD)
 // Boot trim (task #59). See FruitInfo.h contract comment.
 // fruit_shadow.tex loads at boot (FruitInfo_Load Step 0, un-deferred --

@@ -297,4 +297,24 @@ const Colour& FruitInfo_GetCriticalColour();
 // Returns nullptr if not loaded yet.
 Mortar::Texture* FruitInfo_GetShadowTex();
 
+// Port specific: drops every GL-owning texture ref held by the FRUIT_INFO
+// table -- m_HudTexture (+0x300) and m_ZenTexture (+0x304) on each of the
+// g_FruitInfoCount live entries, plus the module-static shadow texture that
+// stands in for the binary's FRUIT_INFO_HEADER+0xC0 slot.
+//
+// Why this exists: the binary's table is a single heap block
+// (`operator new(count * 0x338 + 8)`, see the g_pFruitInfo contract above) and
+// CleanupFruit @0x001defd4 step 6 frees it with a backward ~FruitInfo walk
+// followed by operator delete -- so those SmartPtr dtors run INSIDE
+// GameDestroy, while the GL context is still live. The port's table is a
+// static array (s_FruitInfos), whose implicit dtors instead run at atexit,
+// after SDL_GL_DeleteContext, where every release leaks its GL name. Calling
+// this from CleanupFruit reproduces the binary's release TIMING; the
+// allocation divergence is the only thing left.
+//
+// Idempotent, and both load paths (FruitInfo_Load's inline block, or
+// FruitInfo_LoadHudTextures under FN_BLOCK_PRELOAD) reload on demand, so it is
+// safe to call more than once. Must run before the GL context is destroyed.
+void FruitInfo_UnloadTextures();
+
 #endif

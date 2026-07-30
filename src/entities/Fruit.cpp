@@ -3170,22 +3170,36 @@ void CleanupFruit() {
     }
 
     // Step 6: binary heap-frees Fruit::fruitInfo (count*0x338+8 alloc).
-    // DIFFERS: binary heap-frees fruitInfo; port FruitInfo is a static array -> no free needed
-    // (v1.6.1 CleanupFruit @0x001defd4 step6)
+    // DIFFERS: binary heap-frees fruitInfo; port FruitInfo is a static array -> no free
+    // needed (v1.6.1 CleanupFruit @0x001defd4 step6). The binary's free also runs every
+    // ~FruitInfo, which drops the per-entry texture refs -- the port does that
+    // explicitly in the tail block below, see (b) there.
 
     // Step 7: mark unloaded.
     g_fruitData.s_fruitModelsLoaded = 0;
 
-    // Port specific: the binary's CleanupFruit @0x001defd4 does NOT release
-    // s_sliceModel[0..3]; only Fruit::DestroyFruitModels @0x001df1c0 does, and that
-    // function is DEAD in v1.6.1 (verified: zero bl xrefs across the whole image).
-    // The binary leaks these four refs at process exit, harmlessly -- its fruit
-    // globals are a flat .bss struct with no destructor. The port's g_fruitData is a
-    // real C++ object whose implicit dtor runs at atexit, after GL teardown, so the
-    // refs MUST be severed here instead.
+    // Port specific: two refs the binary drops implicitly (or leaks harmlessly)
+    // but the port must drop HERE, because the port's atexit runs after
+    // SDL_GL_DeleteContext -- anything released there leaks its GL name.
+    //
+    // (a) s_sliceModel[0..3]: the binary's CleanupFruit @0x001defd4 does NOT release
+    // them; only Fruit::DestroyFruitModels @0x001df1c0 does, and that function is
+    // DEAD in v1.6.1 (verified: zero bl xrefs across the whole image). The binary
+    // leaks these four refs at process exit, harmlessly -- its fruit globals are a
+    // flat .bss struct with no destructor. The port's g_fruitData is a real C++
+    // object whose implicit dtor runs at atexit.
+    //
+    // (b) The FRUIT_INFO table's per-entry m_HudTexture/m_ZenTexture (+0x300/+0x304)
+    // and the shadow texture. Here the binary DOES release them inside GameDestroy:
+    // step 6 above frees the `count * 0x338 + 8` heap block with a backward
+    // ~FruitInfo walk, running every SmartPtr dtor while the GL context is live. The
+    // port's table is a static array (s_FruitInfos), so its dtors defer to atexit --
+    // exactly the same object-vs-flat-array divergence as (a). FruitInfo_UnloadTextures
+    // restores the binary's release timing; only the allocation still differs.
     for (int i = 0; i < 4; ++i) {
         g_fruitData.s_sliceModel[i].SetNull();
     }
+    FruitInfo_UnloadTextures();
 }
 
 // ASM-spec v1.6.1 Fruit::AddShadow @0x001dbbe8.
