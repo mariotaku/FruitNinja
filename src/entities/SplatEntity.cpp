@@ -21,6 +21,8 @@
 #include "asset/Texture.h"
 #include "asset/TextureManager.h"
 #include "util/SmartPtr.h"
+#include "engine/MenuBackground.h"          // IsFastHardware()
+#include "engine/network/P2PMessageHandling.h"  // IsMultiplayer()
 #include <cstdlib>
 #include <cmath>
 #include <cstdio>
@@ -58,22 +60,29 @@ static const float UP_LAND_Z          = -50.0f;   // DAT_0017faa8 (landing thres
 //   vmla.f32 s15, s13, s14     ; vel.y += -10.0 * dt
 static const float UP_GRAVITY         = -10.0f;
 
-static const float UP_VEL_CLAMP_LO    = -50.0f;   // DAT_0017fd40
-static const float UP_SCALE_CLAMP_LO  = -200.0f;  // DAT_0017fd48 (ASM-verified
-                                                   // 2026-04-30: was incorrectly
-                                                   // -50; binary value is -200)
+// Slide clamps. The non-SSMP arm uses only the LO pair; the SSMP horizontal-
+// gravity arm clamps symmetrically. Literal pool @0x001ec32c..0x001ec338:
+//   0x001ec32c = 50.0, 0x001ec330 = 200.0, 0x001ec334 = -50.0, 0x001ec338 = -200.0
+static const float UP_VEL_CLAMP_LO    = -50.0f;
+static const float UP_VEL_CLAMP_HI    =  50.0f;
+static const float UP_SCALE_CLAMP_LO  = -200.0f;
+static const float UP_SCALE_CLAMP_HI  =  200.0f;
+
+// SSMP horizontal-gravity magnitude (defunct arm; vmov 0x41200000 @0x001ec2a8).
+static const float UP_GRAVITY_HORIZ   = 10.0f;
 
 static const float UP_LIFE_SLIDE_THR  = 1.25f;    // slide-phase threshold
 
-// Life/decay randomisation constants (written on landing, binary @ 0x0017fa1c-fa36)
+// Life/decay randomisation constants (written on landing, binary @0x001ec240-0x001ec268)
 static const float UP_LIFE_BASE       = 3.75f;    // Rand(2.5) + 3.75
 static const float UP_LIFE_RAND       = 2.5f;
 static const float UP_DECAY_BASE      = 0.375f;   // Rand(0.25) + 0.375
 static const float UP_DECAY_RAND      = 0.25f;
 
-// PlaySplat size-bucket thresholds.
-// ASM-spec v1.6.1 SplatEntity::Update @0x001ebee0: no-SFX bucket threshold is 100.0.
-static const float SPLAT_SZ_LARGE_THR  = 100.0f;  // > 100 -> bucket 3 (no SFX / mute)
+// PlaySplat size-bucket thresholds (v1.6.1 SplatEntity::Update @0x001ec1f8 /
+// @0x001ec210). Bucket 3 is NOT a mute -- PlaySplat clamps its argument to
+// [0,2], so bucket 3 collapses onto bucket 2 (Splatter-Medium).
+static const float SPLAT_SZ_LARGE_THR  = 100.0f;  // > 100 -> bucket 3 (clamps to 2)
 static const float SPLAT_SZ_MEDIUM_THR = 30.0f;   // > 30 -> bucket 2 (medium)
                                                    // else -> bucket 1 (small)
 
@@ -83,10 +92,11 @@ static const float SPLAT_SZ_MEDIUM_THR = 30.0f;   // > 30 -> bucket 2 (medium)
 // full derivation.
 static float s_SpringRate = 1.25f;
 
-// Binary: PlaySplat @ 0x0017f5ec -- per-size SFX cooldown gates.
-// Three independent gates indexed by splat size (0..2). Each starts at 0,
-// is set to 0.5 on fire, and ticks down by dt/frame in UpdateActive.
-// While > 0, PlaySplat suppresses re-fire for that size.
+// v1.6.1 PlaySplat @0x001ebca0 -- per-size SFX cooldown gates.
+// Three independent gates indexed by splat size (0..2). Each starts at 0, is
+// set to 0.5 on fire, ticks down by dt/frame in UpdateActiveSplats, and is
+// debited a further 0.05 by every PlaySplat call. PlaySplat fires when the
+// debited value reaches <= 0.
 static float s_SplatSfxGate[3] = { 0.0f, 0.0f, 0.0f };
 
 // Binary: v1.6.1 SplatEntity::Update @0x001ebee0 + v1.6.1 SplatEntity::UpdateActiveSplats @0x001ec5d8
@@ -232,6 +242,14 @@ void SplatEntity::Init(void* /*param1*/, long /*param2*/, _Vector3<float>* /*par
 // Binary body: `bx lr` (no-op)
 void SplatEntity::Release() {
     // Defunct: no-op stub; v1.6.1 binary @ 0x0017edd0
+}
+
+// Binary body: `mov r3,#0; strb r3,[r0,#0x75]; bx lr`.
+// Kept as its own function because Update calls it through the PLT rather than
+// clearing m_bAlive inline (bl @0x001ec59c -> stub 0x00105040 -> 0x001ecfa8).
+// ASM-verified: 2026-07-31T00:00Z v1.6.1 SplatEntity::Destroy @ 0x001ecfa8 (re-analyst)
+void SplatEntity::Destroy() {
+    m_bAlive = 0;
 }
 
 // --- Vtable slot 6: Draw (binary @ 0x0017ee30) ---
@@ -425,41 +443,37 @@ void SplatEntity::MakeSplat(_Vector3<float> p, _Vector3<float> v, bool param3, b
     // only runs after m_SplatType >= 0 (landed).
 }
 
-// v1.6.1 SplatEntity::Update @0x001ebee0 (vtable slot 5)
-// Two phases: airborne (m_SplatType < 0) does physics + z check;
-// landed (m_SplatType >= 0) does slide + decay.
+// v1.6.1 SplatEntity::Update @0x001ebee0 (vtable slot 5).
 //
-// Bugfix #4: pos integration now unconditional (binary @ 0x0017f78c-f7a4:
-// add happens BEFORE the airborne/landed branch check).
+// Shape: unconditional pos integration, then one of two phases.
+//   airborne (m_SplatType < 0):  landing transition (if m_Pos.z < -50), THEN
+//                                gravity -- both paths join @0x001ec298.
+//   landed   (m_SplatType >= 0): springStep, slide, colour lerp, life decay,
+//                                alpha.
 //
-// Bugfix #1: m_Life/m_DecayRate set on landing (binary @ 0x0017fa1c).
+// Both phases carry a defunct SSMP horizontal-gravity arm keyed on
+// m_bSSMPHorizGravity (+0x74). MakeSplat stubs that flag to 0, so the arms are
+// unreachable here; they are ported for call-shape parity per the stub-don't-
+// skip policy.
 //
-// Bugfix #3: PlaySplat bucket by m_Scale.x (v1.6.1 SplatEntity::Update @0x001ebee0).
-//
-// Bugfix #5: special-fruit splat-type override on landing (binary @ 0x0017f806-f82a).
+// ASM-verified: 2026-07-31T00:00Z v1.6.1 SplatEntity::Update @ 0x001ebee0 (re-analyst)
 void SplatEntity::UpdateSplat(float dt) {
-    if (!m_bAlive) return;
+    // NO m_bAlive guard at entry -- the binary has none. The only caller,
+    // v1.6.1 SplatEntity::UpdateActiveSplats @0x001ec5d8, tests slot+0x75
+    // before dispatching vtable slot 5. An earlier port added a redundant
+    // `if (!m_bAlive) return;` here; removed to match.
 
-    // Bugfix #4 -- binary @ 0x0017f78c-f7a4: pos integration is unconditional.
-    // The binary integrates pos for ALL splats each frame, then branches.
-    // For non-SSMP landed splats vel is (0,0,0) at landing so drift is zero;
-    // the effect is only visible in SSMP horizontal-grav (m_bSSMPHorizGravity).
+    // Pos integration is unconditional and comes FIRST (@0x001ebf00-0x001ebf20:
+    // _Vector3::operator* then operator+=, both ahead of the phase branch at
+    // 0x001ebf24). For non-SSMP landed splats vel is near zero so drift is
+    // negligible; the slide phase then drives m_Vel.y to make the splat run.
     m_Pos = m_Pos + m_Vel * dt;
 
     if (m_SplatType < 0) {
         // --- Airborne phase ---
-        // ASM-verified: 2026-07-07T00:00Z v1.6.1 SplatEntity::Update @0x001ebee0 (implementer)
-        // Binary reads the scaled per-frame dt (game_work.flM_Dt), NOT the
-        // dt parameter passed into this function (`this->m_Vel.y = this->m_Vel.y
-        // + game_work.flM_Dt * -10.0`). Only the m_bSSMPHorizGravity==0 arm is
-        // reachable -- the SSMP branch is defunct (m_bSSMPHorizGravity is
-        // always stubbed to 0 in MakeSplat).
-        m_Vel.y += UP_GRAVITY * game_work.dt;
-
-        // Binary clamps velocity ONLY in the slide-decay phase (below); the
-        // airborne phase does not floor-clamp. (asm-inspector 2026-05-06)
-
-        // Check landing threshold.
+        // Landing test @0x001ebf30: vcmpe m_Pos.z, [0x001ec2f4]=-50.0 then
+        // `bpl 0x001ec298`, i.e. a miss branches straight to the gravity block
+        // BELOW the landing body. Gravity therefore runs after landing too.
         if (m_Pos.z < UP_LAND_Z) {
             // Landing -- pick splat variant.
             //   Normal path:
@@ -476,13 +490,17 @@ void SplatEntity::UpdateSplat(float dt) {
                 type = (Math::g_Random.Rand32(2) == 0) ? 4 : 5;
             }
 
-            // Bugfix #5 (binary @ 0x0017f806-f82a): special-fruit (m_bOnSide /
-            // field_0x2fc != 0) forces splat-type to 2 or 3 (the large-round pair).
-            // In FruitInfo the field at +0x2fc is m_bOnSide.
+            // Special-fruit override -- v1.6.1 SplatEntity::Update
+            // @0x001ebfb4-0x001ebff0: FruitInfo(m_FruitType)->m_bOnSide
+            // (ldrb +0x2fc) != 0 forces splat-type to 2 or 3 (the large-round
+            // pair).
             {
                 // m_FruitType may still hold MakeSplat's out-of-range
                 // critical-flash sentinel, so range-check before indexing --
                 // FruitInfo_Get (v1.6.1 Fruit::FruitInfo @0x001da5c0) does not.
+                // The binary tests only the upper bound (`cmp r0,r3; bge`);
+                // the port's extra >= 0 guard is defensive, m_FruitType is
+                // never negative.
                 if (m_FruitType >= 0 && m_FruitType < g_FruitInfoCount
                         && FruitInfo_Get(m_FruitType)->m_bOnSide != 0) {
                     type = (Math::g_Random.Rand32(2) == 0) ? 2 : 3;
@@ -511,15 +529,8 @@ void SplatEntity::UpdateSplat(float dt) {
                 m_AxisB = _Vector3<float>(CosIdx(iB), SinIdx(iB), 0.0f) * 0.25f;
             }
 
-            // Per-type size multiplier -- binary at landing branch:
-            //   m_Scale *= (kLandScale[type] * 2.5)
-            // Table @ 0x001bd074. See kLandScale[] above.
-            const int idx = (type >= 0 && type < 6) ? type : 0;
-            m_Scale = m_Scale * (kLandScale[idx] * 2.5f);
-
-            // Stick to the background plane. Binary at 0x0017f968 copies a
-            // static global vec3 (DAT_0017fad0) into m_Vel; the pattern
-            // strongly indicates (0,0,0). Port matches.
+            // Stick to the background plane. m_Pos.z store @0x001ec13c;
+            // m_Vel copied from the _Vector3<float>::Zero global @0x001ec150.
             // Splats land at z = -50 (UP_LAND_Z). Farther from camera than fruits
             // (spawn z = (i+1)*32, positive) under ortho near=2000/far=-6000 (larger z
             // = nearer). Drawn after fruits but with depth-TEST ON / depth-WRITE OFF
@@ -528,21 +539,32 @@ void SplatEntity::UpdateSplat(float dt) {
             m_Pos.z = UP_LAND_Z;
             m_Vel   = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
-            // Bugfix #1 (binary @ 0x0017fa1c-fa36): m_Life and m_DecayRate
-            // are initialised HERE (on landing), not in MakeSplat.
-            m_Life      = UP_LIFE_BASE  + Math::g_Random.RandF(UP_LIFE_RAND);
-            m_DecayRate = UP_DECAY_BASE + Math::g_Random.RandF(UP_DECAY_RAND);
+            // Per-type size multiplier -- binary @0x001ec158-0x001ec174:
+            //   m_Scale *= (kLandScale[type] * 2.5)
+            // Table @ 0x001bd074. See kLandScale[] above. Runs AFTER the
+            // m_Pos.z / m_Vel writes, and before the PlaySplat bucket read.
+            const int idx = (type >= 0 && type < 6) ? type : 0;
+            m_Scale = m_Scale * (kLandScale[idx] * 2.5f);
 
-            // Bugfix #3 (v1.6.1 SplatEntity::Update @0x001ebee0): PlaySplat size bucket is
-            // determined by m_Scale.x (after the landing scale multiply above),
-            // NOT by m_SplatType/2. Coconut fruit type suppresses SFX entirely.
-            // ASM-spec v1.6.1 SplatEntity::Update @0x001ebee0: PlaySplat gated on m_bMuteSfx==0 (super-fruit splats land silent).
+            // Coconut lazy-static resolve @0x001ec178-0x001ec1b8 (__cxa_guard
+            // pair around Fruit::FruitType("coconut", false)). The binary
+            // resolves it on the FIRST landing regardless of m_bMuteSfx, i.e.
+            // ahead of the gate below -- not lazily inside it.
+            (void)GetCoconutFruitType();
+
+            // PlaySplat size bucket is determined by m_Scale.x (after the
+            // landing scale multiply above), NOT by m_SplatType/2. Gated on
+            // m_bMuteSfx==0 @0x001ec1d4 (super-fruit splats land silent).
+            // Buckets @0x001ec1e0-0x001ec224. NOTE: none of them is silent --
+            // PlaySplat clamps its argument to [0,2], so bucket 0 (coconut)
+            // plays "Pulp-drip-*" and bucket 3 (> 100) clamps down to 2 and
+            // plays "Splatter-Medium-*".
             if (m_bMuteSfx == 0) {
                 int splatSize;
                 if (m_FruitType == GetCoconutFruitType()) {
-                    splatSize = 0;   // coconut: bucket 0 -- suppress / no SFX
+                    splatSize = 0;   // coconut -> Pulp-drip pair
                 } else if (m_Scale.x > SPLAT_SZ_LARGE_THR) {
-                    splatSize = 3;   // large (> 100): no SFX (PlaySplat clamps to [0,2])
+                    splatSize = 3;   // large (> 100) -> clamps to 2
                 } else if (m_Scale.x > SPLAT_SZ_MEDIUM_THR) {
                     splatSize = 2;   // medium (> 30)
                 } else {
@@ -550,6 +572,23 @@ void SplatEntity::UpdateSplat(float dt) {
                 }
                 PlaySplat(splatSize);
             }
+
+            // Defunct: SSMP horizontal-gravity -- v1.6.1 SplatEntity::Update
+            // @0x001ec228-0x001ec23c. A literal `m_Scale *= 1.0f` (vmov
+            // 0x3f800000 into s0 before the operator*= call): observably a
+            // no-op, kept for call-shape parity. Unreachable in the port --
+            // m_bSSMPHorizGravity is stubbed to 0 in MakeSplat.
+            if (m_bSSMPHorizGravity != 0) {
+                m_Scale = m_Scale * 1.0f;
+            }
+
+            // m_Life / m_DecayRate are initialised HERE (on landing), not in
+            // MakeSplat. Binary @0x001ec240-0x001ec268 -- note this is AFTER
+            // PlaySplat, so PlaySplat's own Rand32(2) draw precedes both RandF
+            // draws in the shared Math::g_Random stream. (An earlier port ran
+            // these two first, silently reordering the global RNG sequence.)
+            m_Life      = UP_LIFE_BASE  + Math::g_Random.RandF(UP_LIFE_RAND);
+            m_DecayRate = UP_DECAY_BASE + Math::g_Random.RandF(UP_DECAY_RAND);
 
             // Per-splat ambient pulp-drip arm: 1-in-10 chance, only when the
             // gate has soaked past -0.5 (i.e. the post-fire cooldown is over
@@ -562,23 +601,68 @@ void SplatEntity::UpdateSplat(float dt) {
                 s_PulpDripGate = 0.25f;
             }
         }
+
+        // Gravity integration -- binary @0x001ec298, BELOW the landing body.
+        // Both the landed-this-frame path (fall-through from 0x001ec294) and
+        // the still-flying path (`bpl` from 0x001ebf40) reach it, so a splat
+        // that lands this frame gets gravity applied to the m_Vel that landing
+        // just zeroed: it enters the landed phase with m_Vel.y = -10*dt rather
+        // than exactly 0. That residual is the seed of the downward run before
+        // the slide phase takes over. (An earlier port ran gravity BEFORE the
+        // landing test and returned, which zeroed it away.)
+        //
+        // Binary reads the scaled per-frame dt (game_work.flM_Dt), NOT the dt
+        // parameter passed into this function.
+        if (m_bSSMPHorizGravity == 0) {
+            m_Vel.y += UP_GRAVITY * game_work.dt;
+        } else {
+            // Defunct: SSMP horizontal-gravity arm @0x001ec2a8-0x001ec2d0.
+            // Gravity pulls toward the nearer side wall. Unreachable in the
+            // port (m_bSSMPHorizGravity is stubbed to 0 in MakeSplat).
+            float ax = UP_GRAVITY_HORIZ * game_work.dt;
+            if (m_Pos.x < 0.0f) ax = -ax;
+            m_Vel.x += ax;
+        }
         return;
     }
 
     // --- Landed phase ---
+    // Binary @0x001ec340 computes the frame's spring step ONCE, at the top of
+    // this phase: s17 = dt * splatSpeed. Both the slide arm and the life-decay
+    // below consume it.
+    const float springStep = dt * s_SpringRate;
+
     // Slide / scale decay -- binary runs this only while m_Life <= 1.25
     // (the tail slide phase). Above that threshold the splat sits still.
     // Rate is per-splat-type from kSlideRate[] @ 0x001bd08c.
     if (m_Life <= UP_LIFE_SLIDE_THR) {
         const int slideIdx = (m_SplatType >= 0 && m_SplatType < 6) ? (int)m_SplatType : 0;
-        // Binary @ 0x0017fb9e: dy = dt * s_SpringRate * kSlideRate[type].
-        const float dy = dt * s_SpringRate * kSlideRate[slideIdx];
-        float ny = m_Vel.y - dy;
-        if (ny < UP_VEL_CLAMP_LO) ny = UP_VEL_CLAMP_LO;
-        m_Vel.y = ny;
-        float nsy = m_Scale.y - dy;
-        if (nsy < UP_SCALE_CLAMP_LO) nsy = UP_SCALE_CLAMP_LO;
-        m_Scale.y = nsy;
+        const float dy = springStep * kSlideRate[slideIdx];
+        if (m_bSSMPHorizGravity == 0) {
+            // Binary @0x001ec400-0x001ec444: subtract from m_Vel.y and
+            // m_Scale.y, floor-clamp only.
+            float ny = m_Vel.y - dy;
+            if (ny < UP_VEL_CLAMP_LO) ny = UP_VEL_CLAMP_LO;
+            m_Vel.y = ny;
+            float nsy = m_Scale.y - dy;
+            if (nsy < UP_SCALE_CLAMP_LO) nsy = UP_SCALE_CLAMP_LO;
+            m_Scale.y = nsy;
+        } else {
+            // Defunct: SSMP horizontal-gravity slide arm @0x001ec378-0x001ec3fc.
+            // Runs on X instead of Y, ADDS to m_Scale.x (note: not a subtract,
+            // and it uses the UNSIGNED step even though m_Vel.x uses the signed
+            // one), and clamps both symmetrically. Unreachable in the port --
+            // m_bSSMPHorizGravity is stubbed to 0 in MakeSplat.
+            const float signedDy = (m_Pos.x < 0.0f) ? -dy : dy;
+            float nvx = m_Vel.x + signedDy;
+            if (nvx <= UP_VEL_CLAMP_LO)      nvx = UP_VEL_CLAMP_LO;
+            else if (nvx >= UP_VEL_CLAMP_HI) nvx = UP_VEL_CLAMP_HI;
+            m_Vel.x = nvx;
+            float nsx = m_Scale.x + dy;
+            if (nsx <= UP_SCALE_CLAMP_LO)      nsx = UP_SCALE_CLAMP_LO;
+            else if (nsx >= UP_SCALE_CLAMP_HI) nsx = UP_SCALE_CLAMP_HI;
+            m_Scale.x = nsx;
+        }
     }
 
     // Critical-flash colour lerp -- v1.6.1 SplatEntity::Update @0x001ebee0,
@@ -613,13 +697,16 @@ void SplatEntity::UpdateSplat(float dt) {
         m_AlphaBase = (float)crit.a + ((int)fresh.a - (int)crit.a) * w;  // float, unclamped
     }
 
-    // Life decay.
-    // Binary @ 0x0017fcea: m_Life -= dt * s_SpringRate * m_DecayRate.
-    m_Life -= dt * s_SpringRate * m_DecayRate;
+    // Life decay -- binary @0x001ec574: `vmls s15, s17, s14`, i.e.
+    // m_Life -= (dt * s_SpringRate) * m_DecayRate.
+    m_Life -= springStep * m_DecayRate;
     if (m_Life <= 0.0f) {
-        m_Life   = 0.0f;
-        m_bAlive = 0;
-        return;
+        m_Life = 0.0f;
+        // Binary calls SplatEntity::Destroy (bl @0x001ec59c) and does NOT
+        // return -- it falls through to the alpha write below, which lands
+        // m_ColA = 0 for the dying splat. An earlier port cleared m_bAlive
+        // inline and returned early, leaving m_ColA stale.
+        Destroy();
     }
 
     // Alpha = min(base, base * life). Binary clamp to uint8.
@@ -629,24 +716,32 @@ void SplatEntity::UpdateSplat(float dt) {
 }
 
 // ---------------------------------------------------------------------
-// Binary: PlaySplat @ 0x0017f5ec
-// Plays one of 6 splat-impact SFX. Caller passes a size index (0..2);
-// PlaySplat clamps to [0,2] then picks one of two pair entries via
-// Rand32(2). Strings (binary capitalisation, no extension):
+// v1.6.1 PlaySplat @0x001ebca0 (the PLT stub callers reach is 0x00103f40).
+// Plays one of 6 splat-impact SFX. Caller passes a size index; PlaySplat
+// clamps to [0,2] then picks one of two pair entries via Rand32(2). Strings
+// (binary capitalisation, no extension):
 //   size 0: "Pulp-drip-2",        "Pulp-drip-1"        (pair 0/1)
 //   size 1: "Splatter-Small-2",   "Splatter-Small-1"
 //   size 2: "Splatter-Medium-2",  "Splatter-Medium-1"
 // Note pair order: Rand32(2)==0 selects suffix -2, ==1 selects -1.
-// Per-size cooldown: gate ticks down by dt/frame in Update; when
-// <= 0 here, fires + resets to 0.5. Three independent gates by size.
-// ASM-verified: 2026-04-29 v1.6.1 binary @ 0x0017f5ec..0x0017f74b (asm-inspector)
+//
+// Per-size cooldown: EVERY call debits the gate by 0.05, and the SFX fires
+// when the debited value reaches <= 0 (then the gate resets to 0.5). The gate
+// also ticks down by dt/frame in UpdateActiveSplats. So a burst of impacts
+// pulls the next sound forward instead of being swallowed by a pure time gate
+// -- an earlier port read the gate without debiting it, which suppressed every
+// impact inside the 0.5s window no matter how many splats landed.
+// ASM-verified: 2026-07-31T00:00Z v1.6.1 PlaySplat @ 0x001ebca0 (re-analyst)
 // ---------------------------------------------------------------------
 void PlaySplat(int splatSize) {
+    // Binary: `if (1 < (int)sz) sz = 2;` then `sz & ~(sz >> 31)` for the floor.
     int sz = splatSize;
     if (sz > 2) sz = 2;
     if (sz < 0) sz = 0;
 
+    s_SplatSfxGate[sz] -= 0.05f;
     if (s_SplatSfxGate[sz] > 0.0f) return;
+    s_SplatSfxGate[sz] = 0.5f;
 
     static const char* kPairs[3][2] = {
         { "Pulp-drip-2",        "Pulp-drip-1"        },  // size 0
@@ -686,7 +781,7 @@ void SplatEntity::LoadContent() {
     s_loadedSplat = true;
 }
 
-// ASM-spec v1.6.1 SplatEntity::CleanUp @ 0x001eb404 (note: stale 0x0017eee0 in header = v1.5.x).
+// ASM-spec v1.6.1 SplatEntity::CleanUp @ 0x001eb404.
 // Destroys the flat pool: dtors on all slots via delete[], frees the backing
 // allocation, nulls s_PoolBase, zeroes s_PoolCount/s_CurrentFree.
 // PORT BUG FIX: prior body incorrectly did s_SplatTex.SetNull() here;
@@ -751,21 +846,25 @@ int SplatEntity::NumActiveSplats() {
     return s_NumActiveSplats;
 }
 
-// ASM-verified: 2026-05-06T18:00 v1.6.1 SplatEntity::UpdateActiveSplats @0x001ec5d8 (asm-inspector)
+// ASM-verified: 2026-07-31T00:00Z v1.6.1 SplatEntity::UpdateActiveSplats @ 0x001ec5d8 (re-analyst)
 // Body order:
-//   (a) Per-impact splat-SFX gate ticks (3-iter loop).
-//   (b) Pulp-drip-gate timer + positive->non-positive fire edge.
-//   (c) Spring-rate compute -- consumes the PRIOR-frame cached count
-//       (s_NumActiveSplats), introducing an intentional 1-frame lag
-//       that's part of the original feel.
-//   (d) Pool-loop -- updates each alive splat; new active count written
-//       to s_NumActiveSplats at the very end.
+//   (a) Per-impact splat-SFX gate ticks (3-iter loop @0x001ec5f4).
+//   (b) Pulp-drip-gate timer + positive->non-positive fire edge (@0x001ec630).
+//   (c) Spring-rate compute (@0x001ec704) -- consumes the PRIOR-frame cached
+//       count (s_NumActiveSplats), introducing an intentional 1-frame lag
+//       that's part of the original feel -- then the slow-hardware / MP
+//       1.5x post-scale (@0x001ec7b0).
+//   (d) Pool-loop (@0x001ec80c) -- updates each alive splat; new active count
+//       written to s_NumActiveSplats at the very end.
 void SplatEntity::UpdateActiveSplats(float dt) {
     // (a) Per-impact splat SFX gates -- three independent cooldowns by size.
+    // Binary @0x001ec604-0x001ec618 is `if (gate > 0) gate -= dt;` with NO
+    // floor clamp: the gate is allowed to settle just below 0, which is what
+    // PlaySplat's `gate -= 0.05; if (gate > 0) return;` debit expects. An
+    // earlier port clamped to 0 here.
     for (int i = 0; i < 3; ++i) {
         if (s_SplatSfxGate[i] > 0.0f) {
             s_SplatSfxGate[i] -= dt;
-            if (s_SplatSfxGate[i] < 0.0f) s_SplatSfxGate[i] = 0.0f;
         }
     }
 
@@ -780,7 +879,7 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         }
     }
 
-    // (c) Per-frame spring rate compute -- binary 0x0017fe46..0x0017feda.
+    // (c) Per-frame spring rate compute -- binary @0x001ec704-0x001ec7ac.
     //   N_total  = Mortar::ActorManager::GetNumEntities()
     //   N_active = s_NumActiveSplats   // PRIOR-frame cached count
     //   raw      = (N_total + N_active) / 15.0 - 0.15
@@ -795,20 +894,33 @@ void SplatEntity::UpdateActiveSplats(float dt) {
         else                  s_SpringRate = raw + 1.25f;
     }
 
+    // Post-scale @0x001ec7b0-0x001ec7f0: slow hardware, or multiplayer that is
+    // not mid-retry, runs the splat spring 1.5x faster (splats dry up sooner).
+    //   if (!IsFastHardware() || (IsMultiplayer() && !m_bMPRetryPending))
+    //       splatSpeed *= 1.5;
+    // Inert on Bada AND on the port: IsFastHardware() is true (Game::Init
+    // calls SetHardware("BADA", true)) and v1.6.1 ::IsMultiplayer @0x0011a094
+    // is a hard `mov r0,#0`. Ported for call shape, not behaviour.
+    if (!IsFastHardware() ||
+        (IsMultiplayer() && game_work.m_bMPRetryPending == 0)) {
+        s_SpringRate = s_SpringRate * 1.5f;
+    }
+
     // (d) Pool loop -- update each alive splat; the flat pool has no
     //     separate free list, so a dead slot just sits with m_bAlive=0
     //     until GetFree's round-robin scan reuses it.
     //     Write the new active count to s_NumActiveSplats LAST.
+    //     Binary @0x001ec824 increments the counter BEFORE dispatching Update,
+    //     so the cached count is "alive at the start of the frame", not
+    //     "survived the frame" -- a splat that expires this frame still counts
+    //     towards next frame's spring rate. An earlier port counted survivors.
     int activeCount = 0;
     for (int i = 0; i < s_PoolCount; ++i) {
         SplatEntity* s = &s_PoolBase[i];
         if (!s->m_bAlive) continue;
 
+        ++activeCount;
         s->UpdateSplat(dt);
-
-        if (s->m_bAlive) {
-            ++activeCount;
-        }
     }
     s_NumActiveSplats = activeCount;
 }
@@ -832,7 +944,7 @@ void SplatEntity::ForEachInPool(PoolVisitor fn, void* user) {
 // ---------------------------------------------------------------------
 // SplatEntity::DrawSplat (0x001eb5d8) -- virtual per-instance render
 // Vtable slot 4.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
+// ASM-verified: 2026-05-18 v1.6.1 SplatEntity::DrawSplat @ 0x001eb5d8 (re-analyst)
 // ---------------------------------------------------------------------
 // Writes 6 QUADCUSTOMVERTEX entries into s_SplatVerts at the cursor
 // position given by s_NumActiveSplats. Tint read from s_CurrentTintRGB.
@@ -937,7 +1049,7 @@ void SplatEntity::DrawSplat() {
 // HUD::scales[3..5], then for each alive landed splat calls DrawSplat()
 // (pure thiscall, vtable slot 4) and increments s_NumActiveSplats.
 // Submits the completed batch.
-// ASM-verified: 2026-05-18 v1.6.1 binary @ 0x00180344 (re-analyst) [addr updated: 0x001ece34]
+// ASM-verified: 2026-05-18 v1.6.1 SplatEntity::DrawActiveSplats @ 0x001ece34 (re-analyst)
 // Depth state owned by GameDraw (binary @ 0x0016b888): no per-call
 // glEnable/glDisable(GL_DEPTH_TEST) or glDepthMask in the binary's body.
 //

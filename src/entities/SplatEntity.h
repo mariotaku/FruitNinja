@@ -84,11 +84,17 @@ public:
     // bx lr (no-op)
     virtual void Release();
 
+    // Non-virtual. Binary body is `mov r3,#0; strb r3,[r0,#0x75]; bx lr` --
+    // it only clears m_bAlive. Called from Update's life-expiry branch
+    // (bl @0x001ec59c through the PLT stub at 0x00105040).
+    // ASM-verified: 2026-07-31T00:00Z v1.6.1 SplatEntity::Destroy @ 0x001ecfa8 (re-analyst)
+    void Destroy();
+
     // --- Vtable slot 4: DrawSplat (binary @ 0x001eb5d8) ---
     // Pure thiscall -- pulls vertex cursor from s_NumActiveSplats and writes
     // into s_pSplatVertexBuffer. Tint read from s_CurrentTintRGB (set by
     // DrawActiveSplats before dispatch).
-    // ASM-verified: 2026-05-18 v1.6.1 binary @ 0x0017f008 (re-analyst) [addr updated: 0x001eb5d8]
+    // ASM-verified: 2026-05-18 v1.6.1 SplatEntity::DrawSplat @ 0x001eb5d8 (re-analyst)
     virtual void DrawSplat();
 
     // --- Vtable slot 5: Update (v1.6.1 SplatEntity::Update @0x001ebee0) ---
@@ -148,7 +154,7 @@ public:
     // Binary: SplatEntity::RemoveAllSplats @ 0x0017eea4
     static void RemoveAllSplats();
     static void LoadContent();
-    // Binary: SplatEntity::CleanUp @ 0x001eb404 (v1.6.1; stale 0x0017eee0 was v1.5.x).
+    // Binary: v1.6.1 SplatEntity::CleanUp @0x001eb404.
     // Destroys the flat pool (dtors + free). Does NOT touch textures.
     static void CleanUp();
 

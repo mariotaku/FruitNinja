@@ -12,10 +12,13 @@
 // corroborated by ~HUDControl3d D1 @0x0018b814 destroying +0x78 then +0x74. The field
 // list below accounts for every byte up to 0x74 with no unexplained gaps.
 //
-// TODO: v1.6.1 HUDControl -- three citations in HUDControl.cpp still carry unresolved
-//   v1.5-era addresses: DefaultDeleteCallback @0x00143f94, and the two ctor-body cites
-//   @0x00144184 / @0x00144104 (the ctor itself is C2 @0x0018b354 / C1 @0x0018b440;
-//   the delegate factory it calls is at 0x0018b310, invoked from 0x0018b3ec).
+// C1 and C2 are instruction-identical. The ctor's helpers, all v1.6.1:
+//   T_864              @0x0018b2dc  copies _Vector3<float>::Zero into m_HudScale (+0x14)
+//   Delegate1 ctor     @0x001138fc  default-constructs m_RemoveCallback (+0x38)
+//   Colour::Colour     @0x00110c48  copy-constructs m_DrawColour (+0x5c) from Colour::White
+//   T_865              @0x0018b310  builds the "Global" delegate bound to DefaultDeleteCallback
+//   Delegate1::operator= @0x00112880 assigns it into m_RemoveCallback
+//   Global::~Global    @0x0010e334  destroys the stack temporary
 //
 
 #include "math/_Vector3.h"
@@ -38,7 +41,9 @@ public:
     // Binary uses strb (byte store); read by v1.6.1 HUDControl::SetToMultiplayerState @0x0018b114.
     uint8_t m_Singular;
 
-    // +0x08: position in centered coords
+    // +0x08: position in centered coords.
+    // NOTE: the binary ctor never writes this offset -- see the DIFFERS note on
+    // HUDControl::HUDControl in HUDControl.cpp.
     _Vector3<float> pos;
 
     // +0x14: per-control HUD-scale multiplier. Multiplied with the
@@ -48,10 +53,14 @@ public:
     // per-frame by the PreDraw chain (per-instance hudScale arg).
     _Vector3<float> m_HudScale;
 
-    // +0x20: size (half-extents)
+    // +0x20: size (half-extents).
+    // NOTE: the binary ctor never writes this offset -- see the DIFFERS note on
+    // HUDControl::HUDControl in HUDControl.cpp.
     _Vector3<float> size;
 
-    // +0x2c: rotation angle / animation timer
+    // +0x2c: rotation angle / animation timer.
+    // NOTE: the binary ctor never writes this offset -- see the DIFFERS note on
+    // HUDControl::HUDControl in HUDControl.cpp.
     float m_Timer;
 
     // +0x30: non-zero = visible + receives updates
