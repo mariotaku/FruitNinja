@@ -305,74 +305,95 @@ void BonusScreen::AwardScores() {
     }
 }
 
-// ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (asm-inspector)
-// ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc (asm-inspector, fresh binary read):
-//   maxLines=1 (not 0) on m_ScoreBox/m_TotalBox, and per-award row colour = m_Awards[i].m_Colour
-//   (not a fixed palette) -- both corrected below; supersedes the prior (stale) verified pass.
-// ASM-verified: 2026-07-24T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc (re-analyst)
+// ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (2026-07-31, direct
+//   disassembly read). Downgraded from ASM-verified: the earlier stamps predate the removal of
+//   five port-added null guards from this body (font, both per-row boxes, m_ScoreBox, m_TotalBox)
+//   and two GETSTRING empty-string fallbacks -- none of which exist in the binary -- and the
+//   "row colour is NOT a fixed palette" claim in the superseded ASM-spec line was WRONG (see
+//   the palette note in the body: the binary builds three stack Colours @0x001621fc..0x0016224c
+//   and feeds them to both boxes of row i).
 //   maxLines=1 confirmed by direct disassembly (mov r2,#0x1 / str r2,[sp,#0x4] immediately before
 //   each ctor call) for ALL FOUR BakedStringBox ctors in this function: m_RankLabelBoxes[i]
-//   @0x001622ac, m_RankValueBoxes[i] @0x00162330, m_ScoreBox, m_TotalBox. Supersedes the prior
-//   pass above, which only caught m_ScoreBox/m_TotalBox and left the per-row boxes at maxLines=0.
+//   @0x001622ac, m_RankValueBoxes[i] @0x00162330, m_ScoreBox @0x0016240c, m_TotalBox @0x00162584.
 void BonusScreen::BuildBonusText() {
     // +0xD8 build-once latch (was mis-named m_bSkipIntro; binary sets it inside
     // BuildBonusText @0x001621dc, not at the Update call site).
+    // Binary order @0x001621dc..0x00162208: ldrb +0xd8 / cmp / bne exit, then
+    // strb 1 -> +0xd8 IMMEDIATELY, before any font or box work.
     if (m_bBonusTextBuilt) return;
-
-    Mortar::FontCacheObjectTTF* font = GetBonusTTFFont();
-    // Guard: m_pTTFFontMain is set once at boot by PreloadFontsTTF, but placed
-    // BEFORE the latch-set below so a transiently-null font can't burn the
-    // create-once latch (matches binary null-check shape at 0x001621dc).
-    if (!font) return;
     m_bBonusTextBuilt = true;
+
+    // No font null guard: the binary reads game_work+0x614 (m_pTTFFontMain) straight
+    // into the BakedStringBox ctor at 0x001622bc / 0x0016234c / 0x00162424 / 0x0016259c
+    // with no cmp -- and it has already burned the +0xd8 latch by then, so a
+    // "don't burn the latch on a null font" guard has no binary counterpart either.
+    Mortar::FontCacheObjectTTF* font = GetBonusTTFFont();
+
+    // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621fc..0x0016224c: a fixed
+    // 3-entry Colour palette is built on the stack (sp+0x60/+0x64/+0x68) before the
+    // row loop and passed to SetColour for BOTH the label and the value box of row i
+    // (@0x001622f0/0x00162300 and @0x00162370/0x00162380, r9 = &palette[i]).
+    //   [0] Colour(0xad,0x7e,0x00,0xff)  bronze   -- ctor args r1/r2/r3/[sp] @0x0016221c
+    //   [1] Colour(0xa0,0x05,0x05,0xff)  red      -- @0x00162234
+    //   [2] Colour(0x01,0x5c,0x95,0xff)  blue     -- @0x0016224c
+    // A prior pass deleted this palette claiming the "fixed gold/red/blue" marker was
+    // wrong. It was wrong about BonusScreen::Draw (which re-SetColours each row from
+    // the award's own animated m_Colour every frame, @0x00164d28/0x00164db0) -- but
+    // right about BuildBonusText. Restored; visually inert because Draw overwrites it.
+    // Stack-local (not static) so the port matches the binary's per-call construction
+    // and avoids a __cxa_guard the binary does not have.
+    Colour buildRowColours[3];
+    buildRowColours[0] = Colour(0xad, 0x7e, 0x00, 0xff);
+    buildRowColours[1] = Colour(0xa0, 0x05, 0x05, 0xff);
+    buildRowColours[2] = Colour(0x01, 0x5c, 0x95, 0xff);
 
     // Per-award label/value boxes (loop i=0..count-1, up to 3).
     // Binary: r6+=4 per iteration == [i].
     // ASM-verified: label font=13px ALL rows, value font=16px ALL rows (constants, not a per-row array).
-    // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c / BuildBonusText @0x001621dc (asm-inspector,
-    // fresh binary read): row colour is the per-award element's OWN animated m_Colour (+0x50),
-    // NOT a fixed 3-entry palette. The prior "fixed gold/red/blue palette" ASM-verified marker
-    // here was WRONG and has been removed.
     // maxLines=1 for BOTH boxes (label @0x001622ac, value @0x00162330) -- same fix as m_ScoreBox
     // below; with maxLines=0 a long award name wraps to a 2nd line and overlaps the next row
     // (42px row pitch was never meant for 2 lines).
+    //
+    // Loop bound: the binary walks the award list with a node cursor and tests
+    // `i <= 2 && node != NULL` (@0x001623b0..0x001623c8, cmp r7,#0x2 + cmp r8,#0x0),
+    // so the `i < 3` clamp IS the binary's -- keep it.
+    // NOTE: the binary allocates both boxes UNCONDITIONALLY per row (operator new @0x0016228c
+    // / @0x00162318 with no `if (box == 0)` test). The port's per-box null guards were
+    // port-added and are gone; the whole function is already one-shot behind the +0xd8 latch.
     for (int i = 0; i < (int)m_Awards.size() && i < 3; ++i) {
-        if (!m_RankLabelBoxes[i]) {
-            // m_RankLabelBoxes[i] (+0xC0): name label, w=220, h=10, align=1 (LEFT).
-            // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x001621dc ctor align arg = 1.
-            m_RankLabelBoxes[i] = new Mortar::BakedStringBox(
-                font,
-                13.0f,   // label font: 13px for ALL rows
-                220.0f,  // 0xDC
-                10.0f,
-                (Mortar::ALIGNMENT_TYPE)0x01,    // LEFT
-                1,       // maxLines: binary passes 1 (single line, no wrap) @0x001622ac -- long names must NOT wrap into the next row (same fix as m_ScoreBox)
-                0        // lineSpacing (binary 7th arg = 0; step = (int)(13+0) = 13px)
-            );
-            m_RankLabelBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
-            m_RankLabelBoxes[i]->SetText(m_Awards[i].m_Name);
-            m_RankLabelBoxes[i]->Update();
-        }
-        if (!m_RankValueBoxes[i]) {
-            // m_RankValueBoxes[i] (+0xCC): tier value as "%i", w=60, h=10, align=0x0F.
-            // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x162324 mov r2,#0xf -> align=0x0F.
-            // 0x0F = center-H (bits 1:0 = 3) + center-V (bits 3:2 = 3 = 0xC);
-            // center-V path is implemented in BakedStringBox::Draw (vertAlign==0xc branch).
-            char valBuf[16];
-            snprintf(valBuf, sizeof(valBuf), "%i", m_Awards[i].m_TierBase);
-            m_RankValueBoxes[i] = new Mortar::BakedStringBox(
-                font,
-                16.0f,   // value font: 16px for ALL rows
-                60.0f,   // 0x3C
-                10.0f,
-                (Mortar::ALIGNMENT_TYPE)0x0F,    // center-H + center-V (binary @0x162324)
-                1,       // maxLines=1 @0x00162330
-                0        // lineSpacing (binary 7th arg = 0; step = (int)(16+0) = 16px)
-            );
-            m_RankValueBoxes[i]->SetColour(m_Awards[i].m_Colour, 0);
-            m_RankValueBoxes[i]->SetText(valBuf);
-            m_RankValueBoxes[i]->Update();
-        }
+        // m_RankLabelBoxes[i] (+0xC0): name label, w=220, h=10, align=1 (LEFT).
+        // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x001621dc ctor align arg = 1.
+        m_RankLabelBoxes[i] = new Mortar::BakedStringBox(
+            font,
+            13.0f,   // label font: 13px for ALL rows
+            220.0f,  // 0xDC
+            10.0f,
+            (Mortar::ALIGNMENT_TYPE)0x01,    // LEFT
+            1,       // maxLines: binary passes 1 (single line, no wrap) @0x001622ac -- long names must NOT wrap into the next row (same fix as m_ScoreBox)
+            0        // lineSpacing (binary 7th arg = 0; step = (int)(13+0) = 13px)
+        );
+        m_RankLabelBoxes[i]->SetColour(buildRowColours[i], 0);
+        m_RankLabelBoxes[i]->SetText(m_Awards[i].m_Name);
+        m_RankLabelBoxes[i]->Update();
+
+        // m_RankValueBoxes[i] (+0xCC): tier value as "%i", w=60, h=10, align=0x0F.
+        // ASM-verified: v1.6.1 BonusScreen::BuildBonusText @0x162324 mov r2,#0xf -> align=0x0F.
+        // 0x0F = center-H (bits 1:0 = 3) + center-V (bits 3:2 = 3 = 0xC);
+        // center-V path is implemented in BakedStringBox::Draw (vertAlign==0xc branch).
+        char valBuf[16];
+        snprintf(valBuf, sizeof(valBuf), "%i", m_Awards[i].m_TierBase);
+        m_RankValueBoxes[i] = new Mortar::BakedStringBox(
+            font,
+            16.0f,   // value font: 16px for ALL rows
+            60.0f,   // 0x3C
+            10.0f,
+            (Mortar::ALIGNMENT_TYPE)0x0F,    // center-H + center-V (binary @0x162324)
+            1,       // maxLines=1 @0x00162330
+            0        // lineSpacing (binary 7th arg = 0; step = (int)(16+0) = 16px)
+        );
+        m_RankValueBoxes[i]->SetColour(buildRowColours[i], 0);
+        m_RankValueBoxes[i]->SetText(valBuf);
+        m_RankValueBoxes[i]->Update();
     }
 
     // m_ScoreBox (+0xB8): the "_ BONUS _" title drawn at top of board pos+(105,+51).
@@ -383,36 +404,43 @@ void BonusScreen::BuildBonusText() {
     //   shadow 5.0 brown 0x5D280C offset Vec3(0,-3,0). STATIC.
     // maxLines was WRONG at 0 (unlimited wrap -- caused the trailing "_" star to wrap to a
     // second line); binary passes maxLines=1 (single line, no wrap).
-    if (!m_ScoreBox) {
-        m_ScoreBox = new Mortar::BakedStringBox(
-            font,
-            30.0f,
-            220.0f,  // 0xDC
-            30.0f,   // 0x1E
-            (Mortar::ALIGNMENT_TYPE)0x0F,
-            1,       // maxLines (was WRONG 0 -- caused 2-line wrap)
-            0        // lineSpacing (binary 7th arg = 0; step = (int)(30+0) = 30px)
-        );
-        m_ScoreBox->SetGradient(
-            Colour(0xFF, 0x00, 0x00, 0xFF),   // red top: RGB(0xFF,0x00,0x00)
-            Colour(0xB4, 0x00, 0x00, 0xFF),   // dark-red bottom: RGB(0xB4,0x00,0x00)
-            false
-        );
-        m_ScoreBox->SetStroke(2.0f,
-            Colour(0xFF, 0xDC, 0x50, 0xFF),   // gold inner: RGB(0xFF,0xDC,0x50)
-            Colour(0xFF, 0xC8, 0x87, 0xFF));  // gold outer: RGB(0xFF,0xC8,0x87)
-        m_ScoreBox->SetShadow(
-            5.0f,
-            Colour(0x5D, 0x28, 0x0C, 0xFF),
-            _Vector3<float>(0.0f, -3.0f, 0.0f),
-            true
-        );
-        char bonusBuf[64];
-        const char* bonusStr = GETSTRING((LocalizedString)0x31E, 0);
-        snprintf(bonusBuf, sizeof(bonusBuf), "_ %s _", (bonusStr && bonusStr[0]) ? bonusStr : "BONUS");
-        m_ScoreBox->SetText(bonusBuf);
-        m_ScoreBox->Update();
-    }
+    // No `if (!m_ScoreBox)` guard: the binary stores 0 into +0xb8 (@0x001623cc) then
+    // allocates unconditionally (@0x001623f0). Port-added guard removed.
+    m_ScoreBox = new Mortar::BakedStringBox(
+        font,
+        30.0f,
+        220.0f,  // 0xDC
+        30.0f,   // 0x1E
+        (Mortar::ALIGNMENT_TYPE)0x0F,
+        1,       // maxLines (was WRONG 0 -- caused 2-line wrap)
+        0        // lineSpacing (binary 7th arg = 0; step = (int)(30+0) = 30px)
+    );
+    m_ScoreBox->SetGradient(
+        Colour(0xFF, 0x00, 0x00, 0xFF),   // red top: RGB(0xFF,0x00,0x00)
+        Colour(0xB4, 0x00, 0x00, 0xFF),   // dark-red bottom: RGB(0xB4,0x00,0x00)
+        false
+    );
+    // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001624ac..0x00162500: the OUTER gold
+    // stroke Colour is built with alpha 0x30, not 0xff -- `mov r3,#0x30 / str r3,[sp,#0]`
+    // @0x001624d4..0x001624dc feeds the Colour ctor's 4th (alpha) arg, then r3 is reused
+    // as 0x30+0x57 = 0x87 for blue. Port had 0xFF here.
+    m_ScoreBox->SetStroke(2.0f,
+        Colour(0xFF, 0xDC, 0x50, 0xFF),   // gold inner: RGBA(0xFF,0xDC,0x50,0xFF) @0x001624d0
+        Colour(0xFF, 0xC8, 0x87, 0x30));  // gold outer: RGBA(0xFF,0xC8,0x87,0x30) @0x001624ec
+    // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x00162554: SetShadow's 4th arg is
+    // r3 = 0 (`mov r3,#0x0` immediately before `bl 0x001111bc`), i.e. FALSE. Port had true.
+    m_ScoreBox->SetShadow(
+        5.0f,
+        Colour(0x5D, 0x28, 0x0C, 0xFF),
+        _Vector3<float>(0.0f, -3.0f, 0.0f),
+        false
+    );
+    // No null/empty fallback on GETSTRING: the binary pipes the returned pointer straight
+    // into OS_SPrintf (@0x001623d4 -> cpy r3,r0 -> bl 0x00111d58), no cmp.
+    char bonusBuf[64];
+    snprintf(bonusBuf, sizeof(bonusBuf), "_ %s _", GETSTRING((LocalizedString)0x31E, 0));
+    m_ScoreBox->SetText(bonusBuf);
+    m_ScoreBox->Update();
 
     // m_TotalBox (+0xBC): raw "TOTAL" label drawn at bottom of board pos+(75,-128).
     // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc (asm-inspector, fresh binary read):
@@ -420,26 +448,26 @@ void BonusScreen::BuildBonusText() {
     //   gradient yellow->orange (top 0xFFEF00, bottom 0xEF7700),
     //   stroke(single-colour) 2.0 red-orange 0xDC1300, NO shadow. STATIC.
     // maxLines was WRONG at 0 (unlimited wrap); binary passes maxLines=1 (single line, no wrap).
-    if (!m_TotalBox) {
-        m_TotalBox = new Mortar::BakedStringBox(
-            font,
-            20.0f,
-            90.0f,   // 0x5A
-            20.0f,   // 0x14
-            (Mortar::ALIGNMENT_TYPE)0x0F,
-            1,       // maxLines (was WRONG 0 -- caused 2-line wrap)
-            0        // lineSpacing (binary 7th arg = 0; step = (int)(20+0) = 20px)
-        );
-        m_TotalBox->SetGradient(
-            Colour(0xFF, 0xEF, 0x00, 0xFF),   // yellow top: RGB(0xFF,0xEF,0x00)
-            Colour(0xEF, 0x77, 0x00, 0xFF),   // orange bottom: RGB(0xEF,0x77,0x00)
-            false
-        );
-        m_TotalBox->SetStroke(2.0f, Colour(0xDC, 0x13, 0x00, 0xFF));
-        const char* totalStr = GETSTRING((LocalizedString)0x31F, 0);
-        m_TotalBox->SetText((totalStr && totalStr[0]) ? totalStr : "TOTAL");
-        m_TotalBox->Update();
-    }
+    // No `if (!m_TotalBox)` guard: the binary allocates unconditionally (@0x0016256c).
+    m_TotalBox = new Mortar::BakedStringBox(
+        font,
+        20.0f,
+        90.0f,   // 0x5A
+        20.0f,   // 0x14
+        (Mortar::ALIGNMENT_TYPE)0x0F,
+        1,       // maxLines (was WRONG 0 -- caused 2-line wrap)
+        0        // lineSpacing (binary 7th arg = 0; step = (int)(20+0) = 20px)
+    );
+    m_TotalBox->SetGradient(
+        Colour(0xFF, 0xEF, 0x00, 0xFF),   // yellow top: RGB(0xFF,0xEF,0x00)
+        Colour(0xEF, 0x77, 0x00, 0xFF),   // orange bottom: RGB(0xEF,0x77,0x00)
+        false
+    );
+    m_TotalBox->SetStroke(2.0f, Colour(0xDC, 0x13, 0x00, 0xFF));
+    // No null/empty fallback: binary pipes GETSTRING(0x31f) straight into SetText
+    // (@0x0016261c -> cpy r1,r0 -> bl 0x001055b4), no cmp.
+    m_TotalBox->SetText(GETSTRING((LocalizedString)0x31F, 0));
+    m_TotalBox->Update();
 }
 
 // ---------------------------------------------------------------------------
@@ -448,9 +476,10 @@ void BonusScreen::BuildBonusText() {
 
 // v1.6.1 @0x00163dd0
 void BonusScreen::Update(float dt) {
-    // SET_DEFINES is a v1.6.1 static ctor (@0x00162090, init_array-only xref) -- the
-    // binary does not call it from Update. Calling it here is a harmless idempotent
-    // re-init (same constants every call).
+    // ASM-spec v1.6.1 BonusScreen::Update @0x00163dec: `bl 0x00103bb0` (SET_DEFINES) is the
+    // FIRST call in the binary body. An earlier comment here claimed the binary never calls
+    // it from Update and that the port's call was a harmless extra -- that was wrong; the
+    // call is faithful. (SET_DEFINES also runs pre-OspMain from init_array @0x2d174c.)
     SET_DEFINES();
 
     // ASM-spec v1.6.1 BonusScreen::Update @0x00163dd0: Update NEVER stores m_Timer (+0xdc).
@@ -475,10 +504,17 @@ void BonusScreen::Update(float dt) {
         // frame m_Timer crosses (0.2f - TRANSITION_IN_TIME) upward -- prev <= thr < cur
         // with prev = m_Timer - dt. Sound "Pause" (string @0x27F971), args
         // (s0=0, s1=1, s2=0); return value discarded (nothing stored to +0xB4).
-        // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+        // ASM-spec v1.6.1 BonusScreen::Update @0x00163fb4..0x00163fd4 (2026-07-31, direct
+        // disassembly read; downgraded from ASM-verified -- the prior stamp was a re-analyst
+        // decompile pass, not an asm-inspector ASM diff, and it covered a port-added
+        // `&& game_work.mGameSound` guard the binary does not have: @0x00163fe8 the binary
+        // loads mGameSound (+0x18c) off the GOT-resolved game_work straight into r7 and
+        // calls SFXPlay with no cmp). The threshold pair itself IS confirmed:
+        //   vcmpe s15(m_Timer), s14(0.2-TIT) / ble skip   -> requires m_Timer > thr
+        //   vcmpe s20(m_Timer-dt), s14      / bhi skip   -> requires m_Timer-dt <= thr
         {
             float thr = 0.2f - TRANSITION_IN_TIME;
-            if (m_Timer - dt <= thr && thr < m_Timer && game_work.mGameSound) {
+            if (m_Timer - dt <= thr && thr < m_Timer) {
                 game_work.mGameSound->SFXPlay(
                     "Pause", 0.0f, 1.0f,
                     Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
@@ -490,7 +526,11 @@ void BonusScreen::Update(float dt) {
         // e = SinIdx(fp*100deg)/SinIdx(100deg) (182 = 65536/360, 18200 = 100*182);
         // AnimPos = (0,-240,0)*(1-e). 240.0f from pool @0x164270, negated via
         // _Vector3 unary operator- @0x0010e9f4.
-        // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+        // ASM-spec v1.6.1 BonusScreen::Update @0x0016405c..0x00164148 (2026-07-31, direct
+        // disassembly read; downgraded from ASM-verified -- re-analyst provenance, never
+        // asm-inspector-diffed). Behaviour CONFIRMED literal-for-literal:
+        //   Vec3 constants @0x0016426c=0.0 / @0x00164270=240.0; angle scale @0x00164274=100.0;
+        //   deg->idx @0x001642c8=182.0; denominator SinIdx(0x4718 = 18200) @0x00164110.
         float fp = m_Timer / TRANSITION_IN_TIME + 1.0f;
         float e = Math::SinIdx((uint16_t)(fp * 100.0f * 182.0f)) /
                   Math::SinIdx((uint16_t)18200);
@@ -504,22 +544,31 @@ void BonusScreen::Update(float dt) {
         m_AnimPos = _Vector3<float>(0.0f, 0.0f, 0.0f);
     }
 
-    // v1.6.1 BonusScreen::Update @0x163f20/@0x16405c/@0x1641a4: co-lerp mHud scales[3..5]->0.5.
+    // v1.6.1 BonusScreen::Update @0x163f28/@0x164078/@0x1641a4: co-lerp mHud scales[3..5]->0.5.
     // Visually inert in port scope (HUD::Draw reads only scales[0..2]) but faithful.
-    if (game_work.mHud) {
+    // No `if (game_work.mHud)` guard: at all three sites the binary does
+    //   ldr r3,[r6,GOT] ; ldr r3,[r3,#0x40] ; vldr s12,[r3,#0x14]
+    // -- mHud (+0x40) is dereferenced with no cmp. Port-added guard removed.
+    // DIVERGENCE (not fixed here, no guard involved): the binary folds this co-lerp INTO
+    // the three m_AnimPos arms above rather than re-testing m_Timer in a second 3-way.
+    // Merging the two blocks would drop 2 redundant float compares and match the binary's
+    // shape; deferred as pure code motion outside this pass's guard/marker scope.
+    {
         float* s = game_work.mHud->scales;
         if (m_Timer > TOTAL_TIME) {
             float f = 1.0f - (m_Timer - TOTAL_TIME) / TRANSITION_OUT_TIME;
             for (int k = 3; k < 6; ++k) s[k] += (0.5f - s[k]) * f;
         } else if (m_Timer < 0.0f) {
-            // Co-lerp factor is fp = m_Timer/TRANSITION_IN_TIME + 1 (0->1), the same
-            // driver as the slide-in ease -- NOT -m_Timer/TRANSITION_IN_TIME (1->0,
-            // inverted). The transition-OUT arm above (1-f) already matches the binary.
-            // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+            // ASM-spec v1.6.1 BonusScreen::Update @0x00164074..0x0016409c (2026-07-31, direct
+            // disassembly read; downgraded from ASM-verified -- re-analyst provenance, and the
+            // enclosing block carried the port-added mHud guard removed above). Behaviour
+            // CONFIRMED: s15 = m_Timer/TIT, then `vcmpe s15,#0 / vaddmi s15,s15,1.0` -- with
+            // m_Timer < 0 the mi arm is live, so f = m_Timer/TIT + 1 (0->1), NOT the inverted
+            // -m_Timer/TIT. The transition-OUT arm above (1-f) also matches (@0x00163f58).
             float f = m_Timer / TRANSITION_IN_TIME + 1.0f;   // 0..1
             for (int k = 3; k < 6; ++k) s[k] += (0.5f - s[k]) * f;
         } else {
-            s[3] = s[4] = s[5] = 0.5f;                 // settle: hard-set
+            s[3] = s[4] = s[5] = 0.5f;                 // settle: hard-set @0x001641b0
         }
     }
 
@@ -559,6 +608,8 @@ void BonusScreen::Update(float dt) {
         m_RushLoopSFX = game_work.mGameSound->SFXPlay(
             "Bonus-drum-roll", 0.0f, 1.0f,
             Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
+        // NOTE: this null test is GENUINE -- binary @0x00163ee4..0x00163eec
+        // `ldr r0,[r4,#0xb4] / cmp r0,#0x0 / beq 0x00163ef8` guards the SetVolume(0.0).
         if (m_RushLoopSFX) {
             m_RushLoopSFX->SetVolume(0.0f);
         }
@@ -567,7 +618,12 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // Phase B: per-award reveal (0 <= timer < revealEnd)
     // -----------------------------------------------------------------------
-    // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+    // ASM-spec v1.6.1 BonusScreen::Update @0x001642f4..0x001646a0 (2026-07-31, direct
+    // disassembly read; downgraded from ASM-verified -- re-analyst provenance, and the loop
+    // body carried a port-added `if (game_work.mGameSound)` around the explosion SFX that
+    // the binary does not have). Every timing literal below re-confirmed against the
+    // constant pool (0.1f @0x001642b0, 0.2f @0x001642b4, 120.0f @0x001642c4,
+    // 182.0f @0x001642c8, SinIdx denom 0x5550 = 21840 @0x0016462c).
     // Per-award reveal timing -- TWO animation channels, both driven by
     //   ph   = fmod(m_Timer - FIRST_AWARD, TIME_PER_AWARD)  -- position within CURRENT slot
     //   FIRST_AWARD    = 0.666667f          (initial delay before award 0's slot)
@@ -607,14 +663,22 @@ void BonusScreen::Update(float dt) {
                 // slot (localFrac < 0) and after it (localFrac > 1). Not-yet-revealed
                 // rows are hidden by Draw's per-row reveal gate, NOT by alpha/score
                 // (a previous port arm zeroed m_Alpha/score pre-reveal -- wrong).
-                // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+                // ASM-spec v1.6.1 BonusScreen::Update @0x00164640..0x00164660 (2026-07-31,
+                // direct disassembly read; downgraded from ASM-verified -- re-analyst
+                // provenance). Behaviour CONFIRMED instruction-for-instruction:
+                //   mvn r3,#0x0 / strb r3,[r5,#0x53]   -> m_Colour.a = 0xFF
+                //   ldr r2,[r5,#0x40] / ldr r3,[r5,#0x44] / mul / str [r5,#0x4c]
+                //   vmov.f32 s15,0x3f800000 -> vstr [r5,#0x54]  -> m_Alpha = 1.0f
                 entry.m_Colour.a       = 0xFF;
                 entry.m_Alpha          = 1.0f;
                 entry.m_DisplayedScore = entry.m_TierBase * entry.m_Multiplier;
                 continue;
             }
 
-            // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+            // ASM-spec v1.6.1 BonusScreen::Update @0x0016434c..0x00164360 (2026-07-31, direct
+            // disassembly read; downgraded from ASM-verified -- re-analyst provenance).
+            // Behaviour CONFIRMED: vcvt.f64.f32 d0,s0 (= m_Timer - FIRST_AWARD) /
+            // vcvt.f64.f32 d1,s2 (= TIME_PER_AWARD) / bl fmod @0x0010737c / vcvt back to s14.
             float ph = fmodf(m_Timer - FIRST_AWARD, TIME_PER_AWARD);
 
             // Channel 1: text/star fade -- ramps m_Colour.a over [0s, 0.1s) of the
@@ -644,7 +708,10 @@ void BonusScreen::Update(float dt) {
 
                 // ASM-verified: 2026-07-24T00:00Z v1.6.1 BonusScreen::Update explosion SFXPlay @0x00164598 (asm-inspector)
                 // "Bonus-Explosion-%i" (i=2n+1 -> 1,3,5), (s0=0,s1=1,s2=0) => full volume, NOT silenced.
-                if (game_work.mGameSound) {
+                // No mGameSound guard: @0x00164554..0x00164568 the binary loads game_work off
+                // the GOT, reads mGameSound (+0x18c) into r3, spills it and calls SFXPlay --
+                // no cmp. Port-added guard removed.
+                {
                     char sfxName[32];
                     snprintf(sfxName, sizeof(sfxName), "Bonus-Explosion-%i", 2 * i + 1);
                     game_work.mGameSound->SFXPlay(
@@ -668,6 +735,11 @@ void BonusScreen::Update(float dt) {
 
                 PSPParticleManager& ppm = PSPParticleManager::GetInstance();
 
+                // NOTE: all three emitter null tests below are GENUINE -- the binary
+                // guards each AddEmitter result before writing m_Pos:
+                //   red   @0x00164438 `subs r3,r0,#0x0 / beq 0x00164480`
+                //   blue  @0x001644a8 `subs r3,r0,#0x0 / beq 0x001644f0`
+                //   impact@0x00164518 `subs r3,r0,#0x0` + `addne/ldmiane/stmiane` predication
                 PSPParticleEmitter* redFx = ppm.AddEmitter(StringHash("bonus_mode_fx_red"), 0, false);
                 if (redFx) {
                     // ASM-spec v1.6.1 BonusScreen::Update @0x00164440-0x00164468:
@@ -695,7 +767,11 @@ void BonusScreen::Update(float dt) {
             // award's slot, peaks ~1.155 then settles to 1.0. Consumed as the
             // value-box Draw SCALE, not an alpha (@0x16460c-0x164660; 182 = 65536/360,
             // 21840 = 120*182).
-            // ASM-verified: 2026-07-26T07:00Z v1.6.1 BonusScreen::Update @0x00163dd0 (re-analyst)
+            // ASM-spec v1.6.1 BonusScreen::Update @0x0016460c..0x00164660 (2026-07-31, direct
+            // disassembly read; downgraded from ASM-verified -- re-analyst provenance).
+            // Behaviour CONFIRMED: s15 = pool@0x001642c4 (120.0f), s14 = s16*s15;
+            // s15 = pool@0x001642c8 (182.0f), s15 = s14*s15; vcvt.s32 / uxth -> SinIdx;
+            // denominator SinIdx(0x5550 = 21840) @0x0016462c; vdiv -> vstr [r5,#0x54].
             entry.m_Alpha = Math::SinIdx((uint16_t)(cur * 120.0f * 182.0f)) /
                             Math::SinIdx((uint16_t)21840);
 
@@ -720,6 +796,12 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // No Game / mGameSound guard: @0x0016417c the binary loads mGameSound (+0x18c) from
     // the GOT-resolved game_work and calls GameSound::Release on it unguarded.
+    // NOTE: the `m_RushLoopSFX != 0` test IS GENUINE -- @0x00164160..0x00164168
+    // `ldr r1,[r4,#0xb4] / cmp r1,#0x0 / beq 0x0016418c`.
+    // DIVERGENCE (not a guard, left alone): the binary places this stop gate inside the
+    // m_AnimPos "settle" arm (0 <= m_Timer <= TOTAL_TIME) at @0x00164154, not after the
+    // per-award loop. Same observable result -- revealEnd < TOTAL_TIME, so the release has
+    // already happened before the transition-out arm can be taken.
     if (m_Timer >= revealEnd && m_RushLoopSFX != 0) {
         game_work.mGameSound->Release(m_RushLoopSFX, "Bonus-drum-roll");
         m_RushLoopSFX = 0;
@@ -732,6 +814,8 @@ void BonusScreen::Update(float dt) {
     // 0.666f, 0x001642ac = 1.166f. SetVolume takes a GAIN (vol*255 -> u8).
     // ASM-verified: 2026-07-26T04:30Z v1.6.1 BonusScreen::Update drum-roll ramp @ 0x0016423c..0x001642e4 + SetVolume(s18) @ 0x001646a4..0x001646b4 (asm-inspector)
     // -----------------------------------------------------------------------
+    // NOTE: GENUINE -- @0x001646a4..0x001646ac `ldr r0,[r4,#0xb4] / cmp r0,#0x0 /
+    // beq 0x001646b8` guards the SetVolume(s18) call.
     if (m_RushLoopSFX) {
         float ratio = m_Timer / (FIRST_AWARD + 2.0f * TIME_PER_AWARD);
         float vol = (ratio <= 0.0f) ? 0.5f
@@ -743,6 +827,25 @@ void BonusScreen::Update(float dt) {
     // -----------------------------------------------------------------------
     // Phase C: finale one-shot (timer >= revealEnd, only once)
     // -----------------------------------------------------------------------
+    // TODO: v1.6.1 0x001646b8 (BonusScreen::Update) -- the finale gate SHAPE is wrong.
+    //   The binary splits on `m_Timer > revealEnd` (@0x001646c4 ble 0x00164760) and:
+    //     * >  revealEnd arm @0x001646c8: AwardScores (bl 0x00110038) is EDGE-triggered by
+    //       `m_Timer - dt <= revealEnd` (s20 = m_Timer - dt, computed once @0x00163f14) --
+    //       there is NO m_FinaleFired (+0xb0) latch on this call at all.
+    //     * <= revealEnd arm @0x00164760: m_DisplayedScore = 0, m_NamePulseScale = 0.0f
+    //       (pool @0x00164910 == 0x00000000), and THEN the +0xb0-latched block runs:
+    //         LeaderboardManager::GetInstance @0x00113908
+    //         GetPreferredNetworkProvider    @0x001090e8
+    //         GetInstance                    @0x00103acc
+    //         RefreshLeaderboard(inst, game_work[+0x4], 3)  @0x00102c78
+    //         GetCurrentScore(0)             @0x00113704   -> += m_TotalScore
+    //         AddPlayerScore(board, (int64)total) @0x00113fa8
+    //         RefreshLeaderboard(inst, game_work[+0x4], 0) / AddPlayerScore again
+    //         then strb 1 -> +0xb0
+    //   So +0xb0 gates the DEFUNCT leaderboard submit (task #93), NOT AwardScores. The port
+    //   currently reuses it as the AwardScores latch. Practically equivalent (m_Timer is
+    //   monotonic, so the edge fires once) but the field's meaning is inverted. Left as-is:
+    //   #93 (stub the leaderboard block) is deprioritised and owns this restructure.
     float finaleStart = revealEnd;
     if (m_Timer >= finaleStart && !m_FinaleFired) {
         m_FinaleFired = true;
@@ -820,12 +923,13 @@ void BonusScreen::Update(float dt) {
 // Draw (binary @ 0x0016492c)
 // ---------------------------------------------------------------------------
 
-// ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::Draw @0x0016492c..0x00164e4c (asm-inspector)
-// ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector, fresh binary read): added the
-//   missing total-score number draw, per-row reveal gate, per-award m_Colour (not fixed palette),
-//   and corrected star icon offset to pos+(-2,+6) -- see inline notes below. Supersedes the
-//   prior (stale) verified pass for those specific sub-blocks; base-box / m_ScoreBox / m_TotalBox
-//   offset findings above are unaffected and remain correct.
+// ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c..0x00164e4c (2026-07-31, direct disassembly
+//   read). Downgraded from ASM-verified: the 2026-06-27 asm-inspector stamp predates the removal
+//   of SEVEN port-added compares from this body (pFontArcade.IsValid, m_ScoreBox, m_TotalBox,
+//   two `i < 3` clamps, m_RankLabelBoxes[i], m_RankValueBoxes[i]) plus the per-row reveal gate
+//   being ported as a `continue`-style skip instead of the binary's break-to-epilogue. The
+//   total-score number draw, per-row reveal gate, per-award m_Colour, and star icon offset
+//   pos+(-2,+6) all re-confirmed against the fresh disassembly -- see inline notes below.
 // ASM-spec v1.6.1 BonusScreen::Draw @0x00164a68 (2 independent RE passes + Bada-HLE visual
 //   ground truth, not yet asm-inspector-diffed -- a prior asm-inspector run wrongly denied this
 //   because it only checked static init of the global, not that the value is read-only
@@ -852,7 +956,12 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     // left with the boxes/rows (it lands ~+50 right of plate center, not -55 left). font =
     // game_work.pFontArcade (pM_Fonts[7], arcade_results_numbers.fnt), align 0xF, colour white.
     //   size = (m_DisplayedScore>0 ? 26 + 14*m_DisplayedScore/m_TotalScore : 26) * m_NamePulseScale.
-    if (game_work.pFontArcade.IsValid()) {
+    // No pFontArcade validity guard: @0x001649a4..0x001649a8 the binary loads the font
+    // (game_work +0x84) into r7 and calls DrawString @0x00164a5c with no cmp. The ONLY
+    // compare in this block is `ldr r3,[r4,#0x7c] / cmp r3,#0x0` @0x001649d4..0x001649e0,
+    // which selects the 26 vs 26+14*ratio size (the vmovgt/vmovle predication). Port-added
+    // guard removed.
+    {
         char totalBuf[16];
         snprintf(totalBuf, sizeof(totalBuf), "%d", m_DisplayedScore);
         float scoreScale = (m_DisplayedScore > 0)
@@ -881,7 +990,9 @@ void BonusScreen::Draw(float* hudScaleRaw) {
 
     // -----------------------------------------------------------------------
     // Pre-loop draws: "_ BONUS _" title (m_ScoreBox) + "TOTAL" label (m_TotalBox).
-    // ASM-verified: 2026-06-27T00:00:00Z v1.6.1 BonusScreen::Draw @0x0016492c (asm-inspector)
+    // ASM-spec v1.6.1 BonusScreen::Draw @0x00164a84..0x00164b20 (2026-07-31, direct disassembly
+    // read; downgraded from ASM-verified -- the prior stamp covered two port-added null guards,
+    // now removed). Offsets and the SetTranslation flag=1 re-confirmed.
     // Both boxes are static (text set once in BuildBonusText; no per-frame SetText here).
     //
     // OFFSET FIDELITY NOTE: these offsets (+105/+51 and +75/-128) are relative to the
@@ -896,22 +1007,21 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     // -----------------------------------------------------------------------
 
     // m_ScoreBox (+0xB8): "_ BONUS _" title at pos+(105,+51). SetTranslation flag=1.
-    if (m_ScoreBox) {
-        m_ScoreBox->SetTranslation(
-            _Vector3<float>(pos.x + 105.0f, pos.y + 51.0f, pos.z),
-            1
-        );
-        m_ScoreBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
-    }
+    // No null guard: @0x00164a84 `ldr r8,[r4,#0xb8]` then SetTranslation @0x00164ab8 and
+    // `ldr r0,[r4,#0xb8]` -> Draw @0x00164acc, both with no cmp. Port-added guard removed.
+    m_ScoreBox->SetTranslation(
+        _Vector3<float>(pos.x + 105.0f, pos.y + 51.0f, pos.z),
+        1
+    );
+    m_ScoreBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
 
     // m_TotalBox (+0xBC): "TOTAL" label at pos+(75,-128). SetTranslation flag=1.
-    if (m_TotalBox) {
-        m_TotalBox->SetTranslation(
-            _Vector3<float>(pos.x + 75.0f, pos.y - 128.0f, pos.z),
-            1
-        );
-        m_TotalBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
-    }
+    // No null guard: @0x00164ad4 / @0x00164b18, same shape as m_ScoreBox above.
+    m_TotalBox->SetTranslation(
+        _Vector3<float>(pos.x + 75.0f, pos.y - 128.0f, pos.z),
+        1
+    );
+    m_TotalBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
 
     // (Total-score number is drawn ABOVE, before the FIRST_NAME_OFFSET shift -- see note there.)
 
@@ -922,62 +1032,77 @@ void BonusScreen::Draw(float* hudScaleRaw) {
     //   (initial delay FIRST_AWARD=0.666667f, interval TIME_PER_AWARD=1.0f -- re-verified,
     //   struct@0x2d8c3c+0x04; see the SET_DEFINES note above).
     //   Row colour = the per-award element's OWN animated m_Colour (+0x50), NOT a fixed palette
-    //   (the prior kDrawRowColours 3-entry palette here was WRONG and has been removed).
+    //   -- re-confirmed 2026-07-31: @0x00164d00 `add r3,r7,#0x50` -> SetColour on the label box,
+    //   @0x00164d90..0x00164da0 the same +0x50 pointer -> SetColour on the value box. (The fixed
+    //   palette that DOES exist lives in BuildBonusText @0x001621fc and is overwritten here.)
+    //
+    //   Loop bound: `bl size @0x00164e2c / cmp r9,r0 / bcc` -- no `i < 3` clamp; the binary
+    //   indexes m_RankLabelBoxes/m_RankValueBoxes off a cursor (r8 += 4 per row) with no bound
+    //   check, relying on BuildBonusText's own `i <= 2` cap. Port-added `i < 3 &&` removed.
+    //
+    //   Reveal gate: @0x00164b68..0x00164b74 `vcmpe s14,s15 / bmi 0x00164e38` -- when row i is
+    //   not yet revealed the binary branches to the FUNCTION EPILOGUE, i.e. it breaks out of the
+    //   loop entirely (the pos.y row step is skipped too). Ported as `break`, which is exact:
+    //   the reveal times are monotonic in i, and pos is restored right after the loop anyway.
     // -----------------------------------------------------------------------
     MatrixManager& mm = MatrixManager::GetInstance();
     for (int i = 0; i < (int)m_Awards.size(); ++i) {
         const BonusAwardHud& entry = m_Awards[i];
 
         bool revealed = (m_Timer - FIRST_AWARD) >= (float)i * TIME_PER_AWARD;
-        if (revealed) {
-            // Star icon draw (only if texture is valid).
-            // Mirrors BSButton::Draw API: SetUnCached -> Scale44 -> GlobalTranslate44 ->
-            // SetCurrentMatrix -> UploadModelViewOnly -> DrawQuadUnCached -> UnSetUnCached.
-            if (entry.m_StarTex.IsValid()) {
-                float texW = (float)entry.m_StarTex->GetWidth();
-                float texH = (float)entry.m_StarTex->GetHeight();
+        if (!revealed) break;
 
-                entry.m_StarTex->SetUnCached();
+        // Star icon draw (only if texture is valid).
+        // NOTE: GENUINE guard -- @0x00164b78..0x00164b84
+        // `add r0,r0,#0x5c / bl SmartPtr::IsValid / cmp r0,#0x0 / beq 0x00164cb0`
+        // skips the whole star block (and only the star block) when m_StarTex is null.
+        // Mirrors BSButton::Draw API: SetUnCached -> Scale44 -> GlobalTranslate44 ->
+        // SetCurrentMatrix -> UploadModelViewOnly -> DrawQuadUnCached -> UnSetUnCached.
+        if (entry.m_StarTex.IsValid()) {
+            float texW = (float)entry.m_StarTex->GetWidth();
+            float texH = (float)entry.m_StarTex->GetHeight();
 
-                // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c-0x0016434: star icon quad is
-                // +/-0.5 centered on the translate pos, so the translate IS the star CENTER, at
-                // pos+(-35,+0) (net -140 from plate center after the -105 FIRST_NAME_OFFSET); the
-                // label sits at pos+(-2,+6) (net -107), 33px right of the star. (A prior
-                // asm-inspector pass mis-read the star translate Y as +6 -- RE confirms +0.)
-                Matrix44 mat = Matrix44::MakeScale(_Vector3<float>(texW + 1.0f, texH + 1.0f, 1.0f));
-                mat.GlobalTranslate44(_Vector3<float>(pos.x - 35.0f, pos.y, pos.z));
-                mm.GetWorldStack().SetCurrentMatrix(mat);
-                mm.UploadModelViewOnly();
+            entry.m_StarTex->SetUnCached();
 
-                Mortar::Mesh::DrawQuadUnCached(entry.m_Colour, NULL);
+            // ASM-spec v1.6.1 BonusScreen::Draw @0x0016492c-0x0016434: star icon quad is
+            // +/-0.5 centered on the translate pos, so the translate IS the star CENTER, at
+            // pos+(-35,+0) (net -140 from plate center after the -105 FIRST_NAME_OFFSET); the
+            // label sits at pos+(-2,+6) (net -107), 33px right of the star. (A prior
+            // asm-inspector pass mis-read the star translate Y as +6 -- RE confirms +0.)
+            Matrix44 mat = Matrix44::MakeScale(_Vector3<float>(texW + 1.0f, texH + 1.0f, 1.0f));
+            mat.GlobalTranslate44(_Vector3<float>(pos.x - 35.0f, pos.y, pos.z));
+            mm.GetWorldStack().SetCurrentMatrix(mat);
+            mm.UploadModelViewOnly();
 
-                entry.m_StarTex->UnSetUnCached();
-            }
+            Mortar::Mesh::DrawQuadUnCached(entry.m_Colour, NULL);
 
-            // m_RankLabelBoxes[i]: pos+(-2,+6), SetTranslation flag=0 (left-aligned).
-            // ASM-verified: v1.6.1 BonusScreen::Draw @0x164cec flag=0.
-            if (i < 3 && m_RankLabelBoxes[i]) {
-                m_RankLabelBoxes[i]->SetColour(entry.m_Colour, 0);
-                m_RankLabelBoxes[i]->SetTranslation(
-                    _Vector3<float>(pos.x - 2.0f, pos.y + 6.0f, pos.z),
-                    0
-                );
-                m_RankLabelBoxes[i]->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
-            }
-
-            // m_RankValueBoxes[i]: pos+(220,+5), SetTranslation flag=0.
-            // ASM-verified: v1.6.1 BonusScreen::Draw @0x164d7c mov r2,#0 -> flag=0.
-            if (i < 3 && m_RankValueBoxes[i]) {
-                m_RankValueBoxes[i]->SetColour(entry.m_Colour, 0);
-                m_RankValueBoxes[i]->SetTranslation(
-                    _Vector3<float>(pos.x + 220.0f, pos.y + 5.0f, pos.z),
-                    0
-                );
-                m_RankValueBoxes[i]->Draw(_Vector2<float>(entry.m_Alpha, entry.m_Alpha), 0.0f, 1);
-            }
+            entry.m_StarTex->UnSetUnCached();
         }
 
-        // Row step: pos.y -= 42 at loop tail (unconditional -- runs even for unrevealed rows).
+        // m_RankLabelBoxes[i]: pos+(-2,+6), SetTranslation flag=0 (left-aligned).
+        // ASM-verified: v1.6.1 BonusScreen::Draw @0x164cec flag=0.
+        // No null guard: @0x00164cb0 `ldr r3,[r8,#0xc0]` is used directly.
+        // Binary order is SetTranslation (@0x00164cf4) THEN SetColour (@0x00164d28).
+        m_RankLabelBoxes[i]->SetTranslation(
+            _Vector3<float>(pos.x - 2.0f, pos.y + 6.0f, pos.z),
+            0
+        );
+        m_RankLabelBoxes[i]->SetColour(entry.m_Colour, 0);
+        m_RankLabelBoxes[i]->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
+
+        // m_RankValueBoxes[i]: pos+(220,+5), SetTranslation flag=0.
+        // ASM-verified: v1.6.1 BonusScreen::Draw @0x164d7c mov r2,#0 -> flag=0.
+        // No null guard: @0x00164d40 `ldr r3,[r8,#0xcc]` used directly.
+        // Binary order is SetTranslation (@0x00164d84) THEN SetColour (@0x00164db0).
+        m_RankValueBoxes[i]->SetTranslation(
+            _Vector3<float>(pos.x + 220.0f, pos.y + 5.0f, pos.z),
+            0
+        );
+        m_RankValueBoxes[i]->SetColour(entry.m_Colour, 0);
+        m_RankValueBoxes[i]->Draw(_Vector2<float>(entry.m_Alpha, entry.m_Alpha), 0.0f, 1);
+
+        // Row step: pos.y -= 42 at loop tail (@0x00164e08..0x00164e24, AWARD_Y_DIF from
+        // tuning struct +0x14).
         pos.y += -42.0f;
     }
 

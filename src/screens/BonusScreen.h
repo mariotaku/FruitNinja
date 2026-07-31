@@ -129,8 +129,10 @@ public:
     // BuildBonusText -- v1.6.1 @0x001621dc..0x0016267b
     // Creates all BakedStringBox members (rank label/value, BONUS title, TOTAL label).
     // Called unconditionally every Update tick; the create-once latch (m_bBonusTextBuilt,
-    // +0xD8) lives INSIDE this function, not at the call site.
-    // ASM-verified: 2026-06-27T00:00Z v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (asm-inspector)
+    // +0xD8) lives INSIDE this function, not at the call site -- and the binary sets it
+    // BEFORE it touches the font (strb 1 -> +0xd8 @0x00162208).
+    // ASM-spec v1.6.1 BonusScreen::BuildBonusText @0x001621dc..0x0016267b (2026-07-31, direct
+    // disassembly read; downgraded from ASM-verified -- see the marker block in BonusScreen.cpp).
     void BuildBonusText();
 
 private:
