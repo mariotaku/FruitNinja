@@ -74,36 +74,62 @@ void FruitRay::Update(float dt) {
 
 Mortar::SmartPtr<Mortar::Texture> FruitRay::RayTexture;
 
-// ASM-verified: 2026-07-24T00:00Z v1.6.1 FruitRay::DrawRay @0x001e48b8 (asm-inspector)
-// (scale-fold m_Life*-2+3, Scale*Start*World*translate order, alpha clamp all MATCH)
+// ASM-spec v1.6.1 FruitRay::DrawRay @0x001e48b8
+// (Re-read instruction-by-instruction 2026-07-30. The previous "ASM-verified"
+// stamp is withdrawn: it only covered the 0x1e48d4-0x1e494c loop and missed
+// the seven post-loop `vstr` stores at 0x1e498c-0x1e49b0 that land INSIDE the
+// vertex array, so the port built a degenerate zero-area triangle and the
+// super-fruit rays never rendered. Restamp to ASM-verified only after an
+// asm-inspector cross-compile diff of this body.)
 //
-// Builds a 3-vertex QUADCUSTOMVERTEX strip (a thin ray "fan" -- one wide
-// vertex + two narrow ones) and draws it with the ray's world matrix.
+// Draws ONE ray: a 3-vertex QUADCUSTOMVERTEX tri-strip -- an apex at the local
+// origin widening to a 0.5-unit base one unit out along +Z.
 //
-// Per-vertex fields (confirmed from ASM @0x1e48c4-0x1e4950):
-//   pos = (0,0,0), normal = (0,0,1), colour = Colour(255,255,255,alpha).PlatformColour()
-//   where alpha = clamp(m_Life*255, 0, 255).
-//   v-coordinate (QUADCUSTOMVERTEX+0x20): vert[0] = 1.0f, vert[1]/vert[2] = 0.05f
-//   (0x3d4ccccd) -- the "thin ray fan" shape. u-coordinate (+0x1c) is left
-//   at whatever the (zero-initialised) stack held -- binary never writes it
-//   in this loop, so it is 0.0f here for parity.
+// Stack map (sub sp,#0x148): the vertex array is at sp+0x48, stride 0x24.
+//   v0 = sp+0x48  v1 = sp+0x6c  v2 = sp+0x90   (DrawTriStrip gets sp+0x48, n=3)
 //
-// Transform chain (confirmed from ASM @0x1e4958-0x1e4a18):
-//   lengthFactor = m_Life * -2.0f + 3.0f
-//   scaledVec    = scale (Entity+0x28) * lengthFactor      (_Vector3::operator*(T))
-//   m            = Scale44(scaledVec)                      -- diag-scale matrix from scaledVec
-//   m            = m * m_StartMatrix
-//   m            = m * m_WorldMatrix
-//   m.GlobalTranslate44(pos)                                (Entity+0x10)
-// TODO: asm-inspect the Vec3-taking Scale44(Vec3*, Matrix44* out) overload
-// (binary @0x0015f518 and siblings resolve to PLT thunks in the current
-// Ghidra view, not an inline body) -- port uses Matrix44::MakeScale(scaledVec)
-// as the byte-faithful equivalent (diag(sx,sy,sz,1) from a Vec3), matching
-// every other MakeScale(Vec3) call site in the port, but the exact thunk
-// target hasn't been ASM-diffed against this port body yet.
+// Loop @0x1e48d4-0x1e494c (r4 = sp+0x60 = &v[i].colour, post-inc 0x24) writes
+// the fields common to all three vertices:
+//   +0x00/04/08 x,y,z   = 0.0f   (pool 0x1e4aac = 0x00000000)
+//   +0x0c/10    nx,ny   = 0.0f
+//   +0x14       nz      = 1.0f
+//   +0x18       colour  = Colour(255,255,255,alpha).PlatformColour()
+//                         alpha = m_Life*255 via vcvt.u32.f32 (saturates <0 to 0)
+//   +0x20       v       = 1.0f for i==0 (vmoveq @0x1e490c), else 0.05f
+//                         (pool 0x1e4ab0 = 0x3d4ccccd)
+//   +0x1c       u       -- NOT written in the loop
+//
+// Post-loop @0x1e498c-0x1e49b0 -- the stores the old marker missed. Their sp
+// offsets fall inside the vertex array, so they are per-vertex overrides:
+//   sp+0x64 = v0+0x1c  v0.u =  0.5f    (0x3f000000)
+//   sp+0x6c = v1+0x00  v1.x = -0.25f   (0xbe800000)
+//   sp+0x74 = v1+0x08  v1.z =  1.0f
+//   sp+0x88 = v1+0x1c  v1.u =  0.0f    (pool 0x1e4aac)
+//   sp+0x90 = v2+0x00  v2.x =  0.25f   (0x3e800000)
+//   sp+0x98 = v2+0x08  v2.z =  1.0f
+//   sp+0xac = v2+0x1c  v2.u =  1.0f
+//
+// Transform chain (ASM @0x1e4958-0x1e4a18):
+//   lengthFactor = m_Life * -2.0f + 3.0f                    (vmla @0x1e497c)
+//   scaledVec    = scale (Entity+0x28) * lengthFactor       (bl 0x0011139c)
+//   m            = Scale44(scaledVec)                       (bl 0x00102ec4)
+//   m            = m * m_StartMatrix (+0x7c)                (bl 0x0010d580)
+//   m            = m * m_WorldMatrix (+0x3c)                (bl 0x0010d580)
+//   m.GlobalTranslate44(pos) (Entity+0x10)                  (bl 0x00106a68)
+//
+// Texture gating (@0x1e4a1c and @0x1e4a7c): the binary calls the
+// `RayTexture.ptr != 0` helper (T.788 @0x001e4890) TWICE and gates ONLY the
+// Set()/UnSet() vtable calls with it. The verts, the matrix, SetCurrentMatrix,
+// the modelview upload and DrawTriStrip all run unconditionally -- there is no
+// early return. Do not reintroduce one.
+//
+// Residual asm-verify delta after this fix is codegen-only: the port's
+// _Matrix44<T>::operator*, MakeScale, GlobalTranslate44 and
+// _Vector3<T>::operator*(T) are template-header inlines, where the binary has
+// them out-of-line behind the five `bl`s listed above. That accounts for the
+// bulk of the port-is-bigger instruction count and is not fixable from this
+// file.
 void FruitRay::DrawRay() {
-    if (!RayTexture.IsValid()) return;
-
     QUADCUSTOMVERTEX verts[3];
     for (int i = 0; i < 3; ++i) {
         verts[i].x = 0.0f;
@@ -112,13 +138,26 @@ void FruitRay::DrawRay() {
         verts[i].nx = 0.0f;
         verts[i].ny = 0.0f;
         verts[i].nz = 1.0f;
-        verts[i].u = 0.0f;
         verts[i].v = (i == 0) ? 1.0f : 0.05f;
 
+        // Binary uses vcvt.u32.f32, which saturates a negative float to 0.
+        // m_Life goes slightly negative on the frame the ray is killed, so the
+        // clamp is load-bearing; spell it out because a plain cast is UB (and
+        // wraps) on the host toolchain.
         float alpha = m_Life * 255.0f;
         Colour c(255, 255, 255, (alpha > 0.0f) ? (uint8_t)(int)alpha : 0);
         verts[i].colour = c.PlatformColour();
     }
+
+    // Per-vertex overrides -- the ray wedge. Apex at the origin sampling the
+    // middle of the texture; base edge one unit out along +Z spanning u 0..1.
+    verts[0].u =  0.5f;
+    verts[1].x = -0.25f;
+    verts[1].z =  1.0f;
+    verts[1].u =  0.0f;
+    verts[2].x =  0.25f;
+    verts[2].z =  1.0f;
+    verts[2].u =  1.0f;
 
     float lengthFactor = m_Life * -2.0f + 3.0f;
     _Vector3<float> scaledVec = scale * lengthFactor;
@@ -128,7 +167,7 @@ void FruitRay::DrawRay() {
     m = m * m_WorldMatrix;
     m.GlobalTranslate44(pos);
 
-    RayTexture->Set();
+    if (RayTexture.IsValid()) RayTexture->Set();
 
     MatrixManager& mm = MatrixManager::GetInstance();
     mm.GetWorldStack().SetCurrentMatrix(m);
@@ -136,7 +175,7 @@ void FruitRay::DrawRay() {
 
     Mortar::Mesh::DrawTriStrip(verts, 3, false, NULL);
 
-    RayTexture->UnSet(true);
+    if (RayTexture.IsValid()) RayTexture->UnSet(true);
 }
 
 // ASM-spec v1.6.1 FruitRay::DrawRays @0x001e4ac4

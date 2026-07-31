@@ -69,9 +69,13 @@ public:
     static Mortar::SmartPtr<Mortar::Texture> RayTexture;
 
     // ASM-spec v1.6.1 FruitRay::DrawRay @0x001e48b8. Per-instance render: builds
-    // a 3-vertex QUADCUSTOMVERTEX tri-fan-shaped strip (thin ray quad), binds
-    // RayTexture, uploads a world matrix built from this ray's scale/orientation,
-    // and issues one Mesh::DrawTriStrip. Called only from DrawRays() below.
+    // a 3-vertex QUADCUSTOMVERTEX tri-strip wedge -- apex at the local origin
+    // (u=0.5, v=1.0), base edge from (-0.25,0,1) to (0.25,0,1) (u=0/1, v=0.05).
+    // Binds RayTexture (both Set and UnSet are individually gated on
+    // RayTexture.IsValid(); the draw itself is NOT gated -- no early return),
+    // uploads a world matrix built from this ray's scale/orientation, and issues
+    // one Mesh::DrawTriStrip. Full stack/offset map in FruitRay.cpp.
+    // Called only from DrawRays() below.
     void DrawRay();
 
     // ASM-spec v1.6.1 FruitRay::DrawRays @0x001e4ac4. Static batch: walks every
