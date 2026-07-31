@@ -203,6 +203,12 @@
   "reason": "Port uses incremental ldrb byte scan; binary uses bulk ldm/stm + index arithmetic. Different iteration strategy, same parse result. No missing operation identified.",
   "verdict": "ACCEPT-deferred"
  },
+ "_Z11RetryUpdatef": {
+  "asm_hash": "1dbaabb4c5b59e5c",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Needs an asm-inspector compile pass -- the delta is structural, not cosmetic. The binary copies _Vector3 triples with ldm/stm and calls setters on subobjects at this+152, this+172, this+212 and +40/+28 (five CALL sites with 3-word aggregate args). The port instead walks the ActorManager type lists directly ('movw #4112' / 'movw #4124' GOT pairs, 'ldrb r,[r,#12]; tst r,#17; bne' entity-flag filter) and writes the target fields itself (vstr runs over +28..+48 and +200..+208), bypassing those setters. It also adds 'subs r,r,#0; beq' and 'tst r,#1; movne r,#1' gates with no visible binary counterpart. 21.5% LCS on 122 binary instructions is too low to file on inspection.",
+  "verdict": "FIX-NEEDED"
+ },
  "_Z11UnloadRingsv": {
   "asm_hash": "5f3526113be6e69c",
   "decided_at": "2026-07-28T13:10Z",
@@ -465,6 +471,12 @@
   "reason": "Defunct: OpenFeint -- no-op stub; src/engine/network/OpenFeint.cpp:10. Binary sets mov r0=1 and tail-calls; port body is empty.",
   "verdict": "ACCEPT-defunct"
  },
+ "_Z19ParseSlashPowerMaskPKc": {
+  "asm_hash": "5263ce3635744482",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Same as ParseSlashModColourType -- documented at src/game/SlashModifier.cpp:24-28. The binary caches six table hashes behind a __cxa_guard static local (+8 guard, hashes at +12..+32) and loops 'add r,#1; cmp r,#6; bne'; the port recomputes StringHash per name and unrolls the six comparisons (moveq #0..#5). The shared tail 'mov r,#1; lsl r,r,r; pop' (return 1<<i) and the null/empty guard are identical.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_Z19PointerDownCallbackP10InputEvent": {
   "asm_hash": "09d1c38c29050be1",
   "decided_at": "2026-06-26T00:00Z",
@@ -514,6 +526,12 @@
   "decided_at": "2026-06-26T00:00Z",
   "reason": "Defunct: social sharing -- no-op stub; src/game/Social.cpp:12. Port body is empty; binary tail-calls social registration logic.",
   "verdict": "ACCEPT-defunct"
+ },
+ "_Z23ParseSlashModColourTypePKc": {
+  "asm_hash": "0328ca8c1cbe481e",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Already documented at src/game/SlashModifier.cpp:11-13: the binary memoises the four table hashes behind a __cxa_guard static local ('ldr r,[r,#36]; tst r,#1; bne' guard byte, then 4 std::string ctors storing hashes at +40/+44/+48/+52); the port calls StringHash on every compare. StringHash is pure, so the results are identical -- only the memoisation is gone. The null/empty input guard exists on both sides ('cmp r,#0; beq' plus 'ldrb r,[r]; cmp #0; beq'), and the three 'cmp; moveq #1/#2/#3; popeq' return arms are identical.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_Z23SetCurrentModeHighscorei": {
   "asm_hash": "47c1455afb03a9ee",
@@ -573,6 +591,12 @@
   "asm_hash": "d7e9458383753f5a",
   "decided_at": "2026-06-26T00:00Z",
   "reason": "Binary accesses bM_Mode/g_unpause_game/g_unpauseDelay as game_work-struct members; port uses separate GOT globals. Different addressing, same values. Confirmed by src/screens/PauseScreen.cpp:120.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_Z9SetupQuadP16QUADCUSTOMVERTEX8_Vector3IfEffN6Mortar16MortarRectangleTIfEE6Colour": {
+  "asm_hash": "643184add609b1f1",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Two benign transforms cover the whole delta. (a) The binary calls Colour::PlatformColour(&colour) out-of-line ('mov r,#0; mov r,r; CALL'); the port inlines it, which is where the ubfx/lsr/uxtb plus orr..lsl#8/#16/#24 byte swizzle comes from (Colour to packed BGRA, src/engine/render/QuadUtil.cpp:68). (b) The binary loops 4x over the 36-byte QUADCUSTOMVERTEX stride ('add r,r,#36; cmp r,#4; bne'); the port fully unrolls to +0/+36/+72/+108. Every vertex field offset (+0,+4,+8,+12,+16,+20,+24,+28,+32) matches, the clip predication (vsubmi/vdivmi/vmovpl/vsubgt/vdivgt/vmovgt) is identical, and ble-vs-bls after vcmpe differs only on NaN operands. Aggregates are by value on both sides (src/engine/render/QuadUtil.h:31-42).",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN10BaseScreen11DrawBordersEN6Mortar8SmartPtrINS0_7TextureEEEf8_Vector3IfE": {
@@ -1288,6 +1312,12 @@
   "score": 2060,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN11AboutScreen11DrawMarqueeEv": {
+  "asm_hash": "23be1b8f2825bf30",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Sign-inverted literals -- exactly the shape feedback_asm_verify_overcorrection warns about. Binary literal pool: 0xc3a00000 = -320.0f and 0xc3d00000 = -416.0f. Port pool: 0x43a00000 = +320.0f and 0x43d00000 = +416.0f. Both sides keep 0xc33f0000 (-191.0f), 0x42860000 (67.0f) and 0x42b40000 (90.0f) unchanged, so this is not a whole-expression negation. The binary also uses vmls (Vd -= Vn*Vm) where the port uses vnmls (Vd = -Vd + Vn*Vm) on the same accumulator. The pair MAY cancel, but a marquee wrap bound flipped from -320/-416 to +320/+416 would scroll the About text the wrong way or wrap off-screen. Needs an asm-inspector pass to settle. Downgrade the stamp at src/screens/AboutScreen.cpp:872.",
+  "verdict": "FIX-NEEDED"
+ },
  "_ZN11AboutScreen11LoadContentEv": {
   "decided_at": "2026-06-18T01:24Z",
   "max_score": 6700,
@@ -1893,6 +1923,12 @@
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary ItemManager::GetFirst(__gnu_cxx::iterator<ItemInfo**>&) vs port GetFirst(int&) const. Completely different iteration protocol -- port uses int index vs binary's std::vector iterator. Fix: port ItemManager iterator API to match binary's iterator-based interface.",
   "verdict": "FIX-NEEDED"
+ },
+ "_ZN11ItemManager9EquipItemEm": {
+  "asm_hash": "263a64c2126c91fa",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "The documented inlined-std-container base+4 trap. The binary does 'add r,r,#28; str r,[r,#-12]!; CALL' -- takes &m_ItemMap (this+0x1C) and calls std::map::find out-of-line. The port inlines the _Rb_tree descent and so opens at base+4 ('add r,r,#32') then walks [r,#16]/[r,#12]/[r,#8] (_M_right/_M_left/_M_parent) -- offsetof is identical, not a layout bug. Everything after the lookup matches: the +0x14/+0x0C equipped-slot check, the 'ldrb/sxtb [r,#16]' slot byte, the 'ldr r,[r,r,lsl#2]' table index, the vtable-slot-2 UnEquip call and the 'mov r,#1' return.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11ItemManagerC1Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -3249,6 +3285,12 @@
   "score": 16000,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN12SPAWNER_INFO12GetRandCountEf": {
+  "asm_hash": "d9b896699b481cf4",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Concrete unexplained delta on a 21-vs-28 function. The binary reaches the RNG by LOADING A POINTER out of the WaveManager instance ('CALL GetInstance; mov r,r0; ldr r,[r,#32]; CALL Rand32') -- i.e. a Random* at WaveManager+0x20. The port takes the ADDRESS of an embedded member ('CALL GetInstance; mov; add r,r,#8; CALL') -- WaveManager+0x8 (src/game/WaveModifier.cpp:44, WaveManager::GetInstance()->GetRandom()). Either the offset or the indirection level is wrong. The other delta (the binary calls an out-of-line float-to-int helper twice, hence the vpush/vpop {d8}; the port inlines vcvt) is benign. Needs an asm-inspector pass on the WaveManager layout. NOTE src/game/WaveManager.cpp is dirty in the worktree. Downgrade the stamp at src/game/WaveModifier.cpp:39 -- it is (re-analyst), not asm-inspector.",
+  "verdict": "FIX-NEEDED"
+ },
  "_ZN12ScoreControl14AddMultipliyerEi": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 100,
@@ -3506,6 +3548,12 @@
   "score": 2200,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN12SlashModInfo14SlashSoundMods12GetNextSoundEv": {
+  "asm_hash": "11ca32c336619010",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Loop unrolling plus a class-nesting name mismatch. The binary rolls the tail shift-down ('ldr r,[r,r]; sub r,r,#4; sub r,r,#1; cmp #0; bgt') as a loop; the port unrolls it four ways with 'ldr r,[r],#-4 / str r,[r],#-4' pairs and an 'and r,#1' remainder guard -- the loop-rotation caveat applies, but the instruction multiset and every field offset (+0, +4, +16, +36, +40) match. Predication differences ('movgt/bgt' vs 'pople', beq vs bne on the early -1 return) are layout only. NOTE the pairing is fuzzy: the binary nests SlashSoundMods inside SlashModInfo (_ZN12SlashModInfo14SlashSoundMods...), the port declares it at global scope (_ZN14SlashSoundMods...). ABI-identical, but nesting the class would make the pairing exact.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN12SlashModInfo5ParseEP12TiXmlElement": {
   "decided_at": "2026-07-03T15:10Z",
   "max_score": 3700,
@@ -3518,6 +3566,12 @@
   "max_score": 200,
   "reason": "Port body matches binary; extra nops are alignment padding. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 660/400 -> 600/200]",
   "score": 600,
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN12SlashModInfoC1Ev": {
+  "asm_hash": "7fb90dd456a5324c",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Instruction-for-instruction the same work, reordered. All four sub-ctor calls survive on both sides at the same offsets (+132, +176, +220, +264) and every shared field store matches (+72, +76, +80, +84, +88, +92, +96, +100, +104, +108, +112, +116, +120, +124, +125, +128). The only port-side additions are strb at +89, +90, +91, +126, +127 -- the trailing bytes of 4-byte Colour/flag groups whose leading byte the binary writes alone. No gate, call-graph or offset divergence.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12SpeedControl17SoundNeedsLoopingEPN6Mortar11MortarSoundE": {
@@ -3618,6 +3672,12 @@
   "score": 5080,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN12TimeModifierC1Ev": {
+  "asm_hash": "980fe4c4e4e37744",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Inlined base-class ctor plus port-added byte init. The binary calls the GameModifier base ctor out-of-line ('mov r,r; CALL' in the prologue); the port inlines it (vtable store, +4/+8/+12 float zeroing, +0x20/+0x28/+0x30 stores). The extra strb runs at +16..19, +24..27 and +44..47 are 4-byte Colour/flag groups the port writes in full where the binary writes only the leading byte. Every shared field offset (+52, +56, +36, +32, +40, +48, +44) is identical.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN12WaveModifier13ApplyModifierEbPf": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 5500,
@@ -3693,6 +3753,24 @@
   "max_score": 2100,
   "reason": "Same as D1Ev (C1/C2 dtor alias). See _ZN12WaveModifierD1Ev reason.",
   "score": 16255,
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN13FruitFactPage17CreateSenseisHeadEf": {
+  "asm_hash": "d413af9e5709c0f8",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Same by-value-aggregate ABI rationale as the other two FruitFactPage creators. Shared anchors: 'mov r,#472; CALL' (operator new), 'mov r,#1024', 'str r,[sp]', the +40/+44 loads. The port additionally hoists a texture-valid gate ('ldr [GOT]; cmp #0; beq') into a cold tail block that the binary reaches by fallthrough. Non-collapsible per reference_vec3_copyctor_no_collapse.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN13FruitFactPage22CreateTitleTextControlEPKc": {
+  "asm_hash": "8d40845ac292d4d8",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Same rationale as CreateSenseisFruitFactText: the binary passes _Vector3/Colour by hidden pointer ('add r,sp,#N' plus out-of-line Colour ctors), the port passes them in registers and builds Colours as 4 strb re-read as one word. All shared anchors line up -- 'mov #472; CALL', 'mov #1024; str [r,#52]', 'mov #200; CALL', 'movw #270', 'mov #14', 'mov #15', and both colour literals (30/235/215/-40/-20 and 40/50/75/-55). The port adds the 'subs r,r,#0; beq' post-new null check. Non-collapsible per reference_vec3_copyctor_no_collapse.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN13FruitFactPage26CreateSenseisFruitFactTextEv": {
+  "asm_hash": "8c0a6c9218ea8e61",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Delta is dominated by the known, non-collapsible by-value-aggregate ABI (reference_vec3_copyctor_no_collapse): the binary's _Vector3/Colour parameters are non-trivially copyable, so GCC 4.4.1 spills each to a stack temp and passes a pointer ('add r,sp,#N' plus Colour ctor CALLs); the port's are trivially copyable so they ride in VFP/core registers (vstr/vldr sp+16..36, Colour built as 4 strb then read back as one word). Shared anchors match exactly: 'mov r,#472; CALL' (operator new), 'mov r,#200; CALL', 'movw r,#270', the #15/#3 stack args, the +148/+124 loads and the 116/93/59 Colour literals. The port adds a 'subs r,r,#0; beq' null-check after operator new.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN13FruitSaveData10AddToTotalEPKcmibb": {
@@ -4552,6 +4630,12 @@
   "reason": "GameOverScreen::PostCallback -- binary strb to [this,#236]=0xEC (m_PostInProgress) and [this,#237]=0xED (m_PostOk); port strb to [this,#204]=0xCC and [this,#205]=0xCD. Port 0x20=32 bytes too low. src/screens/GameOverScreen.h places m_PostOk at +0xCC but binary puts it at +0xEC. Missing 32 bytes in GameOverScreen layout between +0x7C and +0xCC. Score 4000/6 (667x).",
   "verdict": "FIX-NEEDED"
  },
+ "_ZN14GameOverScreen12PreDrawOrderEPfi": {
+  "asm_hash": "f72e44721496ab35",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Layer-gate divergence plus an unexplained extra branch. The binary gates the 0x80 block with 'cmp r,#128' (EQUALITY on the layer word); the port uses 'tst r,#128' (bit test) -- src/screens/GameOverScreen.cpp:1600, '(layerMask & HUD_LAYER_POST_ACTOR) != 0'. These agree only while callers pass exactly one layer bit. The port also adds a second 'tst r,#1; beq' branch with no binary counterpart, and a 'cmp r,#0; cmpne r,#0' double-null gate where the binary has a single 'ldr [#164]; cmp #0; beq'. The rest (by-value Colour/_Vector3 ABI, Colour built inline as 4 strb) is benign. Needs an asm-inspector pass. Downgrade the stamp at src/screens/GameOverScreen.cpp:1591.",
+  "verdict": "FIX-NEEDED"
+ },
  "_ZN14GameOverScreen12QuitCallbackEv": {
   "decided_at": "2026-06-14T07:00Z",
   "max_score": 3800,
@@ -4949,6 +5033,12 @@
   "score": 5715,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN14SuperFruitGlowC1EP5Fruit": {
+  "asm_hash": "62632c7fa6ff027f",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Needs an asm-inspector compile pass. Most of the 149-vs-112 delta is the usual inlined-ctor / by-value-aggregate pattern, but two things are NOT accounted for: (a) the binary makes a two-immediate call 'mov r,#170; mov r,#10; CALL' that has no port counterpart; (b) the port adds a gate 'ldr r,[r,#396]; cmp #0; beq' around the second emitter setup that the binary does not have, plus a 'subs r,r,#0; beq' null-check after operator new(44). Per the whole-delta rule this cannot be filed ACCEPT-cosmetic on inspection.",
+  "verdict": "FIX-NEEDED"
+ },
  "_ZN14WaveSyncPacketC1Ellf": {
   "decided_at": "2026-06-18T03:11Z",
   "max_score": 2600,
@@ -5333,6 +5423,24 @@
   "reason": "Port reloads [#468] after CALL for second arg; binary passes via register before call. Different register-spill strategy, same value. Both store 0 to [#468] twice at end.",
   "verdict": "ACCEPT-cosmetic"
  },
+ "_ZN17GenericHUDControl8AddSoundEPKcff": {
+  "asm_hash": "bd0e9945e04a0116",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Inlined std::vector::push_back. The binary builds the 24-byte sound record at sp+4 and calls out-of-line into the vector at this+124; the port builds the same record on the stack (str/vstr/strb at sp..sp+23), inlines the capacity check ('ldr [#128]; ldr [#132]; cmp; beq'), the 24-byte ldm/stm copy and the 'add #24; str [#128]' finish-pointer bump, falling back to the out-of-line grow path ('add r,r,#124; CALL') only when full. Same container offsets (+124 begin, +128 finish, +132 end_of_storage) and same record layout.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN17GenericHUDControl8SetAngleEff": {
+  "asm_hash": "c639cde9f6ba266f",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Index-trig approximation, accepted by project policy (feedback_index_trig_approximation_ok). The binary pool holds 0x43360000 = 182.0f (the rounded degrees-to-LUT-index scale) and reaches the SinIdx/CosIdx LUT; the port pool holds 0x43360b61 = 182.04445f (65536/360) plus 0x38c90fdb = pi/32768 and reaches sinf/cosf. The shared prologue stores (+0x2C, +0x1C8), the uxth index truncation, and the two ldm/stm _Vector3 writes at +408/+420 all match. vcmp vs vcmpe differs only on NaN.",
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN17GenericHUDControlC1EffN6Mortar8SmartPtrINS0_7TextureEEEP8_Vector2IfE8_Vector3IfES8_6Colouri": {
+  "asm_hash": "e02f594575e5fde1",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Whole delta is inlined subobject construction. The binary makes 9 out-of-line ctor calls at this+124/+140/+164/+188/+212/+236/+276/+316/+356 (the AnimationState/animator blocks, 24- and 40-byte strides); the port inlines all nine as a contiguous vstr run over +136..+468. The shared stores (+460, +464, +180, +208, +352, +328, +136) land at the same offsets. The rest is _Vector3/Colour by value as HFA-in-VFP vs the binary's hidden-pointer spill (known, non-collapsible -- see reference_vec3_copyctor_no_collapse) and vldr/vstr vs ldm/stm.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN17ScreenFadeControl10CancelFadeEv": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 400,
@@ -5471,6 +5579,12 @@
   "score": 6995,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN17ScrollingMenuItemD1Ev": {
+  "asm_hash": "fd26c6a936399f8a",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Small delta (27p vs 22b). The m_pText free at +0x54 is identical on both sides ('ldr [#84]; cmp #0; beq; CALL; mov #0; str [#84]'). The remainder is the port inlining Mortar::Delegate1::~Delegate1 for the member at +0x30 -- it loads the stored functor pointer ('ldr lr,[r,#48]'), dispatches through its vtable and sets the ownership byte at +0x50 -- where the binary calls that dtor out-of-line on this+48. No field-offset or gate divergence.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN17SuperFruitControl10ChangeTextEPKcbPPN6Mortar16FancyBakedStringE": {
   "asm_hash": "956eff8245d2ece1",
   "decided_at": "2026-07-29T02:30Z",
@@ -5517,6 +5631,12 @@
   "decided_at": "2026-07-28T13:30Z",
   "reason": "False-accept mined 2026-07: throw gate read m_SpinAxis.x instead of host->m_Gravity.x, and port always wrote m_TimeScale where the binary has a no-write arm (binary @0x001bca10). FIXED in 57b6a5fb. Fresh sweep should confirm. [resolved-operand pass 2026-07-28] resolution re-check: residual delta is FruitCamera::Transition/TransitionOut vs the port's StartZoomIn/StartZoomOut rename, SinIdx/CosIdx -> sinf/cosf, pow -> powf, Meyers-static PSPParticleManager, Delegate0/Delegate1 construction drift, StringHash arity. No new gap found.",
   "verdict": "MATCH-FIX-APPLIED"
+ },
+ "_ZN17SuperFruitControl8SpawnRayEv": {
+  "asm_hash": "51c403cf66722d93",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Concrete lead: the binary builds a 16-byte lookup table on the stack ('ldm r!,{4}; stmia r!,{4}; ldm r,{4}; stm r,{4}'), indexes it by the spawn counter ('ldr r,[lr,#-128]') and compares the LOADED VALUE with 3 ('cmp r,#3'). The port skips the table entirely and compares the raw masked index ('and lr,r,#7; cmp lr,#3'). Unless that table is the identity permutation the ray-variant selection differs. The binary also uses signed-modulo idioms ('ands r,#-2147483641' plus 'mvnmi ... lsl#29' for %8, and the %4 variant) where the port uses 'and #7'/'and #3' -- equivalent only for a non-negative counter. Needs an asm-inspector pass to read the table contents. NOTE src/entities/SuperFruitControl.cpp is dirty in the worktree and FruitRay is being edited concurrently -- re-check after those land (the asm_hash will restale this entry). Downgrade the stamp at src/entities/SuperFruitControl.cpp:1607.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN17SuperFruitControl9DrawOrderEPfi": {
   "asm_hash": "72b3b5a21f29abda",
@@ -6089,6 +6209,12 @@
   "score": 9372,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN3HUD4DrawEl": {
+  "asm_hash": "2870e0e446a50969",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Whole delta accounted: (a) the documented DIFFERS at src/hud/HUD.cpp:79-81 -- the port calls MatrixStack::Reset() before PreDrawOrder and before DrawOrder (the 'ldr r,[GOT]; add r,lr,#4224; add r,r,#20; CALL' pair); (b) if-conversion -- the binary emits the hudScale and identity-scale arms as two duplicated PreDrawOrder/DrawOrder blocks while the port selects the argument with 'movne' and calls once (both the +0x20 PreDrawOrder and +0x24 DrawOrder slots are present on each side); (c) inlined std::list iteration; (d) _Vector3 moved with vldr/vstr vs the binary's ldm/stm triples.",
+  "verdict": "ACCEPT-cosmetic"
+ },
  "_ZN3HUD4InitEv": {
   "asm_hash": "aa56a58df82b0fcf",
   "decided_at": "2026-07-31T01:45Z",
@@ -6478,6 +6604,12 @@
   "max_score": 12,
   "reason": "INDEX-TRIG LUT APPROXIMATION (permanent accept). Binary indexes a 4096-entry sin LUT @0x001be4a4; the port calls cosf. Output agrees to within the LUT's own quantization (sub-degree), so behaviour is equivalent, but a libm call can never byte-pair with a table index+load -- the divergence is 100% of the body and will never shrink. Pinned here rather than #if-guarded out of the cross-build: commit 22db0292 guarded the body, which did not remove the divergence, it removed the SYMBOL, silently dropping the row from the denominator. Guard reverted 2026-07-28 (#91 gutted-body audit); the accept lives here. Score 2160/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2160/1500 -> 1860/1200] [2026-07-28: ACCEPT-deferred -> ACCEPT-cosmetic; entry has no asm_hash so it re-escalates once -- re-stamp after the next run] [2026-07-28: re-stamped with the current asm_hash so the entry stops re-escalating; verdict unchanged.]",
   "score": 12000,
+  "verdict": "ACCEPT-cosmetic"
+ },
+ "_ZN4Math6Random6Rand32Em": {
+  "asm_hash": "9616e29672937fe0",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Same 19 instructions on both sides, same multiset. The port coalesces the m_Mult/m_Inc loads into 'ldmib r,{r,r}' (= [r+4],[r+8], identical fields); the rest is scheduling. The binary's movhi/movls pair vs the port's mov/movls is the IT-block rendering of the same 'it ls' sequence already documented inline at src/engine/math/Random.cpp:33-35 ('cmn r12,#3; it ls; umull.ls; mov r0,r3'). The gate (max-1 <=u 0xFFFFFFFD) and the LCG step match exactly.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN4Math6RandomC1Ev": {
@@ -7598,6 +7730,12 @@
   "score": 4500,
   "verdict": "ACCEPT-defunct"
  },
+ "_ZN6Mortar12ActorManager9GetEntityElm": {
+  "asm_hash": "e0adc73496d9146d",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Port-added guards the binary does not have, plus a signature mismatch. The binary is ActorManager::GetEntity(long, unsigned long), non-const, 29 instructions total: GOT-load the type-list array, 'lsl r,#3' index, call begin(), call end(), advance slot times, return. There is no room for -- and no trace of -- a typeIdx range check or a 'slot >= list.size()' pre-check. The port opens with 'rsbs r,r,#1; movcc r,#0; orrs r,r,r,lsr#31; beq; mov r,#0; bx lr' (the !m_pTypeLists || typeIdx<0 || typeIdx>=m_NumTypes guard at src/entities/ActorManager.cpp:408) and adds the size() pre-check. The port also declares it const and (int, size_t), mangling to _ZNK...Eij -- paired only fuzzily. The inlined std::list walk explains the rest of the 63-vs-29 delta. Confirm with asm-inspector that the guards are genuinely absent before removing them. Downgrade the stamp.",
+  "verdict": "FIX-NEEDED"
+ },
  "_ZN6Mortar12ActorManagerC1Ev": {
   "asm_hash": "e7fa860f19203464",
   "decided_at": "2026-07-31T01:45Z",
@@ -8004,6 +8142,24 @@
  "_ZN6Mortar14BakedStringBox9SetShadowEf6Colour8_Vector3IfEi": {
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary BakedStringBox::SetShadow(float, Colour, Vec3, int) vs port (float, Colour, Vec3, bool). Last param int->bool. Fix: change port last param from bool to int.",
+  "verdict": "FIX-NEEDED"
+ },
+ "_ZN6Mortar14BakedStringBox9SetStrokeEf6Colour": {
+  "asm_hash": "05e7f4e31b76df7c",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Signature/ABI mismatch, cheap fix. Binary: SetStroke(float, Colour) -- Colour BY VALUE (mangled Ef6Colour; it spills to sp+4 and compares the whole 4-byte Colour as one word: 'ldr r,[r,#92]; ldr r,[r]; cmp'). Port: SetStroke(float, const Colour&) (EfRK6Colour, src/engine/render/BakedStringBox.h:197) -- paired only by fuzzy name. The rest of the delta is benign: the port compares the Colour component-by-component (4x ldrb at +92..+95 vs one word load) and inverts the cold-block layout (beq/bne). Change the 3 SetStroke overloads to take Colour by value. The stamp at src/engine/render/BakedStringBox.cpp:758 cites no symbol -- downgrade.",
+  "verdict": "FIX-NEEDED"
+ },
+ "_ZN6Mortar14BakedStringBox9SetStrokeEf6ColourS1_": {
+  "asm_hash": "6f0a6ae4f6de0c09",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Same as the 1-colour overload: the binary takes Colour BY VALUE (Ef6ColourS1_), the port takes const Colour& (EfRK6ColourS3_, src/engine/render/BakedStringBox.h:198). Remainder is packed-word vs 4x ldrb component compare (+92..95, +96..99) and block-layout inversion -- semantically identical. The stamp at src/engine/render/BakedStringBox.cpp:770 cites no symbol -- downgrade.",
+  "verdict": "FIX-NEEDED"
+ },
+ "_ZN6Mortar14BakedStringBox9SetStrokeEf6ColourS1_S1_": {
+  "asm_hash": "b26fc5624345f972",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Same as the other two overloads: the binary takes Colour BY VALUE (Ef6ColourS1_S1_), the port takes const Colour& (EfRK6ColourS3_S3_, src/engine/render/BakedStringBox.h:199). Remainder is packed-word vs 4x ldrb component compare (+92..95, +96..99, +100..103) and block-layout inversion. The stamp at src/engine/render/BakedStringBox.cpp:785 cites no symbol -- downgrade.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar14BakedStringBoxC1EPNS_18FontCacheObjectTTFEfiiNS_14ALIGNMENT_TYPEEii": {
@@ -8414,6 +8570,12 @@
   "decided_at": "2026-07-01T00:00Z",
   "reason": "sig-mismatch: binary StartNewsRender(SmartPtr<Texture> const&, Font*) vs port (void*, void*). Defunct OpenFeint news renderer; port stubs with void* to avoid pulling in unported types.",
   "verdict": "ACCEPT-defunct"
+ },
+ "_ZN6Mortar22BakedStringTTF_Surface10FinishMeshEv": {
+  "asm_hash": "5b8872fc7908d90a",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Wrong-class port + fuzzy pairing. The binary symbol is Mortar::BakedStringTTF_Surface::FinishMesh() -- a member of the SURFACE with no arguments (this = the surface). The port implements Mortar::BakedStringTTF::FinishMesh(BakedStringTTF_Surface*) -- a member of the OUTER class taking the surface as a parameter. asm-verify paired them by fuzzy name, so every this-relative offset in the diff is shifted and the 176521 score is largely a pairing artifact. Fix the pairing first (move FinishMesh onto BakedStringTTF_Surface, per feedback_preserve_functions), then re-score. Real leads that survive: the port writes 8 floats per 36-byte vertex (+4,+8,+12,+16,+20,+28,+32,+36) where the binary writes 3 (+4,+28,+32) plus the packed colour, and the port indexes the glyph array ('ldr r,[r,r,lsl#2]') where the binary post-increments a pointer ('ldr r,[r],#4'). Downgrade the stamp at src/engine/render/BakedStringTTF.cpp:363.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar22BakedStringTTF_Surface12UpdateBoundsEv": {
   "asm_hash": "65a9ff800c9fa2eb",
@@ -9256,6 +9418,12 @@
   "score": 26000,
   "verdict": "ACCEPT-deferred"
  },
+ "_ZN7ListBox6UpdateEf": {
+  "asm_hash": "e14a36ae8f2aa479",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Real divergence, two parts. (1) The binary's held-touch-slot state is the INT at +0xC8 ('ldr r,[r,#200]; cmn r,#1' / 'str r,[r,#200]' / 'strne r,[r,#200]'); the port instead stores the slot as a FLOAT in m_TouchX at +0xCC ('vldr [#204]; vcmpe #0.0', 'vcvt' + 'vstr [#204]'), round-tripping through vcvt and leaving +0xC8 (m_ActiveTouchId) vestigial -- see src/hud/ListBox.h:122-127. (2) Because m_TouchX is overloaded as the slot, the port loses the binary's horizontal band check on release: the binary range-checks BOTH the stored touch X at +0xCC and Y at +0xD0 against [left,right]/[bottom,top] (two vcmpe/blt/bhi pairs); the port checks only Y (src/hud/ListBox.cpp:236). Also the binary truncates the row index with 'uxth' (unsigned short, no clamp) where the port clamps negatives via 'bic r,r,r,asr#31'. The ASM-verified stamp at src/hud/ListBox.cpp:204 is (re-analyst), not asm-inspector -- downgrade it.",
+  "verdict": "FIX-NEEDED"
+ },
  "_ZN7PowerUp10DeactivateEb": {
   "decided_at": "2026-06-14T05:55Z",
   "max_score": 5200,
@@ -9345,6 +9513,12 @@
   "reason": "Port uses std::list iteration (_ZdlPv loop for modifier list); binary used intrusive linked-list traversal. See src/game/PowerUp.cpp:97-103. Score 5195/4500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 5200/4500 -> 5415/4700]",
   "score": 5415,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN7PowerUp8ActivateEbb8_Vector3IfEPf": {
+  "asm_hash": "b228f4f9cd177e9c",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Whole delta is the two DIFFERS already documented at src/game/PowerUp.cpp:189-192 -- (a) _Vector3 passed HFA-in-VFP (port vstr/vldr sp+4..24 plus an ldm/stm copy) vs the binary's hidden-pointer by-value spill, which also removes the binary's 'ldr [sp,#56]' stack-arg load; (b) ApplyModifier via port vtable +0x20 ('ldr r,[lr,#32]') vs binary +0x14 ('ldr r,[r,#20]') -- plus SmartPtr::IsValid + std::list iterator inlining and cold-block inversion (bne<->beq at m_bApplied +0x18: the port branches TO the out-of-line apply block, the binary branches PAST it). The shared AddCoins(-cost) path (+148/+4/rsb) is identical.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN7PowerUpC1EPS_": {
   "decided_at": "2026-06-14T05:55Z",
@@ -9539,6 +9713,12 @@
   "reason": "New symbol (TiXmlElement signature match). Score 35745/18400. [auto-triaged 2026-06-18T02:22Z]",
   "score": 35745,
   "verdict": "ACCEPT-deferred"
+ },
+ "_ZN8ItemInfoC2Ev": {
+  "asm_hash": "8020faaf63a62a9e",
+  "decided_at": "2026-07-31T13:40Z",
+  "reason": "Inlined 4-byte Colour ctors + port-added padding zeroing. Binary makes 3 out-of-line Colour ctor/copy-ctor calls for m_Colour1(+0x34)/m_Colour2(+0x38); the port inlines them as 4 strb + 1 str. The 12 extra strb at +17..19/+37..39/+61..63/+69..71 are the port's explicit _pad11/_pad25/_pad3d/_pad45 zeroing (src/game/ItemInfo.cpp:57-60), which the binary leaves uninitialised -- harmless, and it accounts for the rest of the delta. No CALL/gate/offset divergence.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN9BombBlast10DrawUpdateEf": {
   "decided_at": "2026-06-14T05:55Z",
