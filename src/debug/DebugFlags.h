@@ -141,6 +141,16 @@ void DebugText_Overlay(float anchorX, float anchorY,
 // text path as the FPS counter. Returns null until the font loads.
 Mortar::FontCacheObjectTTF* DebugFontTTF_Get();
 
+// Port specific: release the lazily-created fonts this TU owns -- the bitmap
+// "fonts/verdana.fnt" used by DebugHUDBounds_Draw's labels, and the
+// gangofchinese.ttf face plus its baked FPS string. Call it from GameDestroy's
+// port-only release block, i.e. while the GL context is still alive: these
+// statics would otherwise be destroyed at atexit, after SDL_GL_DeleteContext,
+// leaking their GL textures and FontInterface objects. Idempotent, and every
+// slot is rebuilt lazily on the next draw, so calling it mid-session only costs
+// one reload. Does not touch the debug flags themselves.
+void DebugFlags_ReleaseResources();
+
 } // namespace FN
 
 #else // __bada__
@@ -166,6 +176,7 @@ inline void DebugText_Overlay(float, float,
                                float, float, float, float,
                                bool,
                                float, float, float, float) {}
+inline void DebugFlags_ReleaseResources() {}
 } // namespace FN
 
 #endif // !__bada__

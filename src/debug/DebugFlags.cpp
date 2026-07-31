@@ -719,6 +719,22 @@ void DebugBladeTrails_Draw() {
     }
 }
 
+// Port specific: drop every lazily-created font object this TU owns so their
+// GL handles die while the context is still live. Contract in DebugFlags.h.
+void DebugFlags_ReleaseResources() {
+    // s_FpsBaked points into s_FpsFontCache, which FontTTFRegistry destroys
+    // together with s_FpsTTFFont -- delete it first, then drop the cache
+    // pointer and the rebuild sentinel so EnsureFpsFontCache/DebugFps_Draw
+    // rebuild from scratch on the next draw.
+    delete s_FpsBaked;
+    s_FpsBaked     = 0;
+    s_FpsLastInt   = -1;
+    s_FpsFontCache = 0;
+    s_FpsTTFFont.SetNull();
+
+    s_DebugFont.SetNull();
+}
+
 } // namespace FN
 
 #endif // !__bada__

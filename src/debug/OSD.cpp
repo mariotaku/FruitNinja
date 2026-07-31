@@ -113,6 +113,12 @@ const char* OSD_AddMessage(const char* s) {
     return s;
 }
 
+// Port specific: drop the lazily-created font so its GL handles die while the
+// context is still live. OSD_Draw re-creates it on the next draw.
+void OSD_ReleaseResources() {
+    s_OsdFont.SetNull();
+}
+
 // Port specific: age + compact. Expired slots drop and the survivors slide
 // up so 0..s_MsgCount-1 stays dense (newest first).
 void OSD_Update(float dt) {

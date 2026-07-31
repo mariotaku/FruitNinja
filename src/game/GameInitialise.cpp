@@ -69,6 +69,8 @@
 #include "util/StringHash.h"
 #include "debug/Logger.h"
 #include "debug/GLHandleLeakCheck.h"
+#include "debug/DebugFlags.h"   // FN::DebugFlags_ReleaseResources
+#include "debug/OSD.h"          // OSD_ReleaseResources
 #include <cstdlib>
 #include <ctime>
 #include <string>
@@ -756,6 +758,15 @@ void GameDestroy() {
     // for m_AllBonuses at all (ClearBestBonuses @0x000feb20 only clears
     // m_BestBonuses), so the singleton hands them to atexit. See BonusManager.h.
     BonusManager_UnloadTextures();
+
+    // Port specific: the debug overlays (OSD toasts, hitbox labels, FPS counter)
+    // hold their fonts in file-scope statics with no binary counterpart at all.
+    // Same ordering problem as the blocks above: their destructors run at atexit,
+    // after SDL_GL_DeleteContext, so the font atlas pages leak their GL names.
+    // Both hooks are no-ops on the __bada__ cross-build and rebuild lazily on the
+    // next debug draw.
+    OSD_ReleaseResources();
+    FN::DebugFlags_ReleaseResources();
 
     // Faithful counterparts that simply had no port call site. FruitFactZenPage's
     // is binary-exact (@0x0017fb00 = 2 SmartPtr nulls + guard byte); the five

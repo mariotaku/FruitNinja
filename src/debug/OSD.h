@@ -57,6 +57,15 @@ void OSD_Update(float dt);
 // game ortho itself via Renderer::SetupGameOrtho, same as DebugFps_Draw.
 void OSD_Draw();
 
+// Port specific: release the lazily-created bitmap font ("fonts/verdana.fnt").
+// Call it from GameDestroy's port-only release block, i.e. while the GL context
+// is still alive -- the static SmartPtr would otherwise be destroyed at atexit,
+// after SDL_GL_DeleteContext, leaking the atlas page's GL texture and its
+// FontInterface. Idempotent; OSD_Draw re-creates the font on the next draw, so
+// calling this mid-session only costs one reload. Does NOT clear the message
+// store (use OSD_Init for that).
+void OSD_ReleaseResources();
+
 #else // __bada__
 
 // Port specific: the toast system does not exist on the cross-build target.
@@ -64,6 +73,7 @@ inline void OSD_AddMessage(const char*, float) {}
 inline void OSD_AppendToLast(const char*) {}
 inline void OSD_Update(float) {}
 inline void OSD_Draw() {}
+inline void OSD_ReleaseResources() {}
 
 #endif // !__bada__
 
