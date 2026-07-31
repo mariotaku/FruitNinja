@@ -1,4 +1,9 @@
 #include <SDL.h>
+#if defined(FRUIT_PLATFORM_WEBOS)
+// SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK. Ships with the webOS buildroot SDK's
+// SDL2 (SDL-webOS 2.30.12); absent from stock upstream SDL2, hence the gate.
+#include <SDL_webOS.h>
+#endif
 #include "config.h"
 #include "render/gl_funcs.h"
 #include "Game.h"
@@ -152,6 +157,21 @@ int main(int argc, char* argv[]) {
     // We want exactly one touch per physical pointer action: mouse is
     // converted to touch (one-way) and the input path is touch-only.
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: claim the TV remote's Back key for the app.
+    //
+    // webOS routes Back to the system by default -- the launcher closes the app
+    // and SDL never sees a key event. SDL-webOS reads this hint when it creates
+    // the shell surface and, when set, sets the Wayland surface property
+    // "_WEBOS_ACCESS_POLICY_KEYS_BACK" = "true" (SDL_waylandwebos.c, webOS-2.30.x),
+    // which makes LSM deliver Back to us as a normal SDL_KEYDOWN instead.
+    // Must be set before the window is created (see FN_SCANCODE_WEBOS_BACK in
+    // GameSDL.cpp for the receiving end).
+    //
+    // Deliberately NOT done for the Exit key: Exit must keep closing the app.
+    SDL_SetHint(SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK, "true");
+#endif
 
     // Port specific: route SDL_Log output to stdout (see FnSdlLogToStdout above).
     // Registered as early as possible so every subsequent SDL log goes through it.

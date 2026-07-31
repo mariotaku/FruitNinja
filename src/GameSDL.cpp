@@ -39,6 +39,50 @@
     #include <sys/stat.h>    // mkdir on POSIX / Emscripten
 #endif
 
+#if defined(FRUIT_PLATFORM_WEBOS)
+// Port specific: scancode the webOS TV remote's Back key arrives on.
+//
+// Value 482, cross-checked in three places, all agreeing:
+//   - the buildroot SDK's SDL2 2.30.12 headers -- SDL_WEBOS_SCANCODE_BACK in
+//     <SDL_webOS.h>;
+//   - webosbrew/SDL-webOS @ webOS-2.30.x -- SDL_SCANCODE_WEBOS_BACK in
+//     <SDL_scancode.h>;
+//   - webosbrew/SDL-webOS @ webOS-2.28.x -- same, same value.
+//
+// Spelled as a local literal rather than either upstream name on purpose: the
+// symbol NAME and the header it lives in move between SDL-webOS snapshots
+// (SDL_webOS.h in the 2.30.12 the SDK ships, SDL_scancode.h at branch HEAD),
+// while the NUMBER has never moved. Comparing the number can't break when the
+// build headers and the TV's system libSDL2 are different snapshots -- the
+// same runtime-older-than-headers hazard fn_wheel_caps() below guards against.
+//
+// The webOS scancodes are purely additive: they occupy 340-505, which stock
+// SDL2 leaves unused. No standard scancode shifts (SDL_SCANCODE_AC_BACK is 270
+// and SDL_NUM_SCANCODES is 512 in both stock and fork), so there is no scancode
+// ABI break to work around here.
+#define FN_SCANCODE_WEBOS_BACK 482
+#endif
+
+// Port specific: is this key press a "back" request?
+//
+// The binary has no back-key concept at all to be faithful to -- Bada's only
+// key listener is GlesForm::OnKeyPressed @0x001f0a84, which handles just
+// KEY_SIDE_UP/KEY_SIDE_DOWN for master volume and never tests KEY_CLEAR (the
+// Wave hardware Back key). So both keys below are port additions, and desktop
+// ESC is the behaviour reference for the TV remote's Back.
+static bool fn_is_back_key(const SDL_Keysym& ks) {
+    if (ks.sym == SDLK_ESCAPE) return true;
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Cast because 482 is outside the stock SDL_Scancode enum's named range.
+    // NOT also accepting SDL_SCANCODE_AC_BACK (270): that is the browser-back
+    // key of an attached keyboard, a different button. The TV remote's Back
+    // arrives as 482 -- LG's own libSDL2 emits it, which is where the webosbrew
+    // fork's value was RE'd from (keyboard_handle_key).
+    if ((int)ks.scancode == FN_SCANCODE_WEBOS_BACK) return true;
+#endif
+    return false;
+}
+
 // Port specific: SDL_GL_GetDrawableSize isn't present on some older webOS TVs'
 // system SDL2 (webosbrew-elf-verify flagged it as an unresolved import). On
 // webOS, drawable size == window size (no HiDPI on a TV panel), so
@@ -401,9 +445,19 @@ void Game::pollInput() {
                     }
                 }
             }
-        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE) {
-            // Port specific: ESC-as-back (no binary counterpart -- the
-            // binary is touch-only Bada hardware with no keyboard).
+        } else if (ev.type == SDL_KEYDOWN && fn_is_back_key(ev.key.keysym)) {
+            // Port specific: ESC-as-back on desktop, and the TV remote's Back
+            // key on webOS (see fn_is_back_key above). No binary counterpart --
+            // the binary is touch-only Bada hardware and its one key listener
+            // handles volume only.
+            //
+            // At the root screen (MainScreen) this is what exits the app, and
+            // it does so through the binary's own quit chain rather than a
+            // port-side shortcut: MainScreen arms m_bBackdropActive on its QUIT
+            // fruit (@0x00196a5c), so HasActiveBackBomb() is true there and the
+            // RegressMenuCallback path below force-slices that fruit ->
+            // QuitGamesCallback (v1.6.1 @0x00196024) -> SystemManager::RequestQuit.
+            // That matches the webOS convention of Back-at-root closing the app.
             //
             // taskStateIndex alone can't distinguish menu vs. live round: State 1
             // (Frontend) is dead code (FrontendTask.cpp / SplashTask.cpp both jump
@@ -445,7 +499,7 @@ void Game::pollInput() {
                     }
                 }
             }
-            // taskStateIndex == 0 (splash): ESC does nothing.
+            // taskStateIndex == 0 (splash): back does nothing.
             // taskStateIndex == 1 (Frontend): dead code, never reached in v1.6.1.
         } else if (ev.type == SDL_WINDOWEVENT &&
                    (ev.window.event == SDL_WINDOWEVENT_FOCUS_LOST ||
