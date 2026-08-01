@@ -18,6 +18,7 @@
 #include "Game.h"
 #include "hud/TimeControl.h"
 
+#include <cstdio>
 #include <cstring>
 #include <cctype>
 #include "game/GameWork.h"
@@ -205,10 +206,18 @@ void AchievementManager::LoadAchievementInfo() {
         info->m_IsGameOver = (isGameOverVal == 1);
 
         // texture
+        // ASM-spec v1.6.1 LoadAchievementInfo @0x00118198: the "texture" attribute is a
+        // BARE name ("over_achiever"); the binary appends the extension itself --
+        //   _OS_snprintf(buf, 0x100, "%s.tex", Attribute("texture"))
+        //   LoadLocalisedTexture(buf)
+        // -- and does it unconditionally (every entry in achievementList.xml carries the
+        // attribute). Passing the bare name straight to LoadLocalisedTexture asked for
+        // "textures/over_achiever", which File::Exists rejects, so EVERY achievement got
+        // an empty SmartPtr and the unlock notification drew no icon.
         const char* texAttr = e.Attribute("texture");
-        if (texAttr) {
-            info->m_Texture = TextureManager::LoadLocalisedTexture(texAttr);
-        }
+        char texPath[256];  // binary's 0x100 snprintf bound
+        snprintf(texPath, sizeof(texPath), "%s.tex", texAttr);
+        info->m_Texture = TextureManager::LoadLocalisedTexture(texPath);
 
         // Insert into m_All (owning map)
         m_All[idHash] = info;

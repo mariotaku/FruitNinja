@@ -150,21 +150,13 @@ int main(int argc, char* argv[]) {
         pickedHash = it->first;
         a = it->second;
     } else {
-        // Pick the first entry with a valid icon texture (m_All.begin() is
-        // BAMBOO_BLADE whose icon fails to load -> popup renders with no badge).
+        // First entry in load order. Every achievementList.xml entry carries a
+        // "texture" attribute and LoadAchievementInfo now appends ".tex" the way
+        // the binary does, so the icon is always valid -- no scan needed. (This
+        // used to scan for a valid-icon entry and warn when none was found, which
+        // masked the missing-extension bug in LoadAchievementInfo.)
         pickedHash = am->m_All.begin()->first;
         a = am->m_All.begin()->second;
-        for (std::map<uint32_t, AchievementInfo*>::iterator it = am->m_All.begin();
-             it != am->m_All.end(); ++it) {
-            if (it->second->m_Texture.IsValid()) {
-                pickedHash = it->first;
-                a = it->second;
-                break;
-            }
-        }
-        if (!a->m_Texture.IsValid()) {
-            std::printf("[achievement/unlock] NOTE: no entry has a valid icon texture; falling back to first entry\n");
-        }
     }
     std::printf("[achievement/unlock] picked id-hash=0x%08x id=\"%s\" name=\"%s\" lang=%s score=%d icon-valid=%d\n",
                 pickedHash, a->m_Name, a->m_DisplayName, langArg, a->m_Score, a->m_Texture.IsValid() ? 1 : 0);
