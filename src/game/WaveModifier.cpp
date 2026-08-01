@@ -36,14 +36,25 @@ void SPAWNER_INFO::SelectTypes() {
     }
 }
 
-// ASM-verified: 2026-07-06 v1.6.1 SPAWNER_INFO::GetRandCount @0x0012df30 (re-analyst).
+// ASM-spec v1.6.1 SPAWNER_INFO::GetRandCount @0x0012df30.
 // Random spawn count in [lo,hi]. lo/hi grow with the wave revisit counter; the low
 // bound uses m_MinGrowthInc (+0x3c, unwritten by Init -> 0), the high bound m_GrowthInc (+0x44).
+// BOTH bounds are floored at 0 AFTER the float->int truncation and BEFORE the
+// subtraction: the binary calls a `bic r0,r0,r0,asr #0x1f` helper @0x0012df28
+// (an inlined Max(x,0)) on each. Dropping the floors lets a negative lo widen
+// `range`, which draws a different Rand32 value and shifts the whole RNG stream.
 int SPAWNER_INFO::GetRandCount(float waveRevisitCounter) {
     int lo = (int)(m_SpawnMin + waveRevisitCounter * m_MinGrowthInc);
+    if (lo < 0) lo = 0;
     int hi = (int)(m_SpawnMax + waveRevisitCounter * m_GrowthInc);
+    if (hi < 0) hi = 0;
     int range = hi - lo;
     if (range < 1) return lo;
+    // DIFFERS: original reads the Random through the WaveManager+0x20 pointer
+    //   (`ldr r0,[r0,#0x20]` @0x0012df8c); the port reaches the same object as an
+    //   embedded member at +0x08 -- see the WaveManager.h DIFFERS on m_Random.
+    //   Same object, same stream: WaveManager::Reset @0x0012ba78 seeds exactly
+    //   this one from the global g_Random, which the port mirrors.
     return lo + (int)WaveManager::GetInstance()->GetRandom().Rand32((uint32_t)range);
 }
 

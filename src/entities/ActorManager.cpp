@@ -404,15 +404,24 @@ Entity* ActorManager::GetEntityNext(int typeIdx, std::list<Entity*>::iterator& i
     return *it;
 }
 
-// v1.6.1 ActorManager::GetEntity @0x001d30d4.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntity @ 0x001d30d4 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetEntity @0x001d30d4 (29 instructions):
+//   r5 = typeIdx << 3 (std::list is 8 bytes); the body indexes
+//   m_pTypeLists[typeIdx] (ldr [this,#0x1010] + r5) twice -- once for begin(),
+//   once for end() -- then walks the list counting up to `slot` and returns *it.
+//   Falling off the end returns 0 (the loop exits on operator!= == false and
+//   that same 0 is the return value, @0x001d3140/@0x001d3144).
+// There is NO typeIdx range check, NO m_pTypeLists null check and NO
+// `slot >= size()` pre-test in the binary -- an earlier port pass added all
+// three, which cannot fit in the 29-instruction body.
 Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
-    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
-    if (slot >= list.size()) return nullptr;
-    std::list<Entity*>::iterator it = list.begin();
-    std::advance(it, slot);
-    return *it;
+    std::list<Entity*>::iterator it  = list.begin();
+    std::list<Entity*>::iterator end = list.end();
+    size_t i = 0;
+    for (; it != end; ++it, ++i) {
+        if (i == slot) return *it;
+    }
+    return nullptr;
 }
 
 // v1.6.1 ActorManager::GetEntityIdx @0x001d3044.

@@ -1604,17 +1604,25 @@ void SuperFruitControl::StopRays()
     }
 }
 
-// ASM-verified: 2026-07-24T00:00Z v1.6.1 SuperFruitControl::SpawnRay @0x001ba810 (asm-inspector)
-// (Z/Y/X axis assignment, deg*182 brad conversion, qz*qy*qx order all MATCH). Spawns one
-// type-6 FruitRay entity, oriented by a pseudo-random quaternion built from
-// three axis-aligned rotations: the file-static `rayNum` counter cycles the
-// elevation band (8-way, low/high split at rayNum&7 < 4) and the quadrant
-// (rayNum&3) that seeds the heading sweep.
+// ASM-spec v1.6.1 SuperFruitControl::SpawnRay @0x001ba810.
+// (Z/Y/X axis assignment, deg*182 brad conversion, qz*qy*qx order all MATCH.)
+// Spawns one type-6 FruitRay entity, oriented by a pseudo-random quaternion built
+// from three axis-aligned rotations. The file-static `rayNum` counter does NOT feed
+// the elevation/quadrant maths directly: it indexes a const 8-entry order table
+// (@0x002837A0, copied onto the stack by the two `ldmia r4,{r0,r1,r2,r3}` blocks
+// @0x001ba858/@0x001ba874), and the LOADED VALUE is what gets compared to 3
+// (`ldr r4,[lr,#-0x80]; cmp r4,#0x3` @0x001ba890) and masked for the quadrant
+// (`ands r4,r4,#0x80000003` @0x001ba8a4). The table interleaves the bands so
+// consecutive rays alternate low/high and skip a quadrant; an earlier port pass
+// used the raw `rayNum & 7` index for both, which fanned the rays wrongly.
 void SuperFruitControl::SpawnRay()
 {
+    // Const order table @0x002837A0 (v1.6.1 .rodata).
+    static const int kRayOrder[8] = { 1, 3, 5, 7, 2, 4, 0, 6 };
+
     static int rayNum = 0;
     rayNum++;
-    int i = rayNum & 7;
+    int i = kRayOrder[rayNum & 7];
 
     float yLo = 5.0f, yHi = 70.0f;
     if (i < 4) { yLo = -35.0f; yHi = -5.0f; }

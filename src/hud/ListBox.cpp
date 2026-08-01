@@ -54,12 +54,13 @@ ListBox::ListBox(_Vector3<float> inPos, _Vector3<float> inSize, std::vector<std:
     , m_CellHeight(0.0f)
     , m_OnSelect()
     , m_ActiveTouchId(-1)
-    // DIFFERS: original m_TouchX sentinel is -NaN (0xFFC00000). The port uses
-    //   -1.0f as the "no held slot" marker -- observable-equivalent on the dead
-    //   touch path, and avoids NaN-compare portability quirks.
-    , m_TouchX(-1.0f)
+    // Port specific: the binary ctor writes only m_ActiveTouchId(+0xC8) = -1 and
+    // leaves the +0xCC..+0xD7 finger record indeterminate. Zeroing is safe --
+    // Update only reads it while a slot is held, and UpdateTouchPosition
+    // overwrites the whole 12-byte block on every held frame.
+    , m_TouchX(0.0f)
     , m_TouchY(0.0f)
-    , _padD4(0.0f)
+    , m_TouchPhase(0.0f)
     , m_VisibleRows(visibleRows)
     , m_SelectedRowColour(0, 0, 255, 255)                             // binary literal default; see header
     , m_HoverRowColour(0x50, 0x96, 0xFF, 0xFF)                        // binary literal default; see header
@@ -200,60 +201,90 @@ void ListBox::Draw(float* hudScaleRaw) {
 }
 
 // ---------------------------------------------------------------------------
+// Row index under a given Y, as the binary computes it three times inline in
+// Update (@0x00194360, @0x00194420, @0x001944b8):
+//   vdiv (top - y) / rowH -> vcvt.u32.f32 -> uxth -> (+ scroller->m_CurrentValue -> uxth)
+// vcvt.u32.f32 rounds toward zero and SATURATES, so a y above `top` yields
+// row 0 rather than a negative index; uxth then keeps the low 16 bits.
+static uint32_t ListBoxRowIndex(float top, float y, float rowH, const VerticalScroller* scroller) {
+    float f = (top - y) / rowH;
+    uint32_t idx;
+    if (!(f > 0.0f))                 idx = 0u;               // saturate negatives / NaN to 0
+    else if (f >= 4294967296.0f)     idx = 0xFFFFFFFFu;      // saturate overflow
+    else                             idx = (uint32_t)f;
+    idx &= 0xFFFFu;                                          // uxth
+    if (scroller) {
+        idx = (idx + (uint32_t)scroller->m_CurrentValue) & 0xFFFFu;
+    }
+    return idx;
+}
+
+// ---------------------------------------------------------------------------
 // vtable slot 10 -- Binary @ 0x00194298
-// ASM-verified: 2026-07-11 v1.6.1 ListBox::Update @ 0x00194298 (re-analyst)
-//   Hover: when the live world touch (game_work.worldPos, +0x94/+0x98) is inside
-//   the row band, m_HoverIt = begin() + scrollOfs + clamp((top - worldPos.y) / rowH, 0).
-//   On tap-release inside a row, m_TopVisibleIt = begin() + scrollOfs + that row
-//   and m_OnSelect() fires (Delegate0 @ +0xA4).
-//   scrollOfs = m_pScroller ? m_pScroller->m_CurrentValue : 0 -- the port
-//   previously omitted this add, so a scrolled list always committed/hovered the
-//   row at the TOP of the visible window instead of the one under the finger.
+// ASM-spec v1.6.1 ListBox::Update @ 0x00194298:
+//   left/right = pos.x -/+ m_CellWidth*0.5, top = pos.y + rowH*0.5,
+//   bottom = (pos.y - rowH*0.5) - rowH * (float)(unsigned)(rows - 1),
+//   rows = min(items.size(), m_VisibleRows).
+//   1. Live hover: when game_work.worldPos (+0x94/+0x98) is inside the body,
+//      m_HoverIt = begin() + rowIndex(worldPos.y).
+//   2. Slot machine, keyed on the INT m_ActiveTouchId (+0xC8):
+//      -1 -> TouchInRegion(left,right,bottom,top,-1); store the result; if it
+//            is -1 fall through to UpdateTouchPosition, else keep the slot only
+//            when IsTouchDown == 2 and return WITHOUT capturing (the capture
+//            happens on the following held frames).
+//      held -> re-hover from the CAPTURED finger pos (m_TouchX/m_TouchY) when
+//            it is inside the body, then: still down -> UpdateTouchPosition;
+//            released -> drop the slot and commit m_TopVisibleIt + m_OnSelect()
+//            only when the captured pos passes BOTH the x and the y range test.
+//   The x test on release (m_TouchX vs left/right, @0x0019447c/@0x00194490) was
+//   missing while an earlier port pass overloaded m_TouchX as the slot index.
 void ListBox::Update(float dt) {
     (void)dt;
+    // Port specific: the binary holds m_pItems as a reference and never null-checks it.
     if (!m_pItems) return;
 
-    float rowH   = m_CellHeight;
-    float left   = pos.x + m_CellWidth * -0.5f;
-    float right  = pos.x + m_CellWidth *  0.5f;
-    float top    = pos.y + rowH * 0.5f;
+    const float rowH   = m_CellHeight;
+    const float left   = pos.x + m_CellWidth * -0.5f;
+    const float right  = pos.x + m_CellWidth *  0.5f;
+    const float top    = pos.y + rowH * 0.5f;
 
-    size_t n = m_pItems->size();
-    uint32_t rows = (n <= (size_t)m_VisibleRows) ? (uint32_t)n : m_VisibleRows;
-    float bottom = (pos.y - rowH * 0.5f) - rowH * (float)(rows > 0 ? rows - 1 : 0);
+    const size_t n = m_pItems->size();
+    const uint32_t rows = (n > (size_t)m_VisibleRows) ? (uint32_t)m_VisibleRows : (uint32_t)n;
+    // (rows - 1) is converted UNSIGNED (vcvt.f32.u32 @0x00194320) -- an empty
+    // list wraps to 0xFFFFFFFF and pushes `bottom` far below the screen, exactly
+    // as the binary does. Harmless: `base` is then null and nothing commits.
+    const float bottom = (pos.y + rowH * -0.5f) - rowH * (float)(uint32_t)(rows - 1u);
 
-    std::string* base = m_pItems->empty() ? NULL : &(*m_pItems)[0];
-    int scrollOfs = (n > (size_t)m_VisibleRows && m_pScroller) ? m_pScroller->m_CurrentValue : 0;
+    std::string* base = m_pItems->empty() ? NULL : &(*m_pItems)[0];   // begin()
 
-    // Hover: index the row under the live world touch position.
+    // 1. Live hover from the global pointer position.
     const _Vector3<float>& wp = game_work.worldPos;
     if (wp.x >= left && wp.x <= right && wp.y >= bottom && wp.y <= top && base) {
-        int idx = (int)((top - wp.y) / rowH) + scrollOfs;
-        if (idx < 0) idx = 0;
-        m_HoverIt = base + idx;
+        m_HoverIt = base + ListBoxRowIndex(top, wp.y, rowH, m_pScroller);
     }
 
-    if (m_TouchX < 0.0f) {
-        // Acquire a slot pressed inside the list body.
-        int slot = TouchInRegion(left, right, bottom, top, -1);
-        m_TouchX = (float)slot;
-        if (slot != -1) {
-            if (IsTouchDown(slot) == 2) {
-                m_TouchY = wp.y;
-                return;
-            }
-            m_TouchX = -1.0f;
+    // 2. Touch slot machine.
+    if (m_ActiveTouchId == -1) {
+        m_ActiveTouchId = TouchInRegion(left, right, bottom, top, -1);
+        if (m_ActiveTouchId != -1) {
+            // Keep the slot only on the press edge; no capture on this frame.
+            if (IsTouchDown(m_ActiveTouchId) != 2) m_ActiveTouchId = -1;
             return;
         }
+        // No slot -- falls through to UpdateTouchPosition (a no-op at id == -1).
     } else {
-        int slot = (int)m_TouchX;
-        if (IsTouchDown(slot) == 0) {
-            m_TouchX = -1.0f;
-            // Commit only if the release lands inside a valid row band.
-            if (m_TouchY < bottom || m_TouchY > top || !base) return;
-            int idx = (int)((top - m_TouchY) / rowH) + scrollOfs;
-            if (idx < 0) idx = 0;
-            m_TopVisibleIt = base + idx;
+        // Re-hover from the captured finger position.
+        if (m_TouchX >= left && m_TouchX <= right &&
+            m_TouchY >= bottom && m_TouchY <= top && base) {
+            m_HoverIt = base + ListBoxRowIndex(top, m_TouchY, rowH, m_pScroller);
+        }
+        if (IsTouchDown(m_ActiveTouchId) == 0) {
+            m_ActiveTouchId = -1;
+            // Commit only when the captured release position is inside the body.
+            if (m_TouchX < left   || m_TouchX > right) return;
+            if (m_TouchY < bottom || m_TouchY > top)   return;
+            if (!base) return;
+            m_TopVisibleIt = base + ListBoxRowIndex(top, m_TouchY, rowH, m_pScroller);
             m_OnSelect();
             return;
         }
@@ -282,10 +313,18 @@ void ListBox::SetFont(Mortar::Font* font) {
     m_pTextFont = font;
 }
 
-// Private helper, reached via a PLT veneer in Update. Captures the live world
-// touch Y each held frame.
+// ASM-spec v1.6.1 ListBox::UpdateTouchPosition @0x001941bc (PLT veneer 0x00111a00):
+//   if (m_ActiveTouchId == -1) return;
+//   ldmia/stmia one 12-byte block: game_work.m_FingerSpawnPos[m_ActiveTouchId]
+//   (GameWork+0xA4, stride 12) -> this+0xCC..+0xD7 (x, y, phase).
+// An earlier port pass captured game_work.worldPos.y instead, so the x half of
+// the release hit-test had no value to test against.
 void ListBox::UpdateTouchPosition() {
-    m_TouchY = game_work.worldPos.y;
+    if (m_ActiveTouchId == -1) return;
+    const _Vector3<float>& finger = game_work.m_FingerSpawnPos[m_ActiveTouchId];
+    m_TouchX     = finger.x;
+    m_TouchY     = finger.y;
+    m_TouchPhase = finger.z;
 }
 
 // ---------------------------------------------------------------------------

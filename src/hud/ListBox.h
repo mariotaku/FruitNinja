@@ -29,7 +29,9 @@
 // ListBox::Update's row hover/commit hit-test adds the SAME m_CurrentValue
 // offset before computing the target row -- omitting it (as an earlier port
 // pass did) makes a scrolled list always hover/commit the row at the top of
-// the visible window instead of the one under the finger.
+// the visible window instead of the one under the finger. Update reads the
+// scroller unconditionally (`ldr r3,[r4,#0x88]; cmp r3,#0` @0x00194364), i.e.
+// it gates on the pointer alone, not on items.size() > visibleRows.
 //
 // Teardown: Release() (@0x00194528) owns tearing down the VerticalScroller --
 // it is a SEPARATE HUD control the ctor AddControl'd, so nothing else removes
@@ -119,18 +121,20 @@ private:
     // +0xA4: fires on commit (tap-release inside a row). 36 bytes -> ends 0xC8.
     Mortar::Delegate0<void> m_OnSelect;
 
-    // +0xC8: active touch slot (-1 = none) written by ctor. (Vestigial; the live
-    // touch machine keys off m_TouchX below.)
+    // +0xC8: held touch slot (-1 = none), written by the ctor and by Update's
+    // touch state machine. This INT is the slot -- Update tests it with
+    // `cmn r5,#1` (@0x001943ac). An earlier port pass overloaded the float
+    // m_TouchX below as the slot, which lost the captured touch X entirely.
     int32_t m_ActiveTouchId;
 
-    // +0xCC: held touch slot stored as float (-NaN sentinel = none).
-    float m_TouchX;
-
-    // +0xD0: captured touch world Y.
-    float m_TouchY;
-
-    // +0xD4: pad / captured Z.
-    float _padD4;
+    // +0xCC..+0xD7: the held slot's captured pointer state, copied as one
+    // 12-byte block by UpdateTouchPosition (@0x001941bc: ldmia/stmia of
+    // game_work.m_FingerSpawnPos[m_ActiveTouchId], GameWork+0xA4, stride 12).
+    // Update range-checks BOTH x (against left/right) and y (against
+    // bottom/top) on release before committing a row.
+    float m_TouchX;      // +0xCC
+    float m_TouchY;      // +0xD0
+    float m_TouchPhase;  // +0xD4  (z slot of the finger record = phase; see IsTouchDown @0x001ca69c)
 
     // +0xD8: visible row count (ctor arg).
     uint8_t m_VisibleRows;
@@ -187,7 +191,7 @@ public:
 
     // Port/test-only: force the committed/hover row and row text colour to drive
     // a specific visual state for screenshot tests (the binary only ever writes
-    // these from the internal touch state machine -- see UpdateTouchPosition).
+    // these from Update's hover/commit paths).
     // No binary counterpart.
     void SetTopVisibleForTest(std::string* it) { m_TopVisibleIt = it; }
     void SetHoverForTest(std::string* it)      { m_HoverIt = it; }
@@ -201,7 +205,8 @@ public:
     void SetHoverRowColour(Colour c)           { m_HoverRowColour = c; }
 
 private:
-    // Private helper reached via a PLT veneer in Update; captures the touch world pos.
+    // Binary @0x001941bc (reached via PLT veneer 0x00111a00 from Update).
+    // No-op when m_ActiveTouchId == -1; else copies the finger record.
     void UpdateTouchPosition();
 
 public:

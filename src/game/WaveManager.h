@@ -39,14 +39,21 @@ public:
     //              filling [0] permanently closed the gate -> 1-fruit-then-stall in Arcade.
     HUDControl3d* m_SpeedControl[2];   // +0x00 (gate), +0x04 (SpeedControl widget)
 
-    // +0x08: RNG instance.
-    // DIFFERS: binary fetches Random via a GOT-relative global pointer; port embeds
-    // it as a member so that m_SpeedControl correctly occupies +0x00/+0x04.
-    // +0x08..+0x1f (24 bytes); bridges into the binary's +0x08..+0x34 unnamed region.
-    Math::Random m_Random;   // Port specific: +0x08
+    // +0x08: RNG instance. The binary also constructs a Math::Random here --
+    // WaveManager::WaveManager @0x001241b8 does `add r0,r0,#0x8; bl Random::ctor`
+    // -- and Math::Random is 0x18 bytes (state +0x00, multiplier +0x08,
+    // increment +0x10; see Random::ctor @0x00242074 / Rand32 @0x00121c2c), so it
+    // occupies +0x08..+0x1F exactly.
+    // DIFFERS: every binary READ of the RNG goes through the `Random*` at +0x20
+    //   (`ldr [this,#0x20]` -- Reset @0x0012ba78, GetRandCount @0x0012df8c,
+    //   GetRandomPowerSpawner @0x0012403c); the port calls the +0x08 member
+    //   directly. Same object and therefore the same stream: Reset seeds the
+    //   +0x20 target from the GOT-relative global g_Random, which the port
+    //   mirrors as `m_Random.Seed(Math::g_Random.Rand32(0))`.
+    Math::Random m_Random;   // +0x08
 
-    // +0x20..+0x23: binary's m_pRandom GOT-relative pointer slot (not used in port;
-    // port embeds m_Random above instead of fetching via pointer).
+    // +0x20..+0x23: the binary's `Random* m_pRandom` slot (see the DIFFERS above;
+    // the port reaches m_Random directly, so nothing reads this).
     uint8_t _pad_0x20[4];     // +0x20
 
     // +0x24: wave queue item pointer. Binary: WaveQueItem* @ +0x24.
