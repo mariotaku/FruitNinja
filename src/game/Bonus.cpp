@@ -181,25 +181,40 @@ void Bonus::Parse(TiXmlElement* e) {
 }
 
 // ---------------------------------------------------------------------------
-// Bonus::IsAchieved -- Binary @ 0x0012e708
-// ASM-verified: 2026-06-07 v1.6.1 Bonus::IsAchieved @ 0x0012e708 (disassemble_function diff)
+// ASM-verified: 2026-08-01T16:08Z v1.6.1 Bonus::IsAchieved @ 0x0012e708..0x0012e917 (asm-inspector)
+//
+// Every comparison was operand-resolved against the binary. Note for future
+// sweeps: an asm-verify row here reports `blt` (binary) vs `bgt` (port) at the
+// min gate. That is a REGISTER-NORMALISATION ARTIFACT, not a bug -- the binary
+// does `cmp r1,r3` (score,min) and the port `cmp r3,r1` (min,score), which is
+// the same strict test with the operands swapped and the same fail target. GCC
+// picked the reverse order because r3 was already loaded. Do not "fix" it.
+//
+// Boundary sense confirmed on both sides: hitting m_MaxSliced exactly COUNTS as
+// achieved, and score == m_MinSliced counts, so equals="N" bonuses award at
+// exactly N.
 //
 // Faithful port of the binary control flow:
-//   1. Gate (0010df3e-0010df62, all unconditional -- NO `>0` guards):
+//   1. Gate (0x0012e708-0x0012e74c, all unconditional -- NO `>0` guards):
 //        if (score <  m_MinSliced) return 0;
 //        if (score >  m_MaxSliced) return 0;
 //        if (m_DivisibleBy > 0 && score % m_DivisibleBy != 0) return 0;
-//      Default m_MaxSliced is 10,000,000 (ctor DAT_0010e390), acting as the
-//      "no upper bound" sentinel -- so the unconditional `score > m_MaxSliced`
-//      almost never fires unless an explicit max/equals was parsed.
-//   2. Per-fruit loop (0010dfd8/0010df7e): iterate fruitCounts (param_2). For
+//      m_MaxSliced's ctor default acts as the "no upper bound" sentinel, so the
+//      unconditional `score > m_MaxSliced` almost never fires unless an explicit
+//      max/equals was parsed.
+//      TODO: v1.6.1 Bonus::Bonus -- the ctor default cited a v1.5.x DAT_0010e390
+//      and its v1.6.1 address is unconfirmed; re-verify the constant rather than
+//      trusting the old 10,000,000 figure.
+//   2. Per-fruit loop (0x0012e750-0x0012e7fc): iterate fruitCounts (param_2). For
 //      each entry: min from m_MinFruit (default 0), max from m_MaxFruit
-//      (default DAT_0010e090 = 1,000,000). Fail if count < min || count > max.
-//   3. Pattern loop (0010dfec-0010e052) over m_PatternHashes: EVERY pattern
+//      (absent-max sentinel loaded from the pool at 0x0012e918 = 1,000,000).
+//      Fail if count < min || count > max -- both strict, and the port's
+//      branchless predication for the `||` is equivalent.
+//   3. Pattern loop (0x0012e820-0x0012e8bc) over m_PatternHashes: EVERY pattern
 //      hash must be present in fruitCounts, and all must share the SAME count,
 //      which on the first iteration must be > 0. (r10 = first-iter flag,
 //      r7 = reference count seeded on first iter.)
-//   4. Side effects on success (0010e054-0010e076):
+//   4. Side effects on success (0x0012e8c0-0x0012e8f8):
 //        if (m_AchievementHash != 0 && m_Tier > 0)
 //            AchievementManager::GetInstance()->UnlockBonusAchievement(m_AchievementHash);
 //        snprintf(m_DisplayName, 0x40, m_NameTemplate, score); // template has %d

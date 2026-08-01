@@ -4,10 +4,24 @@
 
 namespace Math {
 
-// ASM-verified: 2026-06-26 v1.6.1 Math::ClosestPointOnLine @ 0x0027542c (asm-inspector)
+// ASM-verified: 2026-08-01T16:08Z v1.6.1 Math::ClosestPointOnLine @ 0x0027542c..0x002754b7 (asm-inspector)
 // Foot-of-perpendicular on the INFINITE line through A,B (not the segment --
 // despite the name there is no t-clamp). Special cases write only x,y; out.z
 // is left untouched (general path writes z=0). Branch order: A.y==B.y first.
+//
+// The port keeps -1/m where the binary keeps +1/m, so the asm reads vmov #240 /
+// vmls / vsub against the binary's vmov #112 / vmla / vadd. That is ALGEBRAIC
+// FOLDING, not a sign inversion, and it is bit-exact rather than merely close:
+// IEEE division flips only the sign bit and RNE is symmetric under negation, so
+// mp == -k exactly, and non-fused VFP vmls/vmla round the product once with
+// sign-symmetric rounding. P.y - mp*P.x and P.y + k*P.x therefore produce the
+// same bits, as do m - mp and m + k. Verified numerically at the perpendicular
+// foot and beyond both endpoints. Do not "correct" the signs.
+//
+// One residual, unreachable and deliberately not matched: the binary stores
+// out.x then RELOADS A.x from [r0] @0x2754a4, where the port keeps A.x in a
+// register. These differ only if &out == &A, and the sole caller
+// (ColSphereLine @0x0025d164) passes a distinct stack local.
 void ClosestPointOnLine(_Vector3<float>& A, _Vector3<float>& B, _Vector3<float>& P, _Vector3<float>& out) {
     if (A.y == B.y) {
         out.x = P.x;

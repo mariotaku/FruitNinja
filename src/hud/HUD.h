@@ -27,7 +27,7 @@ public:
     float scales[6];
 
     // +0x20: per-frame HUD draw-alpha. HUD::Update writes 1.0 each tick
-    // (v1.6.1 HUD::Update @0x0018c44c: vstr.32 s15,[r4,#0x20], s15=1.0).
+    // (v1.6.1 HUD::Update @0x0018c3c0: vstr.32 s15,[r4,#0x20] @0x0018c3e0, s15=1.0).
     // Read by ScoreControl::Draw (@0x1abce8) and ScoreControl::PreDraw (@0x1aceac)
     // and MissControl::Draw (@0x001521ac) for score/miss alpha calculation.
     // ctor-UNINITIALIZED in binary; also read by GameOverScreen::PreDrawOrder

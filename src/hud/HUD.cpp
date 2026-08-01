@@ -8,11 +8,16 @@
 #include "render/MatrixStack.h"
 #include <list>
 
-// ASM-verified: 2026-05-24 v1.6.1 HUD::{ctor} @ 0x0018c1a0 (re-analyst)
-// DIFFERS: binary ctor initialises scales[6] to 1.0f and writes 1.0f at +0x24
-//          (m_globalTimeScale); m_DrawAlpha (+0x20) is left uninitialized by ctor.
-//          Port zero-inits m_DrawAlpha and pre-inits m_globalTimeScale here to
-//          avoid reading uninit floats before the first Update tick.
+// ASM-verified: 2026-08-02T00:00Z v1.6.1 HUD::HUD @ 0x0018c1a0 (asm-inspector)
+// C2 @0x0018c1a0 (C1 @0x0018c1d4, instruction-identical):
+//   bl std::list ctor(+0x00), then SEVEN vstr of 1.0f, in binary order:
+//   +0x14, +0x08, +0x0c, +0x10, +0x1c, +0x18, +0x24
+//   = scales[0..5] (+0x08..+0x1f) and m_globalTimeScale (+0x24). Nothing else.
+// DIFFERS: m_DrawAlpha (+0x20) is left UNINITIALIZED by the binary ctor (no
+//          eighth store). Port zero-inits it -- an extra vstr vs the binary --
+//          so nothing reads an uninit float before the first Update tick.
+//          (Corrects an earlier triage rationale that claimed "6x vstr,
+//          identical": the binary has 7 stores, the port 8.)
 HUD::HUD() : m_DrawAlpha(0.0f), m_globalTimeScale(1.0f)
 #if !defined(__bada__)
     , m_pInputModal(nullptr)
@@ -26,20 +31,24 @@ HUD::~HUD() {
     Release();
 }
 
-// TODO: HUD::Init -- v1.6.1 address unconfirmed (old marker 0x00144d18 is stale v1.5.x; needs re-RE)
+// ASM-spec v1.6.1 HUD::Init @0x0018c3bc: a single `b 0x00105e04` -- a 4-byte
+// tail-call into the out-of-line std::list<HUDControl*>::clear. Body is exactly
+// `controls.clear()`; the port inlines clear where the binary outlines it.
 void HUD::Init() {
     controls.clear();
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 HUD::Release @ 0x0018c2c0 (re-analyst)
+// ASM-spec v1.6.1 HUD::Release @0x0018c29c (the old marker cited 0x0018c2c0,
+// which is `str r0,[sp,#4]` mid-body, not the prologue).
 void HUD::Release() {
     // Binary v1.6.1 HUD::Release@0x18c2b8: game_work.m_bHudDestructing = 1 (HUD-teardown guard).
     game_work.m_bHudDestructing = 1;
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         HUDControl* ctrl = *it;
         if (!ctrl->m_bNoDestructor) {
-            if (ctrl->m_RemoveCallback)
-                ctrl->m_RemoveCallback(ctrl);
+            // Binary calls Delegate1::operator() unconditionally (@0x0018c2e0);
+            // the delegate's own empty-check short-circuits. No port-side guard.
+            ctrl->m_RemoveCallback(ctrl);
             ctrl = *it;            // re-read after callback
             if (ctrl != nullptr) {
                 delete ctrl;       // binary vtable+0x04 deleting-dtor (Itanium ABI slot 1)
@@ -97,7 +106,19 @@ void HUD::Draw(long layerMask) {
     }
 }
 
-// ASM-verified: 2026-05-24 v1.6.1 HUD::Update @ 0x0018c44c (re-analyst)
+// ASM-verified: 2026-08-02T00:00Z v1.6.1 HUD::Update @ 0x0018c3c0 (asm-inspector)
+// Binary body:
+//   MissControl::PreUpdate(dt); *(this+0x20) = 1.0f;
+//   for (it = controls.begin(); it != controls.end(); ) {
+//       ctrl = *it;
+//       if (ctrl->m_Active != 0 && ctrl->m_bPendingRemoval == 0) ctrl->Update(dt);  // vt+0x28
+//       ctrl = *it;                                   // re-read
+//       if (ctrl->m_bPendingRemoval == 0) { ++it; continue; }
+//       ctrl->m_RemoveCallback(ctrl);                 // unconditional; Delegate1 self-guards
+//       ctrl = *it;
+//       if (ctrl->m_bNoDestructor == 0) { vt+0x04 deleting-dtor; *it = 0; }
+//       it = controls.erase(it);
+//   }
 void HUD::Update(float dt) {
     MissControl::PreUpdate(dt);              // global combo-decay pre-tick
     m_DrawAlpha = 1.0f;                     // binary vstr.32 s15,[r4,#0x20] s15=1.0 (v1.6.1 @0x0018c3e0)
@@ -125,15 +146,22 @@ void HUD::Update(float dt) {
         bool partOfModal = (m_pInputModal == nullptr) ||
                             (ctrl == m_pInputModal) ||
                             (ctrl->m_LayerFlags == Mortar::HUD_LAYER_TOP_MOST);
-        if (ctrl->m_Active && partOfModal) ctrl->Update(dt);
+        // Binary gate is two-term: ldrb [+0x30] / beq skip, then ldrb [+0x33] /
+        // bne skip (v1.6.1 @0x0018c3f4..0x0018c408). A control already flagged
+        // for removal gets NO final Update tick. `partOfModal` is the port-only
+        // third term (see above); it is a no-op when no modal is registered.
+        if (ctrl->m_Active && !ctrl->m_bPendingRemoval && partOfModal) ctrl->Update(dt);
 #else
-        if (ctrl->m_Active) ctrl->Update(dt);
+        // Two-term binary gate -- see the non-__bada__ branch above.
+        if (ctrl->m_Active && !ctrl->m_bPendingRemoval) ctrl->Update(dt);
 #endif
 
         ctrl = *it;                          // re-read after Update may have mutated *it
         if (!ctrl->m_bPendingRemoval) { ++it; continue; }
 
-        if (ctrl->m_RemoveCallback) ctrl->m_RemoveCallback(ctrl);
+        // Binary calls Delegate1::operator() unconditionally (v1.6.1 @0x0018c438);
+        // the delegate's own empty-check short-circuits. No port-side guard.
+        ctrl->m_RemoveCallback(ctrl);
         ctrl = *it;
         if (!ctrl->m_bNoDestructor) {
             delete ctrl;                     // binary vtable+0x04 deleting-dtor

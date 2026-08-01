@@ -178,6 +178,17 @@ const float SlashEntity::MOVE_THRESH_INACTIVE  = 50.0f;   // sqrt(DAT_0017d5f8 =
 // --- Global content ---
 static Mortar::SmartPtr<Mortar::Texture> g_BladeTex;
 
+// Binary file-static `loaded` (_ZL6loaded) @ .bss 0x00332b44 -- the slash BSS
+// block base + 0xcc, i.e. the byte immediately below the three slash
+// SmartPtr<Texture> slots (+0xd0/+0xd4/+0xd8).
+// Three accessors in v1.6.1, all confirmed by xref:
+//   SlashEntity::LoadContent @0x001e7e1c reads it, @0x001e7e34 sets it to 1
+//   SlashEntity::Release     @0x001e7a20 stores 0  (strb r3,[r5,#0xcc])
+//   CleanupSlash             @0x001e8258 stores 0
+// So it is the content-loaded guard, NOT a dead once-flag: Release deliberately
+// re-arms LoadContent so the next call reloads the slash textures.
+static bool g_SlashLoaded = false;
+
 // --- Global instances ---
 SlashEntity* g_pSlashEntities[16] = {0};
 SlashEntity* g_pSlashEntity = nullptr;
@@ -230,16 +241,33 @@ static uint32_t ResolveEmitterHash(const char* path) {
 }
 
 // ---------------------------------------------------------------------------
-// Content load -- matches LoadContent (0x17C948)
+// Content load
+// ASM-spec v1.6.1 SlashEntity::LoadContent @0x001e7e08:
+//   if (loaded) return;
+//   loaded = 1;
+//   s_slashTexture      = LoadLocalisedTexture(...);
+//   s_slashFlashTexture = LoadLocalisedTexture(...);
+//   for (i = 0; i < 8; ++i) { ghost[i].Release();
+//                             ghost[i].buf0 = new char[0x16c8];
+//                             ghost[i].buf1 = new char[0x16c8];
+//                             ghost[i].Reset(); }
+// The guard is the `loaded` byte, not texture validity -- see g_SlashLoaded above.
 // ---------------------------------------------------------------------------
 void SlashEntity::LoadContent() {
-    if (!g_BladeTex.IsValid()) {
-        g_BladeTex = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
-    }
+    if (g_SlashLoaded) return;
+    g_SlashLoaded = true;
+    g_BladeTex = Mortar::TextureManager::LoadLocalisedTexture("blade.tex");
+    // TODO: v1.6.1 0x001e7e08 (SlashEntity::LoadContent) -- the binary also loads a
+    // second "flash" slash texture and allocates the 8-entry SlashEntityGhost ring
+    // (two 0x16c8-byte vertex buffers each). Blocked on the SlashEntityGhost port.
 }
 
+// Port-only teardown helper (no v1.6.1 counterpart; the binary's texture teardown
+// lives in CleanupSlash @0x001e8204). Clears g_SlashLoaded alongside the texture so
+// LoadContent re-arms, matching CleanupSlash's texture-null + loaded=0 pairing.
 void SlashEntity::ReleaseContent() {
     g_BladeTex.SetNull();
+    g_SlashLoaded = false;
 }
 
 // ASM-spec v1.6.1 CleanupSlash @ 0x001e8204.
@@ -247,7 +275,7 @@ void SlashEntity::ReleaseContent() {
 //    Port maps: g_BladeTex (+0xd0) and g_ModTexture (+0xd4 or +0xd8); one of them covers
 //    the +0xd8 slot and one covers +0xd4; the third is unidentified (RE gap below).
 // 2. For i=0..7: SlashEntityGhost::Release(ghost_ring[i]) -- deferred (SlashEntityGhost not ported).
-// 3. Clear loaded flag (bool at BSS+0xcc -- not yet tracked in port).
+// 3. Clear the `loaded` flag (byte at slash BSS+0xcc = 0x00332b44; write @0x001e8258).
 // Called from GameDestroy right after CleanUpSplat(), matching the binary's
 // CleanupBomb -> CleanupFruit -> CleanUpSplat -> CleanupSlash order.
 void CleanupSlash() {
@@ -261,6 +289,9 @@ void CleanupSlash() {
     // Step 2: deferred -- SlashEntityGhost not yet ported.
     // TODO: v1.6.1 CleanupSlash @0x001e8204 -- 8x SlashEntityGhost::Release(ghost_ring[i]);
     // blocked on SlashEntityGhost port.
+
+    // Step 3: clear the content-loaded guard (binary strb 0 @0x001e8258).
+    g_SlashLoaded = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -365,7 +396,13 @@ void SlashEntity::RegisterInputCallbacks() {
 #endif
 }
 
-// ASM-verified: 2026-06-13T00:00 v1.6.1 SlashEntity::Release @ 0x001e79b0 (asm-inspector)
+// ASM-spec v1.6.1 SlashEntity::Release @0x001e79b0 (44 bytes of body, 5 blocks):
+//   free m_pLeftBuffer  (+0x5c) and null it
+//   free m_pRightBuffer (+0x60) and null it
+//   if (m_TrailEmitter) { PSPParticleManager::GetInstance()->ClearEmitter(it); null it }
+//   loaded = 0                       <- strb r3,[r5,#0xcc] @0x001e7a20
+//   tail-call Mortar::Entity::Release
+// The binary does NOT touch m_PointCount (+0x58) here; the port used to zero it.
 void SlashEntity::Release() {
     if (m_pLeftBuffer) {
         delete[] m_pLeftBuffer;
@@ -379,11 +416,14 @@ void SlashEntity::Release() {
         PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
         m_TrailEmitter = nullptr;
     }
-    m_PointCount = 0;
-    // Defunct: dead BSS guard at 0x0024C848 -- no-op stub; v1.6.1 SlashEntity::Release @ 0x001e79b0 (strb 0 @0x001e7a20).
-    // Binary Release writes a 1-byte 0 to a static slot with no other accessors
-    // (likely a once-flag whose set/check sites were inlined out / DCE'd). Port
-    // omits the write; semantically equivalent. (re-analyst 2026-05-20)
+    // Re-arm LoadContent. The slot has three live accessors (LoadContent read+set,
+    // Release, CleanupSlash) -- it is the content-loaded guard, not a dead flag.
+    g_SlashLoaded = false;
+
+    // Binary tail-calls the base (b Mortar::Entity::Release @0x001e7a28), which
+    // frees the ColLine that SlashEntity::Init allocated into m_Col (+0x38).
+    // The port used to drop this, leaking one ColLine per blade teardown.
+    Mortar::Entity::Release();
 }
 
 // ---------------------------------------------------------------------------
@@ -567,10 +607,19 @@ void SlashEntity::PlaySwipe() {
     m_ComboScoreScale = 6.0f;
 }
 
-// ASM-verified: 2026-06-16 v1.6.1 GetHeadThicknessScale @ 0x1e684c (re-analyst). Head thickness scale =
-// half the L/R edge separation at the LAST stored vertex, normalized by the nominal
-// full half-width (ModSlashThickness*9). Range [0,1]. Consumed by OnTouchActive
-// (binary UpdateTouchDown @0x1e9f08) as per-point taper pressure.
+// ASM-spec v1.6.1 SlashEntity::GetHeadThicknessScale @ 0x001e684c. Head thickness
+// scale = half the L/R edge separation at the LAST stored vertex, normalized by the
+// nominal full half-width (ModSlashThickness*9). Range [0,1]. Consumed by
+// OnTouchActive (binary UpdateTouchDown @0x001e9f08) as per-point taper pressure.
+// Two known deltas from the binary body (downgraded from ASM-verified on
+// re-inspection -- the old marker overstated an instruction-level match):
+//   1. The binary's only early-out is `m_PointCount < 1`; the buffer null checks
+//      below are port-added. They are dominated by that test (both buffers are
+//      allocated by InitPoints before m_PointCount can exceed 0), so they are
+//      dead in practice -- kept only because Release now leaves m_PointCount
+//      untouched while nulling the buffers.
+//   2. The binary calls IsSameScreenMultiplayer() and discards the result before
+//      reading ModSlashThickness. Same-screen MP is defunct; the call is dropped.
 float SlashEntity::GetHeadThicknessScale() const {
     if (!m_pLeftBuffer || !m_pRightBuffer) return 0.0f;
     if (m_PointCount < 1) return 0.0f;

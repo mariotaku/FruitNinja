@@ -24,9 +24,9 @@
 //   DrawSlice       0x1e83b0
 //   AddPoint        0x1e9918
 //   UpdatePoints    0x1e6914
+//   LoadContent     0x1e7e08
 //
 // (Older v1.5 addresses remain on methods not yet confirmed at v1.6.1 offsets.)
-//   LoadContent     0x17C948
 //   Reset           0x17B71C
 //   PreUpdate       0x17C584
 //   TouchDown       0x17D61C
@@ -80,7 +80,9 @@ public:
     SlashEntity();
     ~SlashEntity();
 
-    // One-time global content load -- matches 0x17C948. Loads blade.tex.
+    // One-time global content load -- v1.6.1 @0x001e7e08. Loads blade.tex.
+    // Guarded by the binary's file-static `loaded` byte (.bss 0x00332b44), which
+    // Release() and CleanupSlash() both clear, so a torn-down blade re-arms the load.
     static void LoadContent();
     static void ReleaseContent();
 

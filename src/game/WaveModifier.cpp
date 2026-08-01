@@ -13,6 +13,36 @@
 #include <algorithm>
 #include <cstdlib>
 
+// ---------------------------------------------------------------------------
+// Per-player wave counter accessor.
+//
+// v1.6.1 puts the counter at WaveManager + 0x238 + playerIdx*4:
+//   WaveManager::SetCurrentWave    @0x00125d1c writes `str r6,[r4,r5,lsl #2]`
+//                                  with r5 = playerIdx + 0x8e  ->  0x238 + idx*4
+//   WaveModifier::RemoveModifier   @0x00150590 reads `ldr r3,[r0,#0x238]`
+//   WaveModifier::ApplyModifier    @0x0015068c reads `ldr r2,[r0,#0x238]`
+//
+// WaveManager.h's __bada__ layout declares the slot as
+//     union { WAVE_INFO* m_pCurrentWave[2]; int m_WaveCount[2]; };
+// at +0x234. Union members share a base, so m_WaveCount[0] resolves to +0x234
+// (aliasing m_pCurrentWave[0]), NOT the +0x238 the header comment claims. Every
+// cross-build read through m_WaveCount[] is therefore one element low; a
+// compile-one.sh run of RemoveModifier emits `ldr r3,[r0,#564]` against the
+// binary's #568. WaveManager::SetCurrentWave already sidesteps this with the same
+// raw-offset access used here.
+//
+// TODO: v1.6.1 0x00125d1c -- reshape WaveManager.h's __bada__ union so
+// m_WaveCount[0] lands at +0x238 (it has to span +0x234..+0x240 and overlap
+// m_NextWaveDelay_P0), then delete this helper and read w->m_WaveCount[0].
+// ---------------------------------------------------------------------------
+static int& WaveCountP0(WaveManager* w) {
+#if defined(__bada__)
+    return *(int*)((unsigned char*)w + 0x238);
+#else
+    return w->m_WaveCount[0];
+#endif
+}
+
 // ASM-spec v1.6.1 SPAWNER_INFO::SelectTypes @0x0012dcc8 (thunk veneer @0x00114654).
 // Re-rolls fruit-type indices from string-name vector.
 // m_FruitTypeNames holds one name per fruit slot (from XML "type" attr, split by SplitWords).
@@ -360,10 +390,9 @@ void WaveModifier::OnDeferComplete(bool unused, float* pExtra) {
 //   (1) if m_OverideProbabilityPool < 10000 && !isPurchased &&
 //       m_OverideProbabilityPool < WaveManager current wave, rewind via
 //       SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0).
-//       Binary reads the counter at WaveManager+0x238 (confirmed via
-//       SetCurrentWave @ 0x00125d1c writing (playerIdx+0x8e)*4 = 0x238 for P0);
-//       the port maps that slot as m_WaveCount[0] per WaveManager.h's 64-bit
-//       DIFFERS block, matching the rest of this file's convention.
+//       Binary reads the counter at WaveManager+0x238 (`ldr r2,[r0,#0x238]`
+//       @0x001506bc), reached here through WaveCountP0() -- see the note on that
+//       helper for why m_WaveCount[0] does not resolve to +0x238 on __bada__.
 //   (2) call SelectType() on every m_OverideEntries entry, then PREPEND them all
 //       (dst.insert(dst.begin(), ...)) into the WaveManager's current override
 //       list (GetCurrentOverideList(0) == m_ProbabilityOverride[gameMode]), then
@@ -375,11 +404,16 @@ void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
 
     if (m_OverideProbabilityPool < 10000 && !isPurchased) {
         WaveManager* w = WaveManager::GetInstance();
-        if (m_OverideProbabilityPool < w->m_WaveCount[0]) {
+        if (m_OverideProbabilityPool < WaveCountP0(w)) {
             WaveManager::GetInstance()->SetCurrentWave(m_OverideProbabilityPool, -1.0f, 0);
         }
     }
 
+    // Binary @0x001506e4 early-outs on m_OverideEntries.empty(), then indexes the
+    // vector m_OverrideCount times (`operator[](i)` @0x0010e904 -> SelectType
+    // @0x00112358) rather than walking iterators. ParseSpecific keeps
+    // m_OverrideCount and the vector size in lockstep, so both bounds agree and
+    // the empty early-out is redundant here; kept as an iterator walk.
     for (std::vector<PROBABILITY_OVERIDE>::iterator it = m_OverideEntries.begin();
          it != m_OverideEntries.end(); ++it) {
         it->SelectType();
@@ -388,8 +422,9 @@ void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
     // Prepend the (now type-selected) override entries into the WaveManager's
     // current override list. The binary's GetCurrentOverideList(0) returns the
     // vector header at m_ProbabilityOverride[gameMode] (playerIdx 0 = primary
-    // slot); dst.insert(dst.begin(), ...) -- binary-verified instruction-by-
-    // instruction @0x0015068c -- inserts the whole m_OverideEntries range at the
+    // slot); dst.insert(dst.begin(), ...) -- ASM-spec v1.6.1
+    // WaveModifier::ApplyModifier @0x0015068c (insert thunk @0x00113458) --
+    // inserts the whole m_OverideEntries range at the
     // FRONT of dst, then clears it. Front-insertion matters: WaveManager::UpdateWave's
     // override picker walks dst front-to-back and stops at the first cumulative-
     // probability match, so insertion order determines which override wins when
@@ -400,17 +435,31 @@ void WaveModifier::ApplyModifier(bool isPurchased, float* extra) {
     m_OverideEntries.clear();
 }
 
-// ASM-verified: 2026-07-04T00:00:00Z v1.6.1 WaveModifier::RemoveModifier @ 0x00150590
-// If the WaveManager current wave counter (m_WaveCount[0]) is < 0 AND
-// m_OverideProbabilityPool <= that counter and we're not in online MP, reset the
-// wave to SetCurrentWave(5, 0.25f, 0). Then, regardless of that gate, erase the
-// FRONT m_OverrideCount entries from m_ProbabilityOverride[gameMode] -- undoing
-// the PREPEND that ApplyModifier performed when the modifier
-// was applied.
+// ASM-spec v1.6.1 WaveModifier::RemoveModifier @ 0x00150590 (44 instructions).
+// If the P0 wave counter (WaveManager+0x238) is < 0 AND m_OverideProbabilityPool
+// <= that counter and we're not in online MP, reset the wave to
+// SetCurrentWave(5, 0.25f, 0). Then, regardless of that gate, erase the FRONT
+// m_OverrideCount entries from m_ProbabilityOverride[gameMode] -- undoing the
+// PREPEND that ApplyModifier performed when the modifier was applied.
+//
+// The prior ASM-verified stamp claimed an instruction-level match that never
+// held: the port read WaveManager+0x234, and the port body compiles to ~270
+// instructions against the binary's 44. That size gap is codegen, not logic --
+// the binary calls std::vector<PROBABILITY_OVERIDE>'s begin/end/operator!=/erase
+// out of line (0x001124f0 / 0x0010b1a8 / 0x00104f20 / 0x001116a0) while the port
+// TU inlines them, and erase expands to a 0x84-stride element shift that
+// deep-copies each entry's std::vector<std::string> m_Types.
+//
+// One remaining cosmetic delta: the binary reaches the list via
+// WaveManager::GetCurrentOverideList(0) (@0x001231f0 = this + 0x1fc +
+// gameMode*0xc + playerIdx*0x30 + 8), while the port indexes
+// m_ProbabilityOverride[gameMode] inline -- the port's GetCurrentOverideList
+// returns PROBABILITY_OVERIDE* (data()), not the vector header this call site
+// needs. Same address, same list.
 void WaveModifier::RemoveModifier() {
     WaveManager* w = WaveManager::GetInstance();
-    if (w->m_WaveCount[0] < 0 &&
-        m_OverideProbabilityPool <= WaveManager::GetInstance()->m_WaveCount[0] &&
+    if (WaveCountP0(w) < 0 &&
+        m_OverideProbabilityPool <= WaveCountP0(WaveManager::GetInstance()) &&
         !IsOnlineMultiplayer()) {
         WaveManager::GetInstance()->SetCurrentWave(5, 0.25f, 0);
     }
