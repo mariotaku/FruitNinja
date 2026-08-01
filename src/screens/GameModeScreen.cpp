@@ -399,9 +399,8 @@ void GameModeScreen::CreateControls() {
                             g_FruitInfoCount, _Vector3<float>(0, 0, 0),
                             Mortar::Delegate0<void>(BtnDeletedFn{this, btn}));
     }
-    // Binary @ 0x0013e86a: writes 1 to MenuButton+0x138 = m_bRespondsToBackKey.
-    // Marks this button as the screen's hardware Back-key handler.
-    m_pBackButton->m_bRespondsToBackKey = 1;
+    // +0x138 (m_bClickOnRelease) is NOT stored here: v1.6.1 MenuButton::Init @0x0019b9bc
+    // already writes 1 for every button, and this screen has no store of its own.
     m_pBackButton->m_bBackdropActive = 1; // v1.6.1 GameModeScreen::CreateControls @0x00181bac (strb #1, [btn,#0x150])
     m_pBackButton->SetText(
         GETSTRING_CAST_0(LSTR_DJ_BACK_BUTTON),

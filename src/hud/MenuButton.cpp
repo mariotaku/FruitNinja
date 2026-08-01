@@ -145,7 +145,7 @@ MenuButton::MenuButton()
       m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr),
       m_PlayerColour(),
       m_GrowInTimer(0.0f),
-      m_bRespondsToBackKey(0),
+      m_bClickOnRelease(1),
       m_bDragCancel(0),
       m_bClearsMenuItems(0),
       _pad13B(0),
@@ -242,7 +242,12 @@ void MenuButton::Init(_Vector3<float> buttonPos, Mortar::Delegate0<void> clickCb
     // Enables held press-scale (Update @0x0019aeac: size=m_RestScale*0.95) -> Draw @0x0019c2e4
     // press-dim RGB*0.5 for m_FruitType<0 toggle buttons (main menu + pause).
     m_bDragCancel    = 1;   // v1.6.1 MenuButton::Init @0x0019ba28: strb r6(=1),[this,#0x139] unconditional
-    m_bRespondsToBackKey = 0;
+    // ASM-spec v1.6.1 MenuButton::Init @0x0019b9bc: `mov r6,#1` @0x0019b9b0 then
+    // `strb r6,[r0,#0x138]` -- 1 for EVERY button, unconditionally. Buttons fire on the
+    // RELEASE edge and keep their touch slot across a drag-off. The port used to write 0
+    // here and let six screens store 1 back afterwards; none of those stores exist in the
+    // binary, and the 0 default made every toggle button fire on the PRESS edge instead.
+    m_bClickOnRelease = 1;
     m_reservedD4     = static_cast<int>(0xffffffff);
     m_TouchSlot      = -1;
     m_SparkleTimer   = -1.0f;
@@ -535,11 +540,17 @@ void MenuButton::Remove() {
 
 // v1.6.1 MenuButton::TouchReleased @0x0019a7f8
 bool MenuButton::TouchReleased() {
-    // Binary gate requires BOTH m_FruitType<0 AND m_bRespondsToBackKey. Toggle
-    // buttons (sound/music) set m_bRespondsToBackKey=0, so release fires only
-    // m_DeletedCallback, NOT m_ClickCallback -- otherwise the press-edge toggle
-    // reverts on lift (the double-toggle bug). #65.
-    if (m_FruitType < 0 && m_bRespondsToBackKey) {
+    // ASM-verified: 2026-08-02T00:00Z v1.6.1 MenuButton::TouchReleased @ 0x0019a7f8 (disasm):
+    //   ldr r2,[r0,#0x84]; cmp #0; bge .else       -- m_FruitType >= 0 skips the click
+    //   ldrb r2,[r0,#0x138]; cmp #0; beq .else     -- m_bClickOnRelease gate
+    //   add r0,r0,#0x88; bl Delegate0::operator()  -- m_ClickCallback
+    // The tail always fires m_DeletedCallback (+0xAC).
+    // Since Init leaves m_bClickOnRelease=1, this IS the live click edge for toggle
+    // buttons; the press-edge branch in Update below is dead in v1.6.1 (only
+    // KeyboardControl clears the flag, and that class is bypassed here). One fire per
+    // interaction either way -- the old "#65 double-toggle" concern was an artifact of
+    // the port's inverted Init default, not of this gate.
+    if (m_FruitType < 0 && m_bClickOnRelease) {
         m_ClickCallback();
     } else if (m_pEntity != nullptr) {
         // v1.6.1 MenuButton::TouchReleased @0x0019a7f8 calls
@@ -742,8 +753,8 @@ void MenuButton::Update(float dt) {
                     if (magSqr > 0.001f) {   // SLICE_EPS @0x0019ac50 (binary ble-skip => strictly >)
                         // Diagnostic: log where a menu fruit slice registered + fired its callback.
                         LOG_INFO("MENUBTN/Slice",
-                                 "FRUIT slice fired: fruitType=%d backKey=%d pos=(%.1f,%.1f) velMag=%.3f",
-                                 m_FruitType, (int)m_bRespondsToBackKey,
+                                 "FRUIT slice fired: fruitType=%d clickOnRelease=%d pos=(%.1f,%.1f) velMag=%.3f",
+                                 m_FruitType, (int)m_bClickOnRelease,
                                  entity->pos.x, entity->pos.y, magSqr);
                         m_ClickCallback();
                         // v1.6.1 MenuButton::Update @0x0019aa78: thunk 0x00105ec4 -> TutorialControl::ResetTutePos(nullptr)
@@ -777,8 +788,8 @@ void MenuButton::Update(float dt) {
                 if (b && !b->Enabled()) {
                     // Diagnostic: log where a menu bomb slice registered.
                     LOG_INFO("MENUBTN/Slice",
-                             "BOMB slice fired: fruitType=%d backKey=%d pos=(%.1f,%.1f)",
-                             m_FruitType, (int)m_bRespondsToBackKey,
+                             "BOMB slice fired: fruitType=%d clickOnRelease=%d pos=(%.1f,%.1f)",
+                             m_FruitType, (int)m_bClickOnRelease,
                              entity->pos.x, entity->pos.y);
                     m_pEntity = nullptr;
                     entity->scale = m_BaseScale;
@@ -856,7 +867,11 @@ void MenuButton::Update(float dt) {
             m_TouchSlot = slot;
             if (slot >= 0) {
                 if (IsTouchDown(slot) == 2) {
-                    if (!m_bRespondsToBackKey && m_FruitType < 0) {
+                    // v1.6.1 MenuButton::Update @0x0019ae24: PRESS-edge click. Dead in
+                    // v1.6.1 -- Init leaves m_bClickOnRelease=1 on every button and only
+                    // KeyboardControl::Update @0x0018f0f4 clears it (bypassed in this
+                    // port). Kept because the binary keeps the branch.
+                    if (!m_bClickOnRelease && m_FruitType < 0) {
                         m_ClickCallback();
                     }
                 } else {
@@ -888,9 +903,12 @@ void MenuButton::Update(float dt) {
                     } else {
                         size = m_RestScale;
                         // v1.6.1 MenuButton::Update @0x0019af3c: touch-slot detach is
-                        // gated on m_bRespondsToBackKey -- buttons that also respond to
-                        // the back key keep their touch slot on drag-off.
-                        if (!m_bRespondsToBackKey) {
+                        // gated on m_bClickOnRelease -- release-firing buttons KEEP the
+                        // slot on drag-off, so dragging back in and lifting still fires.
+                        // Since Init leaves the flag 1, this detach is dead in v1.6.1
+                        // (HLE-confirmed: drag off a menu toggle, drag back in, release
+                        // -> it still toggles).
+                        if (!m_bClickOnRelease) {
                             m_TouchSlot = -1;
                         }
                     }

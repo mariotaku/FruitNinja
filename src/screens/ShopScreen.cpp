@@ -1054,8 +1054,6 @@ void ShopScreen::Update(float dt) {
                 m_pBuyButton->Init(_Vector3<float>(0.0f, 0.0f, 0.0f),
                     Mortar::Delegate0<void>::Make(this, &ShopScreen::QuitShopCallback),
                     backFruitType, _Vector3<float>(0.0f, 0.0f, 0.0f), nullptr);
-                // Binary: m_bRespondsToBackKey = 1.
-                m_pBuyButton->m_bRespondsToBackKey = 1;
                 m_pBuyButton->m_bBackdropActive = 1; // v1.6.1 ShopScreen::Update @0x001b3570
                 game_work.mHud->AddControl(m_pBuyButton, false);
                 // Binary: register DeletedMenuItem as m_RemoveCallback

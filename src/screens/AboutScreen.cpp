@@ -425,7 +425,6 @@ void AboutScreen::CreateBackButton()
         game_work.m_RingColours[1],
         31.0f, 10.0f, true, true);
 
-    m_pBackButton->m_bRespondsToBackKey = 1;
     m_pBackButton->m_bBackdropActive = 1; // v1.6.1 AboutScreen::Update @0x0015c894 (strb #1, [btn,#0x150])
     game_work.mHud->AddControl(m_pBackButton);
 

@@ -195,8 +195,18 @@ public:
     // +0x134: grow-in delay countdown; Init=1.0; Update gates on >0; decrements by dt.
     float           m_GrowInTimer;         // +0x134
 
-    // +0x138: when 1, back-key fires action
-    uint8_t         m_bRespondsToBackKey;  // +0x138
+    // +0x138: click-EDGE selector (NOT a back-key flag -- the back-key gate is
+    // m_bBackdropActive +0x150). Formerly mis-named m_bRespondsToBackKey.
+    //   1 = fire m_ClickCallback on the RELEASE edge (TouchReleased @0x0019a814) and
+    //       KEEP the touch slot when the finger drags off the button (@0x0019af3c).
+    //   0 = fire on the PRESS edge (Update @0x0019ae24).
+    // Only read where m_FruitType < 0 (toggle buttons); fruit/bomb buttons fire off the
+    // slice test instead.
+    // ASM-spec v1.6.1 MenuButton::Init @0x0019b9bc: `mov r6,#1; strb r6,[r0,#0x138]` --
+    // every button is release-firing by default. The binary's only 0-writer is
+    // KeyboardControl::Update @0x0018f0f4 (on-screen keyboard keys must act on press);
+    // that class is bypassed in this port, so nothing writes 0 here.
+    uint8_t         m_bClickOnRelease;     // +0x138
 
     // +0x139: drag-cancel flag
     uint8_t         m_bDragCancel;         // +0x139
