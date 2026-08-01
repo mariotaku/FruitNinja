@@ -3,6 +3,32 @@
 // SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK. Ships with the webOS buildroot SDK's
 // SDL2 (SDL-webOS 2.30.12); absent from stock upstream SDL2, hence the gate.
 #include <SDL_webOS.h>
+#include <cstddef>
+
+// Port specific: SDL-webOS (release-2.30.12-webos.N) is ABI-INCOMPATIBLE with
+// stock SDL2. It inserts `Uint32 inputSource` into SDL_KeyboardEvent right after
+// windowID, which pushes state/repeat/keysym four bytes later than upstream:
+//
+//   upstream:  type timestamp windowID | state repeat pad2 pad3 keysym
+//   SDL-webOS: type timestamp windowID inputSource | state repeat pad2 pad3 keysym
+//
+// The TV's system libSDL2 is the fork, so building the webOS target against
+// stock headers would read `.state` out of `inputSource` and `.keysym` out of
+// the wrong word -- silently, with no link error, because the scancode enum is
+// unchanged (the webOS additions are purely additive in the 340-505 range stock
+// leaves unused; SDL_SCANCODE_AC_BACK is 270 and SDL_NUM_SCANCODES 512 on both
+// sides). CMake keeps webOS on the sysroot's pkg-config SDL2 for exactly this
+// reason, in a REQUIRED if/elseif arm no FetchContent fallback can reach.
+//
+// This assert makes that assumption loud instead of silent: if someone ever
+// points the webOS build at a stock SDL2, it fails here rather than shipping a
+// binary whose key events are misparsed on-device.
+static_assert(offsetof(SDL_KeyboardEvent, state) ==
+                  offsetof(SDL_KeyboardEvent, windowID) + 2 * sizeof(Uint32),
+              "webOS build is compiling against stock SDL2 headers: "
+              "SDL_KeyboardEvent is missing the webOS inputSource field, so key "
+              "events will be misparsed against the TV's system libSDL2. Use the "
+              "buildroot sysroot's SDL2 (SDL-webOS), not a vendored/stock one.");
 #endif
 #include "config.h"
 #include "render/gl_funcs.h"
