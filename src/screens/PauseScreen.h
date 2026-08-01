@@ -60,14 +60,18 @@ public:
     // +0x98: P1 Resume button (pause_button / play_button swap)
     MenuButton* m_ResumeButton;
 
-    // +0x9c: P2 Resume button (MP only -- Tier-2; always nullptr in Tier-1)
+    // +0x9c: P2 Resume button. Built only inside PauseScreen::Update's
+    // IsSameScreenMultiplayer() arm, which is dead in v1.6.1 -- stays nullptr.
     MenuButton* m_P2ResumeButton;
 
     // +0xa0: P1 Quit button -- BSButton in binary (v1.6.1 PauseScreen::Update @0x001a5ebc)
     BSButton* m_QuitButton;
 
-    // +0xa4: P2 Quit button (MP only -- Tier-2; always nullptr in Tier-1)
-    MenuButton* m_P2QuitButton;
+    // +0xa4: P2 Quit button -- BSButton in binary, exactly like m_QuitButton
+    // (v1.6.1 PauseScreen::Update @0x001a66f0 create block: operator new(0xe8) then
+    // BSButton::BSButton). Only ever built inside the IsSameScreenMultiplayer() arm,
+    // which is dead in v1.6.1 -- so this stays nullptr at runtime.
+    BSButton* m_P2QuitButton;
 
     // +0xa8: 5th MenuButton* slot (binary nulled at ctor; never assigned in shipped code)
     MenuButton* m_Pad_0xA8;
@@ -75,7 +79,8 @@ public:
     // +0xac: P1 Retry button (retry_button.tex)
     MenuButton* m_RetryButton;
 
-    // +0xb0: P2 Retry button (MP only -- Tier-2; always nullptr in Tier-1)
+    // +0xb0: P2 Retry button. Same IsSameScreenMultiplayer()-gated create block as
+    // m_P2ResumeButton -- dead in v1.6.1, stays nullptr.
     MenuButton* m_P2RetryButton;
 
     // +0xb4: secondary button-fade alpha; ctor = 1.0
@@ -217,7 +222,7 @@ void SkipToPause(bool force);
 //   m_ResumeButton   +0x98
 //   m_P2ResumeButton +0x9c
 //   m_QuitButton     +0xa0  (BSButton* in binary, v1.6.1 @0x001a5ebc)
-//   m_P2QuitButton   +0xa4
+//   m_P2QuitButton   +0xa4  (BSButton* in binary, v1.6.1 @0x001a66f0)
 //   m_Pad_0xA8       +0xa8  (5th MenuButton* slot, never assigned)
 //   m_RetryButton    +0xac
 //   m_P2RetryButton  +0xb0

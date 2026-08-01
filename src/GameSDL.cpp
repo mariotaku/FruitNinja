@@ -463,10 +463,18 @@ void Game::pollInput() {
             // (Frontend) is dead code (FrontendTask.cpp / SplashTask.cpp both jump
             // straight to State 2), so BOTH menus and gameplay run under
             // taskStateIndex==2 -- the menu screens ARE the paused Game task.
-            // The real discriminator is whether a menu's back-bomb ring is armed:
-            // every menu screen (Main/GameMode/Dojo/Shop/About/GameOver) sets
-            // m_bBackdropActive=1 on its back/regress MenuButton, and that flag is
-            // never set during a live round. See HUDControl::HasActiveBackBomb.
+            // Discriminator is TWO conditions, and the back-bomb ring alone is not
+            // enough. Every menu screen (Main/GameMode/Dojo/Shop/About/GameOver)
+            // arms m_bBackdropActive=1 on its back/regress MenuButton -- but so
+            // does PauseScreen on its resume button (+0x150, faithful to the
+            // binary), which is live DURING a round. So gate on bM_bPaused too:
+            // the binary uses +0x05 as its menu-vs-play gate (GameUpdate @0x1cf9c4
+            // `ldrb r3,[gctx,#0x5]; cmp; bne` suppresses miss penalty / gank /
+            // GameOver on the menu), so bM_bPaused==0 IS a live round.
+            //
+            // Port specific: do NOT swap this for m_bRespondsToBackKey/+0x138.
+            // That field is the click-EDGE selector (m_bClickOnRelease) whose
+            // binary default is 1 on EVERY button, so it discriminates nothing.
             if (game_work.taskStateIndex == 2) {
                 bool menuBackActive = false;
                 bool mid = false;
@@ -478,7 +486,7 @@ void Game::pollInput() {
                         if ((*it)->HasActiveBackBomb()) menuBackActive = true;
                     }
                 }
-                if (menuBackActive) {
+                if (menuBackActive && game_work.bM_bPaused != 0) {
                     // Menu: block while any HUD control's transition alpha is
                     // mid-fade (BaseScreen subclasses / ShopScreen override
                     // GetTransitionAlpha; everything else reports 1.0f, a no-op
