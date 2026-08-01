@@ -325,10 +325,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_Z13PreloadSoundsv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 24600,
-  "reason": "Global game function _Z13PreloadSoundsv: significant port-side TODO gaps. Score 32440/24800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 32440/24800 -> 32395/24600]",
-  "score": 32395,
+  "asm_hash": "9d125550a8e79c92",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 246,
+  "reason": "Port is 179 instructions vs the binary's 246. One TODO remains in src/game/PreloadSounds.cpp. Delta is the SoundManager function-local-static guard (`tst GREG,#1`) plus the port's table-driven preload loop against the binary's straight-line call list. Deferred, but the 27% shortfall is unexplained -- worth a targeted read if the preload set ever looks short. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 171000,
   "verdict": "ACCEPT-deferred"
  },
  "_Z13SetupGameWorkv": {
@@ -981,18 +982,20 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN10MenuButton11CreateFruitEv": {
-  "decided_at": "2026-06-18T01:24Z",
-  "max_score": 22700,
-  "reason": "Fresh-sweep: new untriaged symbol, raw verdict=DIVERGE, score 29010/22700. ACCEPT-deferred pending narrower investigation. [fresh-sweep 2026-06-14T05:19Z]",
-  "score": 31180,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "8449af91fd234125",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 227,
+  "reason": "The prior entry was an auto fresh-sweep placeholder ('ACCEPT-deferred pending narrower investigation') with no evidence behind it. Sizes are near-equal (221p vs 227b). MenuButton.cpp is under concurrent edit -- not re-verified. Anchored so it restales. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 136000,
+  "verdict": "UNSURE"
  },
  "_ZN10MenuButton11LoadContentEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 6200,
-  "reason": "Score 11569/5800. Large function with GOT, texture loading, SmartPtr differences. All MenuButton field offsets are 4 bytes off (Delegate0 size issue). ACCEPT-deferred pending Delegate0 fix. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 11569/5800 -> 13600/6200]",
-  "score": 13600,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "8feaf7ebd95f4c95",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 62,
+  "reason": "The prior rationale blamed a Delegate0 sizing bug shifting every MenuButton field by 4 and deferred pending that fix; that claim needs re-checking against the current header. Port is 40 instructions vs the binary's 62 -- 35% short on a content loader. MenuButton.cpp is under concurrent edit. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 32000,
+  "verdict": "UNSURE"
  },
  "_ZN10MenuButton12HasNewSymbolEv": {
   "decided_at": "2026-06-21T00:00Z",
@@ -1127,9 +1130,10 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN10MenuButtonC1EN6Mortar8SmartPtrINS0_7TextureEEE8_Vector3IfENS0_9Delegate0IvEEiS5_S7_": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch MED: binary MenuButton ctors take SmartPtr/Vec3/Delegate by value; port takes them by pointer. Also binary has string-based ctor; port has different overload set. Major ctor divergence. Fix: restructure MenuButton ctors to match binary's by-value passing conventions.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "636a4eb219428790",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior FIX-NEEDED rationale is STALE -- the by-value SmartPtr/Vec3/Delegate0 ctor exists and the sides pair on the identical mangled name. The residual (155p vs 105b) looks like the same Vec3-by-value stack spill as the CheckBox/SliderControl ctors, but MenuButton is under concurrent edit so it was not verified. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "UNSURE"
  },
  "_ZN10MenuButtonD0Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -1359,11 +1363,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11AboutScreen6UpdateEf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 36900,
-  "reason": "AboutScreen method stub/divergence. Score 28900/28300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 28885/28300 -> 37780/36900]",
-  "score": 37780,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "fdcdbe13526ef128",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 369,
+  "reason": "Port is 103 instructions against the binary's 369 -- 28%, the same 'port much smaller' shape that turned out to be six real divergences in SplatEntity::Update (bb3f7f1e). The prior rationale was content-free boilerplate ('AboutScreen method stub/divergence') with no cited TODO and no systemic cause, so nothing accounts for the missing two thirds of the body. Needs a real read of the binary's Update against the port. NOTE: AboutScreen.cpp is under concurrent edit; this entry asserts only what the report shows and will restale on the next source change. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 336000,
+  "verdict": "FIX-NEEDED"
  },
  "_ZN11AboutScreen7AddLineEPKc6Colouri": {
   "decided_at": "2026-07-01T00:00Z",
@@ -1371,9 +1376,10 @@
   "verdict": "FIX-NEEDED"
  },
  "_ZN11AboutScreen7NewDrawEv": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary AboutScreen::NewDraw() vs port AboutScreen::NewDraw(float). Port adds float param not in binary. Fix: drop the float param from port.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "bcfc8a1fb0622a38",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior FIX-NEEDED rationale is STALE -- the spurious float param is gone and the sides pair on the identical mangled name. The residual body delta (241p vs 185b) is untriaged. AboutScreen.cpp is under concurrent edit; anchored so it restales on the next change. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "UNSURE"
  },
  "_ZN11AboutScreen7ReleaseEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -1602,9 +1608,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11FNHighscoreC1Ev": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary FNHighscore() default ctor vs port FNHighscore(char const*, unsigned long, int, int, void*, char const*) with online-service params. Defunct online leaderboard service; stub ctor shape differs. No gameplay impact.",
-  "verdict": "ACCEPT-defunct"
+  "asm_hash": "01efbe700932e5c9",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior rationale is STALE (claimed a sig mismatch; the default ctor pairs exactly). Real delta: the binary's default ctor is 9 instructions and only zeroes two bytes (`strb [GREG]`, `strb [GREG,#32]`), while the port memsets the whole record (src/game/FNHighscore.cpp:12) -- a chain of `str GREG,[GREG],#4` over +0..+52 plus `strb [GREG,#83]`. Defunct online leaderboard, no gameplay impact, but the port is a superset of the binary rather than a match, and the body carries no `// Defunct:` marker, so this is deferred rather than defunct. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN11FileManager10FileExistsEPKcm": {
   "decided_at": "2026-06-14T05:55Z",
@@ -1753,9 +1760,10 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11FruitCamera16SetupPerspectiveENS_15PERSPECIVE_TYPEEb": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary FruitCamera::PERSPECIVE_TYPE (scoped enum) vs port PERSPECIVE_TYPE (unscoped). Same underlying int; ABI-identical on ARM32. Cosmetic demangler difference.",
-  "verdict": "ACCEPT-cosmetic"
+  "asm_hash": "eeb234630f1cca65",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior ACCEPT-cosmetic rested on a demangler/scoped-enum argument that is now STALE (the sides pair on the identical mangled name), so it explains none of the residual. Port is 186 instructions vs the binary's 274 -- 32% SHORT on a projection setup -- and the port opens with a `ldrb [GREG,#264]; cmp #0` gate the binary does not have. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "UNSURE"
  },
  "_ZN11FruitCamera17CreateCameraShakeE8_Vector3IfEff": {
   "decided_at": "2026-06-14T05:55Z",
@@ -1826,11 +1834,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11ItemManager11UnequipItemEm": {
-  "decided_at": "2026-06-18T02:35Z",
-  "max_score": 3200,
-  "reason": "New symbol. Score 5450/3200. [auto 2026-06-18T02:35Z]",
-  "score": 5450,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "7b1521ae7983312e",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 32,
+  "reason": "Same inlined-std::map shape as AchievementManager::AchievementExists: the binary constructs a stack iterator and calls _Rb_tree::find plus compare out of line; the port inlines the walk (`add GREG,#32` = map base +4 sentinel, `ldr [GREG,#36]`, then key/left/right at +16/+12/+8). The apparent base+4 shift is the _M_header, not a field-offset bug. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 21621,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11ItemManager12LoadItemDataEv": {
   "decided_at": "2026-06-21T00:00Z",
@@ -2119,18 +2128,20 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11PauseScreen16QuitGameCallbackEv": {
-  "decided_at": "2026-06-14T07:00Z",
-  "max_score": 2100,
-  "reason": "game_work offsets MATCH: port loads game_work via GOT; [r7,#0x50] FruitSaveData matches binary [r4,#0x50]. [r1,#0x89] strb in both. Score 3750/2100. Residual: port reads [r0,#0xd4] vs binary [r0,#0xd8] for PauseScreen state field (pre-existing PauseScreen struct layout difference, not game_work issue); port adds MortarGame guard + game_work null-check cbz. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 3755/2100 2026-06-14T05:55Z]",
-  "score": 3750,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "ae84f3b61d25270b",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 21,
+  "reason": "PauseScreen.cpp is under concurrent edit, so this row was not re-verified. The carried rationale itself admits a residual PauseScreen layout difference (port reads [+0xd4] where the binary reads [+0xd8]) -- that is a field-offset divergence, not an accept. Anchored to the current hash so it restales. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 9692,
+  "verdict": "UNSURE"
  },
  "_ZN11PauseScreen17PauseGameCallbackEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 11200,
-  "reason": "Stale refresh: score improved 14160->11720/11000. SFX/pause-animation hooks Tier-2. ACCEPT-deferred. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 12295/11000 -> 12575/11200]",
-  "score": 12575,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "63f6dc31deac02d9",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 112,
+  "reason": "PauseScreen.cpp is under concurrent edit, so this row was not re-verified. The carried rationale cites Tier-2 SFX/pause-animation hooks without a file:line. Anchored to the current hash so it restales. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 68923,
+  "verdict": "UNSURE"
  },
  "_ZN11PauseScreen17QuitGameCallback2Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -2140,18 +2151,20 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11PauseScreen17RetryGameCallbackEv": {
-  "decided_at": "2026-06-14T07:00Z",
-  "max_score": 4300,
-  "reason": "game_work offsets MATCH: m_ElapsedGameTime at +0x1b8 CONFIRMED -- both binary (vldr s14,[r3,#0x1b8]) and port (vldr s14,[r3,#0x1b8]) read identical offset and compare to vmov.f32 s15,#0x25 (10.5f). game_work base loaded from GOT+0xa4. [r3,#0x50] FruitSaveData same. Score 6295/4300. Residual: port reads PauseScreen state at [r0,#0xd4] vs binary [r0,#0xd8] (pre-existing PauseScreen field offset difference); port adds FruitSaveData::ClearCombo call + MortarGame/game_work null guards. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 6440/4300 2026-06-14T05:55Z]",
-  "score": 6295,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "3496bcad37c3b5e7",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 43,
+  "reason": "PauseScreen.cpp is under concurrent edit, so this row was not re-verified. The carried rationale confirms m_ElapsedGameTime at +0x1b8 on both sides but does not account for the rest of the delta. Anchored to the current hash so it restales. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 22764,
+  "verdict": "UNSURE"
  },
  "_ZN11PauseScreen18PauseGameCallback2Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3100,
-  "reason": "Score 3600/3300. Structural differences in pause callback. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3600/3300 -> 3730/3100]",
-  "score": 3730,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "4379e12348a2dfa0",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 31,
+  "reason": "PauseScreen.cpp is under concurrent edit, so this row was not re-verified. The carried rationale ('structural differences in pause callback') explains nothing; it is anchored to the current hash only, so it restales the moment the source changes instead of staying permanently invisible. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 23000,
+  "verdict": "UNSURE"
  },
  "_ZN11PauseScreen20ContinueGameCallbackEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -2161,10 +2174,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11PauseScreen21SetToMultiplayerStateEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1400,
-  "reason": "Stale refresh: score improved 2310->1800/1400. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-  "score": 1800,
+  "asm_hash": "9bf7d0fca8839666",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 14,
+  "reason": "Defunct P2P multiplayer UI state setter. The binary sets the MP pause layout (two CALLs plus `strb GREG,[GREG,#329]` reached through `[this+172]->[+152]`); the port body is a single tail `b <SYM>`. Consistent with the stub-don't-skip policy, but the body carries no `// Defunct:` marker, so this is deferred rather than defunct -- add the marker and it can move to ACCEPT-defunct. PauseScreen.cpp is under concurrent edit. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 14000,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11PauseScreen4InitEv": {
@@ -2306,11 +2320,12 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11PowerUpShop6UpdateEf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 37500,
-  "reason": "Score increased 50099->56596/38300. Port Update loop diverging; pending full PowerUpShop::Update RE (binary @ 0x00156398). [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 56596/38300 -> 57955/37500]",
-  "score": 57955,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "cbd9de78a307308f",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 375,
+  "reason": "The prior entry defers to a 'pending full RE of PowerUpShop::Update @0x00156398' that has not happened; the rationale is a placeholder, not an explanation, on a 738-line diff. Screen file under concurrent edit. Anchored so it restales. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 256264,
+  "verdict": "UNSURE"
  },
  "_ZN11PowerUpShop7ReleaseEv": {
   "decided_at": "2026-06-14T07:00Z",
@@ -2362,10 +2377,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SlashEntity10InitPointsEl": {
-  "decided_at": "2026-06-17T00:00Z",
-  "max_score": 7500,
-  "reason": "InitPoints: normal.z=1.0 fix applied. Remaining: binary uses unrolled Duff's-device loop with ARM32 GOT pointer to fill 160 records while port uses simple nested for-loops; different codegen pattern but identical result. Score 237% structural difference from loop unrolling. [2026-06-17 blade-trail fixes]",
-  "score": 17805,
+  "asm_hash": "0d47392b3043bd61",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 75,
+  "reason": "Carried forward: the binary fills the 160 point records with an unrolled Duff's-device loop through a GOT pointer, the port uses plain nested for-loops. Shared `str GREG,[GREG,#80]`. The loop-rotation caveat applies -- this one needs a cross-compile if it is ever promoted past deferred. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 62857,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SlashEntity10TouchMoveXEP10InputEvent": {
@@ -2396,10 +2412,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SlashEntity12SetModScalesEffffbbf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3200,
-  "reason": "SetModScales: binary uses GOT-indirect vstr for float globals; port uses vmov/str. Same writes, cosmetic encoding difference. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3875/3500 -> 3100/3200]",
-  "score": 3100,
+  "asm_hash": "af464d44d165aca0",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 32,
+  "reason": "Reloc idiom only: the binary loads each global's address from the GOT then `vstr VREG,[GREG]`; the port does `vmov GREG,VREG` then `str GREG,[GOTBASE,GREG]` (GOT-indexed store of the same bit pattern). Same global set in the same order, same trailing `strb` for the bool members. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 21000,
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11SlashEntity12UpdatePointsEf": {
@@ -2499,11 +2516,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SlashEntity7ReleaseEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3300,
-  "reason": "Release: port uses PSPParticleManager singleton guard (Entity refactor); binary used direct blx. Equivalent teardown. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 4770/3200 -> 5990/3300]",
-  "score": 5990,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "b9b5be8d25b45767",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 33,
+  "reason": "The teardown head matches exactly (null-check, release, zero at +92, +96, +60), so the container/singleton rationale covers most of the body -- but not the tail. The binary ends with `add GREG,GREG,GREG; mov GREG,#0; strb GREG,[GREG,#204]` -- a byte cleared in an INDEXED object (base + index) at +204 -- and the port has no counterpart store at all; it writes `mov GREG,#0; str GREG,[GREG,#88]` instead (different offset, different width). A `-` store with no `+` partner is a missing write, not scheduling. STAMP: downgrade src/entities/SlashEntity.cpp:368 from ASM-verified to ASM-spec. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 17134,
+  "verdict": "FIX-NEEDED"
  },
  "_ZN11SlashEntity8AddPointE8_Vector3IfES1_f": {
   "decided_at": "2026-07-01T00:00Z",
@@ -2616,10 +2634,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SplatEntity16DrawActiveSplatsEv": {
-  "decided_at": "2026-06-18T05:57Z",
-  "max_score": 9300,
-  "reason": "SplatEntity::DrawActiveSplats -- score 19305/8900 (grew from 19193 after R8/R9/R10). Entity Draw method with iteration through active list, MatrixManager, sprite-batch. Tier-2 deferred. [fresh-sweep re-triage 2026-06-14T05:55Z]",
-  "score": 14195,
+  "asm_hash": "37bce7aaab824353",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 93,
+  "reason": "Draw loop over the active list with MatrixManager plus sprite batch. Note the port adds an entry null gate (`ldr [GOT]; cmp GREG,#0; beq`) that the binary does not have -- benign for a draw path, but it is a port-side guard, not a match. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 57089,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SplatEntity18UpdateActiveSplatsEf": {
@@ -2657,16 +2676,18 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11SplatEntity9DrawSplatEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 15000,
-  "reason": "Port DrawSplat (src/entities/SplatEntity.cpp:675) generates different code due to C++ struct-method approach (Colour::TintColour + pack) vs binary's inlined VFP float-to-byte arithmetic. Binary at 0x0017f008 uses inline vcvt/clamp/pack; port calls TintColour. ASM-verified: 2026-05-18 binary @ 0x0017f008 (re-analyst). Score 26665/16200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 26670/16200 -> 28175/15000]",
-  "score": 28175,
+  "asm_hash": "2a333630b1e0aebb",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 150,
+  "reason": "Carried forward: the port routes tint through Colour::TintColour where the binary inlines the VFP float-to-byte clamp/pack. Not independently re-verified in this pass (314-line diff); anchored to the current hash. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 113235,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SplatEntity9MakeSplatE8_Vector3IfES1_bbl": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary SplatEntity::MakeSplat(Vec3,Vec3,bool,bool,long) vs port (Vec3,Vec3,bool,int,bool). Param 4: binary bool, port int. Param 5: binary long, port bool. Real type divergence. Fix: change param 4 from int to bool and param 5 from bool to long.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "f8fefb4bd1e80cbb",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior FIX-NEEDED rationale is STALE -- the param-4/param-5 type fix has landed (src/entities/SplatEntity.h:138 is now `(Vec3, Vec3, bool, bool, long)`) and the sides pair on the identical mangled name. Sizes are near-equal (207p vs 211b), so no gross missing block. The residual body delta was not re-verified line by line in this pass. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN11SplatEntityC1Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -2799,10 +2820,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11WaveManager11GetNextWaveEi": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 37600,
-  "reason": "Stale refresh: score improved 89056->87960. Port uses named API. ACCEPT-deferred. [score refreshed 2026-05-23T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 66195/37300 -> 70403/37600]",
-  "score": 70403,
+  "asm_hash": "c4da4ff320086ea3",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 376,
+  "reason": "Carried forward: large wave-selection function, port uses named API where the binary uses blx chains. Rationale not independently re-verified in this pass (685-line diff); anchored to the current hash so it restales on the next change rather than staying invisible. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 252229,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11WaveManager12CriticalModeEi": {
@@ -2858,10 +2880,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11WaveManager16IsWaveProcessingEi": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 6600,
-  "reason": "WaveManager::IsWaveProcessing -- score drift 7660->8305/5700 post R9. GOT encoding change. [refreshed 2026-05-24]. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 8305/5700 -> 9355/6600]",
-  "score": 9355,
+  "asm_hash": "c023f744111d3cf7",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 66,
+  "reason": "Same fields, different addressing: binary `add GREG,GREG,GREG; ldrb GREG,[GREG,#580]`, port `add GREG,GREG,#580; ldrb GREG,[GREG,GREG]`. Both then index m_WaveCount at base +564 with `add GREG,GREG,GREG,lsl #2` and gate on `ldrb [GREG,#57]`. This is also the row that pins m_WaveCount's base at +564 on BOTH sides, which is what makes WaveModifier::RemoveModifier's +568 read a real signal. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 35999,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11WaveManager16ResetWaveChancesEv": {
@@ -3292,11 +3315,12 @@
   "verdict": "FIX-NEEDED"
  },
  "_ZN12ScoreControl14AddMultipliyerEi": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 100,
-  "reason": "ScoreControl method stub/divergence. Score 400/100. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-  "score": 400,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "556e0a538cc3749b",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 1,
+  "reason": "Both sides are empty. The binary body is exactly `bx lr` (1 instruction); the port is `mov GREG,GREG; bx lr` (2). No semantics on either side. Prior 'stub/divergence' boilerplate was uninformative. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 500,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12ScoreControl4InitEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -3313,11 +3337,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN12ScoreControl5ResetEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4200,
-  "reason": "ScoreControl method stub/divergence. Score 8120/4300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 8120/4300 -> 8265/4200]",
-  "score": 8265,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "e9d323002582f2ed",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 42,
+  "reason": "Prior rationale was content-free boilerplate. The two bodies do not agree on what Reset touches: the binary reaches its sub-object through the literal pool (`ldr [pc,#POOL]; add #116; add #248`) then does `mov #1; strb [GREG,#124]`, while the port loads `[GREG,#248]` and `[GREG,#252]` from `this` and additionally zeroes +40, +52, +244 and the +184..+204 block. Confirm whether the binary clears that block elsewhere. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 32000,
+  "verdict": "UNSURE"
  },
  "_ZN12ScoreControl6UpdateEf": {
   "asm_hash": "70c34669df698a1d",
@@ -3422,10 +3447,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12ScreenEffect8ActivateEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 18300,
-  "reason": "ScreenEffect::Activate -- score improved 33390->32055/17600 [refreshed 2026-05-24 post R8]. Port uses std::vector iteration vs binary pointer-pair; PSPParticleManager::ClearEmitter wiring added. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 31747/17600 -> 34150/18300]",
-  "score": 34150,
+  "asm_hash": "1470eae481745998",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 183,
+  "reason": "Sizes are near-equal (181p vs 183b). Delta is container idiom plus lazy singleton: the binary calls the std::vector/list iterator helpers out of line and spills to [sp,#100], the port inlines them and adds the `tst GREG,#1` function-local-static guard. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 125000,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN12ScreenEffectC1Ev": {
@@ -3603,10 +3629,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12SpeedControl6UpdateEf": {
-  "decided_at": "2026-06-18T02:35Z",
-  "max_score": 31800,
-  "reason": "SpeedControl::Update -- port has PSPParticleManager::ClearEmitter guard plus singleton-init pattern; binary uses direct blx GOT chain. Structural differences from fuller port particle/sound management. Score 43856/33000. [score refreshed 2026-05-20T12:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 43856/33000 -> 43925/31800]",
-  "score": 44390,
+  "asm_hash": "5f98eb2a48b4c11f",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 318,
+  "reason": "Carried forward: the port carries the PSPParticleManager::ClearEmitter guard and singleton-init pattern where the binary uses a direct blx GOT chain. Not independently re-verified in this pass (667-line diff); anchored to the current hash. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 233730,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN12SpeedControlC1Ev": {
@@ -3700,11 +3727,12 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12WaveModifier14RemoveModifierEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4400,
-  "reason": "Score 2200/1700. Port has bx lr stub vs binary. ACCEPT-deferred. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2200/1700 -> 5690/4400]",
-  "score": 5690,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "2125632d9aa38d31",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 44,
+  "reason": "Prior rationale was FALSE on its face ('Port has bx lr stub vs binary') -- the port body is 271 instructions, six times the binary's 44. Real signal: after the GetInstance() CALL the binary reads `ldr GREG,[GREG,#568]` and the port reads `ldr GREG,[GREG,#564]` at the same point in the stream. WaveManager::IsWaveProcessing pins the m_WaveCount BASE at +564 on BOTH sides, so the binary gates on m_WaveCount[1] here while the port source reads m_WaveCount[0] -- an index/offset divergence in the wave-reset gate, not a codegen artifact. Secondary: the port erases override entries one at a time in a while loop (dst.erase(it) per element) where the binary does one bulk front-erase; that explains the size blow-up but not the +568/+564 read. STAMP: downgrade src/game/WaveModifier.cpp:392 from ASM-verified to ASM-spec. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 40265,
+  "verdict": "FIX-NEEDED"
  },
  "_ZN12WaveModifier14UpdateSpecificEf": {
   "decided_at": "2026-06-14T05:55Z",
@@ -3876,17 +3904,19 @@
   "verdict": "ACCEPT-defunct"
  },
  "_ZN13FruitSaveData6UpdateEfP3HUD": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 19200,
-  "reason": "Stub; achievement progress timer not ported. See src/game/FruitSaveData.cpp:222-224 // Stub for now. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 19110/17900 -> 19555/19200]",
-  "score": 19555,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "015d985683b1613f",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 192,
+  "reason": "Prior rationale is FALSE -- it claimed 'Stub; achievement progress timer not ported. See src/game/FruitSaveData.cpp:222-224 // Stub for now'; there is no such comment there and the port has a complete body (src/game/FruitSaveData.cpp:301). Good news from the diff: the offsets MATCH -- the port's `ldr [GREG,#368]` is _M_node_count and `add GREG,#352` is _M_header for a std::map based at +348, exactly the binary's +348. But the port is 75 instructions against 192, and inlined-map-vs-out-of-line does not obviously account for a 61% shortfall. Re-verify the unlock-dispatch tail before accepting. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 152000,
+  "verdict": "UNSURE"
  },
  "_ZN13FruitSaveData8AddToQueEPKcm": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2900,
-  "reason": "Port is a deliberate stub returning 1 (always allow queue). Binary has full body: StringFromCharN + struct lookup + score threshold at [r5,#0x16c]. Stub documented at src/game/FruitSaveData.cpp:200 // Binary @ (unknown) -- stub: always allow queuing. Safe per #52 audit (AchievementManager no-op). Score 3205/2900. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4627/2900 -> 3825/2900]",
-  "score": 3825,
+  "asm_hash": "e0e1ca4e30607ff7",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 29,
+  "reason": "Prior rationale is FALSE -- it claimed 'a deliberate stub returning 1' and cited src/game/FruitSaveData.cpp:200, which holds no such comment; the port has a real body and the sizes are near-equal (30p vs 29b). Real delta: the binary copies the name into a 148-byte stack buffer (`sub sp,#148`, StringFromCharN) before the lookup, the port passes the pointer through (`sub sp,#8`); both then hit the same `[GREG,#368]` / `+348` map and the same score-threshold compare. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 17400,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN13FruitSaveData8GetTotalEPKc": {
@@ -3987,10 +4017,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN13ScoreModifier13ApplyModifierEbPf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 5100,
-  "reason": "Port calls AddDeferedPoints + SetScoreDelegate; binary calls GOT-resolved function pair. TODO at src/game/ScoreModifier.cpp:41-48. Score 5335/5300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5335/5300 -> 5040/5100]",
-  "score": 5040,
+  "asm_hash": "819f442e7fe631b7",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 51,
+  "reason": "Prior rationale cited a TODO at src/game/ScoreModifier.cpp:41-48 that DOES NOT EXIST (those lines are the tail of UpdateSpecific plus the ASM-verified marker). Real delta: both gate on `ldrb [GREG,#52]`, the binary falling into the work block and the port branching to it (beq vs bne with swapped block order), and the port's fallthrough is the m_ApplyCount increment at +48 that the marker documents. The remainder is GOT/delegate construction. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 36527,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN13ScoreModifier13ParseSpecificEP12TiXmlElement": {
@@ -4297,10 +4328,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN13SliderControlC1E8_Vector3IfES1_PKclltl": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 7200,
-  "reason": "SliderControl method stub/divergence. Score 12584/10000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 12584/10000 -> 11085/7200]",
-  "score": 11085,
+  "asm_hash": "65a625d1c71b571d",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 72,
+  "reason": "Same Vec3-by-value ABI divergence as the CheckBox ctor: binary `sub sp,#268` for the by-value struct temps, port `sub sp,#28` plus six `vstr VREG,[sp,#0..20]`. Known non-fixable class (the copy-ctor workaround was tried and reverted). [re-triaged 2026-08-01, hash-anchored]",
+  "score": 51958,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN13SliderControlC2E8_Vector3IfES1_15LocalizedStringlltl": {
@@ -4853,10 +4885,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN14PowerUpManager11SetDefaultsEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 3200,
-  "reason": "PowerUpManager::SetDefaults — binary inlines 6x vstr s16,[r3,#offset] storing 1.0f into pHud->scales[0..5]; port (src/game/PowerUpManager.cpp:85-101, ASM-verified 2026-06-19) does the same 6 direct `pHud->scales[N] = 1.0f` stores inline. [2026-07-30: corrected stale rationale -- it previously claimed the port called a `SlashEntity::ResetModScales()` helper; no such call exists in the port body, and that symbol was a port invention with no binary counterpart, deleted from src/ earlier today. The two are semantically identical regardless; remaining diff is PIC anchor + register choice.] Score 3315/3400. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 3315/3400 -> 2860/3200]",
-  "score": 2860,
+  "asm_hash": "c2d2c513e606c08f",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 32,
+  "reason": "Instruction scheduling only. Port and binary write the SAME offset set with the same values: 1.0f (vmov VREG,#112) to +100/+104/+108/+112/+136, 0 to +96 and to the GOT global itself, then 1.0f to [hud+64]+{8,12,16,20,24,28}. Only the emission order differs. Confirms the 2026-07-30 corrected rationale; now hash-anchored. [re-triaged 2026-08-01]",
+  "score": 14000,
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN14PowerUpManager12LoadTexturesEv": {
@@ -5142,11 +5175,12 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN15TutorialControlC1Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 6000,
-  "reason": "TutorialControl method stub/divergence. Score 12870/6200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 12870/6200 -> 14250/6000]",
-  "score": 14250,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "3740240038c37afb",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 60,
+  "reason": "Prior rationale was content-free boilerplate ('method stub/divergence'). The binary runs two sub-object ctor CALLs off +116/+144 with `str GREG,[GREG],#140`; the port's prologue and field set do not line up with that. No systemic cause identified, so not accepted. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 37000,
+  "verdict": "UNSURE"
  },
  "_ZN15TutorialControlC2Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -5262,11 +5296,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN16FruitFactControlC1Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 6300,
-  "reason": "FruitFactControl ctor C1 -- score drift 17100->16925/10100 [refreshed 2026-05-24 post R9]. GOT encoding change. See src/hud/FruitFactControl.cpp:306,309 Defunct markers. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 16925/10100 -> 20145/6300]",
-  "score": 20145,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "ca2338b70c01425a",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 63,
+  "reason": "Prior rationale cited 'src/hud/FruitFactControl.cpp:306,309 Defunct markers' -- those lines are nav-button repositioning, not Defunct markers, so the citation is FALSE. The ctors also initialise different fields: the port writes `strb 0xFF,[GREG,#155]`, `str [GREG,#128]`, `vstr [GREG,#148]`; the binary does `add #152` / `add #172` and a `str GREG,[GREG],#136` sub-object ctor chain. Port is 43 instructions vs 63. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 46000,
+  "verdict": "UNSURE"
  },
  "_ZN16FruitFactControlC2Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -5657,18 +5692,20 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN18AchievementManager14QueAchievementEP15AchievementInfoRSt17_Rb_tree_iteratorISt4pairIKmS1_EE": {
-  "decided_at": "2026-06-14T07:00Z",
-  "max_score": 5500,
-  "reason": "game_work offsets MATCH: game_work loaded via GOT+0xe4; [r3,#0x50] FruitSaveData access same as binary. Port adds check [r4,#0x190] (game_work.field_0x190 achievement count cap <= 10) -- field at +0x190 is a valid re-layout field (inherent port guard). Score 9420/5500. Residual: port uses std::_Rb_tree iterator walk with lsl#3 stride vs binary's 0x18-stride mla; port adds SmartPtr refcount on tree node deletion. [GameWork re-layout verify 2026-06-14T07:00Z] [prior: score 9425/5500 2026-06-14T05:55Z]",
-  "score": 9420,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "467673d356fe91bc",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 55,
+  "reason": "The carried rationale claims the game_work offsets match and that the port adds a `[GREG,#0x190]` cap check the binary lacks -- an extra port-side gate, which is not a match even if benign. AchievementManager.cpp is under concurrent edit right now, so this was not re-verified. Anchored so it restales. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 35000,
+  "verdict": "UNSURE"
  },
  "_ZN18AchievementManager17AchievementExistsEm": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1500,
-  "reason": "AchievementManager method stub/divergence. Score 4510/1500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-  "score": 4510,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "884728af6dcf4e36",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 15,
+  "reason": "Prior 'method stub/divergence' boilerplate was uninformative. Real delta is the documented inlined-std::map trap: the binary builds a stack iterator pair and makes three out-of-line calls (_Rb_tree::find plus iterator compare), while the port inlines the red-black walk -- `add GREG,#4` onto the map base (the _M_header sentinel) then `ldr [GREG,#16]` key / `ldrcc [GREG,#12]` left / `ldrcs [GREG,#8]` right. offsetof is identical; base+4 is the sentinel, not a layout bug. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 14210,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN18AchievementManager19LoadAchievementInfoEv": {
   "asm_hash": "7b363c25720863cb",
@@ -6236,11 +6273,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN3HUD6UpdateEf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 5900,
-  "reason": "HUD::Update -- score improved 6620->5990/5500 [refreshed 2026-05-24 post R5g HUD zero-divergence pass]. Port calls MissControl::PreUpdate; binary uses blx eb9b8. List iteration: std::list vs intrusive. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5990/5500 -> 6765/5900]",
-  "score": 6765,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "cd9b6d0eec2b1396",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 59,
+  "reason": "Prior rationale (std::list vs intrusive list) does not account for the whole delta. Same-slot condition flip: after `ldr GREG,[GREG,#8]; ldrb GREG,[GREG,#48]; cmp GREG,#0` the binary branches `beq <SYM>` and the port branches `bne <SYM>`, and both continue into `ldrb GREG,[GREG,#51]`. If the fallthrough paths are the same block, the per-control [+48] gate is inverted in the port. HUD::Update runs every frame -- verify the polarity before re-accepting. STAMP: downgrade src/hud/HUD.cpp:100 from ASM-verified to ASM-spec. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 33000,
+  "verdict": "FIX-NEEDED"
  },
  "_ZN3HUD7OnPauseEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -6250,10 +6288,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN3HUD7ReleaseEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4600,
-  "reason": "HUD::Release -- score improved 5395->5145/4700 [refreshed 2026-05-24 post R5g HUD zero-divergence pass]. Port uses std::list _ZdlPv loop vs binary intrusive-list blx chain. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5145/4700 -> 6965/4600]",
-  "score": 6965,
+  "asm_hash": "206403c97bab2867",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 46,
+  "reason": "Offsets agree (+52 strb, +8 deref, +50 byte gate, +56 block). Delta is container idiom: the binary calls std::list begin/end out of line and spills the iterator to [sp,#4]; the port inlines the walk (`ldr GREG,[GREG]; cmp GREG,GREG; beq`). Same teardown order. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 23000,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN3HUD9BeginDrawEf": {
@@ -6264,11 +6303,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN3HUDC1Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1300,
-  "reason": "Same initialization values (vmov s15,#0x70 = 1.0f, 6x vstr). Binary calls blx f51f8 (list _M_init sentinel setup) then vstr block; port writes sentinel pointers [r3,#0]/[r3,#4] directly then vstr block. vstr field order differs (compiler scheduling reorder) but all values identical. Score 1125/1200. [score refreshed 2026-05-24] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1125/1200 -> 1220/1300]",
-  "score": 1220,
-  "verdict": "ACCEPT-cosmetic"
+  "asm_hash": "b3cb732294f45361",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 13,
+  "reason": "Prior ACCEPT-cosmetic rationale MISCOUNTS the stores. The binary writes 7 float slots (+8, +12, +16, +20, +24, +28, +36) after its `CALL` to the list init; the port writes 8 (+8, +12, +16, +20, +24, +28, +32, +36) and pulls one value from the literal pool (`.word 0x0`) rather than vmov #112 (1.0f). So the port initialises a field at +32 that the binary leaves alone, with a different constant. Confirm whether +32 belongs to the inlined std::list init before accepting. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 8666,
+  "verdict": "UNSURE"
  },
  "_ZN3HUDC2Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -6339,10 +6379,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN4Bomb4InitEPvlP8_Vector3IfE": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 14800,
-  "reason": "Bomb::Init -- score improved 26794->25382/15000 [refreshed 2026-05-24 post R8/R9/R10]. Port uses named singletons vs binary blx chains. See src/entities/Bomb.cpp:894 TODO. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 25065/15000 -> 23206/14800]",
-  "score": 23206,
+  "asm_hash": "8bbc14db784307b1",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 148,
+  "reason": "Prior rationale cited a TODO at src/entities/Bomb.cpp:894 that DOES NOT EXIST. Sizes are close (142p vs 148b). Real delta: the port replaces the binary's branch-around with VFP conditional selects (`vldrne` / `vmoveq VREG,#112`) and resolves singletons by name where the binary uses blx chains. No missing store or offset divergence visible in the head. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 103999,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN4Bomb5ChuckEf": {
@@ -6448,10 +6489,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN4Coin7ArrivedEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1700,
-  "reason": "Coin method stub/divergence. Score 8095/1600. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 8095/1600 -> 8400/1700]",
-  "score": 8400,
+  "asm_hash": "fd29029a180d40bc",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 17,
+  "reason": "Two deliberate deviations, both described in the body comment at src/entities/Coin.cpp:139-145 but stamped as ASM-verified rather than DIFFERS: (1) the port gates the arrival delegate on `ldrb [GREG,#144]` (Delegate validity) where the binary calls `[this+112]` unconditionally; (2) the binary ends `orr GREG,GREG,#17` (flags |= ENT_INACTIVE|ENT_KILLED) and the port sets ENT_KILLED only. The rest is the PSPParticleManager function-local-static guard. STAMP: downgrade src/entities/Coin.cpp:139 from ASM-verified to DIFFERS. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 12836,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN4Coin7ReleaseEv": {
@@ -6551,11 +6593,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN4Math12SqrtAsyncSetEf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1700,
-  "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 1225/1800. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 1225/1800 -> 940/1700]",
-  "score": 940,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "c27ac81711b0ec4f",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 17,
+  "reason": "Same correction as Math::Sqrt -- there is no LUT in the binary. Binary inlines vcvt/vsqrt.f64/NaN-check/vcvt then stores; port calls Math::Sqrt out of line then stores. Both end with the same `vmov GREG,VREG; str GREG,[GOT]` to the same global. Whole delta = inline-vs-out-of-line sqrt. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 9000,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN4Math13LineIntersectER8_Vector3IfES2_S2_S2_S2_": {
   "asm_hash": "254352a75541b62a",
@@ -6580,9 +6623,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN4Math18ClosestPointOnLineER8_Vector3IfES2_S2_S2_": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary all 4 params non-const ref, port first 3 by-value + last by ref. On ARM32, Vec3 by-value vs by-non-const-ref is ABI-identical (both pass pointer). Cosmetic cv qualifier difference only.",
-  "verdict": "ACCEPT-cosmetic"
+  "asm_hash": "6d71d931e72e1565",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Needs asm-inspector compile pass. Prior ACCEPT-cosmetic rested on a cv-qualifier / by-value signature argument that is now STALE (both sides pair on the identical mangled name), so it explains none of the residual. Residual is arithmetic: the binary materialises `vmov VREG,#112` (+1.0f) and uses vmla/vsub/vmla/vadd/vdiv; the port materialises `vmov VREG,#240` (-1.0f, sign bit set) and uses vmls/vsub/vmla/vsub/vdiv. That is either an algebraically-equal folding of a -1.0 constant or a sign inversion in the projection term, and register normalisation makes it unresolvable by inspection. High fan-in math leaf -- settle it with a compile-level diff before accepting. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN4Math22GetUncompressedSizeLZ8EPKv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -6592,11 +6636,12 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN4Math4SqrtEf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1000,
-  "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 1400/1000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged]",
-  "score": 1400,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "bd9738416b2ee245",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 10,
+  "reason": "Prior rationale was WRONG (claimed a binary 'ARM LUT'; there is none). Binary widens to f64 (vcvt.f64.f32 / vsqrt.f64 / vcmp self NaN-test / libm fallback / vcvt.f32.f64). Port is `return sqrtf(x)` (src/engine/math/MathUtil.cpp:76), which GCC 4.4.1 tail-calls as a single `b <SYM>`. Output is bit-identical: hardware sqrt is correctly rounded in both precisions and the f32->f64->f32 round trip is exact for sqrt (53 >= 2*24+2), so no double-rounding error. Whole delta accounted for. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 10000,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN4Math6CosIdxEt": {
   "asm_hash": "c047a5f2b512637f",
@@ -6620,11 +6665,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN4Math6RandomC2Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1400,
-  "reason": "Math function stub/divergence; port uses stdlib vs binary ARM LUT/VFP. Score 2010/500. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2010/500 -> 1755/1400]",
-  "score": 1755,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "68a5d760033a33bb",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 14,
+  "reason": "Prior rationale was WRONG ('stdlib vs binary ARM LUT/VFP'; no VFP or LUT here). Real delta is constant materialisation only: the binary loads the seeds from the literal pool (.word 0xdeadbeef / 0x6c078965 / 0x5d588b65 / 0x269ec3), the port builds the identical values with movw/movt (0xBEEF|0xDEAD<<16, 0x8965|0x6C07<<16, 0x8B65|0x5D58<<16, 0x9EC3|0x26<<16). Same three `strd` at +0/+8/+16. Whole delta accounted for. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 8750,
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN4Math6SinIdxEt": {
   "asm_hash": "1f1f478910e5f430",
@@ -6672,8 +6718,9 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN5Bonus10IsAchievedEiRSt3mapImiSt4lessImESaISt4pairIKmiEEE": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary Bonus::IsAchieved(int, map<unsigned long, int>&) vs port (int, map<unsigned long long, int>&). Binary uses 32-bit ulong (ARM32); port uses 64-bit ulonglong (host x64). Fix: change port map key type from unsigned long long to unsigned long.",
+  "asm_hash": "30293fc758057b5f",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Needs asm-inspector compile pass. Prior FIX-NEEDED rationale (ulong vs ulonglong map key) is STALE -- the key type was fixed and the sides now pair on the identical mangled name. Residual signal: after the same `ldr GREG,[GREG]; cmp GREG,GREG` the binary takes `blt <SYM>` and the port takes `bgt <SYM>`, both continuing into the same `ldr GREG,[GREG,#4]; cmp; bgt`. That is either a swapped cmp operand order (benign) or an inverted threshold test on a LIVE scoring path; register normalisation cannot separate the two. [re-triaged 2026-08-01, hash-anchored]",
   "verdict": "FIX-NEEDED"
  },
  "_ZN5Bonus5ParseEP12TiXmlElement": {
@@ -6806,9 +6853,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN5Fruit19SetupSliceRotationsEbb": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary (bool, bool) vs port (bool, int). Second param bool->int. Fix: change second port param back to bool.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "06e3b2de5b90d0d8",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior FIX-NEEDED rationale is STALE -- the second param is back to `bool` and the sides pair on the identical mangled name. But the body is now 584 port instructions against 316 binary (85% larger) with no systemic cause on file. This is no longer a signature problem; it needs a body-level read. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "UNSURE"
  },
  "_ZN5Fruit19UpdateBombAvoidanceEf": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7415,10 +7463,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar11MortarSound9SetVolumeEf": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2100,
-  "reason": "MortarSound stub; Bada audio replaced by SDL2. Score 6390/2000. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 6390/2000 -> 6280/2100]",
-  "score": 6280,
+  "asm_hash": "dd96fdc8818904b3",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 21,
+  "reason": "SDL2 audio backend replaces Bada MortarSound (project-level DIFFERS). Shared head: `ldr [GREG,#8]` handle, null gate, `str [GREG,#12]` cached volume, same `vmul` by the pooled scale. The port adds a function-local-static guard (`tst GREG,#1`) for the SoundManager singleton and a `vcmpe #0.0 / vmovle` clamp the binary does not have -- the clamp is worth a look but is not a gameplay gate. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 15555,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar11MortarSoundC1Ev": {
@@ -7543,11 +7592,12 @@
   "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager11GetNumTypesEv": {
-  "decided_at": "2026-06-18T01:15Z",
-  "max_score": 1800,
-  "reason": "STL container size vs binary raw count. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
-  "score": 8175,
-  "verdict": "ACCEPT-cosmetic"
+  "asm_hash": "7d50295e137e1b04",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 18,
+  "reason": "Prior rationale is WRONG: it blamed 'STL container size vs binary raw count', but neither side uses an STL container here -- both walk the same 8-byte-stride array off the same two globals (`movw #4112` table, `movw #4124` limit) accumulating `addne GREG,#1`. Real delta: the port emits GCC's 4-way unrolled loop with an `and GREG,#1` remainder peel, inlines the per-entry accessor the binary CALLs, and adds two entry guards (`cmp #0; beq` on the table pointer and `cmp #0; ble` on the count) that the binary does not have. ActorManager.cpp is under concurrent edit -- re-triage after that lands. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 15545,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager11HeapDisplayEb": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7557,11 +7607,12 @@
   "verdict": "ACCEPT-defunct"
  },
  "_ZN6Mortar12ActorManager11SendMessageEmPNS_6EntityEPNS_7MessageE": {
-  "decided_at": "2026-06-18T01:15Z",
-  "max_score": 6200,
-  "reason": "Container iteration. Functionally identical. [re-triaged 2026-06-18T01:15Z]",
-  "score": 12335,
-  "verdict": "ACCEPT-cosmetic"
+  "asm_hash": "0e124ef328b8c94e",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 62,
+  "reason": "Prior rationale ('Container iteration. Functionally identical.') is an unsupported one-liner on a 76p-vs-62b delta -- exactly the systemic-rationale shape that hides real bugs. Not re-verified here because ActorManager.cpp is under concurrent edit. Anchored so it restales. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 36710,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager12DisplayUsageEb": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7768,10 +7819,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12IFile_Direct4SeekEmlb": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 1200,
-  "reason": "IFile_Direct I/O method; port uses POSIX vs Bada osp::Io. Score 2830/1200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 2830/1200 -> 2890/1200]",
-  "score": 2890,
+  "asm_hash": "d6f4333a912bfc0a",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 12,
+  "reason": "Platform substitution: the binary calls Bada osp::Io File::Seek in 12 instructions; the port maps the whence enum to SEEK_SET/CUR/END (`cmp #1; moveq/movne #2`), null-checks the handle (`mvneq GREG,#0` -> -1) and checks the POSIX return. Same `[GREG,#16]` handle field on both sides. Consider moving IFile_Direct's POSIX body into a *Posix.cpp so the sweep excludes it. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 9000,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12IFile_Direct4SizeEv": {
@@ -8798,8 +8850,9 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar4Mesh11DrawTriListEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary DrawTriList has trailing TextureAtlasPage* param; port drops it. TextureAtlasPage atlas-binding is handled differently in the port's GLES2 renderer path. Documented port difference.",
+  "asm_hash": "9370d0ee8813e682",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior rationale is STALE: it claimed the port drops the trailing TextureAtlasPage* param, but the two sides now pair on the identical mangled name and the port carries the param. Residual delta is argument normalisation only -- the port emits `subs GREG,#0; movne GREG,#1` before the forwarding CALL because its param is `bool`, where the binary forwards the raw word. Same `mov GREG,#4` primitive selector, same `ldr [sp,#16]` / `str [sp,#4]` marshalling, same single CALL. [re-triaged 2026-08-01, hash-anchored]",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar4Mesh12BindSkeletonERKNS_8SkeletonE": {
@@ -8810,8 +8863,9 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar4Mesh12DrawTriStripEPK16QUADCUSTOMVERTEXlbPNS_19DrawEffectContainerEPNS_16TextureAtlasPageE": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary DrawTriStrip has trailing TextureAtlasPage* param; port drops it. Same documented renderer difference as DrawTriList.",
+  "asm_hash": "cae6df0d753332d1",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Same as Mesh::DrawTriList -- stale sig-mismatch rationale (the param IS present and the names pair exactly); residual is the `subs/movne` bool normalisation of the forwarded argument. [re-triaged 2026-08-01, hash-anchored]",
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar4Mesh16DrawQuadUnCachedE6ColourPNS_19DrawEffectContainerE": {
@@ -9063,10 +9117,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar5Touch7_UpdateEv": {
-  "decided_at": "2026-06-17T16:29Z",
-  "max_score": 2000,
-  "reason": "RE confirmed functionally correct. TouchState coordinates: float in binary (VFP ABI) vs int32_t in port — functionally identical for integer touch inputs. Excess scores are compiler artifact + type-representation difference, not logic bugs. [re-triaged 2026-06-17T16:29Z]",
-  "score": 8565,
+  "asm_hash": "cd433282aa3652eb",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 20,
+  "reason": "Prior rationale was WRONG (blamed float-vs-int32 TouchState coords; the diff contains no VFP at all). Real delta: the binary keeps the 8-slot copy as a counted loop (`mov GREG,#28` stride, `mul`, `cmp GREG,#8; bne`); the port emits GCC 4.4.1's complete unroll -- 8 identical blocks at offsets 224/252/280/308/336/364/392/420 paired with 28/56/84/112/140/168/196, i.e. exactly base+28*i for i=0..7, each with the same 28-byte ldm/stmia + ldm/stm copy and the same per-slot CALL (7 CALLs plus a tail `b <SYM>` = 8 iterations). Same stride, same count, same callee. Whole delta accounted for. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 18133,
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar5Touch9FindTouchEj": {
@@ -9187,11 +9242,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar6EntityC2Ev": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 2900,
-  "reason": "Entity method stub; see src/entities/Entity.cpp Defunct/STUB markers. Score 4715/3300. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 4715/3300 -> 5030/2900]",
-  "score": 5030,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "bb551a5fca3f9e86",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 29,
+  "reason": "Prior rationale cited 'src/entities/Entity.cpp Defunct/STUB markers' -- grep for STUB or 'Defunct:' in src/entities/Entity.cpp returns 0 hits, so the citation is FALSE. The bodies also touch different fields: the binary does `mov GREG,#60`, `str GREG,[GREG],#16` and copies a Vector3 from a GOT global via `ldm GREG,{3}`, while the port writes +0, +4, +8 (strh), +16, +20, +24, +28, +32, +36, +48, +56 directly. This is the base-class ctor for every entity -- worth settling. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 18999,
+  "verdict": "UNSURE"
  },
  "_ZN6Mortar6EntityD0Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -9254,9 +9310,10 @@
   "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar8Skeleton11BuildArraysEm": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary Skeleton::BuildArrays(unsigned long) vs port BuildArrays(int). ulong->int type error. Fix: change port param from int to unsigned long.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "20395d2a363f1ad9",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior FIX-NEEDED is STALE: the ulong->int signature fix has LANDED (src/engine/asset/Skeleton.cpp:66 now takes `unsigned long count`, and the two sides pair on the identical mangled name). Residual is a deliberate, already-documented container substitution: the binary makes ONE `new Matrix44[count*3]` and partitions it into three pointers with no per-element init; the port calls resize() on three std::vector<Matrix44>, which value-constructs each element (the sp+192..sp+252 identity block copied per element is the whole 155-vs-32 gap). Result equivalent because BuildLocalMatrices overwrites everything, but this is a DIFFERS, not an ASM match. STAMP: downgrade src/engine/asset/Skeleton.cpp:62 from ASM-verified to DIFFERS. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar8Skeleton18BuildFinalMatricesEv": {
   "decided_at": "2026-06-18T01:28Z",
@@ -9521,11 +9578,12 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN7PowerUpC1EPS_": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 9700,
-  "reason": "PowerUp copy ctor (C1). Score 15670->15750 (+0.5%) -- negligible drift post-scope-iii. PowerUp struct layout drift (port omits vptr; see PowerUp.h FIXME) means every field offset is shifted by 4; this affects every store in the ctor. Underlying root cause is PowerUp missing virtual qualifier. ACCEPT-deferred. [rerun 2026-05-24T09:50Z] [score updated 2026-05-31: branch fix/port-layout-divergences] [fresh-sweep 2026-06-14T05:19Z: score 14940/9700 -> 16680/9700]",
-  "score": 16680,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "41fbfbabcc069ce1",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 97,
+  "reason": "Prior rationale is STALE: it blamed 'port omits vptr; see PowerUp.h FIXME' and there is no FIXME left -- src/game/PowerUp.h:49 documents `+0x00 vptr (implicit)` and :219 the padded dead region, i.e. the vptr was added. Yet the copy ctor still shows shifted bases (binary `add #164` / `add #8` / `add #172` vs port `vstr [GREG,#200]` / `add #16` / `add #80`). Re-derive the layout before re-accepting. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 56000,
+  "verdict": "UNSURE"
  },
  "_ZN7PowerUpC1Ev": {
   "decided_at": "2026-06-14T05:55Z",
@@ -9651,10 +9709,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN8CheckBoxC1E8_Vector3IfES1_15LocalizedString": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 4400,
-  "reason": "CheckBox method stub/divergence. Score 5769/4200. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 5769/4200 -> 7218/4400]",
-  "score": 7218,
+  "asm_hash": "c2bdb77a4fd662ac",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 44,
+  "reason": "Vec3-by-value ABI divergence, a known non-fixable class: the binary passes the two _Vector3<float> arguments through a large stack frame (`sub sp,#208`), the port spills them itself (`sub sp,#28` plus six `vstr VREG,[sp,#0..20]`). The guarded __bada__ copy-ctor workaround for this was tried and reverted -- do not retry. Same `strb #1,[GREG,#124]` afterwards. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 35200,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN8CheckBoxC1E8_Vector3IfES1_PKc": {
@@ -9839,11 +9898,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9BombFlash6UpdateEf": {
-  "decided_at": "2026-06-18T02:22Z",
-  "max_score": 8600,
-  "reason": "Port has bx lr stub vs binary has code. STUB: BombFlash::Update. See src/entities/BombFlash.cpp. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 9200/8900 -> 9375/8600]",
-  "score": 9100,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "ad374786f0a7c46e",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 86,
+  "reason": "Prior rationale is FALSE: it claimed 'Port has bx lr stub vs binary has code. STUB: BombFlash::Update' and pointed at src/entities/BombFlash.cpp, which contains NO STUB/TODO/Defunct marker at all and has a full body at line 24. Real numbers: port 64 instructions vs binary 86 -- port 26% SMALLER, the shape that hides missing work. The binary builds a Vector3 temp on the stack (`sub sp,#20`, `add GREG,sp,#4`) where the port stores the scale directly, which explains only part of it. Needs a real read. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 55000,
+  "verdict": "UNSURE"
  },
  "_ZN9BombFlash7CleanUpEv": {
   "decided_at": "2026-06-18T02:22Z",
@@ -9895,10 +9955,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9BonusType18UnlockAchievementsEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 6000,
-  "reason": "BonusType method stub/divergence. Score 12900/6000. [score refreshed 2026-05-20T00:00Z] [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 15689/6000 -> 15294/6000]",
-  "score": 15294,
+  "asm_hash": "6a7e8ddad8740ac8",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 60,
+  "reason": "Same inlined-std::list walk as BonusType::GetBest (m_Bonuses at +12, sentinel at base+4), with the [+36] enable byte gated identically on both sides. Prior 'method stub/divergence' boilerplate replaced. Only the head of a 109-line diff was read, so deferred rather than cosmetic. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 36000,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9BonusType5ParseEP12TiXmlElement": {
@@ -9909,10 +9970,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9BonusType7GetBestEv": {
-  "decided_at": "2026-06-14T05:55Z",
-  "max_score": 5400,
-  "reason": "BonusType::GetBest (0x000fe094) -- port uses std::list m_Bonuses iteration + MortarGame null guard; binary uses intrusive list walk. Same algorithm (find best Bonus by tier), different container. Score 14754/5900. [fresh-sweep 2026-05-24T07:41Z: verdict re-affirmed, score unchanged] [fresh-sweep 2026-06-14T05:19Z: score 14754/5900 -> 14179/5400]",
-  "score": 14179,
+  "asm_hash": "692e8f75a6f799cf",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 54,
+  "reason": "Delta is the inlined-std::list idiom: the binary calls the iterator helpers out of line and keeps the cursor at [sp,#4]; the port inlines the walk starting at `ldr GREG,[GREG,#12]; add GREG,#4` (m_Bonuses at +12, sentinel at base+4 -- the documented container trap, not a layout bug). Same per-node `ldr [GREG,#16]` + CALL + `str [GREG,#20]`. Only about a quarter of the diff was read, so deferred rather than cosmetic. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 30203,
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9BonusTypeC1Ev": {
@@ -9999,9 +10061,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9GameSound6UpdateEv": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch: binary GameSound::Update() vs port GameSound::Update(float). Port adds float param not in binary. Fix: drop the float param.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "d53b3579aa2d6065",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior FIX-NEEDED rationale is STALE -- the `Update(float)` -> `Update()` signature fix has landed and the sides pair on the identical mangled name. Residual is the SDL audio backend: the port carries a function-local-static guard for SoundManager::GetInstance, wraps every voice op in MortarSound calls, and re-applies (1-(1-master)*vol)*pitch per live slot (documented at src/engine/audio/GameSound.cpp:196-200). The slot-scan skeleton is shared (`ldrb [GREG,#16]` free flag, `ldr [GREG,#8]` sound pointer). [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN9GameSound7IsValidEPN6Mortar11MortarSoundEPKc": {
   "decided_at": "2026-06-14T05:55Z",
@@ -10025,9 +10088,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN9GameSound7SFXPlayEPKcffN6Mortar9Delegate1IbPNS2_11MortarSoundEEEf": {
-  "decided_at": "2026-07-01T00:00Z",
-  "reason": "sig-mismatch MED: binary GameSound::SFXPlay has 5-param overload (adds trailing float fadeDuration) not present in port. Port only has 3-param and 4-param overloads. Fix: add the 5-param overload to port.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "1b7f25697b8cf183",
+  "decided_at": "2026-08-01T13:40Z",
+  "reason": "Prior FIX-NEEDED rationale is STALE -- the 5-param overload exists and the sides pair on the identical mangled name. Residual is the deliberate deviation already marked at src/engine/audio/GameSound.cpp:71 (`// DIFFERS:` binary calls SoundManager::SFXPlay(name,0,NULL,0x40,-1), port uses the 2-arg form) plus the SDL SoundManager singleton guard. [re-triaged 2026-08-01, hash-anchored]",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN9GameSound7UnpauseEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -10087,11 +10151,12 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZNK11SlashEntity21GetHeadThicknessScaleEv": {
-  "decided_at": "2026-06-17T00:00Z",
-  "max_score": 5000,
-  "reason": "GetHeadThicknessScale: ASM-verified ported at v1.6.1 @0x1e684c. Score 139% structural divergence from GOT/PIC global load vs port's direct global reference, and sqrt codegen difference (binary uses VFP vsqrt.f64 via cast, port uses direct vsqrt.f32). Semantically identical. [2026-06-17 blade-trail fixes]",
-  "score": 6980,
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "fdc926013ef6f161",
+  "decided_at": "2026-08-01T13:40Z",
+  "max_score": 50,
+  "reason": "Prior ACCEPT-deferred rationale (GOT/PIC plus f64-vs-f32 vsqrt) does not account for the whole delta. The port opens with TWO null gates the binary does not have -- `ldr [GREG,#92]; cmp #0; beq` and `ldr [GREG,#96]; cmp #0; beq` -- before reaching the shared `ldr [GREG,#88]; cmp #0; ble` test. Port-side defensive guards on a live per-frame getter need justifying against the binary or removing. [re-triaged 2026-08-01, hash-anchored]",
+  "score": 30000,
+  "verdict": "UNSURE"
  },
  "_ZNK11TimeControl12GetCountDownEv": {
   "decided_at": "2026-06-14T05:55Z",
