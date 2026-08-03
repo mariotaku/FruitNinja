@@ -2056,10 +2056,14 @@ void SlashEntity::Update(float dt) {
                             WaveManager::GetInstance()->AddSpeed(
                                 (float)m_ComboCounter / 3.0f, 0);
                             AddToCurrentScore(m_ComboCounter, m_ComboOnlineMode, true, true);
+                            // ASM-verified: 2026-08-03T00:00Z v1.6.1 SlashEntity::Update @ 0x001e9160 (re-analyst)
+                            // AddCombo lives INSIDE the arcade arm (bl 0x0010dbd0 GetInstance,
+                            // bl 0x0010a150 AddCombo, then b 0x001e919c to the join). The classic/zen
+                            // arm at 0x001e9170 has no AddCombo -- bonuses are an arcade-only feature.
+                            BonusManager::GetInstance()->AddCombo(m_ComboCounter);
                         } else if (!Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer() || m_ComboOnlineMode != 2) {
                             AddToCurrentScore(m_ComboCounter, m_ComboOnlineMode, true, false);
                         }
-                        BonusManager::GetInstance()->AddCombo(m_ComboCounter);
                         // v1.6.1 SlashEntity::Update @0x001e867c: the combo-stat block
                         // reads game_work.m_SaveData (+0x50) with no null test and runs
                         // unconditionally -- the binary never calls Game::GetInstance in
@@ -2068,28 +2072,6 @@ void SlashEntity::Update(float dt) {
                             char buf[64];
                             snprintf(buf, sizeof(buf), "%s_combos", GetModeName((GAME_MODE)game_work.gameMode));
                             game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
-                            // TODO: v1.6.1 0x001e867c (SlashEntity::Update) -- nesting gap.
-                            // In the binary the strawberry_combo_total scan sits OUTSIDE this
-                            // `m_ComboCounter > 2 && m_ComboFruitTypes[1] >= 0` block, one
-                            // level up in the `m_ComboCounter > 1 && m_ComboFruitTypes[0] >= 0`
-                            // block, after UnlockComboAchievement and under its own
-                            // `2 < m_ComboCounter` test. Same for UnlockComboAchievement and
-                            // the best-combo save below, and BonusManager::AddCombo sits
-                            // inside the arcade arm, not after the if/else. Left as-is here:
-                            // re-nesting is a separate change, not part of the guard sweep.
-                            static int s_StrawberryType = -2;
-                            if (s_StrawberryType == -2)
-                                s_StrawberryType = Fruit::FruitType("strawberry", false);
-                            if (s_StrawberryType >= 0) {
-                                for (int i = 0; i < m_ComboCounter; ++i) {
-                                    if (m_ComboFruitTypes[i] == s_StrawberryType) {
-                                        static const uint32_t hStrawberryCombo = StringHash("strawberry_combo_total");
-                                        game_work.m_SaveData->AddToTotal(
-                                            "strawberry_combo_total", hStrawberryCombo, 1, true, false);
-                                        break;
-                                    }
-                                }
-                            }
                         }
                         // (c) Combo coin spawn.
                         {
@@ -2111,36 +2093,74 @@ void SlashEntity::Update(float dt) {
                                             nullptr, nullptr,
                                             Coin::DefaultArrivedDelegate(), true);
                         }
-                        // (d) Achievement unlock.
-                        AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCounter, m_ComboFruitTypes);
-                        // (e) Best-combo save + CheckCombo cache.
-                        {
-                            FruitSaveData* sd = game_work.m_SaveData;
-                            if (sd && m_ComboCounter > sd->m_BestComboLength) {
-                                // ASM-spec v1.6.1 SlashEntity::Update @0x1e9504 / @0x1e95a8: writer copies 11 ints via a
-                                // stepping ptr from +0x150; the 11th read is +0x178 (m_ComboCount), one past the 10-elem
-                                // m_ComboFruitTypes. Reproduce the 11th-slot write explicitly (NOT i<11 -- that would read
-                                // m_ComboFruitTypes[10] out of bounds on the port's 10-element array).
-                                for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
-                                sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
-                                sd->m_BestComboLength = m_ComboCounter;
-                                s_CheckComboFlag = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCounter, nullptr);
-                            } else if (sd && m_ComboCounter == sd->m_BestComboLength) {
-                                if (s_CheckComboFlag == -1)
-                                    s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, m_ComboCounter, nullptr);
-                                int newScore = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCounter, nullptr);
-                                if (s_CheckComboFlag < newScore) {
-                                    // ASM-spec v1.6.1 SlashEntity::Update @0x1e95a8: same 11-int stepping-ptr copy as
-                                    // the new-high path -- 11th slot is m_ComboCount (+0x178 spill).
-                                    for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
-                                    sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
-                                    sd->m_BestComboLength = m_ComboCounter;
+                        // TODO: v1.6.1 0x001e92f8 (SlashEntity::Update) -- the binary tails this
+                        // block with `if (IsOnlineMultiplayer() && m_ComboOnlineMode != 2)
+                        // SendP2PPacket(PointsPacket(wave->id, m_ComboCounter, (int)coinPos.x,
+                        // (int)coinPos.y), false)`. Unported: P2P multiplayer is defunct, and
+                        // IsOnlineMultiplayer() is a stub that always returns false, so the call
+                        // is unreachable either way.
+                    }
+                    // -----------------------------------------------------------------
+                    // OUTER combo level -- still inside `m_ComboCounter > 1 &&
+                    // m_ComboFruitTypes[0] >= 0`, but OUTSIDE the `> 2` block above.
+                    // ASM-verified: 2026-08-03T00:00Z v1.6.1 SlashEntity::Update @ 0x001e93a4 (re-analyst)
+                    // The `> 2` gate at 0x001e9110 (`cmp r2,#2 / ble 0x001e93a4`) and the
+                    // m_ComboFruitTypes[1] gate at 0x001e9118 (`ldr r2,[r4,#0x154] / blt
+                    // 0x001e93a4`) both branch TO 0x001e93a4, which is where r7 = this+0x150
+                    // (m_ComboFruitTypes) is formed for the three blocks below. So a 2-fruit
+                    // swipe DOES reach them.
+                    // -----------------------------------------------------------------
+                    // (d) Achievement unlock -- @0x001e93b4 (bl 0x0010ce60).
+                    // Safe to call at m_ComboCounter == 2: UnlockComboAchievement carries its
+                    // OWN count gate (`info->m_Total > comboLen -> skip`, @0x001175e8), and the
+                    // shipped achievementlist.xml COMBO entries need 6 (combo_mambo) or go
+                    // through the isGameOver arm, which itself rejects comboLen <= 2.
+                    AchievementManager::GetInstance()->UnlockComboAchievement(m_ComboCounter, m_ComboFruitTypes);
+                    // (e) strawberry_combo_total scan -- @0x001e93b8 (`ldr r3,[r4,#0x17c] /
+                    // cmp r3,#2 / ble 0x001e94e0`). Its own `> 2` gate, separate from the one
+                    // above; the false arm lands directly on the best-combo save in (f).
+                    if (m_ComboCounter > 2) {
+                        static int s_StrawberryType = -2;
+                        if (s_StrawberryType == -2)
+                            s_StrawberryType = Fruit::FruitType("strawberry", false);
+                        if (s_StrawberryType >= 0) {
+                            for (int i = 0; i < m_ComboCounter; ++i) {
+                                if (m_ComboFruitTypes[i] == s_StrawberryType) {
+                                    static const uint32_t hStrawberryCombo = StringHash("strawberry_combo_total");
+                                    game_work.m_SaveData->AddToTotal(
+                                        "strawberry_combo_total", hStrawberryCombo, 1, true, false);
+                                    break;
                                 }
                             }
                         }
                     }
+                    // (f) Best-combo save + CheckCombo cache -- @0x001e94e0.
+                    {
+                        FruitSaveData* sd = game_work.m_SaveData;
+                        if (sd && m_ComboCounter > sd->m_BestComboLength) {
+                            // ASM-spec v1.6.1 SlashEntity::Update @0x1e9504 / @0x1e95a8: writer copies 11 ints via a
+                            // stepping ptr from +0x150; the 11th read is +0x178 (m_ComboCount), one past the 10-elem
+                            // m_ComboFruitTypes. Reproduce the 11th-slot write explicitly (NOT i<11 -- that would read
+                            // m_ComboFruitTypes[10] out of bounds on the port's 10-element array).
+                            for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
+                            sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
+                            sd->m_BestComboLength = m_ComboCounter;
+                            s_CheckComboFlag = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCounter, nullptr);
+                        } else if (sd && m_ComboCounter == sd->m_BestComboLength) {
+                            if (s_CheckComboFlag == -1)
+                                s_CheckComboFlag = (signed char)CheckCombo(sd->m_BestComboFruits, m_ComboCounter, nullptr);
+                            int newScore = (signed char)CheckCombo(m_ComboFruitTypes, m_ComboCounter, nullptr);
+                            if (s_CheckComboFlag < newScore) {
+                                // ASM-spec v1.6.1 SlashEntity::Update @0x1e95a8: same 11-int stepping-ptr copy as
+                                // the new-high path -- 11th slot is m_ComboCount (+0x178 spill).
+                                for (int i = 0; i < 10; ++i) sd->m_BestComboFruits[i] = m_ComboFruitTypes[i];
+                                sd->m_BestComboFruits[10] = m_ComboCount;   // +0x178 spill -- binary's 11th slot
+                                sd->m_BestComboLength = m_ComboCounter;
+                            }
+                        }
+                    }
                 }
-                // (f) State reset (unconditional when timer fires).
+                // (g) State reset (unconditional when timer fires) -- @0x001e95e4.
                 m_pLastComboFruit = nullptr;
                 m_ComboCounter = 0;
                 m_ComboOnlineMode = 0;
