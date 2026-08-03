@@ -158,7 +158,13 @@ static Mortar::SmartPtr<Mortar::Texture>       s_SplatTex;
 // SplatEntity::LoadContent. Kept for CleanUpSplat teardown-shape parity only.
 static Mortar::SmartPtr<Mortar::Texture>       s_SplatTexUnused;
 
-static const int MAX_SPLATS_PER_FRAME = 128;
+// Sized to cover the whole splat pool: DrawActiveSplats @0x001ece34 walks
+// s_PoolCount with no per-frame cap, and GameInit step 15 calls
+// SplatEntity::CreatePool(0x100). The buffer must therefore hold 256 * 6 verts.
+// TODO: v1.6.1 0x001ece34 (SplatEntity::DrawActiveSplats) -- the binary's own
+// vertex-array size is not RE'd; 256 is derived from the port's CreatePool arg,
+// not read from the image. Confirm and replace with the real constant.
+static const int MAX_SPLATS_PER_FRAME = 256;
 static QUADCUSTOMVERTEX s_SplatVerts[MAX_SPLATS_PER_FRAME * 6];
 
 // ---------------------------------------------------------------------
@@ -1063,21 +1069,21 @@ void SplatEntity::DrawSplat() {
 //   5. Mesh::DrawTriList(m_points, count*6, ...)
 //   6. splatTexture->UnSet(true)                  -- vtable +0x10, flag=1
 void SplatEntity::DrawActiveSplats() {
-    if (!s_SplatTex.IsValid()) return;
-
     s_NumActiveSplats = 0;
 
     s_CurrentTintRGB = Colour::IdentityTint();
-    // NOTE (guard sweep #156): this mHud test is NOT settled either way. Unlike its
-    // siblings elsewhere in src/entities, it cannot be called a port-added guard --
-    // v1.6.1 DrawActiveSplats @0x001ece34 does not read game_work.mHud (+0x40) at all,
-    // and neither does DrawSplat @0x001eb5d8, so the whole tint hookup above needs its
-    // own RE pass before anyone strips or keeps it. Left as-is deliberately.
+    // DIFFERS: original applies NO tint here -- v1.6.1 DrawActiveSplats @0x001ece34
+    // never reads game_work.mHud (+0x40) and neither does DrawSplat @0x001eb5d8.
+    // The s_CurrentTintRGB hookup is a port addition, kept for now because the port's
+    // splat colouring depends on it; it should be removed once the binary's real
+    // colour source is RE'd.
     if (game_work.mHud) {
         s_CurrentTintRGB = &game_work.mHud->scales[3];
     }
 
-    for (int i = 0; i < s_PoolCount && s_NumActiveSplats < MAX_SPLATS_PER_FRAME; ++i) {
+    // The binary runs this vtable+0x10 loop UNCONDITIONALLY -- the splat texture is
+    // not tested until the flush below, and there is no per-frame splat cap.
+    for (int i = 0; i < s_PoolCount; ++i) {
         SplatEntity* s = &s_PoolBase[i];
         if (!s->m_bAlive)           continue;
         if (s->m_SplatType < 0)     continue;  // still airborne
@@ -1087,7 +1093,8 @@ void SplatEntity::DrawActiveSplats() {
         ++s_NumActiveSplats;
     }
 
-    if (s_NumActiveSplats == 0) return;
+    // Binary flush gate: `if (splatTexture != 0 && 0 < m_curr_drawing_splat)`.
+    if (!s_SplatTex.IsValid() || s_NumActiveSplats == 0) return;
 
     // Binary call order: Set() first, then matrix block, then draw, then UnSet(true).
     s_SplatTex->Set();

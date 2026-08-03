@@ -250,6 +250,12 @@ void ActorManager::DeactivateAllEntities(int typeIdx) {
 // Binary disasm inside @0x001d38f0: `orr r2, r2, #0xc; strb r2, [r6, #0xc]`
 // sets ENT_TICK_DISPATCHED (bits 2+3, 0xc) BEFORE Update dispatch.
 // Binary leaves the bits set permanently after PostUpdate -- sticky advisory, never cleared.
+// ASM-spec v1.6.1 ActorManager::Update @ 0x001d38f0: the per-entity load is
+// 'ldr r6,[r3,#0x8]; ldrb r3,[r6,#0xc]' -- the Entity* is dereferenced with no
+// null test. The pending-deact append @0x001d39b4-0x001d39c8 is unconditional
+// after 'tst r3,#0x10', so there is no m_PendingDeactCount bound check either.
+// The two top-of-body gates (m_pHeap @0x001d3914, m_pTypeLists @0x001d3924) ARE
+// genuine.
 void ActorManager::Update(float dt) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
 
@@ -259,14 +265,13 @@ void ActorManager::Update(float dt) {
         std::list<Entity*>& list = m_pTypeLists[t];
         for (std::list<Entity*>::iterator it = list.begin(); it != list.end(); ++it) {
             Entity* e = *it;
-            if (!e) continue;
             if ((e->flags & ENT_SKIP_MASK) == 0) {
                 e->flags |= ENT_TICK_DISPATCHED;  // 0xc -- both halves set atomically per binary
                 e->Update(dt);
                 e->PostUpdate(dt);  // vtable +0x18 -- Bomb uses this to track fuse emitter
                 // Binary leaves ENT_TICK_DISPATCHED set after PostUpdate (sticky, never cleared).
             }
-            if ((e->flags & ENT_KILLED) && m_PendingDeactCount < 512) {
+            if (e->flags & ENT_KILLED) {
                 m_PendingDeact[m_PendingDeactCount++] = e;
             }
         }
@@ -307,13 +312,17 @@ void ActorManager::Draw(Renderer& r) {
 // the m_DebugDraw gate at its call site, matching the binary's observable
 // behaviour either way; nothing in the port calls SetCollisionVisible, so this
 // loop never runs in a normal session.
+// ASM-spec v1.6.1 ActorManager::DrawDebug @ 0x001d32e0: the only top-of-body test
+// is 'ldrb r3,[r0,#0x1020]; cmp r3,#0; bne' (m_DebugDraw). 'ldr r0,[r5,#0x1010]'
+// has no cmp, and the per-entity sequence 'ldr r3,[r3,#0x8]; ldr r0,[r3,#0x38];
+// cmp r0,#0' tests only m_Col -- the Entity* itself is never null-checked.
 void ActorManager::DrawDebug() {
-    if (!m_DebugDraw || m_pTypeLists == nullptr) return;
+    if (!m_DebugDraw) return;
     for (int t = 0; t < m_NumTypes; t++) {
         std::list<Entity*>& list = m_pTypeLists[t];
         for (std::list<Entity*>::iterator it = list.begin(); it != list.end(); ++it) {
             Entity* e = *it;
-            if (e && e->m_Col) e->m_Col->DrawDebug();
+            if (e->m_Col) e->m_Col->DrawDebug();
         }
     }
 }
@@ -337,9 +346,10 @@ int ActorManager::GetNumEntities(int typeIdx) {
 }
 
 // v1.6.1 ActorManager::GetNumEntities() @0x001d3554.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities() @ 0x001d3554 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetNumEntities() @ 0x001d3554: the body walks all
+// m_NumTypes lists summing size(); there is no m_pTypeLists null test. (The old
+// ASM-verified stamp predates that read and covered a port-added guard.)
 int ActorManager::GetNumEntities() {
-    if (!m_pTypeLists) return 0;
     int total = 0;
     for (int t = 0; t < m_NumTypes; t++) total += (int)m_pTypeLists[t].size();
     return total;
@@ -370,9 +380,10 @@ int ActorManager::GetNumEntities(long typeA, long typeB) {
 }
 
 // v1.6.1 ActorManager::GetNumTypes @0x001d3454.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumTypes @ 0x001d3454 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetNumTypes @ 0x001d3454: counts the non-empty
+// lists with no m_pTypeLists null test. (The old ASM-verified stamp predates that
+// read and covered a port-added guard.)
 int ActorManager::GetNumTypes() {
-    if (!m_pTypeLists) return 0;
     int n = 0;
     for (int t = 0; t < m_NumTypes; t++) if (!m_pTypeLists[t].empty()) n++;
     return n;
@@ -382,12 +393,8 @@ int ActorManager::GetNumTypes() {
 // type list's begin() iterator and returns the Entity* it points at, or
 // nullptr if the list is empty. Binary also returns the ActorManager*
 // via an outer CONCAT that callers ignore.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntityFirst @ 0x001d2f48 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetEntityFirst @ 0x001d2f48: 14 insns -- begin(), end(), operator!=, and an NE-predicated load of *it. No m_pTypeLists null test and no typeIdx range test.
 Entity* ActorManager::GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& it) {
-    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) {
-        it = std::list<Entity*>::iterator();
-        return nullptr;
-    }
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
     it = list.begin();
     if (it == list.end()) return nullptr;
@@ -396,9 +403,8 @@ Entity* ActorManager::GetEntityFirst(int typeIdx, std::list<Entity*>::iterator& 
 
 // Matches v1.6.1 ActorManager::GetEntityNext @0x001d2f00. Advances `it` and
 // returns the next Entity*, or nullptr when past end.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntityNext @ 0x001d2f00 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetEntityNext @ 0x001d2f00: 18 insns -- begin(), end(), operator!=, and an NE-predicated load of *it. No m_pTypeLists null test and no typeIdx range test.
 Entity* ActorManager::GetEntityNext(int typeIdx, std::list<Entity*>::iterator& it) {
-    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return nullptr;
     std::list<Entity*>& list = m_pTypeLists[typeIdx];
     ++it;
     if (it == list.end()) return nullptr;
@@ -427,11 +433,10 @@ Entity* ActorManager::GetEntity(int typeIdx, size_t slot) const {
 
 // v1.6.1 ActorManager::GetEntityIdx @0x001d3044.
 // Defunct: zero in-binary callers (no .plt thunk); v1.6.1 ActorManager::GetEntityIdx @ 0x001d3044.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetEntityIdx @ 0x001d3044 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetEntityIdx @ 0x001d3044: opens with 'ldr r3,[r0,#0x101c]; ldrb r6,[r1,#0x35]; cmp r3,r6; ble -> -1'. The entity is dereferenced before any test and m_pTypeLists is never null-checked.
 int ActorManager::GetEntityIdx(Entity* entity) {
-    if (!entity || !m_pTypeLists) return -1;
     const int type = entity->entityType;
-    if (type < 0 || type >= m_NumTypes) return -1;
+    if (type >= m_NumTypes) return -1;
     int idx = 0;
     for (std::list<Entity*>::const_iterator it = m_pTypeLists[type].begin();
          it != m_pTypeLists[type].end(); ++it, ++idx) {
@@ -453,8 +458,9 @@ void ActorManager::RegisterHashConverter(Mortar::Delegate2<long, unsigned long, 
 
 // v1.6.1 ActorManager::Find(long, ulong) @0x001d3148. Linear scan of type list
 // `type`; returns first entity whose m_RuntimeID (Entity+0x04) equals `trackerKey`.
+// ASM-spec v1.6.1 ActorManager::Find(long,ulong) @ 0x001d3148: no m_pTypeLists null
+// test and no `type` range test -- the body indexes the type list directly.
 Entity* ActorManager::Find(long type, unsigned long trackerKey) {
-    if (!m_pTypeLists || type < 0 || type >= (long)m_NumTypes) return nullptr;
     std::list<Entity*>& lst = m_pTypeLists[type];
     for (std::list<Entity*>::iterator it = lst.begin(); it != lst.end(); ++it) {
         if ((*it)->m_RuntimeID == (uint32_t)trackerKey) return *it;
@@ -465,8 +471,9 @@ Entity* ActorManager::Find(long type, unsigned long trackerKey) {
 // v1.6.1 ActorManager::Find(ulong) @0x001d31b8. Type-agnostic scan; returns first
 // entity matching trackerKey across all type lists. This is the overload
 // SendMessage @0x001d3598 calls.
+// ASM-spec v1.6.1 ActorManager::Find(ulong) @ 0x001d31b8: the loop head @0x001d31dc
+// reads +0x1010 with no cmp -- m_pTypeLists is never null-checked.
 Entity* ActorManager::Find(unsigned long trackerKey) {
-    if (!m_pTypeLists) return nullptr;
     for (int t = 0; t < m_NumTypes; t++) {
         std::list<Entity*>& lst = m_pTypeLists[t];
         for (std::list<Entity*>::iterator it = lst.begin(); it != lst.end(); ++it) {
@@ -520,8 +527,9 @@ void ActorManager::DisplayUsage(bool /*dumpAll*/) {
 // Defunct: zero in-binary callers -- this symbol genuinely has NO .plt thunk, so
 //   nothing ever registers a listener and m_Listeners is empty for the whole
 //   process lifetime; v1.6.1 ActorManager::AddMessageListener @ 0x001d4208.
+// ASM-spec v1.6.1 ActorManager::AddMessageListener @ 0x001d4208: 7 insns straight
+// into push_back -- no null test on the listener.
 void ActorManager::AddMessageListener(Mortar::MessageListener* listener) {
-    if (!listener) return;
     m_Listeners.push_back(listener);
 }
 

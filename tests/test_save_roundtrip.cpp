@@ -32,6 +32,8 @@
 #endif
 
 #include "game/FruitSaveData.h"
+#include "entities/ActorManager.h"
+#include "entities/Entity.h"
 #include "Game.h"
 #include "game/GameWork.h"
 #include "engine/core/MortarGame.h"
@@ -91,6 +93,19 @@ int main() {
     }
     Mortar::MortarGame::GetInstance()->m_versionCombined =
         GetVersionFromString(GetVersionString());
+
+    // Entity system, mirroring GameInit step 7 (v1.6.1 GameInit @0x001ce1c0):
+    // HeapCreate(0x20000) then ActorManager::Initialise(7, 0x2000). SaveGame's
+    // entity block (v1.6.1 SaveGame @0x001530dc, entity pass @0x00153b28) makes
+    // three ActorManager walks -- types 0/1/4 -- via GetEntityFirst/GetEntityNext.
+    // Those index m_pTypeLists (+0x1010) with no null test (ASM-spec v1.6.1
+    // ActorManager::GetEntityFirst @0x001d2f48: 14 insns, begin()/end()/operator!=
+    // and an NE-predicated load). Initialise allocates that array, so a fixture
+    // that skips it faults inside begin(). The factory / hash-converter delegates
+    // GameInit also registers are omitted: this test creates no entities, so all
+    // three lists stay empty and no <ent> element is emitted or read back.
+    Mortar::Entity::HeapCreate(0x20000);
+    Mortar::ActorManager::GetInstance()->Initialise(7, 0x2000);
 
     // Global game_work fields that <state> serialises through (not FruitSaveData members).
     game_work.m_gameDataLicensedState = 7;

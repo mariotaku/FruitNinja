@@ -416,6 +416,8 @@ TAIL:
     pos.x += vel.x * dt;
     pos.y += vel.y * dt;
     pos.z += vel.z * dt;
+    // NOTE: genuine v1.6.1 gate -- _Update tail @0x001d87b0 is
+    // 'ldr r5,[r4,#0x68]; cmp r5,#0; beq'. Not a port addition.
     if (!m_pFlyEmitter) return;
     m_pFlyEmitter->m_Pos    = pos;
     m_pFlyEmitter->m_DirSin = SinIdx(m_Angle);

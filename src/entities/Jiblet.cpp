@@ -244,6 +244,8 @@ void Jiblet::Kill() {
 // The Renderer& param has no binary counterpart (port-only, to satisfy the
 // Mortar::Entity pure-virtual signature); the binary Draw takes only `this`.
 void Jiblet::Draw(Renderer& /*r*/) {
+    // NOTE: genuine v1.6.1 gate -- Draw @0x001e5750 opens with
+    // 'add r0,r0,#0x40; bl SmartPtr::IsValid; cmp r0,#0; beq'. Not a port addition.
     if (!m_pModel) {
         return;
     }

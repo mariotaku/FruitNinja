@@ -584,8 +584,10 @@ void SlashEntity::PreUpdate(float dt) {
 //                                        // writes m_SwipeSoundTimer (+0xb8) = 0.05f after the call.
 // Trailing discarded calls are kept for RNG-stream / call-ordering fidelity.
 void SlashEntity::PlaySwipe() {
+    // Binary is 'bl ItemManager::GetInstance; vmov s0,1.0; bl
+    // PlayAlternateSwipeSound' -- the result is used as `this` with no cmp.
     ItemManager* im = ItemManager::GetInstance();
-    if (!im || !im->PlayAlternateSwipeSound(1.0f, 1.0f)) {
+    if (!im->PlayAlternateSwipeSound(1.0f, 1.0f)) {
         char buf[0x40];
         const int idx = (int)Math::g_Random.Rand32(6) + 1;
         snprintf(buf, sizeof(buf), "Sword-swipe-%d", idx);
@@ -598,11 +600,11 @@ void SlashEntity::PlaySwipe() {
     }
 
     (void)Math::g_Random.RandF(0.5f);
+    // Binary @0x001e8634-0x001e863c: 'bl ActorManager::GetInstance; mov r1,#0;
+    // bl GetNumEntities' -- no cmp on the instance.
     Mortar::ActorManager* am = Mortar::ActorManager::GetInstance();
-    if (am) {
-        (void)am->GetNumEntities(0);
-        (void)am->GetNumEntities(1);
-    }
+    (void)am->GetNumEntities(0);
+    (void)am->GetNumEntities(1);
 
     m_ComboScoreScale = 6.0f;
 }
@@ -855,6 +857,9 @@ void SlashEntity::OnTouchActive(float x, float y) {
 #endif
         // ASM-spec v1.6.1 SlashEntity::UpdateTouchDown @0x1ea2fc
         // Orient trail emitter along swipe direction for particles_directional blades.
+        // NOTE: genuine FUSED gate -- @0x001ea2fc is 'ldr r3,[r4,#0x3c]; cmp r3,#0;
+        // beq; ldr r3,[GOT]; ldrb r3,[r3]; cmp r3,#2; bne'. The emitter null test is
+        // the first half of the binary's own two-part gate, not a port addition.
         if (m_TrailEmitter != NULL && g_DirectionalFlag == 2) {
             short ang  = Math::Atan2Idx(unitDir.x, unitDir.y);
             uint16_t nAng = (uint16_t)(-(short)ang);
@@ -1823,21 +1828,29 @@ void SlashEntity::Update(float dt) {
                                     m_ComboTimer = 0.095f;
                                 }
                                 // MissControl popup: gated on count>2, non-COMBO mode, not ModPowerMask bit 7
+                                // TODO: v1.6.1 0x001e8950 (SlashEntity::Update) -- the binary
+                                // calls CombosEnabled() @0x0010c410 where the port substitutes
+                                // `game_work.gameMode != GAME_MODE_COMBO`, and its gate ORDER is
+                                // `count>2 -> CombosEnabled() -> (online && mode==2 -> skip) ->
+                                // (ModPowerMask & 0x80 -> skip)`. The port evaluates the mask term
+                                // second. Port CombosEnabled and re-order once it is RE'd.
                                 if (m_ComboCounter > 2
                                     && game_work.gameMode != GAME_MODE_COMBO
                                     && (s_ModPowerMask & 0x80u) == 0)
                                 {
                                     bool online = Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer();
                                     if (!online || m_ComboOnlineMode != 2) {
+                                        // Outer test is genuine: 'ldr r7,[r4,#0x11c]; cmp r7,#0;
+                                        // bne' @0x001e8988. The post-GetFree null test is NOT --
+                                        // @0x001e8994 is 'bl GetFree; cpy r10,r0; str r0,[r4,#0x11c]'
+                                        // then straight into MakeCombo, unconditional.
                                         if (m_pComboMissControl == nullptr) {
                                             m_pComboMissControl = MissControl::GetFree();
-                                            if (m_pComboMissControl) {
-                                                m_pComboMissControl->MakeCombo(
-                                                    m_SliceFruitPos, m_ComboCounter, m_ComboOnlineMode);
-                                                m_pComboMissControl->m_RemoveCallback =
-                                                    Mortar::Delegate1<void, HUDControl*>::Make(
-                                                        this, &SlashEntity::MissControlDeleted);
-                                            }
+                                            m_pComboMissControl->MakeCombo(
+                                                m_SliceFruitPos, m_ComboCounter, m_ComboOnlineMode);
+                                            m_pComboMissControl->m_RemoveCallback =
+                                                Mortar::Delegate1<void, HUDControl*>::Make(
+                                                    this, &SlashEntity::MissControlDeleted);
                                         } else {
                                             m_pComboMissControl->MakeCombo(
                                                 m_pComboMissControl->pos,

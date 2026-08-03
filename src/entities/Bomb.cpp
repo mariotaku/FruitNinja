@@ -529,14 +529,20 @@ int Bomb::CollisionResponse(Mortar::Entity* hitter,
             WaveManager::GetInstance()->ResetSpeed(0);
             m_bMenuBombHit = 1;
             HitMenuBomb(pos);  // timer=2.0, flash-flag=1, "menu-bomb" SFX
-            if (game_work.m_FruitCamera)
-                game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
+            // ASM-spec v1.6.1 Bomb::CollisionResponse @ 0x001d5d4c: the camera is
+            // loaded with 'ldr r8,[r3,#0x4c]' and passed straight to
+            // CreateCameraShake @0x001d5e94-0x001d5eac with no cmp.
+            game_work.m_FruitCamera->CreateCameraShake(pos, 2.0f, 3.0f);
             AddToCurrentScore(-10, 0, false, false);
             PowerUpManager::GetInstance()->ClearTimedPowers();
-            if (MissControl* mc = MissControl::GetFree()) {
-                Mortar::SmartPtr<Mortar::Texture> noTex;
-                mc->MakeDisappear(pos, 0x200, noTex);
-            }
+            // ASM-spec v1.6.1 Bomb::CollisionResponse @ 0x001d5ef4-0x001d5f50:
+            // 'bl 0x0011503c; cpy r7,r0' -- the MissControl* is used with no cmp.
+            // The binary then does 'ldr r1,[r4,#0x1c]' (minus_10.tex) ->
+            // SmartPtr<Texture>::SetPtr, MakeDisappear(this,&pos,r2=0,r3=&tex),
+            // then 'mov r3,#0x200; str r3,[r7,#0x34]' (m_LayerFlags).
+            MissControl* mc = MissControl::GetFree();
+            mc->MakeDisappear(pos, 0, g_bombData.texMinus10);
+            mc->m_LayerFlags = 0x200;
         } else {
             // Classic/Zen path: HitBomb handles shake internally (v1.6.1 @ 0x1cf27c)
             if (game_work.bM_bPaused) return 0;
@@ -544,6 +550,9 @@ int Bomb::CollisionResponse(Mortar::Entity* hitter,
         }
     } else if (m_bMenuBombHit != 0) {
         // Menu-bomb re-hit: gate ClearMenuItems on m_bClearsMenuItems
+        // NOTE: genuine v1.6.1 gate -- @0x001d5d78-0x001d5d8c is
+        // 'ldr r3,[r0,#0x84]; cmp r3,#0; beq call; ldrb r3,[r3,#0x13a]; cmp r3,#0;
+        // beq skip', exactly this `||`. Not a port addition.
         if (m_pOwnerButton == nullptr || m_pOwnerButton->m_bClearsMenuItems != 0) {
             ClearMenuItems();
         }
@@ -673,12 +682,14 @@ void HitBomb(_Vector3<float> pos) {
     game_work.m_SaveData->AddToTotal("bomb", StringHash("bomb"), 1,
                                       /*trackSession=*/true, /*achievementGate=*/true);
     game_work.m_BombHitTimer = 3.2f;
-    if (game_work.m_FruitCamera)
-        game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
+    // ASM-spec v1.6.1 HitBomb @ 0x001cf27c: 'ldr r7,[r5,#0x4c]' @0x001cf32c feeds
+    // the 'bl' @0x001cf348 with no cmp -- the camera is never null-checked.
+    game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
     g_BombHitPos = pos;
-    if (GameTaskState* ts = GetTaskState()) {
-        ts->m_bMenuBombFlashFlag = 0;
-    }
+    // Binary is a plain 'mov r3,#0; strb r3,[r12,#0x7a]'. GetTaskState() returns
+    // &s_taskState (GameTaskState.cpp:46) and is never null -- same precedent as
+    // src/game/BombHit.cpp:408.
+    GetTaskState()->m_bMenuBombFlashFlag = 0;
     game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
 }
 
@@ -689,6 +700,9 @@ void HitBomb(_Vector3<float> pos) {
 //  - m_BombHitTimer = 2.0f; g_BombHitPos = pos; s_menuBombHit = 1
 //  - no camera shake (unlike HitBomb) -- the shake is at the CollisionResponse call site
 void HitMenuBomb(_Vector3<float> pos) {
+    // NOTE: genuine v1.6.1 gate -- HitMenuBomb @0x001cf42c early-outs only when
+    // s_mainScreen is non-null AND its +0x118 state == 1. The null test is part of
+    // the &&, not a port addition.
     if (game_work.mMainScreen && game_work.mMainScreen->m_State == STATE_CREATE_BUTTONS)
         return;
 
@@ -697,9 +711,9 @@ void HitMenuBomb(_Vector3<float> pos) {
     game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     game_work.m_BombHitTimer = 2.0f;
     g_BombHitPos = pos;
-    if (GameTaskState* ts = GetTaskState()) {
-        ts->m_bMenuBombFlashFlag = 1;
-    }
+    // Binary is a plain 'mov r3,#1; strb r3,[r12,#0x7a]'. GetTaskState() returns
+    // &s_taskState (GameTaskState.cpp:46) and is never null.
+    GetTaskState()->m_bMenuBombFlashFlag = 1;
 }
 
 // --- Bomb-hit overlay ---

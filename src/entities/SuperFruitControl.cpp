@@ -904,10 +904,10 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
 //                0x1bae64=700.0f (fragment angular-vel).
 void SuperFruitControl::ExplodeSuperFruit()
 {
+    // Binary @0x001baa20 opens 'ldr r0,[r0,#0x7c]; add r0,r0,#0xe0; bl
+    // Quaternion::Matrix33' -- the host is dereferenced in the second instruction,
+    // so there is no null test to port.
     Fruit* host = m_pHostFruit;
-    if (!host) {
-        return;
-    }
 
     // Build rotation basis from host's orientation quaternion (host+0xe0 = m_Rot1).
     // Binary: _Quaternion::Matrix33(host+0xe0) -> rot
@@ -1050,7 +1050,10 @@ void SuperFruitControl::ComboCancel(SlashEntity* se)
 // Re-arms host fruit's slice timer negative iff the finished transition was a zoom-IN.
 void SuperFruitControl::TransitionFin()
 {
-    if (game_work.m_FruitCamera && game_work.m_FruitCamera->IsTransitionIn()) {
+    // Binary is 'ldr r0,[r3,#0x4c]; bl IsTransitionIn' -- the camera is not
+    // null-checked. The inner m_pHostFruit test IS genuine
+    // ('ldr r3,[r4,#0x7c]; cmp r3,#0; vstrne').
+    if (game_work.m_FruitCamera->IsTransitionIn()) {
         if (m_pHostFruit) m_pHostFruit->m_SliceTimer = -1.0f;
     }
 }
@@ -1079,7 +1082,8 @@ void SuperFruitControl::PushBombsAway(float dt)
 // Gate: FruitInfo[type].m_bIsSuperFruit != 0 && !(fruit->flags & 0x10).
 void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
 {
-    if (!fruit) return;
+    // The binary's first block passes `fruit` to Fruit::FruitInfo and dereferences
+    // the result at +0x330, so there is no null test on the fruit to port.
     // Already killed
     if (fruit->flags & ENT_KILLED) return;
 
@@ -1088,8 +1092,11 @@ void SuperFruitControl::SuperFruitThrown(Fruit* fruit)
     // Gate: m_bIsSuperFruit flag at FRUIT_INFO+0x330
     if (!info->m_bIsSuperFruit) return;
 
-    // Already registered
-    if (SuperFruitControls.count(fruit)) return;
+    // NOTE: no "already registered" dedupe here -- @0x001bbf48 gates ONLY on
+    // m_bIsSuperFruit != 0 && (flags & 0x10) == 0, then unconditionally does
+    // AddToTotal + `new SuperFruitGlow` + HUD::AddControl. Re-throwing the same
+    // Fruit object spawns a SECOND glow in the binary. Do not re-add a
+    // SuperFruitControls.count(fruit) early-out.
 
     LOG_INFO("SUPERFRUIT", "SuperFruitThrown() spawning controller for fruit=%p", static_cast<void*>(fruit));
 

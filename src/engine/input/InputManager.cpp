@@ -59,6 +59,8 @@ void InputManager::Destroy() {
 
 // v1.6.1 Mortar::InputManager::Update @0x00243838 — Update: gate on m_loadingConfig, m_inUpdate=true,
 //   broadcast Update(dt), m_inUpdate=false.
+// NOTE: genuine v1.6.1 gate -- @0x00243838 is 'ldrb r3,[r0,#0x4]; cmp r3,#0; bne
+// epilogue'. Not a port addition.
 void InputManager::Update(float dt) {
     if (m_loadingConfig) return;
     m_inUpdate = true;
@@ -106,7 +108,12 @@ void InputManager::ClearActions(unsigned long actionHash) {
     }
 }
 
-// Binary @ 0x00195fe8 — search devices by GetDeviceType.
+// Search devices by GetDeviceType.
+// TODO: v1.6.1 (Mortar::InputManager::HasInputDevice) — body address UNRESOLVED.
+// 0x00195fe8 is a 5-insn PIC thunk (`b 0x0010436c`), not the function body, so the
+// old marker cited the wrong thing. Find the real body before trusting any claim
+// about this function -- in particular, the two `if (out)` guards below are
+// UNSETTLED and must not be stripped on the strength of the thunk.
 bool InputManager::HasInputDevice(InputDeviceTypes type, InputDevice** out) {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {

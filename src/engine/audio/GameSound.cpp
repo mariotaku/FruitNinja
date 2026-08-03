@@ -154,11 +154,11 @@ void GameSound::Release(MortarSound* sound, const char* name) {
 void GameSound::KillAll() {
     for (int i = 0; i < MAX_SLOTS; i++) {
         Slot* s = &m_Slots[i];
+        // Binary: 'ldrb r3,[r4,#0x10]; cmp r3,#0; bne' then 'ldr r0,[r4,#0x8]; bl
+        // Stop' -- only isFree gates the stop, the sound pointer is never tested.
         if (!s->isFree) {
-            if (s->sound) {
-                s->sound->Stop(0.0f);
-                DestroySoundInternals(s->sound);
-            }
+            s->sound->Stop(0.0f);
+            DestroySoundInternals(s->sound);
         }
         s->isFree         = true;
         s->pausedBySystem = 0;
@@ -193,7 +193,9 @@ void GameSound::Unpause() {
     }
 }
 
-// ASM-verified: 2026-05-04T11:00 v1.6.1 GameSound::Update @ 0x00151dd0 (asm-inspector)
+// ASM-spec v1.6.1 GameSound::Update @ 0x00151dd0: the per-slot skip @0x00151e10
+// tests only isFree. (Downgraded from ASM-verified -- that stamp covered a body
+// that also null-tested s->sound, which the binary does not do.)
 // NOTE the per-slot re-apply below: (1 - (1-master)*vol) * PITCH runs every
 // frame for every live slot with vol > 0 -- for a slot played with gain 0
 // (e.g. SpeedControl's first Combo-Blitz-Backing SFXPlay) this writes volume
@@ -209,9 +211,15 @@ void GameSound::Update() {
 
     for (int i = 0; i < MAX_SLOTS; i++) {
         Slot* s = &m_Slots[i];
-        if (s->isFree || s->sound == NULL) continue;
+        // Binary @0x00151e10 tests only isFree; the sound pointer is never
+        // null-checked here.
+        if (s->isFree) continue;
 
         if (!s->sound->IsPlaying() && !s->sound->IsPaused()) {
+            // RELOCATED, not a port addition: the binary calls
+            // Delegate1::operator() @0x0010f95c unconditionally and the
+            // empty-delegate test lives inside that callee. Hoisting it here is
+            // observably identical.
             if (static_cast<bool>(s->finishCallback)) {
                 bool restartedLoop = s->finishCallback(s->sound);
                 if (restartedLoop) return;
