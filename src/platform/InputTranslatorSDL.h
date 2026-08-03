@@ -8,6 +8,24 @@
 // Each channel has actions: TouchDown_N, TouchMove_XN, TouchMove_YN, TouchUp_N.
 // Also generates global "TouchScreen" events for any touch.
 //
+// DIFFERS: original = 8 dispatchable fingers. Data/input/input.txt declares 16
+//   TouchDown_/TouchReleased_/TouchMove_X/Y channels, but the producer side caps
+//   at 8: Touch::SendIndividualTouchCallbacks @0x00242bc4 loops key codes
+//   0x89..0x90 only, and Mortar::Touch itself has 8 slots (Touch::FindTouch
+//   @0x002429a8 loops i<8). Channels 8-15 therefore have mappers that nothing
+//   ever raises in v1.6.1. The port keeps all 16 because MOUSE_CHANNEL is carved
+//   out of the 8-15 overflow range so a desktop mouse never steals a real
+//   finger's Mortar::Touch slot -- a host-input nicety with no gameplay effect
+//   (a Bada device could not deliver a 9th finger anyway).
+//
+// DIFFERS: "TouchScreen" is PORT-ONLY. No mapper for it exists in v1.6.1: the
+//   name is absent from Data/input/input.txt, so InputManager::LoadConfigFile
+//   @0x002442fc never creates one. Its only binary appearance is on the
+//   frontend.txt / SplashInit path, which is unreachable dead code (the v1.6.1
+//   dispatch table at 0x002cc130 registers no Splash/Frontend handlers -- see
+//   src/game/SplashTask.cpp). Nothing in the port subscribes to it either; it is
+//   dispatched purely for shape.
+//
 // Mouse-only desktop platforms are handled by setting
 // SDL_HINT_MOUSE_TOUCH_EVENTS=1 before SDL_Init, which makes SDL synthesize
 // SDL_FINGER* events from SDL_MOUSE* with finger id = SDL_TOUCH_MOUSEID.

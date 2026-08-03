@@ -72,7 +72,15 @@ void InputTranslatorSDL::Init() {
         sprintf(buf, "TouchMove_Y%d", i);
         hashTouchMoveY[i] = StringHash(buf);
 
-        // TouchUp not in original config but we need it
+        // DIFFERS: original = "TouchReleased_%d" (Data/input/input.txt lines 49-64,
+        //   bound to Touch<i+1> action "up"). The name "TouchUp_%d" appears NOWHERE
+        //   in the binary or its data. Both the producer here and the consumer
+        //   (SlashEntity::RegisterInputCallbacks) use the same invented spelling, so
+        //   the port's hash-matched m_bindings dispatch works -- but the moment
+        //   InputManager::LoadConfigFile @0x002442fc is ported, mappers are built
+        //   from input.txt and NO "TouchUp_%d" mapper will exist, so the release
+        //   handler silently unbinds. Rename BOTH sides to "TouchReleased_%d" as
+        //   part of that change, not before (renaming one side alone breaks release).
         sprintf(buf, "TouchUp_%d", i);
         hashTouchUp[i] = StringHash(buf);
     }

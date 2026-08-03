@@ -391,6 +391,10 @@ void SlashEntity::RegisterInputCallbacks() {
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveY));
 
+    // DIFFERS: original = "TouchReleased_%d" (Data/input/input.txt lines 49-64).
+    //   "TouchUp_%d" is a port invention; see the matching note in
+    //   InputTranslatorSDL::Init. Rename both sides together when
+    //   InputManager::LoadConfigFile @0x002442fc lands.
     snprintf(buf, sizeof(buf), "TouchUp_%d", m_FingerId);
     mgr->RegisterInputCallback(StringHash(buf),
         Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchUp));

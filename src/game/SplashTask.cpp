@@ -3,7 +3,7 @@
 // Original: SplashInit 0x16f648, SplashUpdate 0x16f5d8, SplashDraw 0x16f554, SplashExit 0x16f59c
 //
 // Defunct: SplashTask -- these four functions are dead code in the shipped binary.
-// The dispatch table at 0x001E8A28 only registers GameDraw/GameUpdate/GameInit/GameExit;
+// The v1.6.1 dispatch table at 0x002cc130 only registers GameDraw/GameUpdate/GameInit/GameExit;
 // Splash and Frontend addresses never appear. The actual splash is implemented as an
 // in-frame overlay inside GameUpdate/GameDraw (see GameInit.cpp + StartupEffects.cpp).
 // File kept for source-archaeology value only; SplashInit/SplashUpdate/SplashDraw/SplashExit
