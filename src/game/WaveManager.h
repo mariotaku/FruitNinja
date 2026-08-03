@@ -171,39 +171,60 @@ public:
     // WAS WRONG comment: +0x1fc. Actual __bada__ offset: +0x204.
     std::vector<PROBABILITY_OVERIDE> m_ProbabilityOverride[4];  // +0x204
 
-    // +0x234: Per-player aliased region.
-    // In the 32-bit binary, m_pCurrentWave[2] (8 bytes) at +0x234 is aliased
-    // with m_WaveCount[2]. On __bada__, both arrays occupy the same 8 bytes:
-    //   m_pCurrentWave[0] at +0x234 (pointer)
-    //   m_pCurrentWave[1] / m_WaveCount[0] at +0x238 (aliased)
-    //   m_WaveCount[1] at +0x23c (last 4 bytes of union)
-    // The floats at +0x23c and +0x240 are separate (not part of the union),
-    // but in the binary they alias m_WaveCount[1] / m_NextWaveDelay[0].
-    // On the 64-bit host a pointer is 8 bytes and a 4-byte int cannot alias
-    // it correctly -- the union would corrupt m_pCurrentWave[0]'s high 4 bytes
-    // every time m_WaveCount[1] is written. Host uses separate fields.
-    // ASM-verified: 2026-06-18 v1.6.1 WaveManager ctor @ 0x00123ef8
+    // +0x234..+0x243: the wave-slot group. Four consecutive 32-bit words:
+    //   +0x234  WAVE_INFO* m_pCurrentWave     current wave
+    //   +0x238  int        m_WaveCount        wave counter (pre-incremented)
+    //   +0x23c  float      m_NextWaveDelay_P0 pre-spawn delay ("delay" XML attr)
+    //   +0x240  float      m_NextWaveDelay_P1 wave-end wait  ("wait"  XML attr)
+    //
+    // The binary indexes EACH of those four with playerIdx*4, so the [1] element of
+    // one array is the [0] element of the next. That staggered overlap is the
+    // binary's own shape, not a port artifact:
+    //   GetNextWave    @0x0012573c  ldr r3,[r4+playerIdx*4,#0x234]     -> m_pCurrentWave[p]
+    //                               ldr r3,[r4,(playerIdx+0x8e)*4]     -> m_WaveCount[p]
+    //                               vstr s15,[r4+(p+0x8e)*4,#0x4]      -> delay  (0x23c+p*4)
+    //                               str  r1,[r4,(playerIdx+0x90)*4]    -> wait   (0x240+p*4)
+    //   SetCurrentWave @0x00125d1c  str r6,[r4,(playerIdx+0x8e)*4]     -> m_WaveCount[p]
+    //                               vldr/vstr [r4+(p+0x8e)*4,#0x4]     -> delay  (0x23c+p*4)
+    //   Reset          @0x0012ba78  mvn r2,#0 ; str r2,[r4,#0x238]     -> m_WaveCount[0] ONLY
+    //                               vstr s16,[r4,#0x240]               -> wait = 0
+    //   SaveWaveInfo   @0x001254b0  ldr [r4,#0x238] / vldr [r4,#0x23c] / vldr [r4,#0x240]
+    //   RequestCoins   @0x001233b0  ldr r3,[r0,#0x234]
+    // The binary never writes a "m_WaveCount[1]" -- P1 of every array is dead
+    // storage that belongs to the next field. Do NOT write index [1] of any of
+    // them; keep the [2] shape for layout only.
+    //
+    // A plain `union { WAVE_INFO* m_pCurrentWave[2]; int m_WaveCount[2]; }` cannot
+    // express this. Every union member starts at the union's base, so
+    // m_WaveCount[0] landed on +0x234 (aliasing m_pCurrentWave[0]) and every
+    // cross-build read through m_WaveCount[] was one element low. The nested
+    // anonymous structs below give each array its own base. Same pattern as
+    // GameTaskState.h's +0x110 float/byte union.
+    //
+    // On the 64-bit host a pointer is 8 bytes, so the overlap cannot be modelled
+    // at all -- host uses four separate fields, which is why the arrays must never
+    // be indexed past [0] in shared code.
+    // ASM-verified: 2026-08-03T00:00Z v1.6.1 WaveManager ctor @ 0x00123ef8 (re-analyst)
 #if defined(__bada__)
     union {
-        WAVE_INFO* m_pCurrentWave[2];   // +0x234 (P0), +0x238 (P1) — 8 bytes on __bada__
-        int        m_WaveCount[2];      // +0x238 (P0, aliases pCurrentWave[1]), +0x23c (P1)
-    };
+        WAVE_INFO* m_pCurrentWave[2];             // +0x234, +0x238
+        struct {
+            WAVE_INFO* _alias_CurrentWave0;       // +0x234
+            int        m_WaveCount[2];            // +0x238, +0x23c
+        };
+        struct {
+            uint32_t   _alias_CurrentWave0_w;     // +0x234
+            uint32_t   _alias_WaveCount0_w;       // +0x238
+            float      m_NextWaveDelay_P0;        // +0x23c
+        };
+    };                                            // union spans +0x234..+0x23f
+    float m_NextWaveDelay_P1;                     // +0x240
 #else
     WAVE_INFO* m_pCurrentWave[2];       // host: 16 bytes (8 per ptr)
     int        m_WaveCount[2];          // host: 8 bytes
+    float      m_NextWaveDelay_P0;      // host: separate slot
+    float      m_NextWaveDelay_P1;      // host: separate slot
 #endif
-
-    // +0x23c: P0 pre-spawn delay timer ("delay" XML attr).
-    // Binary @ 0x0012598c reads [+0x23c]; GetNextWave @ 0x001251ee writes [+0x23c].
-    // WAS field_0x234 (wrong offset in comment). Actual __bada__ offset: +0x23c.
-    // Binary aliases this slot with m_WaveCount[1] at +0x23c.
-    float m_NextWaveDelay_P0;           // +0x23c (was field_0x234)
-
-    // +0x240: P0 wave-end wait timer ("wait" XML attr).
-    // Binary @ 0x00125956 reads [+0x240]; GetNextWave @ 0x00125224 writes [+0x240].
-    // WAS field_0x238 (wrong offset in comment). Actual __bada__ offset: +0x240.
-    // Binary uses this as P1's m_NextWaveDelay[1] in multiplayer aliasing.
-    float m_NextWaveDelay_P1;           // +0x240 (was field_0x238)
 
     // +0x244: per-player wave-active flag (IsWaveProcessing @0x001232c4 reads m_NextWaveDelay[p+8],
     // i.e. byte at 0x23c+p+8 = 0x244 for p0). Set to 1 by Reset and after each spawn in UpdateWave;
@@ -282,7 +303,8 @@ public:
     // 0x0012bf58: restore state from FruitSaveData.
     void Resume();
 
-    // 0x001247f0: serialise current wave state into FruitSaveData.
+    // v1.6.1 WaveManager::SaveWaveInfo @0x001254b0: serialise current wave state
+    // into FruitSaveData. The split-player sentinel reads m_WaveCount[0] (+0x238).
     int  SaveWaveInfo(FruitSaveData* save);
 
     // __thiscall MEMBERS in the binary -- `this` arrives in r0 and is forwarded straight
@@ -315,10 +337,12 @@ public:
 
     // --- Wave progression ---------------------------------------------
 
-    // 0x00124f10 (227 lines): advance to next WAVE_INFO.
+    // v1.6.1 WaveManager::GetNextWave @0x0012573c: advance to next WAVE_INFO.
     void GetNextWave(int playerIdx);
 
-    // 0x00125340: seek to a specific wave number.
+    // v1.6.1 WaveManager::SetCurrentWave @0x00125d1c: seek to a specific wave number.
+    // Writes m_WaveCount[playerIdx] = waveNo-1, calls GetNextWave(0), then folds
+    // `delay` into the +0x23c slot with a >= 0 clamp.
     void SetCurrentWave(int waveNo, float delay, int playerIdx);
 
     // v1.6.1 WaveManager::SetupWaveQue @0x00123458: build the wave queue for
@@ -498,10 +522,23 @@ static_assert(offsetof(WaveManager, m_pWaveQueItem) == 0x24,
 static_assert(offsetof(WaveManager, m_pWaveQue) == 0x28,
               "WaveManager m_pWaveQue must be at +0x28");
 
-// Guard the tail so the wasm32 build catches future field drift.
+// Guard the tail so the cross-build catches future field drift.
 // v1.6.1 WaveManager ctor @0x00123ef8 / GetInstance @0x00123fa4 (static singleton, 0x2f0)
-static_assert(offsetof(WaveManager, m_pCurrentWave)              == 0x234, "");
-static_assert(offsetof(WaveManager, m_NextWaveDelay_P0)          == 0x23c, "");
+//
+// The four wave-slot asserts pin the staggered group above. If the union is ever
+// flattened back to same-base members, m_WaveCount fails at 0x234 and
+// m_NextWaveDelay_P0 fails at 0x234 or 0x238 -- so a silent regression is
+// impossible as long as this TU is compiled with -D__bada__.
+static_assert(offsetof(WaveManager, m_pCurrentWave)              == 0x234,
+              "WaveManager m_pCurrentWave must be at +0x234 (GetNextWave @0x0012573c)");
+static_assert(offsetof(WaveManager, m_WaveCount)                 == 0x238,
+              "WaveManager m_WaveCount must be at +0x238 (SetCurrentWave @0x00125d1c)");
+static_assert(offsetof(WaveManager, m_NextWaveDelay_P0)          == 0x23c,
+              "WaveManager m_NextWaveDelay_P0 must be at +0x23c (SaveWaveInfo @0x001254b0)");
+static_assert(offsetof(WaveManager, m_NextWaveDelay_P1)          == 0x240,
+              "WaveManager m_NextWaveDelay_P1 must be at +0x240 (Reset @0x0012ba78)");
+static_assert(offsetof(WaveManager, m_WaveActive)                == 0x244,
+              "WaveManager m_WaveActive must be at +0x244 (Reset @0x0012ba78)");
 static_assert(offsetof(WaveManager, m_FruitQueue)                == 0x24c, "");
 static_assert(offsetof(WaveManager, m_GlobalProbabilityOverride) == 0x2e4, "");
 static_assert(sizeof(WaveManager)                                == 0x2f0, "");

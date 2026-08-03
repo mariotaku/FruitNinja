@@ -168,7 +168,9 @@ WaveManager::WaveManager()
     , m_FruitChance(1.0f)
     , m_SpeedAccum(1.0f)
     , m_SpeedScale(1.0f), m_ComboSpeedDivisor(1.0f)
-    , m_NextWaveDelay_P0(0.0f), m_NextWaveDelay_P1(0.0f)
+    // m_NextWaveDelay_P0 is a member of the anonymous wave-slot union on __bada__,
+    // so it cannot sit in the mem-init list -- it is zeroed in the body below.
+    , m_NextWaveDelay_P1(0.0f)
     , m_WaveActive(0), m_BlitzSpawnCount(0), m_BlitzState(0), _pad247(0)
     , m_NextBlitzTime(0.0f)
     , m_MaxWaveIdP0(0)
@@ -182,8 +184,14 @@ WaveManager::WaveManager()
     m_ComboSpeed = 0.0f; m_TargetComboSpeed = 0.0f;
     m_BlitzLevel = 0;
     m_ColdTimer  = 0.0f;
+    // Wave-slot group (+0x234..+0x243). The binary ctor @0x00123ef8 writes nothing
+    // here -- WaveManager is a static singleton, so the whole group is BSS-zero.
+    // The port zeroes it explicitly. On __bada__ these names overlap
+    // (m_pCurrentWave[1] IS m_WaveCount[0], m_WaveCount[1] IS m_NextWaveDelay_P0),
+    // so the writes must all be zero and the delay store must come last.
     m_pCurrentWave[0] = m_pCurrentWave[1] = nullptr;
     m_WaveCount[0] = m_WaveCount[1] = 0;
+    m_NextWaveDelay_P0 = 0.0f;
     // m_DtIncPerMode, m_SpeedClampStart, m_SpeedClampMax:
     // v1.6.1 WaveManager ctor @ 0x00123ef8 leaves these BSS-zero; Init() fills
     // them from <defaults> globalDtInc/globalDtStart/globalDtMax. All 4 shipped
@@ -712,8 +720,12 @@ void WaveManager::Reset(bool fullReset) {
 
     // 4. Per-player wave state.
     m_WaveActive = 1;          // wave-active flag (player 0)
+    // v1.6.1 WaveManager::Reset @0x0012ba78: `mvn r2,#0 ; str r2,[r4,#0x238]` --
+    // the counter is written for P0 ONLY. There is no m_WaveCount[1] store: +0x23c
+    // is m_NextWaveDelay_P0, which Reset leaves for GetNextWave to fill. The port
+    // used to write m_WaveCount[1] = -1 as well, which on the cross-build stamps
+    // 0xffffffff into that float slot.
     m_WaveCount[0] = -1;      // pre-incremented by GetNextWave
-    m_WaveCount[1] = -1;
     // Camera reset not ported (FruitCamera stubs).
 
     // HUD reset — binary @ 0x00144b78 called when game->display->field_0x3c (HUD) exists.
@@ -1038,8 +1050,15 @@ int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
 
     // Sentinel: only save if single-player (m_bSplitPlayerWaves == 0 or waveCount < 0)
     // and waves are loaded for this mode.
+    // v1.6.1 WaveManager::SaveWaveInfo @0x001254b0:
+    //   ldrb r3,[r3,#0x5]      ; game_work.m_bSplitPlayerWaves
+    //   cmp  r3,#0x0 ; beq     ; -> save path
+    //   ldr  r3,[r4,#0x238]    ; m_WaveCount[0]  <-- P0, not P1
+    //   cmp  r3,#0x0 ; bge     ; -> return 0
+    // The port read m_WaveCount[1]. That happened to hit +0x238 while the union was
+    // flat, and would have moved to +0x23c once the union was fixed.
     bool splitPlayer = IsSameScreenMultiplayer();
-    if ((!splitPlayer || m_WaveCount[1] < 0)
+    if ((!splitPlayer || m_WaveCount[0] < 0)
         && !m_WaveInfo[game_work.gameMode].empty())
     {
         // ASM-spec v1.6.1: globalDt base is m_SpeedAccum (+0x78), not field_0x74
@@ -1222,16 +1241,19 @@ void WaveManager::Update(float dt) {
     // Time accumulator — game->field_0x1ac not mapped in port Game struct.
     // TODO: skip stat tracking (game->field_0x1ac += dt).
 
-    // Spawn-pump gate (binary @ 0x00125a30 / 0x00125a62):
-    //   if (g_GameData->bM_bPaused[+0x05] == 0 || this+0x230 (m_WaveCount[0] in SP) <= 0) {
+    // Spawn-pump gate. v1.6.1 WaveManager::Update @0x00126848:
+    //   ldrb r3,[r3,#0x5]     ; game_work.bM_bPaused
+    //   cmp  r3,#0x0 ; beq    ; -> spawn pump
+    //   ldr  r3,[r4,#0x238]   ; m_WaveCount[0]
+    //   cmp  r3,#0x0 ; ble    ; -> spawn pump
+    //   b    UpdateComboSpeed ; tail call, combo tick only
+    // i.e.
+    //   if (bM_bPaused == 0 || m_WaveCount[0] <= 0) {
     //       <fixed-step UpdateWave loop>
     //   } else {
-    //       UpdateComboSpeed(dt);  // bM_bPaused=1 AND wave already loaded -> combo tick only
+    //       UpdateComboSpeed(dt);
     //   }
-    //
-    // Binary +0x230 is DUAL-PURPOSE storage: m_pCurrentWave[1] in MP,
-    // m_WaveCount[0] in SP. Port keeps these as separate fields; SP semantic reads
-    // m_WaveCount[0] directly.
+    // The counter slot is +0x238, not +0x230 as an earlier note claimed.
     //
     // Menu suppression flow (cold boot / menu state):
     //   - GameInit @0x1ce1c0 sets bM_bPaused[+0x05]=1, bM_Mode[+0x02]=0 (menu state).
@@ -1296,20 +1318,22 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
     // always open. Arcade creates SpeedControl on first frame, gate closes
     // after — spawn loop only runs in burst (Arcade waves use delay=0).
     // ASM: ldrb r3,[r0,#0x0]; cmp r3,r2; bne epilogue
+    // Wave-slot group (+0x234..+0x243, see WaveManager.h). The binary indexes all
+    // four members with playerIdx*4 off their own base. m_pCurrentWave and
+    // m_WaveCount are declared as [2] arrays and index correctly on both builds;
+    // delay/wait have no array form (P1 of `wait` would be m_WaveActive), so the
+    // cross-build keeps the raw offsets to reproduce the binary's addressing.
+    WAVE_INFO*& pCurrentWave = m_pCurrentWave[playerIdx];
+    int&        waveCount    = m_WaveCount[playerIdx];
 #if defined(__bada__)
-    // v1.6.1 binary register-level access: offset-based per-player aliased slots.
-    WAVE_INFO*& pCurrentWave = *(WAVE_INFO**)((uint8_t*)this + 0x234 + playerIdx * 4);
-    int& waveCount = *(int*)((uint8_t*)this + 0x238 + playerIdx * 4);
     float& delay = *(float*)((uint8_t*)this + 0x23c + playerIdx * 4);
-    float& wait = *(float*)((uint8_t*)this + 0x240 + playerIdx * 4);
+    float& wait  = *(float*)((uint8_t*)this + 0x240 + playerIdx * 4);
     // Gate check: first byte of this+0x00 (m_SpeedControl[0] LSB on __bada__).
     if (*(const uint8_t*)this != 0)
         goto wave_end_check;
 #else
-    WAVE_INFO*& pCurrentWave = m_pCurrentWave[playerIdx];
-    int& waveCount = m_WaveCount[playerIdx];
     float& delay = m_NextWaveDelay_P0;     // SP only
-    float& wait = m_NextWaveDelay_P1;      // SP only
+    float& wait  = m_NextWaveDelay_P1;     // SP only
     // Gate check: v1.6.1 binary @ 0x00125dac: ldrb r3,[r0,#0x0]; cmp r3,r2; bne epilogue.
     if (m_SpeedControl[0] != nullptr)
         goto wave_end_check;
@@ -1690,17 +1714,20 @@ void WaveManager::UpdateComboSpeed(float dtIn) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::GetNextWave(int playerIdx) {
-#if defined(__bada__)
-    // v1.6.1 binary @ 0x0012573c: offset-based per-player aliased slot access.
-    WAVE_INFO*& pCurrentWave = *(WAVE_INFO**)((uint8_t*)this + 0x234 + playerIdx * 4);
-    int& waveCount = *(int*)((uint8_t*)this + 0x238 + playerIdx * 4);
-    float& delay = *(float*)((uint8_t*)this + 0x23c + playerIdx * 4);
-    float& wait = *(float*)((uint8_t*)this + 0x240 + playerIdx * 4);
-#else
+    // Wave-slot group (+0x234..+0x243, see WaveManager.h).
+    // v1.6.1 GetNextWave @0x0012573c:
+    //   ldr  r3,[r4+playerIdx*4,#0x234]  -> m_pCurrentWave[playerIdx]
+    //   ldr  r3,[r4,(playerIdx+0x8e)*4]  -> m_WaveCount[playerIdx]  (+0x238+p*4)
+    //   vstr s15,[r7,#0x4] (r7 = r4+(playerIdx+0x8e)*4) -> delay    (+0x23c+p*4)
+    //   str  r1,[r4,(playerIdx+0x90)*4]  -> wait                    (+0x240+p*4)
     WAVE_INFO*& pCurrentWave = m_pCurrentWave[playerIdx];
-    int& waveCount = m_WaveCount[playerIdx];
+    int&        waveCount    = m_WaveCount[playerIdx];
+#if defined(__bada__)
+    float& delay = *(float*)((uint8_t*)this + 0x23c + playerIdx * 4);
+    float& wait  = *(float*)((uint8_t*)this + 0x240 + playerIdx * 4);
+#else
     float& delay = m_NextWaveDelay_P0;     // SP only (SSM would need array)
-    float& wait = m_NextWaveDelay_P1;      // SP only (SSM would need array)
+    float& wait  = m_NextWaveDelay_P1;     // SP only (SSM would need array)
 #endif
     // No Game guard: v1.6.1 WaveManager::GetNextWave @0x0012573c reaches game_work
     // through the GOT (ldr r7,[r6,r3] @0x00125760) and derefs pM_SaveData unguarded.
@@ -1878,16 +1905,17 @@ void WaveManager::GetNextWave(int playerIdx) {
 // ----------------------------------------------------------------------------
 
 void WaveManager::SetCurrentWave(int waveNo, float aDelay, int playerIdx) {
+    // v1.6.1 SetCurrentWave @0x00125d1c:
+    //   add r5,r2,#0x8e ; str r6,[r4,r5,lsl #2]   -> m_WaveCount[playerIdx] (+0x238+p*4)
+    //   add r4,r4,r5,lsl #2 ; vldr/vstr [r4,#0x4] -> delay                  (+0x23c+p*4)
+    int& count = m_WaveCount[playerIdx];
 #if defined(__bada__)
-    // v1.6.1 binary @ 0x00125d1c: offset-based per-player slot access.
-    int& count = *(int*)((uint8_t*)this + 0x238 + playerIdx * 4);
+    // No array form for the delay slot -- keep the binary's +0x23c+p*4 addressing.
     float& delay = *(float*)((uint8_t*)this + 0x23c + playerIdx * 4);
 #else
-    int& count = m_WaveCount[playerIdx];
     float& delay = m_NextWaveDelay_P0;     // SP only
 #endif
     ClearUnspawned();
-    // v1.6.1 binary @ 0x00125d1c: *(int*)(&m_pCurrentWave + playerIdx*4 + 4) = waveNo - 1
     count = waveNo - 1;
     GetNextWave(0);  // binary always calls GetNextWave with playerIdx=0
 
