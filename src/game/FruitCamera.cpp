@@ -59,8 +59,8 @@ FruitCamera::~FruitCamera() {
 //   5. LookAt = Lerp(globalLook, m_ZoomTarget, SinTransition(ZoomT, k))
 //   6. m_RollOut = (short)(Lerp(0, m_RollScale, InverseSquareTransition(ZoomT)) * k)
 //   7. add shake offset: Vec3(m_Target.x, m_Target.y, 0) += into LookAt
-// ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00180c8c..0x00180d0e (re-analyst) [v1.5.1].
-// v1.6.1 UpdateCamera at 0x1edf24 extends this with the zoom state machine.
+// ASM-spec v1.6.1 FruitCamera::UpdateCamera @0x001edf24: the zoom state machine
+// above. Spec marker, not a verify -- the v1.6.1 body has not been ASM-diffed.
 void FruitCamera::UpdateCamera(float dt) {
     // RE-ported: 0x1edf24 — v1.6.1 UpdateCamera does NOT write m_reserved14c (+0x14c) at all.
     // The v1.5.1 (float)m_TiltPitch / (float)m_TiltYaw casts were dropped; m_reserved14c retains ctor value.
@@ -180,7 +180,7 @@ _Vector3<float> FruitCamera::TranslatePos(_Vector3<float> pos, bool inverse, boo
     return pos;
 }
 
-// 0x1ed77c (v1.6.1 IdleCamera — sets mode 0)
+// ASM-spec v1.6.1 FruitCamera::IdleCamera @0x001ed77c — clears follow entity, mode 0
 void FruitCamera::IdleCamera() {
     m_pFollowEntity = 0;
     m_CameraMode = 0;
@@ -191,8 +191,8 @@ void FruitCamera::UpdateIdle(float dt) {
     (void)dt;
 }
 
-// Binary @ 0x00180c50 (v1.5.1) / v1.6.1 equivalent — delta-preserving follow.
-// ASM-verified semantic (re-analyst): delta = m_lookAt - entity->pos;
+// ASM-spec v1.6.1 FruitCamera::UpdateFollow @0x001ed7ec — delta-preserving follow.
+// Semantic (re-analyst): delta = m_lookAt - entity->pos;
 //   m_lookAt = entity->pos; m_pos -= delta;
 // Net: m_pos += (entity->pos - oldLookAt), preserving (m_pos - m_lookAt).
 void FruitCamera::UpdateFollow(float dt) {
@@ -206,7 +206,9 @@ void FruitCamera::UpdateFollow(float dt) {
     }
 }
 
-// Binary @ 0x00180b2c — bind follow entity, reset tilt to (0,0), up=(0,1,0)
+// ASM-spec v1.6.1 FruitCamera::FollowEntity @0x001ed78c — bind follow entity (entity
+// and mode are stored only when entity != 0, `strne`), always reset tilt to (0,0)
+// and up to (0,1,0).
 void FruitCamera::FollowEntity(Mortar::Entity* entity) {
     if (entity) {
         m_pFollowEntity = entity;
@@ -217,88 +219,160 @@ void FruitCamera::FollowEntity(Mortar::Entity* entity) {
     m_up = _Vector3<float>(0.0f, 1.0f, 0.0f);
 }
 
-// Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
+// ASM-spec v1.6.1 FruitCamera::GetFollowEntity @0x001ed768 — return m_pFollowEntity iff mode==1
 Mortar::Entity* FruitCamera::GetFollowEntity() {
     return (m_CameraMode == 1) ? m_pFollowEntity : 0;
 }
 
-// Non-virtual (0x001ee124) — 4-type ortho dispatch.
-//
-// ASM-spec v1.6.1 SetupPerspective @ 0x001ee124 (body 0x001ee124..0x001ee53f,
-// 271 instructions; last function in FruitCamera.cpp before that file's
-// static-ctor @ 0x001ee56c).
-// The port compiles to 186 against the binary's ~274. Of the two candidate
-// causes previously listed, a disassembly read settles both:
-//   (1) REFUTED — the binary DOES have the m_bDirty early-out. At 0x001ee180:
-//       `ldrb r3,[r5,#0x108]; cmp r3,#0; bne 0x001ee194; cmp r10,#0;
-//        beq 0x001ee4f8`, i.e. exactly `if (!m_bDirty && !forceUpdate)`, with
-//       0x001ee4f8 as the cheap re-upload tail. Not the source of the delta.
-//   (2) CONFIRMED — this is the whole gap. The binary dispatches through a
-//       jump table at 0x001ee1d4 (`cmp r7,#4; addls pc,pc,r7,lsl #2`) with five
-//       entries resolving to THREE distinct bodies (0x001ee1f0, 0x001ee298,
-//       0x001ee3a4) plus a default. The port branches only PT_GENERIC vs
-//       everything-else, so it collapses two of the three arms.
-// Port the two missing arms before re-stamping.
+// ASM-spec v1.6.1 FruitCamera::SetupPerspective @0x001ee124
+// (body 0x001ee124..0x001ee53f; last function in FruitCamera.cpp before that
+// file's static-ctor @0x001ee56c). Non-virtual, 5 selector values / 3 arms.
 //
 // CAUTION: the binary has a SECOND, different function actually named
 // `FruitCamera::SetupPerspective` @ 0x00257aac. That one is a true perspective
 // setup (reads fovy/aspect/near/far at +0x11c/+0x120/+0x124/+0x128 and calls
 // 0x0010dd60); it is NOT this ortho dispatcher. Do not merge the two, and note
 // that asm-verify pairs this port body against 0x001ee124 by instruction count.
+//
+// Structure of the binary body:
+//   0x001ee130..0x001ee17c  snapshot zoom(+0x15c) / lookAt(+0x150) / roll(+0x160)
+//                           into locals, then `cmp r7,#4` overrides all three for
+//                           PT_GENERIC (zoom=1, roll=0, lookAt = engine `Zero` Vec3).
+//   0x001ee180              `if (!m_bDirty && !forceUpdate) goto 0x001ee4f8`.
+//   0x001ee194..0x001ee1cc  halfH = zoom*160, halfW = zoom*240;
+//                           up = Vec3(SinIdx(roll), CosIdx(roll), 0).
+//   0x001ee1d4              5-entry jump table -> the three arms below.
+//   0x001ee4ac..0x001ee4b8  shared ortho tail (MatrixManager::SetupOrtho, out=0).
+//   0x001ee4bc..0x001ee4ec  m_projection <- projection stack m_Current.
+//   0x001ee4f8..0x001ee51c  the !dirty early-out: SetCurrentMatrix on view then
+//                           projection, NO upload.
+//   0x001ee520              MatrixStack::Reset(world stack) -- every path ends here.
+//
+// The binary writes NEITHER m_bDirty nor m_bInitialized here (only the base
+// MortarCamera::SetupPerspective @0x00257aac / ::SetupOrtho @0x00257758 do), and
+// the early-out does NOT call UploadAll -- both were port-side additions and are
+// removed. Nothing else clears m_bDirty on a FruitCamera, so the early-out is in
+// practice unreachable, exactly as in the binary.
 void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
+    // 0x001ee130: s16 <- m_Zoom; sp+0x124 <- copy of m_LookAt; r6 <- m_RollOut.
+    float zoom = m_Zoom;
+    _Vector3<float> lookAt = m_LookAt;
+    uint16_t rollOut = m_RollOut;
+
+    // 0x001ee154: PT_GENERIC ignores the camera entirely -- screen-space setup.
+    // lookAt <- the engine `Zero` Vec3 global (GOT 0x001ee564 -> 0x002d9288).
+    if (perspType == PT_GENERIC) {
+        zoom    = 1.0f;
+        rollOut = 0;
+        lookAt  = _Vector3<float>(0.0f, 0.0f, 0.0f);
+    }
+
+    // 0x001ee180
     if (!m_bDirty && !forceUpdate) {
         Matrix44 viewMat44;
         m_localToWorld.ToMatrix44(viewMat44);
         mm.GetViewStack().SetCurrentMatrix(viewMat44);
         mm.GetProjectionStack().SetCurrentMatrix(m_projection);
-        mm.UploadAll();
         mm.GetWorldStack().Reset();
         return;
     }
 
-    _Vector3<float> eye, at;
-    if (perspType == PT_GENERIC) {
-        eye = _Vector3<float>(0.0f, 0.0f, 1.0f);
-        at  = _Vector3<float>(0.0f, 0.0f, 0.0f);
-    } else {
-        eye = _Vector3<float>(m_Target.x, m_Target.y, 1.0f);
-        at  = _Vector3<float>(m_Target.x, m_Target.y, 0.0f);
-    }
-    _Vector3<float> up(0.0f, 1.0f, 0.0f);
-    mm.SetupLookAt(eye, up, at);
-    m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
-
-    // ASM-spec v1.6.1 SetupPerspective @ 0x001ee4ac..0x001ee4b8 -- the shared
-    // ortho tail of the function above: two vldr.32 into s4/s5, r1=0, then
-    // bl 0x001129ac (= MatrixManager::SetupOrtho). All three dispatch arms
-    // converge here via `b 0x001ee4ac`.
+    // 0x001ee198: the ortho half-extents scale with m_Zoom -- this is what makes
+    // the zoom state machine in UpdateCamera visible. Literals from the pool at
+    // 0x001ee544 (160.0f) and 0x001ee548 (240.0f).
     // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
     // horizontal bounds widen with Layout::HalfWidth() when Layout::g_WideLayout is
     // on (== 240.0f, i.e. the original bounds, otherwise). Vertical stays +-160.
+    float halfH = zoom * 160.0f;
 #ifdef __bada__
-    mm.SetupOrtho(160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
+    float halfW = zoom * 240.0f;
 #else
-    mm.SetupOrtho(160.0f, -160.0f, -Layout::HalfWidth(), Layout::HalfWidth(), 2000.0f, -6000.0f);
+    float halfW = zoom * Layout::HalfWidth();
 #endif
 
-    m_projection = mm.GetProjectionStack().m_Current;
-    m_bDirty = false;
-    m_bInitialized = false;
+    // 0x001ee1a8: up = Vec3(SinIdx(m_RollOut), CosIdx(m_RollOut), 0). m_RollOut is
+    // the zoom transition's roll in 16-bit angle-index units, so at rest (roll 0)
+    // this is exactly (0,1,0).
+    _Vector3<float> up(Math::SinIdx(rollOut), Math::CosIdx(rollOut), 0.0f);
 
+    // SetupOrtho takes (top, bottom, left, right, near, far) -- NOT the GL order.
+    float top, bottom, left, right;
+    _Vector3<float> at, eye;
+
+    switch (perspType) {
+    case PT_STANDARD:      // 0x001ee1dc -> 0x001ee1f0
+    case PT_STANDARD_2D:   // 0x001ee1e0 -> 0x001ee1f0
+    case PT_GENERIC:       // 0x001ee1ec -> 0x001ee1f0
+        // 0x001ee1f0: eye = Vec3(0,0,1) + lookAt; at = lookAt; up as computed above.
+        at  = lookAt;
+        eye = _Vector3<float>(0.0f, 0.0f, 1.0f) + at;
+        mm.SetupLookAt(eye, up, at);
+        m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
+        // 0x001ee4ac reached with s0=halfH, s1=-halfH, s2=-halfW, s3=halfW.
+        top = halfH; bottom = -halfH; left = -halfW; right = halfW;
+        break;
+
+    case PT_ROTATED_CW:    // 0x001ee1e4 -> 0x001ee298
+        // 0x001ee298: at = Vec3(-lookAt.y, lookAt.x, lookAt.z) / 1.0f. The divisor
+        // is materialised on the stack (`vstr s16,[sp,#0x134]` after
+        // `vmov.f32 s16,#1.0`) because operator/ takes a const float&, so the
+        // source really does divide by a constant 1.0f here.
+        at  = _Vector3<float>(-lookAt.y, lookAt.x, lookAt.z) / 1.0f;
+        up  = _Vector3<float>(1.0f, 0.0f, 0.0f);
+        eye = _Vector3<float>(0.0f, 0.0f, 1.0f) + at;
+        mm.SetupLookAt(eye, up, at);
+        m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
+        // 0x001ee374: s0=DAT_001ee550(-240), s1=DAT_001ee548(240),
+        //             s2=DAT_001ee544(160), s3=DAT_001ee554(-480).
+        // Both axes are inverted relative to PT_ROTATED_CCW, so with up=(1,0,0)
+        // the scene lands rotated 90 deg clockwise. Ignores m_Zoom by design.
+        top = -240.0f; bottom = 240.0f; left = 160.0f; right = -480.0f;
+        break;
+
+    case PT_ROTATED_CCW:   // 0x001ee1e8 -> 0x001ee3a4
+        // 0x001ee3a4: up first, then at = Vec3(lookAt.y, -lookAt.x, lookAt.z) / 1.0f.
+        up  = _Vector3<float>(1.0f, 0.0f, 0.0f);
+        at  = _Vector3<float>(lookAt.y, -lookAt.x, lookAt.z) / 1.0f;
+        eye = _Vector3<float>(0.0f, 0.0f, 1.0f) + at;
+        mm.SetupLookAt(eye, up, at);
+        m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
+        // 0x001ee480: s0=DAT_001ee548(240), s1=DAT_001ee550(-240),
+        //             s2=DAT_001ee554(-480), s3=DAT_001ee544(160).
+        top = 240.0f; bottom = -240.0f; left = -480.0f; right = 160.0f;
+        break;
+
+    default:
+        // 0x001ee1d8: selector > 4 skips the whole camera setup and falls straight
+        // through to the world-stack reset.
+        mm.GetWorldStack().Reset();
+        return;
+    }
+
+    // 0x001ee4ac: shared ortho tail -- s4/s5 from DAT_001ee558 (2000.0f) and
+    // DAT_001ee55c (-6000.0f), r1 = 0 (no out-matrix). All three arms `b` here.
+    mm.SetupOrtho(top, bottom, left, right, 2000.0f, -6000.0f);
+
+    // 0x001ee4bc
+    m_projection = mm.GetProjectionStack().m_Current;
+
+    // 0x001ee520
     mm.GetWorldStack().Reset();
 }
 
-// ASM-spec v1.6.1 FruitCamera::ViewIsNormal @<addr TBD>
-// Assumed predicate: m_ZoomT<=0.0f (view not zoomed/rotated).
-// Consistent with TranslatePos no-op gate. TODO: verify exact predicate in binary.
+// ASM-spec v1.6.1 FruitCamera::ViewIsNormal @0x001d0098:
+//   if (m_Target.x == 0 && m_Target.y == 0) return m_ZoomT <= 0; else return false;
+// The shake offset counts too -- the prior port checked only m_ZoomT.
 bool FruitCamera::ViewIsNormal() {
-    return m_ZoomT <= 0.0f;
+    if (m_Target.x == 0.0f && m_Target.y == 0.0f) {
+        return m_ZoomT <= 0.0f;
+    }
+    return false;
 }
 
-// Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
-// ASM-verified: 2026-05-17 v1.6.1 binary @ 0x00180d10..0x00180d68 (re-analyst).
+// ASM-spec v1.6.1 FruitCamera::CreateCameraShake @0x001ed9e0 — shake angle from
+// impact via Math::Atan2Idx, dir = (CosIdx,SinIdx)*9 then *= dirScale.
 // DIFFERS: original = Math::Atan2Idx 16-bit-angle-index trig; port uses
 //          atan2f/sinf/cosf with the (radians to 16-bit-index) conversion
 //          factor 65536/2pi.
@@ -315,9 +389,6 @@ void FruitCamera::CreateCameraShake(_Vector3<float> impact, float intensity, flo
 
 // v1.6.1 FruitCamera::UpdateShake @ 0x001edcc0 (body 0x001edcc0..0x001edf00).
 // Constants verified by value from the v1.6.1 literal pool at 0x001edf08.
-// (The old 0x00180ea0 / 0x00181068 citations were v1.5.1 residue — in v1.6.1
-// 0x00180ea0 falls inside FruitFactZenPage::Init. The pool moved 0x00181068 ->
-// 0x001edf08; the four floats kept their order and values.)
 void FruitCamera::UpdateShake(float dt) {
     static const float LERP_FACTOR    = 0.2f;    // DAT_001edf08
     static const float SNAP_NEG       = -0.01f;  // DAT_001edf0c

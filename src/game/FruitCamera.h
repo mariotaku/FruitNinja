@@ -21,15 +21,33 @@ struct InputEvent;
 
 class FruitCamera : public Mortar::MortarCamera {
 public:
-    // Binary enum from switch in SetupPerspective @ 0x001ee124 (v1.6.1); nested inside
+    // Binary enum from the switch in SetupPerspective @ 0x001ee124 (v1.6.1); nested inside
     // FruitCamera in the binary (mangles N11FruitCamera15PERSPECIVE_TYPEE) -- must stay
     // nested here, not global, for SetupPerspective's mangled symbol to pair.
     // Typo in original binary symbol preserved intentionally.
+    //
+    // ASM-spec v1.6.1 FruitCamera::SetupPerspective @0x001ee124: the jump table at
+    // 0x001ee1d4 has FIVE entries (`cmp r7,#4; addls pc,pc,r7,lsl #2`) resolving to
+    // THREE distinct arms plus a default:
+    //   0 -> 0x001ee1f0 | 1 -> 0x001ee1f0 | 2 -> 0x001ee298 | 3 -> 0x001ee3a4
+    //   4 -> 0x001ee1f0 | >4 -> 0x001ee520 (no camera setup at all)
+    // 0, 1 and 4 share one arm; 4 additionally zeroes lookAt/roll and forces zoom=1
+    // in the pre-switch block at 0x001ee164.
+    //
+    // 0 and 1 are byte-for-byte the same code path in v1.6.1 -- nothing distinguishes
+    // them but caller intent. Names below come from the v1.6.1 GameDraw @0x001cd7a0
+    // call sites (r1 = the value, r2 = forceUpdate, always 1):
+    //   0 : depth-on 3D passes  (ActorManager::Draw, FruitRay, DrawSlices, particles)
+    //   1 : depth-off 2D passes (DrawBackground, HUD 0x40 + splats/shadows/blasts)
+    //   4 : screen-space passes (DrawStartFade, the 16 blade draws, HUD 0x01/0x08)
+    // 2 and 3 have NO v1.6.1 call site (GameDraw and DrawStartFade are the only
+    // callers and pass only 0/1/4) -- their arms are ported for shape, not reachability.
     enum PERSPECIVE_TYPE {
         PT_STANDARD    = 0,
-        PT_ROTATED_CW  = 1,
-        PT_ROTATED_CCW = 2,
-        PT_GENERIC     = 3,
+        PT_STANDARD_2D = 1,
+        PT_ROTATED_CW  = 2,
+        PT_ROTATED_CCW = 3,
+        PT_GENERIC     = 4,
     };
 
     // +0x12C: entity pointer for follow mode (nullptr = none).
@@ -105,22 +123,23 @@ public:
     // 4-state: 0=idle, 1=follow, 2=zoom-in, 3=zoom-out + zoom lerp + shake.
     void UpdateCamera(float dt);
 
-    // Non-virtual (0x001810ac) — 4-type ortho dispatch
+    // Non-virtual; v1.6.1 FruitCamera::SetupPerspective @0x001ee124 — 5-value / 3-arm ortho dispatch
     void SetupPerspective(PERSPECIVE_TYPE perspType = PT_STANDARD, bool forceUpdate = false);
 
-    // Binary @ 0x00180d10 — shake angle from impact, dir = (cos,sin)*9*dirScale
+    // v1.6.1 FruitCamera::CreateCameraShake @0x001ed9e0 — shake angle from impact,
+    // dir = (CosIdx,SinIdx)*9 then *= dirScale
     void CreateCameraShake(_Vector3<float> impact, float intensity, float dirScale);
 
-    // 0x00180ea0 (v1.5.1 address; v1.6.1 equivalent in UpdateCamera)
+    // v1.6.1 FruitCamera::UpdateShake @0x001edcc0
     void UpdateShake(float dt);
 
-    // Binary @ 0x00180b2c — bind follow entity, reset tilt to (0,0), up=(0,1,0)
+    // v1.6.1 FruitCamera::FollowEntity @0x001ed78c — bind follow entity, reset tilt to (0,0), up=(0,1,0)
     void FollowEntity(Mortar::Entity* entity);
 
-    // Binary @ 0x00180a0c — return m_pFollowEntity iff mode==1
+    // v1.6.1 FruitCamera::GetFollowEntity @0x001ed768 — return m_pFollowEntity iff mode==1
     Mortar::Entity* GetFollowEntity();
 
-    // Helpers: IdleCamera @ 0x1ed77c (sets mode 0)
+    // v1.6.1 FruitCamera::IdleCamera @0x001ed77c (clears follow entity, sets mode 0)
     void IdleCamera();
 
     // ASM-spec v1.6.1 FruitCamera::TranslatePos @0x001ed840: view<->world;
@@ -128,10 +147,9 @@ public:
     // no-op when m_ZoomT<=0.
     _Vector3<float> TranslatePos(_Vector3<float> pos, bool inverse, bool useZeroCenter);
 
-    // ASM-spec v1.6.1 FruitCamera::ViewIsNormal @<addr TBD>
-    // Returns true when the view is in its standard (non-zoomed, non-rotated) state.
-    // TODO: verify exact predicate against binary; assumed m_ZoomT<=0 (consistent
-    //   with TranslatePos no-op gate and the DrawBackground normal-path gate).
+    // ASM-spec v1.6.1 FruitCamera::ViewIsNormal @0x001d0098:
+    //   m_Target.x == 0 && m_Target.y == 0 && m_ZoomT <= 0
+    // i.e. neither shaking nor zooming. Gates DrawBackground's 3x3 UV-seam path.
     bool ViewIsNormal();
 
     // Zoom API. Binary symbols: FruitCamera::Transition @ 0x1bef54 (zoom-in),
