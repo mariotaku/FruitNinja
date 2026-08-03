@@ -4,7 +4,27 @@
 #include <cstdint>
 #include <algorithm>
 
-// Matches original Colour (BGRA byte order, 4 bytes)
+// ASM-spec v1.6.1 Colour (Colour.cpp TU @ 0x0021e7e4..0x0021eadc):
+//   sizeof == 4, align 4. Byte layout  +0 b, +1 g, +2 r, +3 a.
+//   Evidence: (a) global.constructors.keyed.to.Colour.cpp @0x0021e9b8 writes
+//   Red=[2]=0xff, Green=[1]=0xff, Blue=[0]=0xff, all with [3]=0xff;
+//   (b) Colour::Colour(uint8,uint8,uint8,uint8) @0x0013f970 stores r->+2,
+//   g->+1, b->+0, a(stack arg)->+3;  (c) the six BSS statics at 0x0034e2f4
+//   are spaced exactly 4 bytes apart.
+//
+//   The binary also has a 32-bit lvalue aliasing the four bytes at +0 (a
+//   union member): Colour::Colour(unsigned long) @0x0021e7e4 opens with
+//   `str r1,[r0,#0]` before patching two bytes, and callers compare two
+//   Colours with a single `ldr`/`ldr`/`cmp` word compare (e.g.
+//   BakedStringBox::SetStroke @0x002453f0 +0x5c/+0x60/+0x64). Numerically
+//   that word is 0xAARRGGBB -- which is why ToString() prints "(argb)".
+//   TODO: v1.6.1 0x0021e7e4 (Colour::Colour(unsigned long)) -- port the
+//   packed union member + the unsigned-long ctor (inverse of PlatformColour).
+//
+//   Also unported: the empty user-declared ~Colour @0x0021eadc and the
+//   user-declared `Colour operator=(Colour const&)` @0x0011e064 (returns by
+//   VALUE, sret). Those make Colour non-POD in the binary, so it is passed
+//   and returned in memory, not in r0. See the report notes in Colour.cpp.
 struct Colour {
     uint8_t b, g, r, a;
 
@@ -12,7 +32,10 @@ struct Colour {
     Colour(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
         : b(b), g(g), r(r), a(a) {}
 
-    // Return packed BGRA value
+    // ASM-spec v1.6.1 Colour::PlatformColour @ 0x0021e7f8:
+    //   builds a byte-swapped temp (tmp.b=r, tmp.g=g, tmp.r=b, tmp.a=a) and
+    //   returns its word, i.e. (a<<24)|(b<<16)|(g<<8)|r. In memory that is
+    //   r,g,b,a -- GL_RGBA order. This matches the expression below exactly.
     uint32_t PlatformColour() const {
         return (uint32_t)a << 24 | (uint32_t)b << 16 | (uint32_t)g << 8 | r;
     }
@@ -58,30 +81,53 @@ struct Colour {
     }
 
 public:
-    // Binary @ 0x00183f58 -- two-arg Lerp: builds copies of `a` and `*this`
-    //   then delegates to the 3-arg Lerp(this, a, *this, t). Returns *this.
+    // TODO: v1.6.1 0x0021e900 (Colour::Lerp(Colour const&, float) const,
+    //   _ZNK6Colour4LerpERKS_f) -- signature and semantics both diverge.
+    //   Binary returns a NEW Colour BY VALUE (sret) and leaves *this alone:
+    //     r0=sret, r1=this, r2=&a; it copies *this and a onto the stack and
+    //     tail-calls the 3-arg Lerp(sret, /*p1=*/*this, /*p2=*/a, t).
+    //   So the result is  a + (*this - a) * t   (t=0 -> a, t=1 -> *this).
+    //   The port instead mutates *this and passes (a, *this) -- args swapped.
     Colour* Lerp(Colour const& a, float t) const;
-    // Binary @ 0x00183e98 -- three-arg Lerp: this = a; per channel
-    //   this -= (b - a) * t (R/G/B/A), then clamp each to >= 0 (signed->float,
-    //   truncate toward zero). Returns this.
+    // ASM-spec v1.6.1 Colour::Lerp(Colour, Colour, float) @ 0x0021e828
+    //   (_ZN6Colour4LerpES_S_f): seeds *this from the SECOND param, then
+    //   subtracts the scaled delta per channel:
+    //     *this = b;  this->ch -= (b.ch - a.ch) * t
+    //   i.e. result = b + (a - b) * t. t=0 gives b, t=1 gives a. There is no
+    //   clamp on t. The negative clamp is `vcvt.u32.f32` (round-to-zero,
+    //   saturates <0 to 0) followed by strb -- equivalent to the port's
+    //   (char)(int) expression. Mutates and returns *this.
     Colour* Lerp(Colour a, Colour b, float t);
-    // Binary @ 0x00183f98 -- snprintf "%d, %d, %d, %d (argb)" (a,r,g,b) into a
-    //   static 0x100 buffer and return it.
+    // ASM-spec v1.6.1 Colour::ToString @ 0x0021e95c: snprintf
+    //   "%d, %d, %d, %d (argb)" (a,r,g,b) into the shared 0x100 static buffer
+    //   at 0x0034e1f4 and return it.
     char* ToString() const;
 
-    // Binary static colour constants (BSS, zero-init then set by static ctors).
-    // TODO: re-verify v1.6.1 Colour::Red/White/Black BSS addresses via Ghidra xref.
-    static const Colour Red;    // Colour::Red   = Colour(255,0,0,255)
-    static const Colour White;  // Colour::White = Colour(255,255,255,255)
-    static const Colour Black;  // Colour::Black = Colour(0,0,0,255)
+    // Binary static colour constants: BSS, zero-init, then filled by
+    // global.constructors.keyed.to.Colour.cpp @ 0x0021e9b8 (each also
+    // registers Colour::~Colour with __aeabi_atexit).
+    static const Colour Red;    // 0x0034e2fc  Colour(255,0,0,255)
+    static const Colour White;  // 0x0034e2f8  Colour(255,255,255,255)
+    static const Colour Black;  // 0x0034e2f4  Colour(0,0,0,255)
+    // TODO: v1.6.1 0x0021e9b8 (global ctors keyed to Colour.cpp) -- port the
+    //   three missing statics: Green 0x0034e300 Colour(0,255,0,255),
+    //   Blue 0x0034e304 Colour(0,0,255,255), Yellow 0x0034e308
+    //   Colour(255,255,0,255). Binary declares them non-const.
 };
 
 // ASM-spec v1.6.1 LerpColourFromArray @ 0x0014f254:
 //   Interpolates within a colour gradient array.
-//   t: normalised position [0,1] across the array. arr: array of count Colour entries.
-//   Guard: returns arr[count-1] if isnan(t) || count==1 || t<=0.
+//   t: normalised position [0,1] across the array. arr: array of count Colour
+//   entries; count must be >= 1.
+//   Guards, in the binary's order:
+//     t >= 1.0f             -> arr[count-1]
+//     t <= 0.0f || count==1 -> arr[0]
 //   Otherwise: scaled=t*(count-1); idx=(int)scaled; frac=fmod(scaled,1.0);
-//   result.Lerp(arr[idx+1], arr[idx], frac) -- a=arr[idx+1], b=arr[idx] (binary arg order).
+//   result.Lerp(arr[idx+1], arr[idx], frac) -- a=arr[idx+1], b=arr[idx]
+//   (binary arg order), which walks arr[idx] -> arr[idx+1] as frac goes 0 -> 1.
+//   The `t >= 1.0f` guard is what keeps idx+1 in bounds: without it, t == 1.0f
+//   reaches the main path and reads arr[count].
+//   No NaN test -- the binary has none. See Colour.cpp for why.
 Colour LerpColourFromArray(float t, Colour* arr, int count);
 
 #endif

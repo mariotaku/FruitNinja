@@ -207,78 +207,240 @@ static void test_to_float_zero_alpha()
     CHECK(f[3] == 0.0f);
 }
 
-// Lerp 3-arg: formula is `a - (b-a)*t` per channel (binary Colour.cpp lines 23-42).
-// Choose a.r=200, b.r=100, t=0.5: dr=100-200=-100; fr=200-(-100)*0.5=250 -- no clamp.
-// Verify with a=(200,200,200,200), b=(100,100,100,100), t=0.5.
-static void test_lerp_3arg_no_clamp()
-{
-    Colour result;
-    Colour a(200, 200, 200, 200);
-    Colour b(100, 100, 100, 100);
-    result.Lerp(a, b, 0.5f);
-    // dr = 100-200 = -100; fr = 200 - (-100)*0.5 = 250 -> (char)(int)250 = 250.
-    CHECK(result.r == 250);
-    CHECK(result.g == 250);
-    CHECK(result.b == 250);
-    CHECK(result.a == 250);
-}
+// ---------------------------------------------------------------------------
+// Colour::Lerp(Colour a, Colour b, float t) -- v1.6.1 @ 0x0021e828.
+//
+// The binary SEEDS *this FROM THE SECOND PARAMETER (`ldrb rN,[r2,#k]` ->
+// `strb rN,[r0,#k]`), then subtracts the scaled delta:
+//     *this = b;   this->ch -= (b.ch - a.ch) * t
+// which is  result = b + (a - b) * t.  So t=0 gives b and t=1 gives a --
+// Lerp(a, b, t) walks FROM b TO a, not the other way round.
+//
+// Do NOT "fix" the seeding order back to `a`: the tests below fail if you do,
+// and test_lerp_from_array_interpolate shows independently why `b` is right
+// (it is the only seeding that makes the gradient continuous at t == 1).
+// ---------------------------------------------------------------------------
 
-// Lerp 3-arg with positive delta (b > a): result = a - (b-a)*t.
-// a.r=50, b.r=150, t=0.5: dr=100; fr=50-100*0.5=50-50=0.
-static void test_lerp_3arg_zero_result()
-{
-    Colour result;
-    Colour a(50, 50, 50, 50);
-    Colour b(150, 150, 150, 150);
-    result.Lerp(a, b, 0.5f);
-    // fr = 50 - (150-50)*0.5 = 50 - 50 = 0. The check is (0.0 < 0.0) which is false
-    // -> result clamped to 0.
-    CHECK(result.r == 0);
-    CHECK(result.g == 0);
-    CHECK(result.b == 0);
-    CHECK(result.a == 0);
-}
-
-// Lerp 3-arg at t=0: result = a (since delta*0 = 0).
+// t=0 must return b exactly. a and b are deliberately different in every
+// channel so a swapped seed cannot pass by coincidence.
 static void test_lerp_3arg_t0()
 {
     Colour result;
     Colour a(10, 20, 30, 40);
-    Colour b(200, 200, 200, 200);
+    Colour b(200, 201, 202, 203);
     result.Lerp(a, b, 0.0f);
+    // b + (a-b)*0 = b.
+    CHECK(result.r == 200);
+    CHECK(result.g == 201);
+    CHECK(result.b == 202);
+    CHECK(result.a == 203);
+}
+
+// t=1 must return a exactly.
+static void test_lerp_3arg_t1()
+{
+    Colour result;
+    Colour a(10, 20, 30, 40);
+    Colour b(200, 201, 202, 203);
+    result.Lerp(a, b, 1.0f);
+    // b + (a-b)*1 = a. Per channel: 200 - (200-10)*1 = 10, etc.
     CHECK(result.r == 10);
     CHECK(result.g == 20);
     CHECK(result.b == 30);
     CHECK(result.a == 40);
 }
 
-// Lerp 2-arg: `self.Lerp(other, t)` delegates to `3arg(other, self, t)`.
-// So result = other - (self - other)*t.
+// Midpoint, all channels land in range so the clamp is not involved.
+static void test_lerp_3arg_no_clamp()
+{
+    Colour result;
+    Colour a(200, 200, 200, 200);
+    Colour b(100, 100, 100, 100);
+    result.Lerp(a, b, 0.5f);
+    // seed = b = 100; delta = b-a = -100; f = 100 - (-100)*0.5 = 150.
+    CHECK(result.r == 150);
+    CHECK(result.g == 150);
+    CHECK(result.b == 150);
+    CHECK(result.a == 150);
+}
+
+// The binary puts no clamp on t, so t outside [0,1] extrapolates. Negative
+// results hit the `vcvt.u32.f32` saturation (round-to-zero, <0 -> 0), which
+// the port spells (0.0f < f) ? (char)(int)f : 0.
+// t=2 with b > a drives every channel negative.
+static void test_lerp_3arg_negative_clamp()
+{
+    Colour result;
+    Colour a(10, 20, 30, 40);
+    Colour b(100, 100, 100, 100);
+    result.Lerp(a, b, 2.0f);
+    // r: 100 - (100-10)*2 = -80 -> 0.  g: 100 - 80*2 = -60 -> 0.
+    // b: 100 - 70*2 = -40 -> 0.        a: 100 - 60*2 = -20 -> 0.
+    CHECK(result.r == 0);
+    CHECK(result.g == 0);
+    CHECK(result.b == 0);
+    CHECK(result.a == 0);
+}
+
+// Lerp 2-arg: `self.Lerp(other, t)` -> 3arg(a=other, b=self, t),
+// so the port computes self + (other - self)*t.
+// At t=0.5 that coincides with the binary's a + (self - a)*t, so this case is
+// traceable to 0x0021e900 despite the outstanding arg-order divergence.
 // self=(200,200,200,200), other=(100,100,100,100), t=0.5:
-//   3arg(other=100, self=200, t=0.5): dr=200-100=100; fr=100-100*0.5=50.
+//   seed = self = 200; delta = self-other = 100; f = 200 - 100*0.5 = 150.
 static void test_lerp_2arg()
 {
     Colour self(200, 200, 200, 200);
     Colour other(100, 100, 100, 100);
     self.Lerp(other, 0.5f);
-    // result = other - (self - other)*0.5 = 100 - 100*0.5 = 50.
-    CHECK(self.r == 50);
-    CHECK(self.g == 50);
-    CHECK(self.b == 50);
-    CHECK(self.a == 50);
+    CHECK(self.r == 150);
+    CHECK(self.g == 150);
+    CHECK(self.b == 150);
+    CHECK(self.a == 150);
 }
 
-// Lerp 2-arg at t=0: result = other (first arg).
-static void test_lerp_2arg_t0()
+// NOT binary-traceable. This pins the KNOWN divergence documented by the
+// // TODO at v1.6.1 0x0021e900 in Colour.h/Colour.cpp: the binary returns a
+// new Colour by value (sret) and passes (p1=*this, p2=other), so at t=0 it
+// yields OTHER, i.e. (50,60,70,80). The port mutates *this and passes the
+// pair swapped, so it yields SELF. When the 2-arg overload is ported to its
+// real `Colour Lerp(Colour const&, float) const` signature, delete this test
+// and assert (50,60,70,80) instead.
+static void test_lerp_2arg_t0_pins_known_divergence()
 {
     Colour self(200, 200, 200, 200);
     Colour other(50, 60, 70, 80);
     self.Lerp(other, 0.0f);
-    // 3arg(other, self, 0.0): result = other - 0 = other.
-    CHECK(self.r == 50);
-    CHECK(self.g == 60);
-    CHECK(self.b == 70);
-    CHECK(self.a == 80);
+    CHECK(self.r == 200);
+    CHECK(self.g == 200);
+    CHECK(self.b == 200);
+    CHECK(self.a == 200);
+}
+
+// ---------------------------------------------------------------------------
+// LerpColourFromArray -- v1.6.1 @ 0x0014f254.
+//   t >= 1.0f             -> arr[count-1]
+//   t <= 0.0f || count==1 -> arr[0]
+//   otherwise             -> Lerp(arr[idx+1], arr[idx], frac)
+// Every array below carries one extra trailing SENTINEL element that `count`
+// excludes. Any read past arr[count-1] shows up as a sentinel-tinted result,
+// which is how the t == 1.0f one-past-the-end read is caught.
+// ---------------------------------------------------------------------------
+
+// Fills a 4-entry gradient plus a 5th sentinel; count passed to the function
+// is 4, so arr[4] must never be read.
+static void make_gradient(Colour* arr)
+{
+    arr[0] = Colour(0, 10, 20, 30);
+    arr[1] = Colour(100, 110, 120, 130);
+    arr[2] = Colour(200, 200, 200, 200);
+    arr[3] = Colour(60, 61, 62, 63);
+    arr[4] = Colour(7, 7, 7, 7);      // sentinel -- out of bounds for count=4
+}
+
+// t == 1.0f takes the `vcmpe.f32 s0,1.0 / bge` path: arr[count-1].
+// Before the guard existed this fell through to the main path, computed
+// idx == count-1 and read arr[count] -- the sentinel.
+static void test_lerp_from_array_t1_no_overread()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(1.0f, arr, 4);
+    CHECK(c.r == 60 && c.g == 61 && c.b == 62 && c.a == 63);   // arr[3]
+    // Explicit: the sentinel must not have leaked into the result.
+    CHECK(!(c.r == 7 && c.g == 7 && c.b == 7 && c.a == 7));
+    CHECK(arr[4].r == 7 && arr[4].g == 7 && arr[4].b == 7 && arr[4].a == 7);
+}
+
+// t > 1.0f takes the same `bge` path.
+static void test_lerp_from_array_t_above_1()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(4.0f, arr, 4);
+    CHECK(c.r == 60 && c.g == 61 && c.b == 62 && c.a == 63);   // arr[3]
+}
+
+// t == 0.0f: r3 = (t <= 0) is set, so the function falls through to L_ret with
+// r1 still == arr -- arr[0], NOT arr[count-1].
+static void test_lerp_from_array_t0()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(0.0f, arr, 4);
+    CHECK(c.r == 0 && c.g == 10 && c.b == 20 && c.a == 30);    // arr[0]
+}
+
+// t < 0 is the same `t <= 0` path.
+static void test_lerp_from_array_t_negative()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(-0.5f, arr, 4);
+    CHECK(c.r == 0 && c.g == 10 && c.b == 20 && c.a == 30);    // arr[0]
+}
+
+// count == 1: `cmp r2,#1 / orreq r3,r3,#1` forces the early-out even for a
+// mid-range t. Result is arr[0], which for count==1 is also the only element.
+static void test_lerp_from_array_count1()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(0.5f, arr, 1);
+    CHECK(c.r == 0 && c.g == 10 && c.b == 20 && c.a == 30);    // arr[0]
+    // arr[1] would be the wrong answer -- make the failure mode explicit.
+    CHECK(!(c.r == 100 && c.g == 110 && c.b == 120 && c.a == 130));
+}
+
+// Main path. count=4 so scaled = t*3.
+//   t=0.25 -> scaled=0.75, idx=0, frac=0.75
+//   Lerp(a=arr[1], b=arr[0], 0.75) = arr[0] + (arr[1]-arr[0])*0.75
+//   r: 0 + 100*0.75 = 75.  g: 10 + 100*0.75 = 85.
+//   b: 20 + 100*0.75 = 95. a: 30 + 100*0.75 = 105.
+// This is the case that proves the seed must be `b`: with the old `a` seed the
+// same call returned arr[1] + (arr[1]-arr[0])*frac, which runs AWAY from
+// arr[0] and does not meet arr[count-1] as t -> 1.
+static void test_lerp_from_array_interpolate()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(0.25f, arr, 4);
+    CHECK(c.r == 75);
+    CHECK(c.g == 85);
+    CHECK(c.b == 95);
+    CHECK(c.a == 105);
+}
+
+// Second segment: t=0.5 -> scaled=1.5, idx=1, frac=0.5
+//   Lerp(a=arr[2], b=arr[1], 0.5) = arr[1] + (arr[2]-arr[1])*0.5
+//   r: 100 + 100*0.5 = 150.  g: 110 + 90*0.5 = 155.
+//   b: 120 + 80*0.5 = 160.   a: 130 + 70*0.5 = 165.
+static void test_lerp_from_array_second_segment()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(0.5f, arr, 4);
+    CHECK(c.r == 150);
+    CHECK(c.g == 155);
+    CHECK(c.b == 160);
+    CHECK(c.a == 165);
+}
+
+// Continuity check: the main path's limit as t -> 1 must equal the value the
+// t >= 1.0f early-out returns. Sampling just under a segment boundary
+// (t=0.999 -> scaled=2.997, idx=2, frac=0.997) has to land next to arr[3].
+static void test_lerp_from_array_continuous_at_end()
+{
+    Colour arr[5];
+    make_gradient(arr);
+    Colour c = LerpColourFromArray(0.999f, arr, 4);
+    Colour end = LerpColourFromArray(1.0f, arr, 4);
+    // arr[2]=(200,200,200,200) -> arr[3]=(60,61,62,63); at frac 0.997 the
+    // result is within a couple of steps of arr[3] in every channel.
+    CHECK(c.r >= end.r && c.r <= end.r + 2);
+    CHECK(c.g >= end.g && c.g <= end.g + 2);
+    CHECK(c.b >= end.b && c.b <= end.b + 2);
+    CHECK(c.a >= end.a && c.a <= end.a + 2);
 }
 
 // ToString format: "%d, %d, %d, %d (argb)" with args (a, r, g, b).
@@ -356,20 +518,47 @@ int main()
     test_to_float_zero_alpha();
     std::printf("  toFloat all-zero: OK\n");
 
-    test_lerp_3arg_no_clamp();
-    std::printf("  Lerp 3-arg (a=200,b=100,t=0.5) -> 250: OK\n");
-
-    test_lerp_3arg_zero_result();
-    std::printf("  Lerp 3-arg (a=50,b=150,t=0.5) -> 0 (clamp): OK\n");
-
     test_lerp_3arg_t0();
-    std::printf("  Lerp 3-arg at t=0 -> a: OK\n");
+    std::printf("  Lerp 3-arg at t=0 -> b: OK\n");
+
+    test_lerp_3arg_t1();
+    std::printf("  Lerp 3-arg at t=1 -> a: OK\n");
+
+    test_lerp_3arg_no_clamp();
+    std::printf("  Lerp 3-arg (a=200,b=100,t=0.5) -> 150: OK\n");
+
+    test_lerp_3arg_negative_clamp();
+    std::printf("  Lerp 3-arg (a=10..,b=100,t=2) -> 0 (clamp): OK\n");
 
     test_lerp_2arg();
-    std::printf("  Lerp 2-arg (self=200,other=100,t=0.5) -> 50: OK\n");
+    std::printf("  Lerp 2-arg (self=200,other=100,t=0.5) -> 150: OK\n");
 
-    test_lerp_2arg_t0();
-    std::printf("  Lerp 2-arg at t=0 -> other: OK\n");
+    test_lerp_2arg_t0_pins_known_divergence();
+    std::printf("  Lerp 2-arg at t=0 (pins known 0x0021e900 divergence): OK\n");
+
+    test_lerp_from_array_t1_no_overread();
+    std::printf("  LerpColourFromArray t=1 -> arr[count-1], no over-read: OK\n");
+
+    test_lerp_from_array_t_above_1();
+    std::printf("  LerpColourFromArray t>1 -> arr[count-1]: OK\n");
+
+    test_lerp_from_array_t0();
+    std::printf("  LerpColourFromArray t=0 -> arr[0]: OK\n");
+
+    test_lerp_from_array_t_negative();
+    std::printf("  LerpColourFromArray t<0 -> arr[0]: OK\n");
+
+    test_lerp_from_array_count1();
+    std::printf("  LerpColourFromArray count=1 -> arr[0]: OK\n");
+
+    test_lerp_from_array_interpolate();
+    std::printf("  LerpColourFromArray t=0.25 -> segment 0 interpolate: OK\n");
+
+    test_lerp_from_array_second_segment();
+    std::printf("  LerpColourFromArray t=0.5 -> segment 1 interpolate: OK\n");
+
+    test_lerp_from_array_continuous_at_end();
+    std::printf("  LerpColourFromArray continuous into the t>=1 early-out: OK\n");
 
     test_tostring();
     std::printf("  ToString format (a,r,g,b) argb order: OK\n");
