@@ -213,6 +213,28 @@ public:
     }
 };
 
+#ifdef __bada__
+#include <cstddef>
+static_assert(sizeof(HUDControl)                        == 0x74, "HUDControl size");
+static_assert(offsetof(HUDControl, m_Singular)          == 0x04, "HUDControl::m_Singular");
+static_assert(offsetof(HUDControl, pos)                 == 0x08, "HUDControl::pos");
+static_assert(offsetof(HUDControl, m_HudScale)          == 0x14, "HUDControl::m_HudScale");
+static_assert(offsetof(HUDControl, size)                == 0x20, "HUDControl::size");
+static_assert(offsetof(HUDControl, m_Timer)             == 0x2c, "HUDControl::m_Timer");
+static_assert(offsetof(HUDControl, m_Active)            == 0x30, "HUDControl::m_Active");
+static_assert(offsetof(HUDControl, m_reserved31)        == 0x31, "HUDControl::m_reserved31");
+static_assert(offsetof(HUDControl, m_bNoDestructor)     == 0x32, "HUDControl::m_bNoDestructor");
+static_assert(offsetof(HUDControl, m_bPendingRemoval)   == 0x33, "HUDControl::m_bPendingRemoval");
+static_assert(offsetof(HUDControl, m_LayerFlags)        == 0x34, "HUDControl::m_LayerFlags");
+static_assert(offsetof(HUDControl, m_RemoveCallback)    == 0x38, "HUDControl::m_RemoveCallback");
+static_assert(offsetof(HUDControl, m_DrawColour)        == 0x5c, "HUDControl::m_DrawColour");
+static_assert(offsetof(HUDControl, m_bUseHUDScales)     == 0x60, "HUDControl::m_bUseHUDScales");
+static_assert(offsetof(HUDControl, m_UVLeft)            == 0x64, "HUDControl::m_UVLeft");
+static_assert(offsetof(HUDControl, m_UVTop)             == 0x68, "HUDControl::m_UVTop");
+static_assert(offsetof(HUDControl, m_UVRight)           == 0x6c, "HUDControl::m_UVRight");
+static_assert(offsetof(HUDControl, m_UVBottom)          == 0x70, "HUDControl::m_UVBottom");
+#endif
+
 // v1.6.1 DefaultSoundRemovedCallback @0x00151a74 -- default sound-remove no-op callback.
 // 30+ call sites use this as the default when no specific cleanup is needed on sound removal.
 // Returns 0 always.

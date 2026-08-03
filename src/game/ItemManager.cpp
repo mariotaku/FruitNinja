@@ -375,7 +375,7 @@ bool ItemManager::UnlockItem(uint32_t hash) {
     if (it == m_ByHash.end()) return false;
     ItemInfo* item = it->second;
     item->m_bSeen = false;     // +0x3c — flag NEW for badge
-    item->m_Cost  = -1;        // +0x0c — purchased/unlocked
+    item->m_Cost  = -1;        // ItemInfo+0x0c — purchased/unlocked (str [r3,#0xc] @0x0013847c)
     return true;
 }
 

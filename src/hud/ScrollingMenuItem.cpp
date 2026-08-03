@@ -133,7 +133,7 @@ void ScrollingMenuItem::Draw() {
                      maxWH, 0xF, 0.0f, pClip);
 }
 
-// Binary @ 0x0015b228 -- 4-param ctor: ScrollingMenuItem(float width, float height,
+// Binary @ 0x001afbb0 -- 4-param ctor: ScrollingMenuItem(float width, float height,
 // char const* text, Mortar::Delegate1<void,ScrollingMenuItem*> callback).
 //
 // Binary sequence (disasm-confirmed):
@@ -148,8 +148,8 @@ void ScrollingMenuItem::Draw() {
 //   MakeColourFromGlobal_ScrollMenu(tmp, &m_Colour)  copies the global white
 //                                                colour singleton (GOT+0x73a4 =
 //                                                {255,255,255,255}) into m_Colour.
-//   m_Height = width   (param1 -> +0x24, vstr s16=s0 at 0x0015b28e)
-//   m_Width  = height  (param2 -> +0x28, vstr s17=s1 at 0x0015b292)
+//   m_Height = width   (param1 -> +0x24, vstr s16 at 0x001afc40)
+//   m_Width  = height  (param2 -> +0x28, vstr s17 at 0x001afc44)
 //
 // Param naming is "swapped": the first float (width) lands in m_Height (the
 // ROW PITCH field, GetHeight target) and the second (height) lands in m_Width.
@@ -158,8 +158,8 @@ ScrollingMenuItem::ScrollingMenuItem(float width, float height, const char* text
     : m_pParent(nullptr)
     , m_Colour(0xFFFFFFFF)   // overwritten below by MakeColourFromGlobal_ScrollMenu
     , m_Size{0.0f, 0.0f, 0.0f}
-    , m_Height(width)        // param1 (width) -> +0x24 m_Height (binary vstr s16)
-    , m_Width(height)        // param2 (height) -> +0x28 m_Width  (binary vstr s17)
+    , m_Height(width)        // param1 (width) -> +0x24 m_Height (v1.6.1 ctor @0x001afbb0, vstr s16,[r4,#0x24] @0x001afc40)
+    , m_Width(height)        // param2 (height) -> +0x28 m_Width  (v1.6.1 ctor @0x001afbb0, vstr s17,[r4,#0x28] @0x001afc44)
     , _pre_del0(0)
     , m_bOnscreen(0)
     , _pre_del1(0)

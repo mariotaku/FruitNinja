@@ -1667,7 +1667,7 @@ void SuperFruitControl::SpawnJibs()
             PSPParticleEmitter* e = mgr.AddEmitter(hash, 0, false);
             if (e) {
                 e->m_bTrailStarted = 1;         // +0x4d
-                e->m_Pos = m_ExplodeOrigin;     // explosion world pos (+0xf0)
+                e->m_Pos = m_ExplodeOrigin;     // this+0xf0 (m_ExplodeOrigin) -> emitter+0x08 (m_Pos)
                 uint16_t ang = m_pHostFruit->m_SliceArcAngle;   // Fruit+0xc0
                 e->m_DirCos = CosIdx(ang);
                 e->m_DirSin = SinIdx(ang);

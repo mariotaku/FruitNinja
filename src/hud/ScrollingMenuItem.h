@@ -31,7 +31,7 @@
 // DIFFERS (v1.5.1 port): old vtable had Update omitted, SetText at slot 10,
 // Draw at slot 11. v1.6.1 inserts Update at slot 10 per binary VTABLE evidence.
 //
-// Struct layout (from ctor 0x0015b228, SetParent 0x0015aeb4, SetOnscreen 0x0013ce10):
+// Struct layout (from ctor 0x001afbb0, SetParent 0x0015aeb4, SetOnscreen 0x0013ce10):
 //   +0x00  vtable*               (4 bytes on ARM32)
 //   +0x04  float    pos.x        (set by Move)
 //   +0x08  float    pos.y
@@ -85,21 +85,21 @@ public:
     virtual ~ScrollingMenuItem();
 
     // vtable +0x08 (slot 2): GetHeight
-    // Binary 0x0013cdf0: returns *(this + 0x24) = m_Height (binary name, ROW PITCH for
+    // Binary 0x00178d88: returns *(this + 0x24) = m_Height (binary name, ROW PITCH for
     // layout). ShopListItem sets 80.0f; FriendLeaderboardItem sets 47.0f; default 25.0f.
     virtual float GetHeight() { return m_Height; }
 
     // vtable +0x0C (slot 3): GetWidth
-    // Binary 0x0013cdf8: returns *(this + 0x28) = m_Width (binary name).
+    // Binary 0x00178d90: returns *(this + 0x28) = m_Width (binary name).
     // NOT m_Size.x (+0x18) — those are separate display-size fields.
     virtual float GetWidth() { return m_Width; }
 
     // vtable +0x10 (slot 4): SetHeight
-    // Binary 0x0013ce00: writes to *(this + 0x24) = m_Height.
+    // Binary 0x00178d98: writes to *(this + 0x24) = m_Height.
     virtual void SetHeight(float h) { m_Height = h; }
 
     // vtable +0x14 (slot 5): SetWidth
-    // Binary 0x0013ce08: writes to *(this + 0x28) = m_Width.
+    // Binary 0x00178da0: writes to *(this + 0x28) = m_Width.
     virtual void SetWidth(float w) { m_Width = w; }
 
     // vtable +0x18 (slot 6): Move(_Vector3) -- updates item world position
@@ -171,7 +171,7 @@ public:
 #endif
 
     // 4-param ctor: float width, float height, char const*, Mortar::Delegate1<...>
-    // Binary @ 0x0015b228: param1(width)->m_Height, param2(height)->m_Width,
+    // Binary @ 0x001afbb0: param1(width)->m_Height, param2(height)->m_Width,
     // m_Size from global default Vec3, m_Colour from global white singleton.
     ScrollingMenuItem(float, float, const char*, Mortar::Delegate1<void, ScrollingMenuItem*>);
 
@@ -239,6 +239,16 @@ public:
     // Binary ScrollingMenuItem ends here at +0x58 (total size 88 bytes on ARM32).
     // m_field58 (+0x58) and m_DescText (+0x5C) are ShopListItem fields, not base fields.
 };
+
+#ifdef __bada__
+static_assert(offsetof(ScrollingMenuItem, m_pParent)   == 0x10, "ScrollingMenuItem::m_pParent");
+static_assert(offsetof(ScrollingMenuItem, m_Height)    == 0x24, "ScrollingMenuItem::m_Height");
+static_assert(offsetof(ScrollingMenuItem, m_Width)     == 0x28, "ScrollingMenuItem::m_Width");
+static_assert(offsetof(ScrollingMenuItem, m_bOnscreen) == 0x2d, "ScrollingMenuItem::m_bOnscreen");
+static_assert(offsetof(ScrollingMenuItem, m_Delegate)  == 0x30, "ScrollingMenuItem::m_Delegate");
+static_assert(offsetof(ScrollingMenuItem, m_pText)     == 0x54, "ScrollingMenuItem::m_pText");
+static_assert(sizeof(ScrollingMenuItem)                == 0x58, "ScrollingMenuItem size");
+#endif
 
 // Convenience accessor that matches binary SetOnscreen semantics.
 // SetOnscreen 0x0013ce10 writes byte at +0x2D (pre-Mortar::Delegate1 gap, m_bOnscreen field).

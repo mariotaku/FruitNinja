@@ -207,9 +207,14 @@ def candidates(code, comment, is_header, enclosing, exact, owners):
     # invented a "-200 drift".
     named = re.search(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:=|@)?\s*[\(]?"
                       r"(?:[A-Za-z_][A-Za-z0-9_]*\s*)?\+\s*0[xX]", comment)
+    # The word before the label is only a binding when the code actually mentions
+    # it. "// explosion world pos (+0xf0)" ends in `pos`, which names no field of
+    # the object being written -- binding to it pinned an unrelated class's `pos`
+    # and reported a stale label on a correct line. Same guard the fall-through
+    # path below already applies.
     if named:
         f = named.group(1)
-        if f in owners:
+        if f in owners and re.search(r"\b" + re.escape(f) + r"\b", code):
             pin(None, f)
             return out
         # Label attributed to a field we cannot pin -> not our business.
@@ -223,6 +228,9 @@ def candidates(code, comment, is_header, enclosing, exact, owners):
 
     def pin_checked(cls, f):
         if hint_cls and cls is None and f in owners:
+            if (hint_cls, f) in exact:
+                pin(hint_cls, f)    # comment named the class outright
+                return
             if hint_cls not in owners[f]:
                 return          # comment says another class; refuse to guess
         pin(cls, f)
@@ -234,11 +242,13 @@ def candidates(code, comment, is_header, enclosing, exact, owners):
     if am:
         pin(am.group(1), am.group(2))
 
-    # ...or the comment names the field explicitly.
+    # ...or the comment names the field explicitly. Goes through pin_checked so an
+    # explicit "HUDControl::pos" hint still overrules the by-name resolution --
+    # calling pin() here ignored the hint and pinned Entity::pos instead.
     for m in RE_IDENT.finditer(comment):
         f = m.group(1)
         if f in owners and re.search(r"\b" + re.escape(f) + r"\b", code):
-            pin(None, f)
+            pin_checked(None, f)
 
     return out
 

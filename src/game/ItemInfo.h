@@ -290,6 +290,9 @@ static_assert(offsetof(LoopingSound, m_CurrentVol)           == 0x04, "LoopingSo
 static_assert(offsetof(LoopingSound, m_pSound)               == 0x08, "LoopingSound::m_pSound");
 static_assert(offsetof(LoopingSound, m_pLoopName)            == 0x0c, "LoopingSound::m_pLoopName");
 static_assert(sizeof(ItemInfo)                               == 0x48, "ItemInfo size");
+static_assert(offsetof(ItemInfo, m_pName)                    == 0x04, "ItemInfo::m_pName");
+static_assert(offsetof(ItemInfo, m_Hash)                     == 0x08, "ItemInfo::m_Hash");
+static_assert(offsetof(ItemInfo, m_Cost)                     == 0x0c, "ItemInfo::m_Cost");
 static_assert(offsetof(ItemInfo, m_Scale)                    == 0x40, "ItemInfo::m_Scale");
 static_assert(offsetof(ItemInfo, m_IsNew)                    == 0x44, "ItemInfo::m_IsNew");
 static_assert(sizeof(SlashModInfo)                           == 0x118, "SlashModInfo size");

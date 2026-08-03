@@ -663,31 +663,24 @@ void PowerUpShop::ButtonDeleted(HUDControl* deletedCtrl) {
     }
     if (m_BuyTriggered != 0 && m_BuyButton->m_pTrackedFruit != NULL) {
         Fruit* fruit = m_BuyButton->m_pTrackedFruit;
-        // Binary @ 0x001a9438 (instruction-traced):
-        //   0xc3f00000 = -480.0f (DAT_00156b04); 0xc1200000 = -10.0f.
-        // Kick the falling buy-fruit piece off-screen:
-        //   vstr s15(-480), [r5,#0xbc] -> m_SecondPos.y (+0xBC)
-        //   vstr s15(-480), [r5,#0x14] -> pos.y         (+0x14)
-        // TODO: v1.6.1 PowerUpShop::Update - re-read this disassembly quote. The
-        // #0xbc/#0xc8 operands put m_SecondPos.y at +0xBC and m_SecondVel.y at
-        // +0xC8, but Fruit.h's __bada__ assert pins m_SecondPos at +0xC8 (.y =
-        // +0xCC) and m_SecondVel at +0xD4 (.y = +0xD8) -- a uniform -16 across
-        // all four operands, the signature of a v1.5.1-era quote. The two plain
-        // offset labels above were corrected; these are QUOTED INSTRUCTIONS, so
-        // they get re-read against the binary rather than silently renumbered.
-        // The code itself writes named fields and is correct either way.
-        fruit->m_SecondPos.y = -480.0f;  // +0xBC, 0xc3f00000
+        // Binary @ 0x001a9438 (instruction-traced, v1.6.1):
+        //   vldr s15 = -480.0f (0xc3f00000); vmov s15 = -10.0f (0xc1200000)
+        //   vstr s15,[r6,#0x14] -> pos.y           (+0x14)
+        //   vstr s15,[r6,#0xcc] -> m_SecondPos.y   (+0xCC)
+        //   bl 0x001a90e0 -> Vec3 = -(*_Vector3<float>::UnitY @0x002d9ed8) = (0,-1,0);
+        //     ldmia/stmia into [r6+0xa0] = m_Gravity (+0xA0)
+        //   vstr s15,[r3,#0x20] -> vel.y           (+0x20)
+        //   vstr s15,[r3,#0xd8] -> m_SecondVel.y   (+0xD8)
+        fruit->m_SecondPos.y = -480.0f;  // +0xCC, 0xc3f00000
         fruit->pos.y         = -480.0f;  // +0x14, 0xc3f00000
 
-        // bl 0x00156824 (NegateVec3_SpeedCtrl) negates the file-static origin
-        // Vec3 and stm's the 3 floats into fruit->m_Gravity (+0xA0..0xAB).
-        // -g_Origin == (0,0,0); the negate is just how the binary materialises a
-        // zero vec from the stored origin constant (same helper used by Release).
-        fruit->m_Gravity = g_Origin;     // +0xA0, stm from NegateVec3(origin)
+        // The negated global at 0x002D9ED8 is _Vector3<float>::UnitY = (0,1,0),
+        // NOT the file-static origin -- so the kicked buy-fruit gets downward
+        // gravity and falls. Same semantic as ShopScreen::DeletedMenuItem; a zero
+        // m_Gravity would leave Fruit::CheckHasGoneOffscreen unable to ever fire.
+        fruit->m_Gravity = _Vector3<float>(0.0f, -1.0f, 0.0f);   // +0xA0
 
-        //   vstr s15(-10), [r3,#0xc8] -> m_SecondVel.y (+0xC8)
-        //   vstr s15(-10), [r3,#0x20] -> vel.y         (+0x20)
-        fruit->m_SecondVel.y = -10.0f;   // +0xC8, 0xc1200000
+        fruit->m_SecondVel.y = -10.0f;   // +0xD8, 0xc1200000
         fruit->vel.y         = -10.0f;   // +0x20, 0xc1200000
     }
     m_BuyTriggered = 0;
