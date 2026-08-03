@@ -135,23 +135,21 @@ void ActorManager::Clear() {
 
 // v1.6.1 ActorManager::Add(long, bool) @0x001d3fac. Binary-faithful recycle-first Add.
 // This is the overload LoadEntity @0x001d408c calls (PLT thunk 0x001168e4).
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Add(long,bool) @ 0x001d3fac (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::Add(long,bool) @ 0x001d3fac: 36 insns. No heap/typelist null check, no entityType range check, no candidate null check -- reverse-scans m_FreePool[m_FreeCount-1..0] on entityType (+0x35, byte), push_back, m_FreeCount--, compact, Entity::Activate. Factory path calls Delegate1::operator() unconditionally; the unbound guard lives in Delegate1<Entity*,long>::Call @0x001d4798 (subs r3,r0,#0; cpyeq r0,r3; ret).
 Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary*/) {
-    if (m_pHeap == nullptr || m_pTypeLists == nullptr) return nullptr;
-    if (entityType < 0 || entityType >= m_NumTypes) return nullptr;
-
     // --- Recycle path: reverse-scan free pool for matching type. ---
     for (int i = m_FreeCount - 1; i >= 0; i--) {
         Entity* candidate = m_FreePool[i];
-        if (candidate && candidate->entityType == entityType) {
+        if (candidate->entityType == entityType) {
             // push_back BEFORE decrementing count (matches binary ordering
             // inside ActorManager::Add(long,bool) @0x001d3fac).
             m_pTypeLists[entityType].push_back(candidate);
             m_FreeCount--;
-            // Compact pool: shift [i+1..m_FreeCount] one slot left.
+            // Compact pool: shift [i+1..m_FreeCount] one slot left. Binary
+            // stops here -- the vacated top slot keeps its stale duplicate,
+            // it is never re-nulled.
             for (int j = i; j < m_FreeCount; j++)
                 m_FreePool[j] = m_FreePool[j + 1];
-            m_FreePool[m_FreeCount] = nullptr;
             // Mortar::Entity::Activate: flags &= 0xFE (clear bit 0 only) — only
             // ENT_INACTIVE (bit 0) is cleared; ENT_KILLED is NOT touched.
             // ASM-verified: 2026-04-28T15:55Z v1.6.1 Mortar::Entity::Activate @ 0x001d45f8 (asm-inspector)
@@ -161,11 +159,17 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
     }
 
     // --- Factory path: pool empty or no matching type. ---
+    // Genuine guard: binary calls Delegate1<Entity*,long>::operator() unconditionally
+    // @0x001d4050, but the unbound-impl check lives one level down in
+    // Delegate1<Entity*,long>::Call @0x001d4798 (subs r3,r0,#0; cpyeq r0,r3; ret).
+    // This is a faithful relocation of that check. LOG_WARN is port-only and
+    // compiles out under __bada__.
     if (!m_FactoryDelegate) {
         LOG_WARN("ACTOR/Add", "no factory registered (type %d)", entityType);
         return nullptr;
     }
     Entity* entity = m_FactoryDelegate(entityType);
+    // Genuine guard: `cmp r0,#0 ; str r0,[sp,#4] ; beq 0x001d4084` @0x001d4054.
     if (entity == nullptr) return nullptr;
     m_pTypeLists[entityType].push_back(entity);
     entity->entityType    = entityType;   // binary: store at +0x35
@@ -230,13 +234,11 @@ void ActorManager::Remove(Entity* entity) {
 
 // v1.6.1 ActorManager::DeactivateAllEntities @0x001d2e94.
 // Defunct: zero in-binary callers (no .plt thunk); v1.6.1 ActorManager::DeactivateAllEntities @ 0x001d2e94.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::DeactivateAllEntities @ 0x001d2e94 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::DeactivateAllEntities @ 0x001d2e94: 27 insns. Indexes m_pTypeLists[typeIdx] with no null check, no range check, and ORs 0x10 into (*it)->flags (+0xc) with no null check on the entity.
 void ActorManager::DeactivateAllEntities(int typeIdx) {
-    if (m_pTypeLists == nullptr) return;
-    if (typeIdx < 0 || typeIdx >= m_NumTypes) return;
     for (std::list<Entity*>::iterator it = m_pTypeLists[typeIdx].begin();
          it != m_pTypeLists[typeIdx].end(); ++it) {
-        if (*it) (*it)->flags |= ENT_KILLED;
+        (*it)->flags |= ENT_KILLED;
     }
 }
 
@@ -276,15 +278,16 @@ void ActorManager::Update(float dt) {
     m_PendingDeactCount = 0;
 }
 
-// v1.6.1 ActorManager::Draw @0x001d3380. Tail-calls DrawDebug (PLT 0x0010c884).
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Draw @ 0x001d3380 (asm-inspector)
+// v1.6.1 ActorManager::Draw @0x001d3380. Calls DrawDebug (PLT 0x0010c884) via a
+// plain bl, not a tail call.
+// ASM-spec v1.6.1 ActorManager::Draw @ 0x001d3380: 52 insns. Two genuine top-of-body gates -- m_pHeap (+0x00) and m_pTypeLists (+0x1010) -- then per entity 'tst flags,#0x11; bne' with NO null check, then 'ldrb m_DebugDraw (+0x1020)' gating a bl to DrawDebug @0x0010c884.
 void ActorManager::Draw(Renderer& r) {
     if (m_pHeap == nullptr || m_pTypeLists == nullptr) return;
     for (int t = 0; t < m_NumTypes; t++) {
         std::list<Entity*>& list = m_pTypeLists[t];
         for (std::list<Entity*>::iterator it = list.begin(); it != list.end(); ++it) {
             Entity* e = *it;
-            if (e && (e->flags & ENT_SKIP_MASK) == 0) {
+            if ((e->flags & ENT_SKIP_MASK) == 0) {
                 e->Draw(r);
             }
         }
@@ -344,13 +347,11 @@ int ActorManager::GetNumEntities() {
 
 // v1.6.1 ActorManager::GetNumEntities(long*) @0x001d349c. Sentinel is -1L, not 0
 // (type 0 == Bomb would be skipped wrongly) -- confirmed against v1.6.1.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities(long*) @ 0x001d349c (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetNumEntities(long*) @ 0x001d349c: 17 insns. Walks the array summing m_pTypeLists[*p].size() until 'cmn r3,#0x1' hits the -1L sentinel. No m_pTypeLists null check, no pointer null check, no per-entry range check.
 int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) {
-    if (!m_pTypeLists || !typeIdxNullTerminated) return 0;
     int total = 0;
     for (const long* p = typeIdxNullTerminated; *p != -1L; ++p) {
-        const long t = *p;
-        if (t >= 0 && t < (long)m_NumTypes) total += (int)m_pTypeLists[t].size();
+        total += (int)m_pTypeLists[*p].size();
     }
     return total;
 }
