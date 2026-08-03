@@ -117,6 +117,12 @@ public:
     // left only by QuitToMenu / GameOver -> STATE_CAMERA_ZOOM. v1.6.1 MainScreen::Update @0x00197828.
     bool IsInGameplay() const { return m_State == STATE_CAMERA_FADE; }
 
+    // v1.6.1 MainScreen::IsDisplayingNews @0x001d00d8 -- body is `m_State == 0xb`.
+    // Read by GameDraw @0x001cdd38 as the second half of the DrawNews triple gate.
+    // Defunct in practice: STATE_NEWS is only entered from the online-news flow, so
+    // this always returns false in the port.
+    bool IsDisplayingNews() const;
+
     // Drop the four menu buttons (Play/Dojo/MoreGames/Quit).
     void DeleteMenuButtons();
 

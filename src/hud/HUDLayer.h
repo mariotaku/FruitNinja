@@ -20,10 +20,13 @@
 //   6.  BombBlast::DrawActiveBlasts()           (fixed)
 //   7.  BombFlash::DrawActiveFlashes()          (fixed)
 //   8.  HUD::Draw(0x80)   — post-actor HUD (cards / buttons / keyboard)
+//   8a. FruitRay::DrawRays()                    (fixed)
+//   8b. DrawSlices(dt, pass=1)                  — slash trails, modelIdx==3 only
+//                                                 (the super-fruit slice model)
 //   9.  pm.Draw(-1)                             — particles, background tier
 //   10. ActorList draw loop (16 actors, vtable +0x34 SecondaryDraw)
 //   11. pm.Draw(0)                              — particles, mid tier
-//   12. DrawSlices(dt)                          — slash trails
+//   12. DrawSlices(dt, pass=0)                  — slash trails, modelIdx!=3
 //   13. HUD::Draw(0x01)   — score / miss / game-over / mainscreen logo
 //   14. pm.Draw(1)                              — particles, foreground tier
 //   15. WaveManager::Draw(0)

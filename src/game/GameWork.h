@@ -250,6 +250,13 @@ extern float g_unpauseDelay;   // @ 0x00316708
 extern int   g_unpause_game;   // @ 0x0031670c  (byte in binary)
 extern float g_repauseDelay;   // @ 0x00316710
 
+// Same .bss block, +0x99 (v1.6.1 GameDraw @0x001cddcc: `ldrb r3,[r5,#0x99]`).
+// GameDraw's tail drains it: when set, it clears the Input/Input.txt action set and
+// re-clears the flag. GameInit zeroes it at boot.
+// TODO: v1.6.1 0x00316799 (clearInput) — no port-side writer yet; whichever binary
+//   function arms this flag is not RE'd, so the drain below never fires in the port.
+extern int   g_clearInput;     // @ 0x00316799 (byte in binary)
+
 #ifdef __bada__
 #include <cstddef>
 static_assert(offsetof(GameWork, bM_Mode)               == 0x02,  "GameWork::bM_Mode");

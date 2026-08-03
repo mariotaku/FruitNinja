@@ -58,6 +58,7 @@
 #include "game/PowerUpManager.h"
 #include "game/ItemManager.h"
 #include "engine/network/P2PMessageHandling.h"
+#include "engine/network/NetworkManager.h"
 
 #if defined(FN_BLOCK_PRELOAD)
 #include "resource/ResBlock.h"
@@ -168,8 +169,9 @@ void GameInit(unsigned long) {
             // Functionally equivalent with the port's always-fast IsFastHardware.
             ChangeBackground(nullptr);
         }
-        // Binary also assigns: hud_font = pM_Fonts[1]; unpause_game = 0; clearInput = 0;
+        // Binary also assigns: hud_font = pM_Fonts[1].
         g_unpause_game = 0;
+        g_clearInput = 0;
         game_work.bM_Mode = false;
         game_work.gameMode = 0;
     }
@@ -319,6 +321,7 @@ static float quickener     = 1.0f;    // _ZL9quickener @ 0x002d8cd8 (ST .data 0x
 float g_unpauseDelay  = 0.0f;   // @ 0x00316708
 int   g_unpause_game  = 0;      // @ 0x0031670c  (byte in binary; int here for portability)
 float g_repauseDelay  = 0.0f;   // @ 0x00316710
+int   g_clearInput    = 0;      // @ 0x00316799 (byte in binary; see GameWork.h)
 
 // ASM-spec v1.6.1 AddCoins @ 0x00119f78
 void AddCoins(int delta) {
@@ -832,186 +835,234 @@ void DrawBackground() {
     bgTex->UnSet();
 }
 
-// Matches GameDraw (v1.6.1 @0x001cd720, 211 lines) -- full render frame.
+// GameDraw -- v1.6.1 @0x001cd720. Full render frame.
 //
-// Binary draw order (verified from decompile, see comments inline):
-//   1.  Camera + background quad
-//   2.  Mortar::ActorManager::Draw (3D entities -- fruit, bomb, SlashEntity)
-//   3.  HUD::BeginDraw
-//   4.  HUD::Draw(0x40)
-//   5.  SplatEntity::DrawActiveSplats / Fruit::DrawShadows /
-//       SlashEntity::PreDraw / BombBlast::DrawActiveBlasts /
-//       BombFlash::DrawActiveFlashes            [not yet ported]
-//   6.  HUD::Draw(0x80)
-//   7.  pm.Draw(-1)   -- "background" particles (useDepth=-1, earliest)
-//   8.  SlashEntity::DrawSlice x16 via g_pSlashEntities vtable loop
-//   9.  pm.Draw(0)    -- "mid" particles
-//   10. DrawSlices    -- SlashEntity::DrawSlice blade ribbon
-//   11. HUD::Draw(0x01) -- MainScreen (logo + shade). Drawn AFTER slash
-//       so logo appears in front of the blade.
-//   12. pm.Draw(1)    -- "foreground" particles (drawn over logo,
-//       under buttons)
-//   13. WaveManager::Draw                       [not yet ported]
-//   14. HUD::Draw(0x08) -- buttons
-//   15. HUD::Draw(0x100) + DrawBombHit + HUD::Draw(0x200)
-//   16. HUD::Draw(0x400)
+// Structure: the ENTIRE draw body is wrapped in `active && IsRenderingAllowed()`;
+// the tail (unpause drain, clearInput drain, HUD::Draw(0x800)) runs even when
+// `active` is false. The one exception is the LoadingJob::CanBoot() early return at
+// 0x001cd84c, which leaves the function outright -- it skips the tail too.
 //
-// Key insight: the particle layer indices map differently from what the
-// layer names imply -- pm.Draw(-1) actually draws EARLIEST (background)
-// and pm.Draw(1) draws LATER (foreground, over logo).
+// The frame is cut into ten camera passes. Every pass re-runs
+// FruitCamera::SetupPerspective(<type>, /*forceUpdate=*/true) via the thunk at
+// 0x00106ec4; forceUpdate is 1 in all ten call sites. Perspective types (see
+// FruitCamera::PERSPECIVE_TYPE): 0 = depth-on 3D, 1 = depth-off 2D, 4 = screen-space.
+//
+//   SP#1  @0x001cd844  type 1  DrawBackground
+//   SP#2  @0x001cd8b4  type 0  ActorManager::Draw
+//   SP#3  @0x001cd944  type 1  HUD 0x40 + splats/shadows/PreDraw/blasts/flashes + HUD 0x80
+//   SP#4  @0x001cd9ac  type 0  FruitRay::DrawRays, DrawSlices(pass=1), pm.Draw(-1)
+//   SP#5  @0x001cda78  type 4  the 16 blade DrawSlice calls -- CONDITIONAL, see below
+//   SP#6  @0x001cdae0  type 0  pm.Draw(0), DrawSlices(pass=0)
+//   SP#7  @0x001cdb7c  type 4  HUD 0x01
+//   SP#8  @0x001cdba8  type 0  pm.Draw(1)
+//   SP#9  @0x001cdc04  type 4  WaveManager, HUD 0x08/0x400, PostEffects, CritHit,
+//                              HUD 0x100, DrawBombHit
+//   SP#10 @0x001cdcc0  type 0  HUD 0x200 + the news gate
+//
+// SP#5 is the only guarded one: `vcmpe s15,#0 ; bls` @0x001cda58 skips the
+// SetupPerspective when m_BombHitTimer > 0, so during a bomb hit the 16 blades draw
+// under SP#4's type-0 perspective instead. The blade loop itself is unconditional
+// and has no null check.
+//
+// Ambience is the DisplayManager global-ambience colour (vslot +0x5c,
+// SetGlobalAmbience(Colour::PlatformColour())), NOT SetDrawColour. It is Black for
+// the frame except three White windows: around ActorManager::Draw, around
+// FruitRay::DrawRays + DrawSlices(pass=1), and around DrawSlices(pass=0).
+//
+// HUD tint scales[0..2] are saved at function ENTRY (@0x001cd764), forced to 1.0
+// just before SP#9 (@0x001cdbdc) so the overlay passes ignore ScreenEffect tinting,
+// and restored at 0x001cdcfc -- BEFORE DrawStartFade, not after.
+//
+// The binary also builds a grey Colour(0x40,0x40,0x40,0xff) at 0x001cd7bc and never
+// uses it (dead leftover); it is deliberately not ported.
 void GameDraw(float dt, bool active) {
     Game* game = Game::GetInstance();
-
     GameTaskState* ts = GetTaskState();
-    // 1. Camera projection
-    game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, false);
-
-    // DrawBackground (v1.6.1 @ 0x001ccaf4) — factored from inline to free function.
-    DrawBackground();
 
     PSPParticleManager& pm = PSPParticleManager::GetInstance();
     Mortar::DisplayManager& dm = Mortar::DisplayManager::GetInstance();
 
-    // === 1. Mortar::ActorManager::Draw -- 3D fruit/bomb/slash entities ===
-    // v1.6.1 GameDraw @0x001cd720: SetDepthBufferWrite(1) + SetDepthBuffer(1)
-    // just before Mortar::ActorManager::Draw. Depth func stays at GL_LESS set
-    // by BeginFrame -- binary never overrides it.
-    dm.SetDepthBufferWrite(true);
-    dm.SetDepthBuffer(true);
-    // Port specific: wireframe debug mode (F2). Renderer::SetWireframe is a
-    // no-op where glPolygonMode is unavailable (GLES / Emscripten).
-    if (FN::g_DebugWireframe) game->renderer.SetWireframe(true);
-    game->actorManager->Draw(game->renderer);
-    if (FN::g_DebugWireframe) game->renderer.SetWireframe(false);
+    // @0x001cd72c `cmp r0,#0 ; beq tail` and @0x001cd744 vslot +0x68
+    // (DisplayManager::IsRenderingAllowed) `cmp r0,#0 ; beq tail`.
+    if (active && dm.IsRenderingAllowed()) {
+        // @0x001cd764: snapshot the HUD tint scales before anything draws.
+        // PowerUpManager::SetDefaults resets them each GameUpdate tick and
+        // ScreenEffect::Update multiplies them, so the overlay passes below force 1.0
+        // and this snapshot puts the ScreenEffect values back at 0x001cdcfc.
+        float savedScales[3];
+        savedScales[0] = game_work.mHud->scales[0];
+        savedScales[1] = game_work.mHud->scales[1];
+        savedScales[2] = game_work.mHud->scales[2];
 
-    // === 2. HUD::BeginDraw + post-actor block ===
-    // v1.6.1 GameDraw @0x001cd720 right after Mortar::ActorManager::Draw:
-    //   SetDepthBuffer(1)       -- depth test still ON
-    //   SetDepthBufferWrite(0)  -- writes OFF for HUD/splats/bomb blasts
-    dm.SetDepthBuffer(true);
-    dm.SetDepthBufferWrite(false);
-    {
-        game_work.mHud->BeginDraw(dt);
+        // @0x001cd78c / 0x001cd7a0: depth write OFF then depth test OFF, before the
+        // background quad. Depth func stays at GL_LESS from BeginFrame.
+        dm.SetDepthBufferWrite(false);
+        dm.SetDepthBuffer(false);
 
-        // 2a. HUD::Draw(0x40) -- menu button sprites (v1.6.1 GameDraw @0x001cd720)
-        game_work.mHud->Draw(Mortar::HUD_LAYER_MENU_BG);
+        const Colour white(Colour::White);   // @0x001cd7cc
+        const Colour black(Colour::Black);   // @0x001cd7dc
 
-        // 2b. SplatEntity::DrawActiveSplats (v1.6.1 GameDraw @0x001cd720)
-        SplatEntity::DrawActiveSplats();
+        dm.SetGlobalAmbience(black.PlatformColour());  // @0x001cd800
 
-        // 2c. Fruit::DrawShadows (v1.6.1 GameDraw @0x001cd720)
-        Fruit::DrawShadows();
+        // @0x001cd834: per-frame light direction = (worldPos.x, worldPos.y, 100).
+        // worldPos (+0x94) doubles as the global pointer position, so the scene
+        // light tracks the last touch.
+        dm.SetLightDirection(_Vector3<float>(game_work.worldPos.x,
+                                             game_work.worldPos.y,
+                                             100.0f));
 
-        // 2d. SlashEntity::PreDraw -- blade pre-pass for each of 16 finger slots
-        //     (v1.6.1 GameDraw @0x001cd720; binary loops over SlashEntity[16]).
+        // SP#1 @0x001cd844
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD_2D, true);
+
+        // DrawBackground (v1.6.1 @0x001ccaf4) -- factored from inline to free function.
+        DrawBackground();
+
+        // DIFFERS: original = `if (!LoadingJob::CanBoot()) { if (s_startFadeInTime > 0)
+        //   DrawStartFade(); return; }` (v1.6.1 GameDraw @0x001cd84c; the false arm
+        //   branches to the epilogue at 0x001cde14, skipping even the tail), using an
+        //   unconditional true because the port has no async LoadingJob -- CanBoot() is
+        //   always true here (same reading as Game::Paused / Game::UnPaused) and the port
+        //   deliberately draws the game underneath the splash instead of replacing it
+        //   (see GameUpdate's splash-phase DIFFERS). The false arm is unreachable, so it
+        //   is not emitted.
+
+        // @0x001cd888 / 0x001cd89c: depth write + depth test back ON for the 3D pass.
+        dm.SetDepthBufferWrite(true);
+        dm.SetDepthBuffer(true);
+
+        // SP#2 @0x001cd8b4
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
+
+        // Ambience window 1 (White) -- @0x001cd8d8 .. 0x001cd904.
+        dm.SetGlobalAmbience(white.PlatformColour());
+        // Port specific: wireframe debug mode (F2). Renderer::SetWireframe is a
+        // no-op where glPolygonMode is unavailable (GLES / Emscripten).
+        if (FN::g_DebugWireframe) game->renderer.SetWireframe(true);
+        game->actorManager->Draw(game->renderer);   // @0x001cd8e0
+        if (FN::g_DebugWireframe) game->renderer.SetWireframe(false);
+        dm.SetGlobalAmbience(black.PlatformColour());
+
+        // @0x001cd918 / 0x001cd92c: depth test stays ON, depth writes OFF for the
+        // HUD / splat / blast block.
+        dm.SetDepthBuffer(true);
+        dm.SetDepthBufferWrite(false);
+
+        // SP#3 @0x001cd944
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD_2D, true);
+
+        game_work.mHud->BeginDraw(dt);                          // @0x001cd958
+        game_work.mHud->Draw(Mortar::HUD_LAYER_MENU_BG);        // @0x001cd96c  0x40
+        SplatEntity::DrawActiveSplats();                        // @0x001cd970
+        Fruit::DrawShadows();                                   // @0x001cd974
+        // SlashEntity::PreDraw -- blade pre-pass.
+        // TODO: v1.6.1 0x001cd978 (SlashEntity::PreDraw) — the binary makes ONE call here
+        //   (like DrawActiveSplats / DrawShadows / DrawActiveBlasts, which are all
+        //   draw-them-all statics); the port instead loops the 16 finger slots. Confirm
+        //   whether the binary's PreDraw walks the slots internally before collapsing this.
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) g_pSlashEntities[i]->PreDraw();
         }
+        // Shockwave rings belong to this post-actor block, NOT to layer 0x200.
+        BombBlast::DrawActiveBlasts();                          // @0x001cd97c
+        BombFlash::DrawActiveFlashes();                         // @0x001cd980
+        game_work.mHud->Draw(Mortar::HUD_LAYER_POST_ACTOR);     // @0x001cd994  0x80
 
-        // 2e. BombBlast::DrawActiveBlasts (v1.6.1 GameDraw @0x001cd720) -- drawn HERE
-        //     in the binary, NOT inside the 0x200 layer. Shockwave rings belong to
-        //     this post-actor block.
-        BombBlast::DrawActiveBlasts();
+        // SP#4 @0x001cd9ac
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
 
-        // 2f. BombFlash::DrawActiveFlashes (v1.6.1 GameDraw @0x001cd720)
-        BombFlash::DrawActiveFlashes();
+        // Ambience window 2 (White) -- @0x001cd9d0 .. 0x001cda04.
+        dm.SetGlobalAmbience(white.PlatformColour());
+        FruitRay::DrawRays();                                   // @0x001cd9d4
+        // @0x001cd9e0 `mov r0,#1 ; bl DrawSlices` -- the modelIdx==3 pass. This is the
+        // super-fruit slice model; without it that model never draws.
+        DrawSlices(dt, true);
+        dm.SetGlobalAmbience(black.PlatformColour());
 
-        // 2g. HUD::Draw(0x80) -- DojoScreen / AboutScreen (v1.6.1 GameDraw @0x001cd720)
-        game_work.mHud->Draw(Mortar::HUD_LAYER_POST_ACTOR);
-
-        // 2h. FruitRay::DrawRays -- super-fruit ray burst (v1.6.1 GameDraw @0x001cd9d4).
-        // Binary sets the platform draw colour to white before the batch and
-        // restores black after (DisplayManagerBada::SetDrawColour).
-        dm.SetDrawColour(Colour::White);
-        FruitRay::DrawRays();
-        dm.SetDrawColour(Colour::Black);
-    }
-
-    // Particle dt: binary GameDraw recomputes s0=frameDt/wavedt before each
-    // pm.Draw call (v1.6.1 @0x001cda20/0x001cdafc/0x001cdbc4). Mirror the same derivation
-    // used by the Update path (GameInit.cpp lines 484-493).
-    float particleDt;
-    bool particlesPaused;
-    {
-        float particleDtNorm = 1.0f;
-        WaveManager* wm = WaveManager::GetInstance();
-        float wavedt = wm->GetWavedt(0);
-        if (wavedt != 0.0f) {
-            particleDtNorm = 1.0f / wavedt;
+        // Particle dt: the binary recomputes s0 = frameDt / paticlesDt before each of
+        // the three pm.Draw calls (@0x001cda20 / 0x001cdafc / 0x001cdbc4) and passes
+        // paused = (bM_Mode != 0).
+        // TODO: v1.6.1 0x001cda18 (paticlesDt) — the binary divides by a single global
+        //   (block base +0x20, adjacent to s_startFadeInTime at +0x1c); the port instead
+        //   derives the divisor from WaveManager::GetWavedt(0) below. Not verified to be
+        //   the same value -- RE paticlesDt's writer before trusting either.
+        float particleDt;
+        bool particlesPaused;
+        {
+            float particleDtNorm = 1.0f;
+            WaveManager* wm = WaveManager::GetInstance();
+            float wavedt = wm->GetWavedt(0);
+            if (wavedt != 0.0f) {
+                particleDtNorm = 1.0f / wavedt;
+            }
+            if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
+                particleDtNorm = 1.0f;
+            }
+            particleDt = dt / particleDtNorm;
+            // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: GameDraw passes
+            // paused = (bM_Mode != 0) to all three pm.Draw calls. The extra
+            // SettingsScreen term is port specific -- that modal has no binary
+            // counterpart and does not set bM_Mode, so it is OR'd into the same
+            // `paused` argument rather than carrying a second freeze mechanism.
+            particlesPaused = (game_work.bM_Mode != 0) || SettingsScreen::IsOpen();
         }
-        if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
-            particleDtNorm = 1.0f;
+
+        // @0x001cda34: background particles, drawn BEHIND the logo/shade.
+        pm.Draw(particleDt, particlesPaused, -1);
+
+        // @0x001cda48: depth test off for the blade loop and every later 2D pass.
+        dm.SetDepthBuffer(false);
+
+        // SP#5 @0x001cda78 -- guarded. `vcmpe s15,#0 ; bls` @0x001cda58 tests
+        // m_BombHitTimer: the perspective switch only happens when NO bomb hit is
+        // running. During a bomb hit the loop below falls through on SP#4's type 0.
+        if (game_work.m_BombHitTimer <= 0.0f) {
+            game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_GENERIC, true);
         }
-        particleDt = dt / particleDtNorm;
-        // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: GameDraw passes
-        // paused = (bM_Mode != 0) to all three pm.Draw calls. The extra
-        // SettingsScreen term is port specific -- that modal has no binary
-        // counterpart and does not set bM_Mode, so it is OR'd into the same
-        // `paused` argument rather than carrying a second freeze mechanism.
-        particlesPaused = (game_work.bM_Mode != 0) || SettingsScreen::IsOpen();
-    }
 
-    // === 3. Background particles ===
-    // Binary pm.Draw(-1) @ v1.6.1 0x001cda34 -- drawn BEHIND the logo/shade.
-    pm.Draw(particleDt, particlesPaused, -1);
+        // @0x001cdaa4: 16 x `ldr r0,[r3,r5] ; ldr r3,[r0] ; ldr r3,[r3,#0x34] ; blx r3`
+        // -- unconditional, no null test in the binary. ActorManager::Draw above already
+        // walked the type-3 SlashEntity slots but their Draw(Renderer&) vtable slot is a
+        // `bx lr` stub, so all blade rendering comes from here.
+        // TODO: v1.6.1 0x001cdab8 (SlashEntity vtable +0x34) — slot identity is carried
+        //   over from an earlier port comment, not re-confirmed against the vtable dump.
+        for (int i = 0; i < 16; ++i) {
+            if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();
+        }
 
-    // v1.6.1 GameDraw @0x001cd720 after pm.Draw(-1): SetDepthBuffer(0) turns
-    // depth test off before the SlashEntity DrawSlice loop x16 and all
-    // later 2D passes. Explicit per-finger DrawSlice dispatch loop.
-    // ActorManager::Draw above already walked type-3 SlashEntity slots but
-    // their Draw(Renderer&) vtable slot is a BX lr stub -- no output.
-    // All blade rendering comes from here.
-    // ASM-spec v1.6.1 GameDraw @ 0x001cd720
-    // (Downgraded from ASM-verified 2026-05-18: GameDraw carried four port-added
-    // mHud null tests the binary does not have, and was MISSING the +0x164 test the
-    // binary does have at 0x001cdc44. Re-verify before restamping.)
-    dm.SetDepthBuffer(false);
-    for (int i = 0; i < 16; ++i) {
-        if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();
-    }
+        // SP#6 @0x001cdae0
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
 
-    // === 4. Mid particles + slice lines + main-screen logo ===
-    // Binary pm.Draw(0) @ v1.6.1 0x001cdb10
-    pm.Draw(particleDt, particlesPaused, 0);
+        pm.Draw(particleDt, particlesPaused, 0);                // @0x001cdb10
 
-    // DrawSlices (v1.6.1 GameDraw @0x001cd720) -- slash-line pool
-    DrawSlices(dt, false);   // pass=false: draw modelIdx!=3 nodes
+        // Ambience window 3 (White) -- @0x001cdb34 .. 0x001cdb64.
+        dm.SetGlobalAmbience(white.PlatformColour());
+        DrawSlices(dt, false);                                  // @0x001cdb40  modelIdx != 3
+        dm.SetGlobalAmbience(black.PlatformColour());
 
-    // v1.6.1 GameDraw @0x001cd720: save/restore HUD scales around the overlay passes.
-    // PowerUpManager::SetDefaults resets scales to 1.0 each GameUpdate tick; ScreenEffect::Update
-    // multiplies them (fade=0 at effect start -> scales *= 0 -> overlays go black).
-    // Binary saves here, resets to 1.0 before overlay draws, then restores so ScreenEffect
-    // tinting applies to the 0x01/particle pass but NOT to 0x08/0x400/0x100/0x200 overlays.
-    // 0x001cd75c-0x001cd778: `ldr r3,[r3,#0x40] ; vldr s15,[r3,#0x8]/[0xc]/[0x10]`,
-    // no cmp -- and the port already calls mHud->Draw(0x01) unguarded below.
-    float savedScales[3];
-    savedScales[0] = game_work.mHud->scales[0];
-    savedScales[1] = game_work.mHud->scales[1];
-    savedScales[2] = game_work.mHud->scales[2];
+        // SP#7 @0x001cdb7c -- HUD 0x01 (MainScreen logo + shade) draws AFTER the blade
+        // so the logo sits in front of it.
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_GENERIC, true);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);        // @0x001cdb90  0x01
 
-    // HUD::Draw(0x01) -- MainScreen logo / shade (v1.6.1 GameDraw @0x001cd720)
-    game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
+        // SP#8 @0x001cdba8
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
+        pm.Draw(particleDt, particlesPaused, 1);                // @0x001cdbd8
 
-    // pm.Draw(1) -- foreground particles @ v1.6.1 0x001cdbd8
-    pm.Draw(particleDt, particlesPaused, 1);
+        // @0x001cdbf8: force the tint scales to 1.0 so the 0x08 / 0x400 / 0x100 / 0x200
+        // overlay passes are NOT affected by ScreenEffect gameplay tinting (which can
+        // drive them to 0 and turn every overlay sprite black).
+        game_work.mHud->scales[0] = 1.0f;
+        game_work.mHud->scales[1] = 1.0f;
+        game_work.mHud->scales[2] = 1.0f;
 
-    // v1.6.1 GameDraw @0x001cd720: reset HUD tint scales to 1.0f after the 0x01 pass so the
-    // 0x08/0x400/0x100/0x200 overlay passes (combo icons, sensei head, pause, fades) are NOT
-    // affected by ScreenEffect gameplay tinting (which can drive scales to 0 -> black sprites).
-    // 0x001cdbe8-0x001cdc00: `ldr r3,[r2,#0x40] ; vstr s15(1.0),[r3,#0x8]/[0xc]/[0x10]`,
-    // no cmp.
-    game_work.mHud->scales[0] = 1.0f;
-    game_work.mHud->scales[1] = 1.0f;
-    game_work.mHud->scales[2] = 1.0f;
+        // SP#9 @0x001cdc04
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_GENERIC, true);
 
-    // WaveManager::Draw(0) (v1.6.1 GameDraw @0x001cd720) -- stubbed (wave-banner overlay).
-    WaveManager::GetInstance()->Draw(0);
+        WaveManager::GetInstance()->Draw(0);                    // @0x001cdc10
 
-    // === 5. HUD overlay layers + flash effects ===
-    {
         // DIFFERS: original = no pause bg-dim (v1.6.1 GameDraw @0x001cd720). Port injects a full-screen
-        //   ~50% black quad between pass15 (WaveManager::Draw(0)) and pass16 (HUD::Draw(0x08)) so the
-        //   frozen gameplay dims while the manual-pause UI (layers 0x08/0x108/0x100) stays bright.
+        //   ~50% black quad between WaveManager::Draw(0) and HUD::Draw(0x08) so the frozen gameplay
+        //   dims while the manual-pause UI (layers 0x08/0x108/0x100) stays bright.
         //   Alpha source is PauseScreen::m_Alpha ONLY (the manual pause overlay's own state machine).
         //   Do NOT drive this from game_work.m_PauseAmount: GameOverScreen::Update ramps it to 1.0
         //   and HOLDS it there for the entire game-over display in every mode (STATE_MAIN_DISPLAY /
@@ -1045,49 +1096,55 @@ void GameDraw(float dt, bool active) {
             }
         }
 
-        // HUD::Draw(0x08) -- buttons (v1.6.1 GameDraw @0x001cd720)
-        game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_BUTTONS);        // @0x001cdc24  0x08
+        // 0x400 draws BEFORE the bomb-hit white flash, so game-over fact-board text is
+        // covered by the flash on quit instead of popping on top of it. (#35)
+        game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);     // @0x001cdc38  0x400
 
-        // ASM-spec v1.6.1 GameDraw @0x001cd720: pass order 0x08 -> 0x400 -> PostEffects
-        // -> CritHit -> 0x100 -> DrawBombHit -> 0x200. Binary draws HUD::Draw(0x400) here,
-        // BEFORE the bomb-hit white flash -- so game-over fact-board text (layer 0x400)
-        // is covered by the flash on quit instead of popping on top of it. (#35)
-        game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
-
-        // MainScreen::DrawPostEffects (v1.6.1 GameDraw @0x001cd720). NOTE: this null
-        // test is GENUINE and was MISSING from the port -- the binary guards +0x164
-        // here where it guards nothing else in GameDraw:
-        //   001cdc44: ldr r0,[r3,#0x164] ; cmp r0,#0x0 ; beq 0x001cdc54
-        // then bl 0x001111f8 (MainScreen::DrawPostEffects). Same shape again at
-        // 0x001cdcf0/0x001cdcf4.
+        // @0x001cdc44 `ldr r0,[r3,#0x164] ; cmp r0,#0 ; beq` -- the only null test the
+        // binary makes on a game_work pointer inside GameDraw.
         if (game_work.mMainScreen) {
-            game_work.mMainScreen->DrawPostEffects();
+            game_work.mMainScreen->DrawPostEffects();           // @0x001cdc50
         }
 
-        // DrawCritHit (v1.6.1 @ 0x001ccfa0) -- gated on critFlash > 0 && IsFastHardware.
-        DrawCritHit();
-
-        // HUD::Draw(0x100) -- overlays (v1.6.1 GameDraw @0x001cd720)
-        game_work.mHud->Draw(Mortar::HUD_LAYER_P2_SCORE);
-
-        // DrawBombHit (v1.6.1 GameDraw @0x001cd720) -- bomb-hit white flash, gated on
-        // bombFlash > 0. Binary gates on LoadingJob::CanBoot() -- when splash
-        // is exclusive (CanBoot false), DrawBombHit is never reached. Port
-        // always draws game content, so suppress bomb flash while the splash
-        // is active.
-        {
-            GameTaskState* splashTs = GetTaskState();
-            if (splashTs->splashFadeTimer <= 0.0f) {
-                DrawBombHit();
-            }
+        // @0x001cdc54: IsFastHardware() && m_CritTimer > 0 -> DrawCritHit (@0x001cdc78).
+        // The binary calls the FREE IsFastHardware @0x0011f394 here (no `this`), not the
+        // MortarGame vtable slot 3.
+        if (IsFastHardware() && game_work.m_CritTimer > 0.0f) {
+            DrawCritHit();
         }
 
-        // HUD::Draw(0x200) -- bomb-hit overlay layer (v1.6.1 GameDraw @0x001cd720)
-        game_work.mHud->Draw(Mortar::HUD_LAYER_SLIDER);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_P2_SCORE);       // @0x001cdc8c  0x100
 
-        // DrawNews / DrawStartFade (v1.6.1 GameDraw @0x001cd720)
-        FN::DrawNews();
-        DrawStartFade();
+        // @0x001cdc98: m_BombHitTimer > 0 -> DrawBombHit (@0x001cdca8).
+        if (game_work.m_BombHitTimer > 0.0f) {
+            DrawBombHit();
+        }
+
+        // SP#10 @0x001cdcc0 -- note this one is type 0, not 4.
+        game_work.m_FruitCamera->SetupPerspective(FruitCamera::PT_STANDARD, true);
+        game_work.mHud->Draw(Mortar::HUD_LAYER_SLIDER);         // @0x001cdcd4  0x200
+
+        // Defunct: online news -- the triple gate is ported for shape; both
+        // NetworkManager::IsShowingModalDialog and MainScreen::IsDisplayingNews are
+        // hard-false stubs, so DrawNews (itself a no-op) is never reached.
+        // v1.6.1 GameDraw @0x001cdcdc / 0x001cdcf4 / 0x001cdd3c.
+        if (Mortar::NetworkManager::GetInstance()->IsShowingModalDialog() &&
+            game_work.mMainScreen &&
+            game_work.mMainScreen->IsDisplayingNews()) {
+            Mortar::NetworkManager::GetInstance()->DrawNews();
+        }
+
+        // @0x001cdcfc: restore the entry snapshot so the next PowerUpManager::SetDefaults
+        // reset starts from the correct per-frame base. This happens BEFORE DrawStartFade.
+        game_work.mHud->scales[0] = savedScales[0];
+        game_work.mHud->scales[1] = savedScales[1];
+        game_work.mHud->scales[2] = savedScales[2];
+
+        // @0x001cdd24: s_startFadeInTime > 0 -> DrawStartFade (@0x001cdd50).
+        if (ts->splashFadeTimer > 0.0f) {
+            DrawStartFade();
+        }
 
         // Debug overlay -- fruit/bomb hitboxes + MenuButton AABBs + blade trails (F1 toggle)
 #ifndef __bada__
@@ -1095,30 +1152,30 @@ void GameDraw(float dt, bool active) {
         FN::DebugHUDBounds_Draw();
         FN::DebugBladeTrails_Draw();
 #endif
-
-        // v1.6.1 GameDraw @0x001cd720: save/restore HUD scales around the overlay passes.
-        // Restore ScreenEffect-modified values so the next SetDefaults reset starts from
-        // the correct per-frame base (binary restores before leaving the overlay block).
-        // 0x001cdcfc-0x001cdd18: `ldr r3,[r3,#0x40] ; vstr [sp+0x18] -> [r3,#0x8]` etc,
-        // no cmp.
-        game_work.mHud->scales[0] = savedScales[0];
-        game_work.mHud->scales[1] = savedScales[1];
-        game_work.mHud->scales[2] = savedScales[2];
     }
 
-    // v1.6.1 GameDraw tail @0x001cdd64: unpause_game auto-clear.
-    // When UnpauseGame() arms unpause_game=1, GameDraw fires the actual bM_Mode clear
-    // + ClearActions on the NEXT rendered frame, after the fade overlay has settled.
-    // The binary clears bM_Mode here (not in UnpauseGame directly) so the gameplay
-    // tick cannot restart before the pause overlay has completely faded.
+    // ---- tail @0x001cdd5c: runs even when `active` is false ----
+
+    // @0x001cdd64: unpause_game auto-clear. When UnpauseGame() arms unpause_game=1,
+    // GameDraw fires the actual bM_Mode clear + ClearActions on the NEXT rendered frame,
+    // after the fade overlay has settled -- the binary clears bM_Mode here (not in
+    // UnpauseGame) so the gameplay tick cannot restart mid-fade.
+    // TODO: v1.6.1 0x001cddb0 (debugMenu) — the binary also does `strb r7,[r6,#0x98]`
+    //   (debugMenu = 0) inside this block; the port has no debugMenu global to clear.
     if (g_unpause_game != 0 && game_work.bM_Mode != 0) {
         g_unpause_game = 0;
         Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/PauseMenu.txt"));
         game_work.bM_Mode = false;
     }
 
-    // v1.6.1 GameDraw tail @0x001cde00-0x001cde10: `ldr r0,[r3,#0x40] ; bl HUD::Draw`,
-    // no cmp. Fires unconditionally outside the active-guard.
+    // @0x001cddcc: clearInput drain -- flush the gameplay action set, then clear the flag.
+    if (g_clearInput != 0) {
+        Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/Input.txt"));
+        g_clearInput = 0;
+    }
+
+    // @0x001cde10: `ldr r0,[r3,#0x40] ; bl HUD::Draw`, no cmp. Fires unconditionally
+    // outside the active-guard.
     game_work.mHud->Draw(Mortar::HUD_LAYER_TOP_MOST);
 }
 

@@ -1509,6 +1509,11 @@ void MainScreen::DrawLoadingSymbol(float* hudScale) {
 void MainScreen::PreDraw(float* /*hudScale*/) {
 }
 
+// ASM-spec v1.6.1 MainScreen::IsDisplayingNews @0x001d00d8: `return this->m_State == 0xb`.
+bool MainScreen::IsDisplayingNews() const {
+    return m_State == STATE_NEWS;
+}
+
 // Defunct: NetworkManager::CancelNewsDisplay — no-op stub; v1.6.1 binary @ 0x0014AFB8
 void MainScreen::CancelNews() {
     // Defunct: NetworkManager — no-op stub; v1.6.1 binary @ 0x0014AFB8
