@@ -70,12 +70,14 @@ void TimeSinkModifier::ParseSpecific(TiXmlElement* xml) {
 //       on g_GameData TimeControl slot (indirect GOT 0x2d92a0 + 0x184 == game_work.mCountDown +0x180).
 void TimeSinkModifier::ScoreNotification(int points, int /*extra*/) {
     float v = (float)points;
+    // v1.6.1 TimeSinkModifier::ScoreNotification @0x0014dac4: the only gate is the
+    // VFP GE from `vcmpe.f32 s13,#0`. The negative arm is
+    // `ldr r0,[r3,#0x184]; b TimeControl::AddTime` at 0x0014dafc -- an unconditional
+    // tail-call with no null test on mCountDown.
     if (m_Accumulator >= 0.0f) {
         m_Accumulator += v * m_Multiplier;
     } else {
-        if (game_work.mCountDown) {
-            game_work.mCountDown->AddTime(v * m_Multiplier);
-        }
+        game_work.mCountDown->AddTime(v * m_Multiplier);
     }
 }
 
@@ -87,10 +89,11 @@ void TimeSinkModifier::ScoreNotification(int points, int /*extra*/) {
 // slasher) is never referenced in the binary body — only this (r0) and score (r2).
 void TimeSinkModifier::FruitWasSlicedSink(Fruit* /*fruit*/, int score, Mortar::Entity* /*slasher*/) {
     float v = (float)score;
+    // v1.6.1 TimeSinkModifier::FruitWasSlicedSink @0x0014da7c: body is byte-identical
+    // to ScoreNotification apart from the score register. The negative arm tail-calls
+    // TimeControl::AddTime on game_work+0x184 with no null test.
     if (m_Accumulator < 0.0f) {
-        if (game_work.mCountDown) {
-            game_work.mCountDown->AddTime(v * m_Multiplier);
-        }
+        game_work.mCountDown->AddTime(v * m_Multiplier);
     } else {
         m_Accumulator += v * m_Multiplier;
     }

@@ -77,7 +77,10 @@ void GameTaskUpdate(float rawDt) {
         // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: per-frame FruitSaveData::Update
         // (gated bomb-hit-timer<=0) before state dispatch. Runs every frame, all modes
         // incl arcade -- drives achievement/combo save progression.
-        if (game_work.m_BombHitTimer <= 0.0f && game_work.m_SaveData) {
+        // v1.6.1 GameTaskUpdate @0x0011a290: the only gate is the bomb-hit timer
+        // (`vcmpe.f32 s15,#0` on [r7,#0x10], `bhi` skip @0x0011a388). Both +0x50 and
+        // +0x40 are loaded straight into the call at 0x0011a38c/0x0011a394, untested.
+        if (game_work.m_BombHitTimer <= 0.0f) {
             game_work.m_SaveData->Update(dt, game_work.mHud);
         }
 
@@ -153,6 +156,9 @@ void GameTaskSaveOnExit() {
     // HUD). SaveSettings does its own IDBFS flush on web.
     SaveSettings();
     if (*GetIsSavingBool() != 0) return;
+    // NOTE: this mHud early return is GENUINE, not a port addition. v1.6.1 has
+    // `cmp r0,#0x0 ; ldmiaeq sp!,{r4,r5,r6,pc}` at 0x001ce1a0/0x001ce1a4 -- a
+    // conditional return straight out of the function.
     if (!game_work.mHud) return;
     game_work.mHud->Save();
     SaveCurrentData(true);

@@ -338,7 +338,10 @@ void EndRetryLevel() {
 
     SetScore(0, -1);                               // 0x001cbc54
 
-    if (game_work.m_SaveData) {
+    // v1.6.1 EndRetryLevel @0x001cbc24: `ldr r3,[r4,#0x50]` at 0x001cbc68 feeds the
+    // four stores directly -- no cmp/cbz between the load and 0x001cbc6c. There is
+    // no gate here at all.
+    {
         FruitSaveData* sd = game_work.m_SaveData;
         sd->m_GameOverField2 = -1;                     // 0x001cbc78 [+0x120]
         sd->m_GameOverField4 = -1;                     // 0x001cbc6c [+0x128]
@@ -400,7 +403,13 @@ void RetryLevel() {
     // Mute the persistent looping Bomb-Fuse handle for the 0.1s retry-shrink window.
     // Binary path: *(GameTaskState*)(GOT+0x452d4) +0xD8 = m_pBombFuseSound; SetVolume(0).
     // NOT ambient music -- the prior TODO label was wrong.
-    if (GameTaskState* ts = GetTaskState()) {
+    // NOTE: the m_pBombFuseSound test is GENUINE -- v1.6.1 RetryLevel @0x001cf124
+    // does `ldr r0,[r3,#0x70]; cmp r0,#0x0; beq 0x001cf1cc` at 0x001cf1b8 before
+    // MortarSound::SetVolume. The outer GetTaskState() test was a port addition:
+    // GetTaskState returns &s_taskState, a file-static that can never be null, and
+    // the binary reads that block straight off the GOT.
+    {
+        GameTaskState* ts = GetTaskState();
         if (ts->m_pBombFuseSound) {
             ts->m_pBombFuseSound->SetVolume(0.0f);
         }
@@ -413,10 +422,12 @@ void RetryLevel() {
     // port uses a default-constructed Delegate1 (functionally identical -- the
     // stock handler is a no-op release-on-done path that the port's GameSound
     // implements internally).
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>());
-    }
+    // v1.6.1 RetryLevel @0x001cf124: `ldr r6,[r3,#0x18c]` at 0x001cf1dc loads
+    // mGameSound and 0x001cf210 calls SFXPlay -- no test. (Contrast the
+    // m_pBombFuseSound test above, which the binary DOES have; the omission here
+    // is deliberate.)
+    game_work.mGameSound->SFXPlay("Game-start", 1.0f, 1.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*>());
 }
 
 // ASM-verified: 2026-05-20 v1.6.1 RetryUpdate @ 0x001cb4fc (re-analyst)

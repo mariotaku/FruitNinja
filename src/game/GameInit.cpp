@@ -293,7 +293,11 @@ void GameInit(unsigned long) {
     }
 }
 
-// ASM-verified: 2026-06-18 v1.6.1 GameUpdate @ 0x001CF534 (asm-inspector)
+// ASM-spec v1.6.1 GameUpdate @ 0x001cf534
+// (Downgraded from ASM-verified 2026-06-18: the body carried two port-added
+// mGameSound null tests in the bomb-fuse block that the binary does not have
+// (0x001cfd3c / 0x001cfe00 load +0x18c and deref it straight), so that diff
+// cannot have been clean. Re-verify before restamping.)
 //
 // slowTime/slowTimeSpeed/slowTimeTime globals -- bss/data statics from the
 // binary's GameTask.cpp translation unit (SlowTime sets slowTimeTime=1).
@@ -735,12 +739,17 @@ void GameUpdate(float dt, bool active) {
         if (noSfx || metric <= 0.0f || paused) {
             vol = 0.0f;
         } else {
-            if (!ts->m_pBombFuseSound && gs) {
+            // v1.6.1 GameUpdate @0x001cf534, fuse block 0x001cfcf4-0x001cfe2c: the only
+            // gate on the SFXPlay is `ldr r3,[r3,#0x70] ; cmp #0 ; bne` @0x001cfd30,
+            // i.e. m_pBombFuseSound == 0. mGameSound is `ldr r6,[r5,#0x18c]`
+            // @0x001cfd3c straight into r0. The master volume comes from a second
+            // untested load, `ldr r3,[r3,#0x18c] ; vldr.32 s14,[r3]` @0x001cfe00.
+            if (!ts->m_pBombFuseSound) {
                 ts->m_pBombFuseSound = gs->SFXPlay("Bomb-Fuse", 0.0f, 1.0f);
             }
             float t = metric / 100.0f;
             if (t < 0.0f) t = 0.0f; else if (t > 1.0f) t = 1.0f;
-            vol = t * (gs ? gs->m_MasterVolume : 1.0f);
+            vol = t * gs->m_MasterVolume;
         }
         if (fuse) fuse->SetVolume(vol);
     }
@@ -809,15 +818,15 @@ void DrawBackground() {
     mm.UploadModelViewOnly();
 
     // v1.6.1 DrawBackground @0x001ccaf4: background quad vertex colour is the HUD
-    // WORLD tint via TintWhite(&HUD::scales[3]) @0x00167d20 -- NOT hardcoded white.
+    // WORLD tint via TintWhite(&HUD::scales[3]) @0x0010fea8 -- NOT hardcoded white.
     // This is the Arcade 2x / freeze / etc. whole-scene darken (ScreenEffect
     // backTint drives scales[3..5]). Splats read the same tint; fruit models stay white.
-    Colour bgTint(255, 255, 255, 255);
-    if (game_work.mHud) {
-        bgTint = Colour::TintWhite(game_work.mHud->scales[3],
-                                   game_work.mHud->scales[4],
-                                   game_work.mHud->scales[5]);
-    }
+    // Both arms of the FruitCamera::ViewIsNormal branch (@0x001ccb38) do
+    // `ldr r1,[r4,#0x40] ; add r1,r1,#0x14 ; bl TintWhite` (0x001ccba8 / 0x001ccc34)
+    // with no cmp -- there is no white fallback in the binary.
+    Colour bgTint = Colour::TintWhite(game_work.mHud->scales[3],
+                                      game_work.mHud->scales[4],
+                                      game_work.mHud->scales[5]);
     Renderer::GetInstance()->DrawQuad(bgTint, 0.03125f, 0.96875f, 0.1875f, 0.8125f);
 
     bgTex->UnSet();
@@ -952,7 +961,10 @@ void GameDraw(float dt, bool active) {
     // ActorManager::Draw above already walked type-3 SlashEntity slots but
     // their Draw(Renderer&) vtable slot is a BX lr stub -- no output.
     // All blade rendering comes from here.
-    // ASM-verified: 2026-05-18 v1.6.1 GameDraw @ 0x001cd720 (re-analyst)
+    // ASM-spec v1.6.1 GameDraw @ 0x001cd720
+    // (Downgraded from ASM-verified 2026-05-18: GameDraw carried four port-added
+    // mHud null tests the binary does not have, and was MISSING the +0x164 test the
+    // binary does have at 0x001cdc44. Re-verify before restamping.)
     dm.SetDepthBuffer(false);
     for (int i = 0; i < 16; ++i) {
         if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();
@@ -970,12 +982,12 @@ void GameDraw(float dt, bool active) {
     // multiplies them (fade=0 at effect start -> scales *= 0 -> overlays go black).
     // Binary saves here, resets to 1.0 before overlay draws, then restores so ScreenEffect
     // tinting applies to the 0x01/particle pass but NOT to 0x08/0x400/0x100/0x200 overlays.
-    float savedScales[3] = { 1.0f, 1.0f, 1.0f };
-    if (game_work.mHud) {
-        savedScales[0] = game_work.mHud->scales[0];
-        savedScales[1] = game_work.mHud->scales[1];
-        savedScales[2] = game_work.mHud->scales[2];
-    }
+    // 0x001cd75c-0x001cd778: `ldr r3,[r3,#0x40] ; vldr s15,[r3,#0x8]/[0xc]/[0x10]`,
+    // no cmp -- and the port already calls mHud->Draw(0x01) unguarded below.
+    float savedScales[3];
+    savedScales[0] = game_work.mHud->scales[0];
+    savedScales[1] = game_work.mHud->scales[1];
+    savedScales[2] = game_work.mHud->scales[2];
 
     // HUD::Draw(0x01) -- MainScreen logo / shade (v1.6.1 GameDraw @0x001cd720)
     game_work.mHud->Draw(Mortar::HUD_LAYER_DEFAULT);
@@ -986,11 +998,11 @@ void GameDraw(float dt, bool active) {
     // v1.6.1 GameDraw @0x001cd720: reset HUD tint scales to 1.0f after the 0x01 pass so the
     // 0x08/0x400/0x100/0x200 overlay passes (combo icons, sensei head, pause, fades) are NOT
     // affected by ScreenEffect gameplay tinting (which can drive scales to 0 -> black sprites).
-    if (game_work.mHud) {
-        game_work.mHud->scales[0] = 1.0f;
-        game_work.mHud->scales[1] = 1.0f;
-        game_work.mHud->scales[2] = 1.0f;
-    }
+    // 0x001cdbe8-0x001cdc00: `ldr r3,[r2,#0x40] ; vstr s15(1.0),[r3,#0x8]/[0xc]/[0x10]`,
+    // no cmp.
+    game_work.mHud->scales[0] = 1.0f;
+    game_work.mHud->scales[1] = 1.0f;
+    game_work.mHud->scales[2] = 1.0f;
 
     // WaveManager::Draw(0) (v1.6.1 GameDraw @0x001cd720) -- stubbed (wave-banner overlay).
     WaveManager::GetInstance()->Draw(0);
@@ -1042,8 +1054,15 @@ void GameDraw(float dt, bool active) {
         // is covered by the flash on quit instead of popping on top of it. (#35)
         game_work.mHud->Draw(Mortar::HUD_LAYER_FADE_MODAL);
 
-        // MainScreen::DrawPostEffects (v1.6.1 GameDraw @0x001cd720)
-        game_work.mMainScreen->DrawPostEffects();
+        // MainScreen::DrawPostEffects (v1.6.1 GameDraw @0x001cd720). NOTE: this null
+        // test is GENUINE and was MISSING from the port -- the binary guards +0x164
+        // here where it guards nothing else in GameDraw:
+        //   001cdc44: ldr r0,[r3,#0x164] ; cmp r0,#0x0 ; beq 0x001cdc54
+        // then bl 0x001111f8 (MainScreen::DrawPostEffects). Same shape again at
+        // 0x001cdcf0/0x001cdcf4.
+        if (game_work.mMainScreen) {
+            game_work.mMainScreen->DrawPostEffects();
+        }
 
         // DrawCritHit (v1.6.1 @ 0x001ccfa0) -- gated on critFlash > 0 && IsFastHardware.
         DrawCritHit();
@@ -1080,11 +1099,11 @@ void GameDraw(float dt, bool active) {
         // v1.6.1 GameDraw @0x001cd720: save/restore HUD scales around the overlay passes.
         // Restore ScreenEffect-modified values so the next SetDefaults reset starts from
         // the correct per-frame base (binary restores before leaving the overlay block).
-        if (game_work.mHud) {
-            game_work.mHud->scales[0] = savedScales[0];
-            game_work.mHud->scales[1] = savedScales[1];
-            game_work.mHud->scales[2] = savedScales[2];
-        }
+        // 0x001cdcfc-0x001cdd18: `ldr r3,[r3,#0x40] ; vstr [sp+0x18] -> [r3,#0x8]` etc,
+        // no cmp.
+        game_work.mHud->scales[0] = savedScales[0];
+        game_work.mHud->scales[1] = savedScales[1];
+        game_work.mHud->scales[2] = savedScales[2];
     }
 
     // v1.6.1 GameDraw tail @0x001cdd64: unpause_game auto-clear.
@@ -1098,8 +1117,9 @@ void GameDraw(float dt, bool active) {
         game_work.bM_Mode = false;
     }
 
-    // v1.6.1 GameDraw tail @0x001cdd80: HUD::Draw(0x800) fires unconditionally outside the active-guard.
-    if (game_work.mHud) game_work.mHud->Draw(Mortar::HUD_LAYER_TOP_MOST);
+    // v1.6.1 GameDraw tail @0x001cde00-0x001cde10: `ldr r0,[r3,#0x40] ; bl HUD::Draw`,
+    // no cmp. Fires unconditionally outside the active-guard.
+    game_work.mHud->Draw(Mortar::HUD_LAYER_TOP_MOST);
 }
 
 // v1.6.1 GameExit @0x001cfed4. Order matters:
@@ -1137,6 +1157,14 @@ void GameExit() {
         // hd_slice_fruit). ~MainScreen -> Release() only NULLS its MenuButton
         // pointers (they are HUD-owned and already freed above), so this is not a
         // double-free.
+        // NOTE: this null test is GENUINE. v1.6.1 GameExit @0x001cfed4 reads the
+        // MainScreen slot as `ldr r0,[r5,#0x1c]` (r5 = the second static block, the one
+        // the port models as game_work.mMainScreen) and does `cmp r0,r6(0) ; beq
+        // 0x001cffd0` at 0x001cffb4-0x001cffbc before the vtable-slot-1 deleting dtor.
+        // TODO: v1.6.1 0x001cffdc (GameExit) -- the binary guards the mHud teardown the
+        //   same way (`cmp r5,#0x0 ; beq 0x001cfff4` around HUD::Release @0x00110888 and
+        //   the delete @0x00108ecc) and runs it AFTER the MainScreen delete. The port
+        //   splits Release/delete around the MainScreen block and guards neither.
         if (game_work.mMainScreen) {
             delete game_work.mMainScreen;
             game_work.mMainScreen = nullptr;

@@ -80,7 +80,11 @@ AchievementManager* AchievementManager::GetInstance() {
 // ---------------------------------------------------------------------------
 
 void AchievementManager::LoadAchievementInfo() {
-    // ASM-verified: 2026-05-23 v1.6.1 AchievementManager::LoadAchievementInfo @ 0x00118198 (re-analyst)
+    // ASM-spec v1.6.1 AchievementManager::LoadAchievementInfo @ 0x00118198
+    // (Downgraded from ASM-verified 2026-05-23: the body carried a port-added
+    // m_SaveData null test the binary does not have, and still gates on
+    // `IsAchievementUnlocked() != 0` where the binary uses `cmp r0,#0x1`.
+    // Re-verify before restamping.)
     // Binary loads exactly 2 preamble textures BEFORE opening the XML doc, assigned
     // directly to NotificationControl's class statics (mangled
     // _ZN19NotificationControl8s_bannerE / s_unlockBannerE) -- Draw() reads them via
@@ -114,8 +118,15 @@ void AchievementManager::LoadAchievementInfo() {
         // GETSTRING_CAST_0_STR(nameAttr)) -- localized name, drawn by the unlock popup.
         const char* nameAttr = e.Attribute("name");
 
-        // Skip if already unlocked (binary: game_work.m_SaveData->IsAchievementUnlocked)
-        if (game_work.m_SaveData && game_work.m_SaveData->IsAchievementUnlocked(idHash)) continue;
+        // Skip if already unlocked. v1.6.1 LoadAchievementInfo @0x00118198: the
+        // binary loads game_work.m_SaveData (+0x50) straight into r0 at 0x00118360
+        // and calls IsAchievementUnlocked with no null test -- the only gate is the
+        // return value.
+        // TODO: v1.6.1 0x00118368 (LoadAchievementInfo) -- the binary's gate is
+        //   `cmp r0,#0x1 ; beq skip`, i.e. skip only on EXACTLY 1. The port's
+        //   IsAchievementUnlocked returns 2 for a pending unlock, which the binary
+        //   would NOT skip. Settle what @0x001527e8 returns before switching to == 1.
+        if (game_work.m_SaveData->IsAchievementUnlocked(idHash)) continue;
 
         // Skip if already loaded (id is unique per entry, unlike name which is shared)
         if (m_All.find(idHash) != m_All.end()) continue;
@@ -368,7 +379,11 @@ int AchievementManager::UnlockedAchievement(uint32_t hash, HUD* hud) {
     NotificationControl* ctrl = new NotificationControl(
         a->m_DisplayName, a->m_Score, a->m_Texture, notifType);
     ctrl->Init();
-    if (hud) hud->AddControl(ctrl, false);
+    // v1.6.1 AchievementManager::UnlockedAchievement @0x001180a8: the hud argument
+    // is parked in r6 at 0x001180b4 and never compared -- 0x00118170 calls
+    // HUD::AddControl(hud, ctrl, false) straight. The only gate in the body is the
+    // `it != m_All.end()` test at 0x001180e4.
+    hud->AddControl(ctrl, false);
     return 1;
 }
 
@@ -690,8 +705,11 @@ int AchievementManager::UnlockComboAchievement(int comboLen, int* fruitArr) {
         //   no timer HUD), reject. If comboLen <= 2, reject. If countdown still
         //   running, reject. Only when the Arcade/Zen-timed countdown has hit 0.0f
         //   does the achievement become eligible.
-        // ASM-verified: 2026-05-18 v1.6.1 AchievementManager::QueAchievement @ 0x0011750c (re-analyst)
-        // (IsGameOver gate is a mid-function range within QueAchievement; exact offset unverified -- asm-inspector to pin)
+        // ASM-verified: 2026-08-03 v1.6.1 AchievementManager::UnlockComboAchievement @ 0x001175e8 (re-analyst)
+        // NOTE: the mCountDown null test below is GENUINE, not a port addition. The
+        // binary fuses it with the comboLen test at 0x001176c8-0x001176d4:
+        //   ldr r3,[r3,#0x184] ; cmp r3,#0x0 ; cmpne r5,#0x2 ; ble reject
+        // A null TimeControl sets Z, so `ble` is taken and the achievement is rejected.
         if (info->m_IsGameOver) {
             if (game_work.mCountDown == NULL) { ++it; continue; }
             if (comboLen <= 2)        { ++it; continue; }

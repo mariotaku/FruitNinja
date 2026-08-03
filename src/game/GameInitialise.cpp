@@ -437,8 +437,14 @@ void GameInitialise(void* window, const char* config) {
     PreloadFontsTTF();
 
     // ASM-spec v1.6.1 InitialiseData @0x0011c3f0: per-language globalSizeScale.
-    // Only langId 0x13 (russian) gets 0.9; all others are 1.0.
-    if (game_work.m_pTTFFontMain) {
+    // Only langId 0x13 (russian) gets 0.9; all others are 1.0. The `cmp r3,#0x13`
+    // at 0x0011c5d0 is the ONLY gate -- the FontInterface::GetInstance() result at
+    // 0x0011c5d8 is not tested, and there is no game_work font member on this path.
+    // TODO: v1.6.1 0x0011c5d8 (InitialiseData) -- the binary targets the
+    //   Mortar::FontInterface SINGLETON, not game_work.m_pTTFFontMain->GetAtlas(),
+    //   and calls FontInterface::Initialize(this, 1.0f, scale, 2, false) @0x0010e620.
+    //   The port drops the trailing `2, false` args and picks a different object.
+    {
         float scale = (game_work.languageFlag == 0x13) ? 0.9f : 1.0f;
         game_work.m_pTTFFontMain->GetAtlas()->InitialiseData(1.0f, scale);
     }

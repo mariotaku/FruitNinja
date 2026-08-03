@@ -455,7 +455,10 @@ bool FruitSaveData::PlayedModeToday(GAME_MODE gameMode) {
 // not from m_EntityStates) -- see the TODO inside the <state> block.
 // ----------------------------------------------------------------------
 void SaveGame(FruitSaveData* save) {
-    if (!save) return;
+    // v1.6.1 SaveGame @0x001530dc: entry is `cpy r5,r0` then straight into
+    // `bl FruitSaveData::CheckDatesHaveChanged` @0x001530ec with r0 still holding
+    // the argument. No entry compare; the first deref (`ldr r2,[r5,#0x40]`
+    // @0x00153144) is unguarded too.
 
     // ASM-spec v1.6.1 SaveGame @ 0x001530dc (first statement).
     save->CheckDatesHaveChanged();
@@ -964,7 +967,13 @@ void ParseSaveFile(TiXmlNode* node, FruitSaveData* data) {
 // version-sensitive stats) and the post-parse game-mode clamp.
 // ----------------------------------------------------------------------
 bool LoadGame(FruitSaveData* save) {
-    if (!save) return false;
+    // v1.6.1 LoadGame @0x0015591c: entry is `cpy r4,r0` then GetSavePath +
+    // File::Exists; the only `cmp` is on the file-exists result, and even the miss
+    // path falls through to `ldr r6,[r4,#0x1f8]` @0x001559b4. The argument is never
+    // tested.
+    // TODO: v1.6.1 0x00155a14 (LoadGame) -- the binary always returns 0; the port
+    //   has three `return false` paths plus a `return true`. Audit the call sites
+    //   before collapsing the return value.
 
     TiXmlDocument doc;
     std::string sp = GetSavePath();

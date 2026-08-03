@@ -10,6 +10,7 @@
 #include "engine/util/StringHash.h"
 #include "engine/util/StringTable.h"
 #include "engine/asset/TextureManager.h"
+#include "hud/ScoreControl.h"   // GetCurrentScore -- v1.6.1 @0x0011a0cc
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -390,13 +391,15 @@ Bonus* BonusType::GetBest() {
 // ---------------------------------------------------------------------------
 int GetBonusTotal(unsigned long hash) {
     static const uint32_t kScoreHash = StringHash("score");
+    // v1.6.1 GetBonusTotal @0x0012e4c4: no Game::GetInstance call and no pointer
+    // compare anywhere in the body. `cmp r6,r3` @0x0012e534 (hash vs the guarded
+    // static scoreHash) picks between two tail-calls: GetCurrentScore(0) @0x0012e544
+    // and FruitSaveData::GetTotal(game_work.m_SaveData, hash) @0x0012e55c, the latter
+    // fed by an untested `ldr r0,[r3,#0x50]` @0x0012e554.
     if ((uint32_t)hash == kScoreHash) {
-        Game* g = Game::GetInstance();
-        return g ? game_work.currentScore : 0;
+        return GetCurrentScore(0);
     }
-    Game* g = Game::GetInstance();
-    FruitSaveData* sd = g ? game_work.m_SaveData : 0;
-    return sd ? sd->GetTotal((uint32_t)hash) : 0;
+    return game_work.m_SaveData->GetTotal((uint32_t)hash);
 }
 
 // ---------------------------------------------------------------------------

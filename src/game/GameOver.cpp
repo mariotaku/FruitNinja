@@ -54,20 +54,24 @@ void GameOver(int endReason, float endScore, int endParam) {
     // DIFFERS: when a field == -1 we substitute 1 (the first valid texture
     // variant) so sensei body + head are visible. Once the gameplay-side
     // setters land, the substitution can come out.
+    // v1.6.1 GameOver @0x001cb788: `ldr r3,[r7,#0x50]` @0x001cb7d0 is followed straight
+    // by `ldr r2,[r3,#0x11c]` @0x001cb7dc, then +0x124, +0x128, +0x120 -- no cmp, no
+    // branch. The only gate in the head is the one-shot re-entry flag
+    // (`ldrb r3,[r7,#0x5] ; cmp #0 ; bne 0x001cb9a0` @0x001cb7ac).
     FruitSaveData* save = game_work.m_SaveData;
     // Substitute 1 when the gameplay-side setter hasn't written a real value
     // (sentinel -1). Inlined per-field instead of a helper lambda -- the
     // cross-toolchain (GCC 4.4.1) doesn't support C++11 lambdas.
-    int expressionIdx = (save && save->m_GameOverField2 > 0) ? save->m_GameOverField2 : 1;
-    int bgPatternIdx  = (save && save->m_GameOverField1 > 0) ? save->m_GameOverField1 : 1;
+    int expressionIdx = (save->m_GameOverField2 > 0) ? save->m_GameOverField2 : 1;
+    int bgPatternIdx  = (save->m_GameOverField1 > 0) ? save->m_GameOverField1 : 1;
     // ASM-spec v1.6.1 GameOver @0x001cb788: +0x124/+0x128 are passed RAW.
     // Every v1.6.1 writer stores -1 (FruitSaveData ctors, GameOverScreen::Release,
     // GameOver @0x001cb83c, EndRetryLevel @0x001cbc70) — dead override fields —
     // so the -1 sentinel must reach FruitFactControl/Fruit::GetFact, which uses
     // it to draw a fresh random fruit fact. Clamping to 0 pinned the fact to
     // fruit 0 every game-over.
-    int tabIndex      = save ? save->m_GameOverField3 : -1;
-    int starCount     = save ? save->m_GameOverField4 : -1;
+    int tabIndex      = save->m_GameOverField3;
+    int starCount     = save->m_GameOverField4;
 
     GameOverScreen* gos = new GameOverScreen(
         "GameOver", endReason, endScore,
@@ -85,9 +89,22 @@ void GameOver(int endReason, float endScore, int endParam) {
     gos->Init();
     game_work.mHud->AddControl(gos);
 
-    // Binary @ 0x00169f94: bump <MODE>_today and write m_LastPlayedDay[mode].
-    // 0x00169fec: sd->m_LastPlayedDay[mode] = GetDaysSince1900().
-    if (game_work.m_SaveData) {
+    // v1.6.1 GameOver @0x001cb788, day block 0x001cb84c-0x001cb954: bump the per-mode
+    // day stat and write m_LastPlayedDay[mode]. +0x50 is deref'd raw at 0x001cb7d0,
+    // 0x001cb830, 0x001cb86c, 0x001cb8cc, 0x001cb904 and 0x001cb948 -- there is no cmp
+    // on it anywhere in the function. The real gate is `endReason == -1`
+    // (`cmp r6,r2 ; bne` @0x001cb828/0x001cb848).
+    // TODO: v1.6.1 0x001cb84c (GameOver) -- port the day block faithfully. Gaps:
+    //   (1) the missing `endReason == -1` gate above this block;
+    //   (2) the key is GetModeName(gameMode) + "_days", not "<MODE>_today";
+    //   (3) the binary branches 3 ways -- AddToTotal(key,1,true,true) when
+    //       m_LastPlayedDay[mode] == today-1 || GetTotal(key) == 0, else
+    //       SetTotal(key,1,true,true) when m_LastPlayedDay[mode] != today, else nothing;
+    //   (4) missing "games_at_grave_yard_time" bump (MortarDate::CurrentDate(&d,1);
+    //       if (d.hour - 2u < 3) AddToTotal(...,1,true,true));
+    //   (5) the binary runs gos->Init() + HUD::AddControl AFTER this block
+    //       (0x001cb958-0x001cb97c); the port runs them before.
+    {
         static const char* k_ModeNames[4] = { "CLASSIC", "CASINO", "ARCADE", "ZEN" };
         int mode = (int)game_work.gameMode;
         if (mode >= 0 && mode < 4) {
@@ -124,21 +141,24 @@ void AddToCurrentScore(int points, int param1, bool param2, bool /*param3*/) {
     // ASM-spec v1.6.1 AddToCurrentScore @0x0011a4c0: crossing a NEW_LIFE_AT(100) boundary restores one life.
     if (oldScore / Fruit::NEW_LIFE_AT < game_work.currentScore / Fruit::NEW_LIFE_AT && game_work.missCount > 0) {
         game_work.missCount--;
-        if (game_work.mGameSound) game_work.mGameSound->SFXPlay("extra-life", 1.0f, 1.0f);
+        // v1.6.1 AddToCurrentScore @0x0011a4c0: `ldr r7,[r3,#0x18c]` at 0x0011a570 feeds
+        // SFXPlay directly; the only gate is `missCount != 0` at 0x0011a558.
+        game_work.mGameSound->SFXPlay("extra-life", 1.0f, 1.0f);
     }
-    // Binary AddToCurrentScore @0x0011a4c0: cache "all" cumulative count in
-    // game_work for achievement gating in GameOverScreen::Update state-6.
+    // v1.6.1 AddToCurrentScore @0x0011a4c0: cache "all" cumulative count in
+    // game_work for achievement gating in GameOverScreen::Update state-6. The only
+    // gate is `points > 0 && param2 && param1 <= 1` @0x0011a658-0x0011a66c;
+    // `ldr r0,[r6,#0x50]` @0x0011a698 feeds the first AddToTotal and 0x0011a6bc
+    // reloads +0x50 for the second -- neither is tested.
     if (points > 0 && param2 && param1 < 2) {
-        if (game_work.m_SaveData) {
-            static const uint32_t s_allHash = StringHash("all");
-            game_work.m_pLastScoredSaveEntry =
-                (void*)(intptr_t)game_work.m_SaveData->AddToTotal(
-                    "all", s_allHash, points, true, false);
-            if (game_work.m_bUpsideDownActive) {
-                static const uint32_t s_upHash = StringHash("upside_down_points");
-                game_work.m_SaveData->AddToTotal(
-                    "upside_down_points", s_upHash, points, false, true);
-            }
+        static const uint32_t s_allHash = StringHash("all");
+        game_work.m_pLastScoredSaveEntry =
+            (void*)(intptr_t)game_work.m_SaveData->AddToTotal(
+                "all", s_allHash, points, true, false);
+        if (game_work.m_bUpsideDownActive) {
+            static const uint32_t s_upHash = StringHash("upside_down_points");
+            game_work.m_SaveData->AddToTotal(
+                "upside_down_points", s_upHash, points, false, true);
         }
     }
     // Defunct: P2P PointsPacket (param3 && param1==1) -- no-op stub; v1.6.1 AddToCurrentScore @0x0011a4c0

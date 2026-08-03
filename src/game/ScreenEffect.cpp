@@ -585,6 +585,9 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         // control exists but Activate could not add it", and this block is the
         // one that adds it once the HUD appears. On the normal HUD-present path
         // the flag stays 1 and this never fires -- it cannot double-add.
+        // NOTE: BOTH tests are GENUINE. 0x001488ac-0x001488c4:
+        //   ldr r0,[r3,#0x40] ; cmp r0,#0x0 ; beq 0x001488d8
+        //   ldrb r2,[r5,#0xc] ; cmp r2,#0x0 ; bne 0x001488d8
         if (game_work.mHud && !img.m_bAddedToHUD) {
             img.m_bAddedToHUD = true;
             game_work.mHud->AddControl(img.m_pHudCtrl, false);
@@ -689,9 +692,12 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
             ? ((float)img.m_Tint.a * img.m_CurrentVis)
             : (float)img.m_Tint.a;
         if (alpha < 0.0f) alpha = 0.0f;
-        // v1.6.1 ScreenEffect::Update @0x00148aa4-0x00148ad0: unconditionally
-        // multiplies the alpha byte by HUD::m_globalTimeScale (+0x24), for every
-        // image whenever HUD exists -- not just fade-flagged ones.
+        // v1.6.1 ScreenEffect::Update @0x00148a9c-0x00148ad0: multiplies the alpha byte
+        // by HUD::m_globalTimeScale (+0x24) for EVERY image, not just fade-flagged
+        // ones. NOTE: the HUD test is GENUINE --
+        //   ldr r2,[r3,#0x40] ; cmp r2,#0x0 ; beq 0x00148ad4   (0x00148aa4-0x00148aac)
+        // The binary has no explicit alpha<0 clamp; vcvt.u32.f32 saturates instead, so
+        // the port's clamp is equivalent.
         if (game_work.mHud) {
             alpha = alpha * game_work.mHud->m_globalTimeScale;
             if (alpha < 0.0f) alpha = 0.0f;
@@ -705,6 +711,10 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
     }
 
     // Per-tint colour multiply on HUD scales (v1.6.1 ScreenEffect::Update @0x00148844 tint tail)
+    // NOTE: the `if (hud)` below is GENUINE. 0x00148c10-0x00148c18:
+    //   ldr r2,[r2,#0x40] ; cmp r2,#0x0 ; beq 0x00148ce8
+    // skipping the 3-iteration multiply loop at 0x00148c24-0x00148ce4. The binary
+    // re-loads mHud per tint; caching it once is equivalent.
     HUD* hud = game_work.mHud;
     for (size_t i = 0; i < m_Tints.size(); ++i) {
         ScreenTint& t = m_Tints[i];
@@ -799,6 +809,11 @@ void ScreenEffect::Deactivate() {
         // binary's defence against the atexit ~PowerUpManager -> Deactivate path running after
         // GameDestroy has deleted the HUD (GameDestroy @0x0011cea4 nulls game_work.pM_pHud and
         // never drains PowerUpManager; the manager is a __aeabi_atexit local static @0x00140848).
+        // NOTE: BOTH tests are GENUINE. 0x0014859c-0x001485b0:
+        //   ldr r3,[r3,#0x40] ; cmp r3,#0x0 ; beq 0x00148640
+        //   ldr r5,[r8,#0x8]  ; cmp r5,#0x0 ; beq 0x00148640
+        // mHud is loaded and tested but never used in the loop body -- a pure liveness
+        // probe, which corroborates the atexit-teardown rationale above.
         if (game_work.mHud && img.m_pHudCtrl) {
             // v1.6.1 ScreenEffect::Deactivate @0x00148510
             if (img.m_DeferKind == 1) {

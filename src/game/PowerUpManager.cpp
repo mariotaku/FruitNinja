@@ -193,8 +193,10 @@ void PowerUpManager::Reset(bool fullReset) {
     m_SlowClockMult         = 1.0f;
     ClearScoreMultipliers();
 
-    // Binary @ 0x00142e08: if HUD != NULL, writes 1.0f to all 6 scale slots.
-    // Port: SetDefaults() already does this; HUD gate kept faithful to binary.
+    // NOTE: this HUD test is GENUINE. v1.6.1 PowerUpManager::Reset @0x00142e08 does
+    // `ldr r3,[r3,#0x40] ; cmp r3,#0x0 ; beq` at 0x00142e64-0x00142e6c before the six
+    // 1.0f stores. (SetDefaults writes the same six slots UNguarded -- the asymmetry
+    // is the binary's.)
     HUD* pHud = game_work.mHud;
     if (pHud) {
         pHud->scales[0] = 1.0f;
@@ -206,11 +208,11 @@ void PowerUpManager::Reset(bool fullReset) {
     }
 
     if (fullReset) {
-        // Binary @ 0x00142e08: (**(code **)(*(int *)game_work.pM_pTimeControl + 0x10))()
-        // = TimeControl::Reset() via vtable slot +0x10, called BEFORE the active-list drain.
-        if (game_work.mCountDown) {
-            game_work.mCountDown->Reset();
-        }
+        // v1.6.1 PowerUpManager::Reset @0x00142e08: `ldr r0,[r3,#0x184] ; ldr r3,[r0] ;
+        // ldr r3,[r3,#0x10] ; blx r3` at 0x00142e98-0x00142ea4 -- TimeControl::Reset via
+        // vtable slot +0x10, called BEFORE the active-list drain. The only gate is the
+        // `cmp r7,#0x0 ; beq` on fullReset at 0x00142e88; +0x184 is never tested.
+        game_work.mCountDown->Reset();
     }
 
     std::list<PowerUp*>::iterator it = m_ActivePowerUps.begin();

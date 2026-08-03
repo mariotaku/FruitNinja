@@ -31,9 +31,12 @@
 #include "game/PowerUpManager.h"
 #include "game/PowerUp.h"
 #include "game/GameWork.h"
+#include "game/FruitSaveData.h"
 #include "game/GameMode.h"
 #include "game/WaveManager.h"
 #include "audio/GameSound.h"
+#include "hud/HUD.h"
+#include "hud/TimeControl.h"
 #include "Game.h"
 #include "engine/asset/FileManager.h"
 #include "engine/asset/FileSystem_Direct.h"
@@ -70,11 +73,36 @@ int main() {
     game_work.gameMode = GAME_MODE_ARCADE;
     WaveManager::GetInstance()->Init();
 
+    // GetNextWave's head derefs game_work.m_SaveData unguarded, exactly like the
+    // binary (v1.6.1 WaveManager::GetNextWave @0x0012573c -- `ldr r0,[r7,#0x50]`
+    // @0x00125768 straight into FruitSaveData::UnlockTotals, no null test).
+    // GameInitialise always creates the save before gameplay; mirror that here.
+    static FruitSaveData s_saveData;
+    game_work.m_SaveData = &s_saveData;
+
     // ScreenEffect::Update's SFX tail (v1.6.1 @0x00148d84) derefs
     // game_work.mGameSound unguarded, exactly like the binary (GameInitialise
     // always creates it before gameplay). SoundManager has no audio device in
     // this headless test, so SFXPlay is a silent no-op -- no audio is played.
     game_work.mGameSound = new GameSound();
+
+    // WaveManager derefs game_work.mHud unguarded in three places -- ResetControls
+    // (Resume @0x0012bf58) and two AddControl sites -- exactly like the binary,
+    // which has no null test at any of them. The port used to carry an
+    // `if (game_work.mHud)` guard there; it was port-added and removed in the #156
+    // sweep, so a NULL here is now a segfault rather than a silently skipped call.
+    // Per the standing rule the fixture supplies the global; production does not
+    // re-grow a guard the binary lacks. The HUD ctor allocates nothing but the
+    // object itself, and GameInitialise always creates it before gameplay.
+    game_work.mHud = new HUD();
+
+    // WaveManager also derefs game_work.mCountDown (TimeControl, +0x184) unguarded
+    // in UpdateWave -- the binary reads the blitz timer straight through it. The
+    // port's `if (mCountDown)` there was port-added AND actively wrong: its
+    // zero-init fallback forced `-m_NextBlitzTime >= 0` and held the Arcade blitz
+    // gate permanently SHUT. Removed in the #156 sweep, so the fixture must supply
+    // it like real boot does.
+    game_work.mCountDown = new TimeControl();
 
     PowerUpManager* pum = PowerUpManager::GetInstance();
     pum->Load();

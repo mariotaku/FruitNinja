@@ -258,6 +258,9 @@ void UpdateMusic(float dt) {
         if (game_work.m_PauseAmount < 0.0f) {            // 0x0016a7ba: bpl -> 0x0016a80a
             // Transition active: 3-way split on MainScreen::m_State
             // (v1.6.1 UpdateMusic @0x001cc18c, disasm 0x001cc350-0x001cc3ec).
+            // NOTE: the null test is GENUINE. v1.6.1 UpdateMusic @0x001cc18c,
+            // 0x001cc354-0x001cc35c: `ldr r3,[r3,#0x164] ; cmp r3,#0x0 ; beq 0x001cc510`,
+            // then `ldr r3,[r3,#0x118] ; cmp r3,#0x4 ; bne 0x001cc510`.
             MainScreen* ms = game_work.mMainScreen;
             if (ms != nullptr && ms->m_State == STATE_DOJO_WAIT_B) {
                 // About/Dojo wait: ramp UP toward +1.0, play the Dojo track.

@@ -46,7 +46,12 @@ int GameModifier::Update(float dt) {
 // power-up name-hash lookups via PowerUpManager::GetActiveSingle; scales by
 // PowerUpManager::m_WaveDtModPrev (field_0x74). DAT consts: 0.01f, 0.0f,
 // 50.0f (aa0), 0.333f (aa4), 0.1f (aa8).
-// ASM-verified: 2026-06-13T18:00Z v1.6.1 binary @ 0x00140890 (asm-inspector)
+// ASM-spec v1.6.1 GameModifier::ApplyModifier @ 0x00140890
+// (Downgraded from ASM-verified 2026-06-13: the body carried a port-added
+// m_SaveData null ternary the binary does not have -- 0x001409d0/0x001409d4 load
+// +0x50 and read +0x10c with nothing between -- plus the `mult > 0` test noted
+// below. Re-verify before restamping. NOTE the name mismatch too: Ghidra demangles
+// 0x00140890 as ApplyModifier, the port calls it OnDeferComplete.)
 void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
     // 1) fold m_Duration (+0x04) into m_BonusAccum -- binary vldr.32 s15,[r0,#4]
     float acc = m_Duration;
@@ -73,7 +78,9 @@ void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
     static bool     s_initB = false;
     if (!s_initB) { s_hashB = StringHash("freeze");   s_initB = true; }
 
-    float baseTime = game_work.m_SaveData ? game_work.m_SaveData->m_TimeRemainingSave : 0.0f;
+    // v1.6.1 @0x001409c8-0x001409d4: `ldr r3,[r3,#0x50] ; vldr.32 s17,[r3,#0x10c]` --
+    // m_SaveData is loaded and dereferenced with nothing between the two loads.
+    float baseTime = game_work.m_SaveData->m_TimeRemainingSave;
     float bonusA = 0.0f;
     if (PowerUpManager::GetInstance()->GetActiveSingle(s_hashA)) bonusA = 5.0f;
 
@@ -87,6 +94,12 @@ void GameModifier::OnDeferComplete(bool /*unused*/, float* pExtra) {
 
     float target = baseTime + bonusA + bonusB;
     float mult   = PowerUpManager::GetInstance()->m_WaveDtModPrev;
+    // TODO: v1.6.1 0x00140a44 (GameModifier::ApplyModifier) -- the binary divides
+    //   unconditionally (`vdiv.f32 s15,s17,s15`) and then does vcmpe/ble. There is no
+    //   `mult > 0` test; a zero m_WaveDtModPrev yields inf/NaN and the compare falls
+    //   through. The port's added test changes the branch outcome. Left in place
+    //   pending a check of what m_WaveDtModPrev can actually be at this call site --
+    //   removing it blind would trade one divergence for a NaN.
     if (mult > 0.0f && target < m_BonusAccum / mult) {
         float v = target * mult - 0.333f;
         if (v < 0.1f) v = 0.1f;

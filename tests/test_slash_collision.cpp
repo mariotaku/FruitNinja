@@ -34,6 +34,7 @@
 #include "collision/ColSphere.h"
 #include "engine/input/InputEvent.h"
 #include "game/GameWork.h"
+#include "game/FruitSaveData.h"
 #include "hud/HUD.h"
 #include "engine/audio/GameSound.h"
 #include <cstdio>
@@ -287,6 +288,11 @@ int main() {
     // must never actually play audio.
     game_work.mHud = new HUD();
     game_work.mGameSound = new GameSound();
+    // AddToCurrentScore's "all" AddToTotal branch derefs game_work.m_SaveData
+    // unguarded too (v1.6.1 @0x0011a698 -- `ldr r0,[r6,#0x50]` straight into the
+    // call). Same fixture-supplies-the-global rule.
+    static FruitSaveData s_saveData;
+    game_work.m_SaveData = &s_saveData;
 
     test_crossing_hit();
     test_blank_miss();
