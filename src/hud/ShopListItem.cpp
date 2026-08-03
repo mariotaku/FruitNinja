@@ -499,8 +499,11 @@ void ShopListItem::NewDraw() {
 // ShopListItem::DrawDividers @ v1.6.1 0x001b1a98
 // ---------------------------------------------------------------------------
 void ShopListItem::DrawDividers() {
-    // No head gate in the binary: DrawDividers @0x001b1a98 issues divider 1's matrix
-    // and draw before its only +0x278 read at 0x001b1b58.
+    // No head gate in the binary: DrawDividers @0x001b1a98 builds divider 1's matrix
+    // and calls texture->Set() BEFORE its only +0x278 read (m_pItemInfo->m_Type)
+    // @0x001b1b58-0x1b5c; the actual DrawQuadUnCached draw call (the colour consumer)
+    // happens AFTER that read, at 0x001b1b98/0x001b1bc8 -- so the port's read-before-
+    // matrix-setup ordering here is a behaviourally-safe reordering, not a divergence.
     MatrixManager& mm = MatrixManager::GetInstance();
     const Colour colGrey(128, 128, 128, 255);
     const Colour colWhite(255, 255, 255, 200);

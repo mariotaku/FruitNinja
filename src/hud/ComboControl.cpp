@@ -19,14 +19,14 @@ ComboControl::ComboControl(int comboCount)
     m_bNoDestructor = 0;
 }
 
-// dtor @ 0x00136c0c / 0x00136c4c / 0x00136c88
+// dtor (base/D2) @0x00169410, (complete/D1) @0x00169464, (deleting/D0) @0x001693b4
 ComboControl::~ComboControl() {}
 
 void ComboControl::Reset() {
-    // no-op in binary @ 0x00136bdc
+    // no-op in binary @ 0x00169384
 }
 
-// Update @ 0x00136be4: lifetime -= dt; if lifetime < 0 set m_bPendingRemoval=1
+// Update @ 0x0016938c: lifetime -= dt; if lifetime < 0 set m_bPendingRemoval=1
 void ComboControl::Update(float dt) {
     m_Lifetime -= dt;
     if (m_Lifetime < 0.0f) {

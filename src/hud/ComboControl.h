@@ -3,7 +3,7 @@
 
 // Defunct: ComboControl — unused in binary; class shape and vtable preserved
 // per stub-don't-skip policy. Zero call sites in binary; combo popup is
-// rendered by MissControl (binary @ 0x0017dad8). Binary @ 0x00136cc4 ctor.
+// rendered by MissControl (binary @ 0x0017dad8). Binary @ 0x001694b8 ctor.
 // re-analyst confirmed 2026-05-20.
 //
 // Analysed: 2026-04-30T00:00
@@ -14,13 +14,13 @@
 // Spawned by combo logic; owned by HUD until removed (fire-and-forget).
 //
 // Binary addresses:
-//   ctor (real)    0x00136cc4
-//   ctor (alias)   0x00136d1c
-//   dtor (regular) 0x00136c0c
-//   dtor (inplace) 0x00136c4c
-//   dtor (deleting)0x00136c88
-//   Reset          0x00136bdc  (no-op body)
-//   Update         0x00136be4  (lifetime -= dt; if <0 m_bPendingRemoval=1)
+//   ctor (base)     0x001694b8
+//   ctor (complete) 0x00169534
+//   dtor (base/D2)     0x00169410
+//   dtor (complete/D1) 0x00169464
+//   dtor (deleting/D0) 0x001693b4
+//   Reset          0x00169384  (no-op body)
+//   Update         0x0016938c  (lifetime -= dt; if <0 m_bPendingRemoval=1)
 
 #include "HUDControl3d.h"
 #include <cstdint>
@@ -37,7 +37,7 @@ public:
     explicit ComboControl(int comboCount);
     ~ComboControl() override;
 
-    void Reset() override;     // 0x00136bdc — no-op in binary
+    void Reset() override;     // 0x00169384 -- no-op in binary
     void Update(float dt) override;
     void Draw(float* hudScaleRaw) override;
 
