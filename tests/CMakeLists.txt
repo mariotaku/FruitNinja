@@ -206,7 +206,35 @@ macro(fn_add_game_test _target _source)
     if (NOT "NO_GL_CONTEXT" IN_LIST _fn_agt_extra_args)
         set_property(GLOBAL APPEND PROPERTY FN_GL_CONTEXT_TEST_EXES ${_target})
     endif()
+    # Every fn_add_game_test target links fruit-ninja-game, so it MUST be
+    # relinked whenever that library is. The build_freshness gate checks exactly
+    # this set -- see the note at its add_test() below. Pure-logic tests that
+    # only link mortar_engine are deliberately excluded: they do not depend on
+    # the game lib, so flagging them would be a false positive that trains
+    # people to ignore the gate.
+    set_property(GLOBAL APPEND PROPERTY FN_GAME_LINKED_TEST_EXES ${_target})
 endmacro()
+
+# ---------------------------------------------------------------------------
+# Staleness gate -- MUST be the first registered test.
+#
+# ctest does not build. Build one target (an IDE run config, or
+# `--target test_foo`) and then run the suite, and every OTHER test executable
+# is whatever was last linked -- old code reporting PASSED.
+#
+# This is not theoretical: a real SEGFAULT in slash_collision sat on main across
+# four pushed commits while the suite reported 243/243, because a single-target
+# build had left that exe predating the change that broke it. The same trap had
+# already burned a separate multi-round detour chasing a "particle regression"
+# that was only 96 stale test exes.
+#
+# Registered FIRST so it fails in the first second, rather than after ~8 minutes
+# of misleading green. See tests/check_build_freshness.cmake.
+add_test(NAME build_freshness
+         COMMAND ${CMAKE_COMMAND}
+                 -DBUILD_DIR=${CMAKE_BINARY_DIR}
+                 -DEXE_DIR=${CMAKE_BINARY_DIR}/tests
+                 -P ${CMAKE_CURRENT_SOURCE_DIR}/check_build_freshness.cmake)
 
 # ---------------------------------------------------------------------------
 # Pure-logic tests (no SDL, no GL, no audio)
@@ -1579,3 +1607,14 @@ set_tests_properties(screenshot_slash_texture PROPERTIES TIMEOUT 60
 fn_add_game_test(test_superfruit_finale_tick test_superfruit_finale_tick.cpp)
 add_test(NAME superfruit_finale_tick COMMAND test_superfruit_finale_tick)
 set_tests_properties(superfruit_finale_tick PROPERTIES TIMEOUT 120)
+
+# ---------------------------------------------------------------------------
+# build_freshness input: the set of test executables that link fruit-ninja-game.
+#
+# Written at the END so every fn_add_game_test() above has registered. The gate
+# checks these against the game library's timestamp; see
+# tests/check_build_freshness.cmake for why that comparison and not "newer than
+# the newest source".
+get_property(_fn_game_linked GLOBAL PROPERTY FN_GAME_LINKED_TEST_EXES)
+string(REPLACE ";" "\n" _fn_game_linked_lines "${_fn_game_linked}")
+file(WRITE "${CMAKE_BINARY_DIR}/tests/game_linked_tests.txt" "${_fn_game_linked_lines}\n")
