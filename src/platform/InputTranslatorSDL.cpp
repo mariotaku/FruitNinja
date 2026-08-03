@@ -74,13 +74,11 @@ void InputTranslatorSDL::Init() {
 
         // DIFFERS: original = "TouchReleased_%d" (Data/input/input.txt lines 49-64,
         //   bound to Touch<i+1> action "up"). The name "TouchUp_%d" appears NOWHERE
-        //   in the binary or its data. Both the producer here and the consumer
-        //   (SlashEntity::RegisterInputCallbacks) use the same invented spelling, so
-        //   the port's hash-matched m_bindings dispatch works -- but the moment
-        //   InputManager::LoadConfigFile @0x002442fc is ported, mappers are built
-        //   from input.txt and NO "TouchUp_%d" mapper will exist, so the release
-        //   handler silently unbinds. Rename BOTH sides to "TouchReleased_%d" as
-        //   part of that change, not before (renaming one side alone breaks release).
+        //   in the binary or its data. Nothing in the game binds it any more -- the
+        //   blade has no release handler (v1.6.1 registers no per-finger release
+        //   callback at all), so these events are emitted and dropped. Kept only
+        //   because tests still pin the release edge on this hash. Rename to
+        //   "TouchReleased_%d" when InputManager::LoadConfigFile @0x002442fc lands.
         sprintf(buf, "TouchUp_%d", i);
         hashTouchUp[i] = StringHash(buf);
     }
@@ -639,12 +637,11 @@ void InputTranslatorSDL::DispatchForSimTick() {
     Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
 
     // Port specific: settings modal captures input -- don't feed the slice
-    // blade (SlashEntity's TouchDown_N/TouchMove_XN/YN/TouchUp_N handlers)
-    // while it's open. See HUD::SetInputModal (src/hud/HUD.h). This is the
-    // actual per-finger dispatch site to InputManager (SlashEntity binds its
-    // callbacks directly to these hashes); GameTaskInput.cpp's global
-    // PointerDownCallback/PointerMoveCallback are no-op pass-throughs on
-    // this port and don't drive the blade. Null out mgr rather than early-
+    // blade (TouchDown_N / TouchMove_XN / TouchMove_YN) while it's open. See
+    // HUD::SetInputModal (src/hud/HUD.h). This is the per-finger dispatch site
+    // to InputManager; GameTaskInput.cpp's TouchDownCallback @0x001cbf18 and
+    // PointerMoveCallback @0x001cbfcc are the handlers on the far side and they
+    // are what forward each event to g_pSlashEntities[n]. Null out mgr rather than early-
     // returning so the Touch ring buffer still drains this tick (below) and
     // prevActive/pending bookkeeping stays correct -- otherwise events queue
     // up while the modal is open and burst-apply once it closes.
@@ -674,19 +671,17 @@ void InputTranslatorSDL::DispatchForSimTick() {
         bool wasActive = prevActive[ch];
         int  phase     = (slot >= 0) ? touch.states1[slot].phase : 1;
 
-        // v1.6.1 TouchDownCallback @0x001cbf18 -> InputSink::TouchDown: the
-        // binary populates game_work.m_FingerSpawnPos[slot] from the touch
-        // event on press and refreshes .x/.y while held. TouchDownCallback is
-        // stubbed as a no-op pass-through (GameTaskInput.cpp) and InputSink is
-        // unported (GameInit.cpp TODO), so nothing was ever writing this field
-        // -- HUD widgets (UiCheckbox/UiSlider/UiDropdown, CheckBox/SliderControl/
-        // ComboBox/VerticalScroller) read game_work.m_FingerSpawnPos[slot] via
-        // PollTouch and always saw (0,0,0). Populate it here from the already-
-        // drained Touch state (the real position source) instead of reviving
-        // the InputSink call graph. Index by `slot` (Touch::states1 index),
-        // matching what TouchInRegion/IsTouchDown/the widgets themselves use --
-        // NOT `ch` (extId-1), since ___UpdateInternal's rotating-cursor slot
-        // claim means slot != ch in general.
+        // DIFFERS: original writes game_work.m_FingerSpawnPos from the touch
+        //   callbacks themselves -- TouchDownCallback @0x001cbf18 stamps .z and
+        //   PointerMoveCallback @0x001cbfcc stores .x/.y, both indexed by the
+        //   ACTION CHANNEL. Those two are ported now and do exactly that. This
+        //   write stays anyway, because the port's action channel is extId-1
+        //   while the binary's is the Mortar::Touch::states1 SLOT index (see
+        //   Touch::SendIndividualTouchCallbacks @0x00242bc4), and every UI widget
+        //   (UiCheckbox/UiSlider/UiDropdown, CheckBox/SliderControl/ComboBox/
+        //   VerticalScroller) reads m_FingerSpawnPos at the slot TouchInRegion
+        //   handed it. Drop this block once DispatchForSimTick dispatches per
+        //   states1 slot -- then channel == slot and the callbacks cover it.
         // .z is the spawn-anim age counter, independently owned and decremented
         // by GameInit.cpp's per-frame loop (2 -> 0 -> -1); only stamp it on the
         // press edge (mirroring the binary's fresh-spawn write) and leave it

@@ -81,30 +81,24 @@ void InputManager::Update(float dt) {
 // nothing — hence the port's InputDeviceBinding list stands in. Porting this also
 // needs InputManager::ParseAction and InputManager::ParseKey.
 //
-// BLOCKER (do not attempt LoadConfigFile alone -- it will silently kill input):
+// One-callback-per-hash constraint (satisfied as of the blade-input rework):
 // InputDevice::RegisterInputCallback @0x002759f4 walks m_ActionMappers and calls
 // InputActionMapper::SetCallback on every mapper whose m_ActionHash matches.
 // SetCallback OVERWRITES the mapper's single 36-byte Delegate1 -- one mapper holds
-// exactly ONE callback, there is no append. The port currently relies on the
-// m_bindings LIST holding several handlers per hash, and registers TWICE on the
-// same hashes from two places:
-//   TouchMove_X<i>/Y<i> — GameTaskInitInput binds PointerMoveCallback;
-//                          SlashEntity::Init binds SlashEntity::TouchMoveX/Y
-//   TouchDown_<i>       — GameTaskInitInput binds TouchDownCallback;
-//                          SlashEntity::Init binds SlashEntity::TouchDown
-// With faithful overwrite semantics whichever registers LAST silently wins and the
-// other handler is lost. SlashEntity::RegisterInputCallbacks is itself port-invented
-// (its whole body is `#if !defined(__bada__)`): in the binary the blade is driven
-// indirectly, PointerMoveCallback @0x001cbfcc dispatching to
-// SlashEntity::TouchMoveX/Y(inputEnts[n], ev) over the 16 pooled type-3 entities
-// GameTaskInitInput creates via ActorManager::Add(3). The port creates none of those
-// (EntityFactory returns nullptr for type 3), so that indirection does not exist here.
-// Additionally SlashEntity binds "TouchUp_<i>", which input.txt does NOT declare
-// (it is "TouchReleased_<i>") -- so under mapper dispatch the blade would never release.
-// Landing the mapper path therefore requires, in the same change: the type-3 pooled
-// input entities, PointerMoveCallback's per-finger half (key codes 0x99..0xb8),
-// a real TouchDownCallback @0x001cbf18 plus a TouchReleased dispatcher, and deleting
-// SlashEntity::RegisterInputCallbacks.
+// exactly ONE callback, there is no append, so a hash with two port-side handlers
+// would silently lose one under the mapper path. The blade used to be such a case
+// (GameTaskInitInput and SlashEntity::Init both bound TouchDown_<i> /
+// TouchMove_X<i> / TouchMove_Y<i>). It no longer is: GameTaskInitInput is the sole
+// registrar, and its TouchDownCallback @0x001cbf18 / PointerMoveCallback
+// @0x001cbfcc dispatch into g_pSlashEntities[n] the way the binary does.
+//
+// What still blocks the swap:
+//   * The action names. The port's translators emit "TouchUp_<i>", which
+//     input.txt does not declare (it is "TouchReleased_<i>", and v1.6.1 binds no
+//     callback to it at all). Rename translator-side when this lands.
+//   * InputEvent's port-only side channel (actionHash, x, y) and the m_bindings
+//     list itself -- see the DIFFERS in InputEvent.h and InputDevice.h.
+//   * InputManager::ParseAction and InputManager::ParseKey must be live.
 int InputManager::LoadConfigFile(const char* path) {
     (void)path;
     // Defunct: input config file — no-op stub; v1.6.1 Mortar::InputManager::LoadConfigFile @ 0x002442fc

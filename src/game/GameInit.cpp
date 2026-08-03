@@ -279,13 +279,10 @@ void GameInit(unsigned long) {
     // SliceEffect list + pool are owned by Fruit TU (s_slices + s_pool).
     // Created in Fruit::LoadFruitModels (v1.6.1 @0x001e10c4). No explicit init here.
 
-    // Per-finger SlashEntity array (binary: allocated by GameTaskInitInput)
-    for (int i = 0; i < 16; ++i) {
-        if (!g_pSlashEntities[i]) {
-            g_pSlashEntities[i] = static_cast<SlashEntity*>(game->actorManager->Add(3, true));
-            g_pSlashEntities[i]->Init(i);
-        }
-    }
+    // The 16 per-finger SlashEntities are allocated by GameTaskInitInput above
+    // (step 13), exactly as the binary does -- the port used to allocate a
+    // SECOND set of 16 here, which ActorManager then updated and drew alongside
+    // the ones the touch callbacks actually drive. Only the alias is left.
     g_pSlashEntity = g_pSlashEntities[0];
 
     // Re-apply equipped blade now that SlashEntities exist

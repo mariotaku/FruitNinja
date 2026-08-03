@@ -1,25 +1,39 @@
 #ifndef FN_GAME_TASK_INPUT_H
 #define FN_GAME_TASK_INPUT_H
 
-// GameTaskInitInput -- free function matching binary 0x00169670 (357 lines).
+// GameTaskInitInput -- v1.6.1 GameTaskInitInput @ 0x001cae0c (thunk @ 0x0011512c).
 //
-// Sets up per-session input bindings:
-//   - InputManager::LoadConfigFile
-//   - 16-slot rotated touch region loop: Mortar::ActorManager::Add(3, true) per slot,
-//     Mortar::Entity::Init with zone position, InputManager::RegisterInputCallback x3
-//     per slot (touch/swipe/move handlers, "touchN"/"swipeN"/"moveN").
-//   - 7 global input callbacks (keys, accelerometer, etc.)
+// Sets up per-session input bindings, in this order:
+//   - InputManager::LoadConfigFile("Input/Input.txt")   (Defunct stub in the port)
+//   - 16-slot loop: zero game_work.m_FingerSpawnPos[i], allocate one pooled
+//     type-3 entity (SlashEntity) via Mortar::ActorManager::Add(3, true) into
+//     g_pSlashEntities[i], Init it, then RegisterInputCallback x3 --
+//     "TouchMove_X<i>" and "TouchMove_Y<i>" -> PointerMoveCallback,
+//     "TouchDown_<i>" -> TouchDownCallback. "TouchReleased_<i>" is formatted and
+//     then dropped: v1.6.1 binds NO per-finger release callback.
+//   - 6 global named callbacks: PointerMove, PointerPressed, PointerReleased,
+//     PointerPressedX, RegressMenu, ShowPauseMenu.
 //
-// Stored results: per-slot Mortar::Entity ptrs -> g_TaskState +0x24..+0x60
-//                 per-slot Vec3 zones  -> g_TaskState-adjacent InputZones array
-//                 callback table       -> InputManager singleton.
-//
-// TODO: full body.
-// TODO: multi-touch / multi-player input zones (16-slot loop body).
+// This is the ONLY place the blade is wired to input. SlashEntity does not
+// subscribe to the InputManager itself.
 
 void GameTaskInitInput();
 
 struct InputEvent;
+
+// v1.6.1 TouchDownCallback @ 0x001cbf18 -- handler for "TouchDown_<i>". Offers
+// the press to game_work.m_pActiveTouchSink first, else runs
+// g_pSlashEntities[n]->TouchDown, then stamps m_FingerSpawnPos[n].z (2 = press
+// edge, 1 = held). Fires EVERY tick a finger is held, not just on the edge.
+// n comes from the button key id at InputEvent +0x08 (m_KeyId - 0x89).
+bool TouchDownCallback(InputEvent* ev);
+
+// v1.6.1 PointerMoveCallback @ 0x001cbfcc -- handler for "PointerMove" AND for
+// every "TouchMove_X<i>" / "TouchMove_Y<i>". Branches on the axis key code at
+// InputEvent +0x06: 0x74/0x75 write game_work.worldPos, 0x99..0xa8 and
+// 0xa9..0xb8 drive the sink or g_pSlashEntities[n] and store
+// m_FingerSpawnPos[n].x / .y.
+bool PointerMoveCallback(InputEvent* ev);
 
 // v1.6.1 RegressMenuCallback @ 0x001ca350 -- the "RegressMenu" action handler
 // (back-key input). Unconditionally sets game_work.m_bFrameDirty (see

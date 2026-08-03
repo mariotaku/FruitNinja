@@ -22,15 +22,18 @@
 // SDL event flow: InputTranslatorSDL calls __UpdateInternal per event.
 // Once per frame InputManager::Update broadcasts Update(dt) -> Touch::Update(dt).
 //
-// Clarified 2026-05-18: 0x002772d4+0xa0 is a SEPARATE 16-slot table in BSS
-// used ONLY by free helpers IsTouchDown @0x001ca69c and TouchInRegion
-// @0x001ca754. Entries are {float x@+0xa0, y@+0xa4, phase@+0xa8}, stride 12,
-// indexed 0..15. Phase: 1.0=held, 2.0=press-edge, <=0=up.
-// The BSS table is written by a legacy Mortar input layer that has zero
-// observable callers in this binary (Bada caps point ids at 8 per
-// GlesForm::OnTouch* @ 0x0018334c). Mortar::Touch::states1 is the only live
-// source, and port's IsTouchDown/TouchInRegion correctly read it. The
-// 8-slot vs 16-slot cap is binary-faithful, not a port shortcut.
+// The 16-slot table the free helpers IsTouchDown @0x001ca69c and TouchInRegion
+// @0x001ca754 read is game_work.m_FingerSpawnPos (GameWork +0xa4, stride 12:
+// x@+0xa4, y@+0xa8, z@+0xac). There is no separate BSS table -- IsTouchDown does
+// `vldr.32 s15,[r0,#0xac]` and TouchInRegion gates on [r2,#0xac] then reads
+// [r2,#0xa4]/[r2,#0xa8]. z: 2.0=press-edge, 1.0=held, <=0=up.
+// Its writers are the per-finger callbacks in GameTaskInput.cpp
+// (TouchDownCallback @0x001cbf18 stamps z, PointerMoveCallback @0x001cbfcc
+// stores x/y).
+// The port's IsTouchDown/TouchInRegion instead read Mortar::Touch::states1,
+// which carries the same phase information at 8 slots rather than 16. Bada caps
+// point ids at 8 anyway (GlesForm::OnTouch* @ 0x0018334c), so the 8-slot cap is
+// binary-faithful, not a port shortcut.
 
 #include <cstdint>
 

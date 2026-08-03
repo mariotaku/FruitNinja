@@ -9,17 +9,19 @@
 #include "screens/PauseScreen.h"
 #include <cstdio>
 #include "game/GameWork.h"
+#include "entities/SlashEntity.h"
+#include "input/InputSink.h"
 
 // ASM-spec v1.6.1 GameTaskInitInput @ 0x001cae0c (thunk @ 0x0011512c): pending re-verification
 
-// 16-slot touch zone position table.
-// Binary: g_TaskState+0xa0..0xa8 region, 12-byte stride (Vec3).
-// GOT[+0x77cc] supplies the zero-vec3 default used in the loop.
-static _Vector3<float> g_TouchZoneTable[16];
-
-// 16-slot entity pointer table — one Mortar::ActorManager type-3 entity per touch zone.
-// Binary: stored at g_TaskState+0x24..+0x60 (4 bytes each, 16 entries).
-static Mortar::Entity* g_TouchEntities[16];
+// The 16-slot finger position table this file zeroes and then feeds is
+// game_work.m_FingerSpawnPos (GameWork +0xa4, 12-byte Vec3 stride, x@+0xa4
+// y@+0xa8 z@+0xac). There is no second table: IsTouchDown @0x001ca69c reads
+// +0xac and TouchInRegion @0x001ca754 gates on +0xac then reads +0xa4/+0xa8.
+//
+// The 16 pooled type-3 entities the loop allocates are the port's
+// g_pSlashEntities[] -- the binary indexes the same array as inputEnts[n] from
+// TouchDownCallback @0x001cbf18 and PointerMoveCallback @0x001cbfcc.
 
 // Forward declarations for input callbacks (bodies below).
 bool PointerMoveCallback(InputEvent* ev);
@@ -34,8 +36,6 @@ bool ShowPauseMenuCallback(InputEvent* ev);
 // v1.6.1 TouchDownCallback @ 0x001cbf18 dispatches InputSink::TouchDown /
 // SlashEntity::TouchDown for key codes 0x89+i (distinct from PointerDownCallback
 // at 0x001ca2bc which handles global "PointerPressed").
-// TODO: v1.6.1 0x001cbf18 (TouchDownCallback) -- port full body once
-// InputSink/key-code-0x89+i dispatch is RE'd.
 bool TouchDownCallback(InputEvent* ev);
 
 
@@ -55,24 +55,29 @@ void GameTaskInitInput() {
 
     // --- Section B: 16-zone loop, v1.6.1 GameTaskInitInput @ 0x001cae0c ---
     //
-    // DIFFERS: binary creates 16 pooled SlashEntity instances here (one per
-    //   touch zone). Port owns SlashEntity as a singleton (g_pSlashEntity)
-    //   and EntityFactory returns nullptr for type 3, so Add(3) returns
-    //   nullptr. Skip the per-zone Mortar::Entity creation + Init for now and leave
-    //   g_TouchEntities[i] = nullptr; PointerMoveCallback dispatch must
-    //   null-check downstream. Full fix requires SlashEntity to be poolable
-    //   (R5+) or a dedicated TouchZoneEntity stub.
+    // Per slot: zero the finger position, allocate one pooled type-3 entity
+    // (EntityFactory case 3 -> new SlashEntity) through ActorManager::Add(3,
+    // true), Init it at that zero position, then register the three per-finger
+    // action callbacks. Every touch reaches a blade through those callbacks --
+    // SlashEntity does not subscribe to the InputManager itself, in the binary
+    // or here.
+    //
+    // Only slots 0..7 are ever driven in v1.6.1 (Touch::SendIndividualTouchCallbacks
+    // @0x00242bc4 walks 8 states1 slots). Slots 8..15 are allocated and
+    // registered and then never fire -- keep them, they are binary-faithful.
     _Vector3<float> defaultPos(0.0f, 0.0f, 0.0f);  // GOT[+0x77cc]
     for (int i = 0; i < 16; ++i) {
-        g_TouchZoneTable[i] = defaultPos;
+        game_work.m_FingerSpawnPos[i] = defaultPos;
 
-        Mortar::Entity* e = Mortar::ActorManager::GetInstance()->Add(3, true);
-        g_TouchEntities[i] = e;
+        SlashEntity* e = static_cast<SlashEntity*>(
+            Mortar::ActorManager::GetInstance()->Add(3, true));
+        g_pSlashEntities[i] = e;
 
-        _Vector3<float> initPos = defaultPos;
-        // Binary: Mortar::Entity::vtable[+0x08] called as (nullptr, 0, &initPos).
-        // Port-specific null-guard: skip Init when factory refused type 3.
-        if (e) e->Init(nullptr, 0, &initPos);
+        // Binary: Mortar::Entity::vtable[+0x08] called as (nullptr, 0, &initPos)
+        // with initPos = the same zero vec3. The port wrapper stamps the finger
+        // index first (needed by the FN::g_MotionMode pointer-channel gate) and
+        // then makes that 3-arg call; SlashEntity::Init ignores all three args.
+        e->Init(i);
 
         char nameDown[16], nameMove[16], nameUp[20];
         snprintf(nameDown, sizeof(nameDown), "TouchDown_%d", i);
@@ -119,11 +124,7 @@ void GameTaskInitInput() {
 }
 
 // --- Input callbacks ---
-// PointerMoveCallback / PointerDownCallback / PointerUpCallback /
-// PointerDownXboxCallback below were re-decompiled against v1.6.1.
-// TODO: v1.6.1 0x001cbf18 (TouchDownCallback) -- body still not re-decompiled
-// against v1.6.1; re-verify before trusting the pass-through stub at the bottom
-// of this file.
+// All of these were re-decompiled against v1.6.1.
 
 // ASM-spec v1.6.1 PointerMoveCallback @ 0x001cbfcc:
 //   uint  kc  = ev->m_KeyCode;          // binary InputEvent +0x06 (ushort)
@@ -144,42 +145,79 @@ void GameTaskInitInput() {
 //
 // Registered on BOTH "PointerMove" (the global pointer, keycodes 0x74/0x75) and
 // the per-finger "TouchMove_X<i>"/"TouchMove_Y<i>" hashes -- one function, three
-// keycode ranges.
+// keycode ranges. The two per-finger ranges are tested independently (NOT
+// else-if); they are disjoint, so at most one fires.
 //
-// DIFFERS: the per-finger half is not reproduced here. The port binds
-//   SlashEntity::TouchMoveX/Y directly to the TouchMove_X<i>/Y<i> hashes in
-//   SlashEntity::Init, and InputTranslatorSDL::DispatchForSimTick writes
-//   game_work.m_FingerSpawnPos[] from the drained Mortar::Touch state. The
-//   per-finger dispatch stamps m_KeyCode with TouchAxisX/Y<i> (0x99..0xb8), so
-//   neither MouseAxis branch below fires on that path.
+// DIFFERS: original = px/py re-centred from raw top-left Y-down device pixels
+//   (px = v - W/2, py = H/2 - v, dimensions from DisplayManager vtable +0x40)
+//   (v1.6.1 PointerMoveCallback @0x001cbfcc), using ev->m_Value unchanged
+//   because the port already re-centres and flips Y one layer earlier, in
+//   Layout::TouchToGame (see InputTranslatorSDL::TransformTouchNormalized)
+//   before the value ever reaches Mortar::Touch. Exactly one side does the
+//   centring -- applying it here as well would double-transform every touch.
 //
-// DIFFERS: the binary re-centres the raw device pixel coordinate here
-//   (px = v - W/2, py = H/2 - v, from GlesForm's top-left Y-down 480x320
-//   space). The port's touch coordinates are already centred and Y-up by the
-//   time they reach Mortar::Touch (Layout::TouchToGame -- see
-//   InputTranslatorSDL::TransformTouchNormalized), so re-applying the centring
-//   would double-transform. The value is assigned straight through.
+// KNOWN PORT DIVERGENCE (affects this function and TouchDownCallback below):
+//   `n` here is the ACTION CHANNEL. In the binary that is also the
+//   Mortar::Touch::states1 SLOT index, because Touch::SendIndividualTouchCallbacks
+//   @0x00242bc4 walks states1 and derives 0x89+slot / 0x99+slot / 0xa9+slot from
+//   the slot it is standing on. The port's InputTranslatorSDL::DispatchForSimTick
+//   instead derives the channel from extId-1, and ___UpdateInternal's rotating
+//   free-slot claim means slot != extId-1 in general. So m_FingerSpawnPos ends up
+//   with two writers at two indices for the same finger: the translator writes
+//   [slot] (which every UI widget reads, via the slot TouchInRegion returns) and
+//   these callbacks write [channel]. Fixing this properly means making the
+//   translator dispatch per states1 slot, as the binary does -- then the
+//   translator's own m_FingerSpawnPos write becomes redundant and can go.
 //
-// MUST return false. Unlike the binary -- where this function IS the per-finger
-// TouchMoveX/Y dispatcher and returning 1 is correct -- the port has
-// SlashEntity::TouchMoveX/Y registered on the same TouchMove_X<i>/Y<i> hashes,
-// AFTER this one. InputDeviceBada::DispatchEvent stops the chain on a true
-// return, so returning true here consumes the move event and kills slicing
-// outright.
+// Returns true (binary returns 1). Safe now that GameTaskInitInput is the only
+// registrar for these hashes: SlashEntity no longer binds itself to
+// TouchMove_X<i>/Y<i>, so InputDeviceBada::DispatchEvent's stop-on-true has no
+// second handler left to starve.
 bool PointerMoveCallback(InputEvent* ev) {
     if (!ev) return false;
 
     // Binary InputEvent +0x08 -- the single axis-value word. See
     // InputDevice::AxisEvent @0x0027582c and the emitter in InputDeviceBada.cpp.
-    const float value = ev->m_Value;
+    const float px = ev->m_Value;
+    const float py = ev->m_Value;
 
-    if (ev->m_KeyCode == INPUT_KEY_MOUSEAXISX) {
-        game_work.worldPos.x = value;
-    } else if (ev->m_KeyCode == INPUT_KEY_MOUSEAXISY) {
-        game_work.worldPos.y = value;
+    const uint16_t kc = ev->m_KeyCode;
+
+    if (kc == INPUT_KEY_MOUSEAXISX) {
+        game_work.worldPos.x = px;
+    } else if (kc == INPUT_KEY_MOUSEAXISY) {
+        game_work.worldPos.y = py;
     }
 
-    return false;  // see the MUST-return-false note above
+    Mortar::InputSink* sink = game_work.m_pActiveTouchSink;
+
+    // TouchAxisX1..16 (0x99..0xa8).
+    unsigned int n = (unsigned int)(uint16_t)(kc - INPUT_KEY_TOUCHAXISX1);
+    if (n < 16) {
+        if (sink) {
+            sink->TouchMoveX(ev, &game_work.m_FingerSpawnPos[n]);
+        } else {
+            g_pSlashEntities[n]->TouchMoveX(ev);
+        }
+        game_work.m_FingerSpawnPos[kc - INPUT_KEY_TOUCHAXISX1].x = px;
+    }
+
+    // TouchAxisY1..16 (0xa9..0xb8). The store order really is asymmetric with
+    // the X block above: the binary stores BEFORE the sink call and AFTER the
+    // blade call, so the sink sees the fresh y and the blade does not. Do not
+    // "tidy" this into one store.
+    n = (unsigned int)(uint16_t)(kc - INPUT_KEY_TOUCHAXISY1);
+    if (n < 16) {
+        if (sink) {
+            game_work.m_FingerSpawnPos[n].y = py;
+            sink->TouchMoveY(ev, &game_work.m_FingerSpawnPos[n]);
+        } else {
+            g_pSlashEntities[n]->TouchMoveY(ev);
+            game_work.m_FingerSpawnPos[kc - INPUT_KEY_TOUCHAXISY1].y = py;
+        }
+    }
+
+    return true;
 }
 
 // ASM-spec v1.6.1 PointerDownCallback @ 0x001ca2bc -- 7 instructions:
@@ -222,9 +260,8 @@ bool PointerUpCallback(InputEvent* /*ev*/) {
 // ASM-spec v1.6.1 PointerDownXboxCallback @ 0x001cbec8: game_work from the GOT,
 // `strb r4,[r2,#0xa2]` / `strb r4,[r2,#0xa0]`, then
 // SlashEntity::TouchDown(inputEnts[ev->word1], ev) and `cpy r0,r4` (returns 1).
-// No Game::GetInstance, no null test. Port covers the TouchDown dispatch via the
-// per-finger SlashEntity callbacks bound in SlashEntity::Init, so only the
-// game_work writes remain here.
+// No Game::GetInstance, no null test. The blade dispatch is omitted here because
+// nothing ever raises this action (see below); only the game_work writes remain.
 //
 // DEAD IN v1.6.1 -- registered but never dispatched, and the port keeps it that
 // way. Data/input/input.txt binds `PointerPressedX: X360_A; down`, but
@@ -289,11 +326,42 @@ bool ShowPauseMenuCallback(InputEvent* ev) {
     return true;
 }
 
-// TouchDownCallback -- registered for "TouchDown_<i>" actions in the zone
-// loop. v1.6.1 TouchDownCallback @ 0x001cbf18 dispatches InputSink::TouchDown
-// / SlashEntity::TouchDown for key codes 0x89+i. Port covers this via
-// per-finger TouchDown_n callbacks bound in SlashEntity::Init directly --
-// so this global hook is a no-op pass-through.
-bool TouchDownCallback(InputEvent* /*ev*/) {
-    return false;  // pass-through; per-finger TouchDown_n handlers do the work
+// ASM-spec v1.6.1 TouchDownCallback @ 0x001cbf18 -- registered for
+// "TouchDown_<i>" in the zone loop above. The finger index comes from the BUTTON
+// key id at InputEvent +0x08 (m_KeyId, Touch1 = 0x89), not from the axis key
+// code at +0x06.
+//
+//   uint n = ev->m_KeyId - 0x89;
+//   if (n < 0x10) {
+//       if (!sink || !InputSink::TouchDown(sink, ev, &m_FingerSpawnPos[n]))
+//           SlashEntity::TouchDown(inputEnts[n], ev);
+//       float& z = m_FingerSpawnPos[n].z;
+//       z = (z < 0.0f) ? 2.0f : 1.0f;
+//   }
+//   return 1;
+//
+// The sink gets first refusal and the blade runs only when the sink declines
+// (returns 0). The z stamp happens either way -- z is the finger's age counter
+// that GameUpdate's loop ages down (2/1 -> 0 -> -1), so 2 means "press edge"
+// (previous value had already aged past 0) and 1 means "still held".
+//
+// This fires EVERY tick a finger is held, not just on the press edge: the
+// binary's ButtonPressed(Touch<n>, 2, ...) is emitted per poll from
+// Touch::SendIndividualTouchCallbacks @0x00242bc4. SlashEntity::TouchDown
+// @0x001ea420 relies on that -- its unconditional tail call to UpdateTouchDown
+// is what feeds the trail, and its `m_BladeActive == 0` Reset gate is only
+// self-clearing because the call repeats every frame.
+bool TouchDownCallback(InputEvent* ev) {
+    if (!ev) return false;
+
+    unsigned int n = (unsigned int)(ev->m_KeyId - INPUT_KEY_TOUCH1);
+    if (n < 16) {
+        Mortar::InputSink* sink = game_work.m_pActiveTouchSink;
+        if (!sink || !sink->TouchDown(ev, &game_work.m_FingerSpawnPos[n])) {
+            g_pSlashEntities[ev->m_KeyId - INPUT_KEY_TOUCH1]->TouchDown(ev);
+        }
+        float& z = game_work.m_FingerSpawnPos[n].z;
+        z = (z < 0.0f) ? 2.0f : 1.0f;
+    }
+    return true;
 }

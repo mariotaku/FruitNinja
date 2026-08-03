@@ -147,10 +147,9 @@ public:
     // full 8-finger Mortar::Touch capacity (channels 0-7) unchanged; touch
     // overflow (channels 8-15) loses one slot (8-14 remain). Channel 15
     // still reaches a real blade: DispatchForSimTick's channel 8-15 loop
-    // dispatches TouchDown_15/TouchMove_X15/Y15/TouchUp_15 through
-    // InputManager exactly like channels 0-7, and
-    // SlashEntity::RegisterInputCallbacks subscribes g_pSlashEntities[15]
-    // (GameInit's 16-blade init loop) to those same hashes.
+    // dispatches TouchDown_15/TouchMove_X15/Y15 through InputManager exactly
+    // like channels 0-7, and GameTaskInitInput's TouchDownCallback /
+    // PointerMoveCallback route those to g_pSlashEntities[15].
     static const int MOUSE_CHANNEL = FN::POINTER_FINGER_CHANNEL;
 
     // Pre-computed action hashes for 16 touch channels

@@ -361,8 +361,11 @@ SlashEntity::~SlashEntity() {
     Release();
 }
 
-// Port-only convenience: stores fingerId, calls binary-faithful 3-arg Init,
-// then registers per-finger input callbacks.
+// Port-only convenience: stores fingerId, then makes the binary-faithful 3-arg
+// Init call. A SlashEntity never subscribes to the InputManager itself -- the
+// blade is driven indirectly from TouchDownCallback @0x001cbf18 and
+// PointerMoveCallback @0x001cbfcc, which index g_pSlashEntities[] (the binary's
+// inputEnts) by finger. See GameTaskInput.cpp.
 void SlashEntity::Init(int fingerId) {
 #if !defined(__bada__)
     m_FingerId = fingerId;
@@ -370,35 +373,6 @@ void SlashEntity::Init(int fingerId) {
     (void)fingerId;
 #endif
     Init(static_cast<void*>(nullptr), 0L, static_cast<_Vector3<float>*>(nullptr));
-    RegisterInputCallbacks();
-}
-
-void SlashEntity::RegisterInputCallbacks() {
-#if !defined(__bada__)
-    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
-    if (!mgr) return;
-
-    char buf[20];
-    snprintf(buf, sizeof(buf), "TouchDown_%d", m_FingerId);
-    mgr->RegisterInputCallback(StringHash(buf),
-        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchDown));
-
-    snprintf(buf, sizeof(buf), "TouchMove_X%d", m_FingerId);
-    mgr->RegisterInputCallback(StringHash(buf),
-        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveX));
-
-    snprintf(buf, sizeof(buf), "TouchMove_Y%d", m_FingerId);
-    mgr->RegisterInputCallback(StringHash(buf),
-        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchMoveY));
-
-    // DIFFERS: original = "TouchReleased_%d" (Data/input/input.txt lines 49-64).
-    //   "TouchUp_%d" is a port invention; see the matching note in
-    //   InputTranslatorSDL::Init. Rename both sides together when
-    //   InputManager::LoadConfigFile @0x002442fc lands.
-    snprintf(buf, sizeof(buf), "TouchUp_%d", m_FingerId);
-    mgr->RegisterInputCallback(StringHash(buf),
-        Mortar::Delegate1<bool, InputEvent*>::Make(this, &SlashEntity::TouchUp));
-#endif
 }
 
 // ASM-spec v1.6.1 SlashEntity::Release @0x001e79b0 (44 bytes of body, 5 blocks):
@@ -898,26 +872,6 @@ void SlashEntity::OnTouchActive(float x, float y) {
     // TouchDown event arrives so DrawSlice's latch sees an active fuse.
     // ASM-verified: 2026-06-16 v1.6.1 binary @ 0x1ea3d0 (asm-inspector)
     m_BladeActive |= 1;
-}
-
-void SlashEntity::OnTouchReleased() {
-    // Port specific: binary has no OnTouchReleased -- the blade latch (m_BladeActive)
-    // decays naturally via Update (1->2->0, sim rate) when dispatch stops delivering
-    // touches. This body only clears the trail emitter on the SDL FINGERUP edge to
-    // prevent the emitter streaming at a frozen lift position (PollHeldFingers edge case).
-#ifdef FN_DEBUG_TOUCH
-    LOG_DEBUG("SLASH", "OnTouchReleased[%d]: stroke ended bladeActive=%d pointCount=%d",
-             m_FingerId, (int)m_BladeActive, m_PointCount);
-#endif
-    // DIFFERS: original defers trail-emitter teardown to the next TouchDown
-    // via the !bladeActive branch in Update; port clears on the release edge
-    // so the emitter cannot stream at a frozen lift position when PollHeldFingers
-    // keeps the finger "held" (e.g. web MOUSEBUTTONUP without matching FINGERUP).
-    // Safe now that the &m_TrailEmitter ppRef fix keeps m_TrailEmitter valid.
-    if (m_TrailEmitter) {
-        PSPParticleManager::GetInstance().ClearEmitter(m_TrailEmitter);
-        m_TrailEmitter = nullptr;
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -2782,11 +2736,11 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
 #endif
 }
 
-// Port-only release handler.
-bool SlashEntity::TouchUp(InputEvent* /*event*/) {
-    OnTouchReleased();
-    return true;
-}
+// The binary has NO per-finger release handler: v1.6.1 registers no
+// "TouchReleased_<i>" callback at all (GameTaskInitInput @0x001cae0c builds the
+// name and drops it). A stroke ends purely because TouchDown stops arriving --
+// the m_BladeActive shift register in Update then decays 1 -> 2 -> 0 and the
+// !bladeActive branch there tears the trail emitter down.
 
 // v1.6.1 SlashEntity::PreDraw @0x001e8514 -- `for (i = 0; i < 8; ++i)
 // SlashEntityGhost::Draw(&s_ghosts[i]);` (stride 0x10). SlashEntityGhost is not ported

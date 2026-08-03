@@ -26,7 +26,8 @@
 //
 // Drives the REAL chain: SDL events -> InputTranslatorSDL::DrainSDLEvent ->
 // DispatchForSimTick -> Mortar::InputManager -> InputDeviceBada bindings ->
-// SlashEntity callbacks. SDL_INIT_EVENTS only: no GL, no window, no audio
+// GameTaskInput.cpp's TouchDownCallback / PointerMoveCallback ->
+// g_pSlashEntities[0]. SDL_INIT_EVENTS only: no GL, no window, no audio
 // (SlashEntity Touch paths never reach SoundManager; trail emitter is null).
 //
 // FIXTURE INVARIANT: the dispatch chain here stops at the Touch callbacks --
@@ -47,6 +48,7 @@
 #include "input/InputEvent.h"
 #include "util/StringHash.h"
 #include "entities/SlashEntity.h"
+#include "game/GameTaskInput.h"
 #include <SDL.h>
 #include <cstdio>
 #include <cstring>
@@ -146,6 +148,30 @@ static bool RecMoveY (InputEvent*) { ++g_cntMoveY;  return false; }
 static bool RecUp    (InputEvent*) { ++g_cntUp;     return false; }
 static void ResetCounters() { g_cntScreen = g_cntDown = g_cntMoveX = g_cntMoveY = g_cntUp = 0; }
 
+// ---------------------------------------------------------------------------
+// Wire one blade the way GameTaskInitInput @0x001cae0c does: the free callbacks
+// in GameTaskInput.cpp own the per-finger hashes and dispatch into
+// g_pSlashEntities[n]. SlashEntity itself subscribes to nothing.
+// (GameTaskInitInput is not callable here -- it needs the ActorManager and a
+// booted Game -- so the test does the same three registrations by hand.)
+// ---------------------------------------------------------------------------
+static void WireBlade(Mortar::InputManager& im, SlashEntity& se, int channel) {
+    se.Init(channel);
+    g_pSlashEntities[channel] = &se;
+
+    char buf[20];
+    sprintf(buf, "TouchMove_X%d", channel);
+    im.RegisterInputCallback(StringHash(buf), PointerMoveCallback);
+    sprintf(buf, "TouchMove_Y%d", channel);
+    im.RegisterInputCallback(StringHash(buf), PointerMoveCallback);
+    sprintf(buf, "TouchDown_%d", channel);
+    im.RegisterInputCallback(StringHash(buf), TouchDownCallback);
+}
+
+// The SlashEntity is a stack local in every test below -- drop the global
+// before it dies or the next test dispatches into a dangling pointer.
+static void UnwireBlade(int channel) { g_pSlashEntities[channel] = NULL; }
+
 // TAP: press frame emits TouchScreen + TouchDown only -- NO TouchMove.
 // SWIPE: motion ticks emit TouchMove.
 static void test_event_gate_press_vs_motion() {
@@ -225,7 +251,7 @@ static void test_taps_do_not_bridge_latch_clear() {
     InputTranslatorSDL tr;
     tr.Init();
     SlashEntity se;
-    se.Init(0);                              // finger 0; registers callbacks
+    WireBlade(im, se, 0);                    // finger 0
 
     CHECK(se.TestGetBombHitEdge() == 0);
 
@@ -255,6 +281,7 @@ static void test_taps_do_not_bridge_latch_clear() {
         CHECK_NEAR(se.GetHeadPos().y, se.GetTailPos().y, 0.01f);
     }
 
+    UnwireBlade(0);
     printf("  PASS\n");
 }
 
@@ -275,7 +302,7 @@ static void test_taps_do_not_bridge_bomb_latched() {
     InputTranslatorSDL tr;
     tr.Init();
     SlashEntity se;
-    se.Init(0);
+    WireBlade(im, se, 0);
 
     // Prime a real stroke (latch clear): press at P0=(0,0), drag to P1=(120,0).
     SDL_Event d = MakeFingerDown((SDL_FingerID)1, 0.5f, 0.5f);
@@ -312,6 +339,7 @@ static void test_taps_do_not_bridge_bomb_latched() {
     CHECK(se.TestGetBombHitEdge() == 1);     // latch untouched by taps
 
     printf("    after 3 taps: pointCount=%d (unchanged)\n", se.GetPointCount());
+    UnwireBlade(0);
     printf("  PASS\n");
 }
 
@@ -328,7 +356,7 @@ static void test_swipe_tracks_and_starts_at_press() {
     InputTranslatorSDL tr;
     tr.Init();
     SlashEntity se;
-    se.Init(0);
+    WireBlade(im, se, 0);
 
     // Pollute the blade's cached raw position with a prior tap far away:
     // D = (192, -128). The swipe below must NOT start there.
@@ -374,6 +402,7 @@ static void test_swipe_tracks_and_starts_at_press() {
     tr.DrainSDLEvent(u, NULL);
     tr.DispatchForSimTick();
 
+    UnwireBlade(0);
     printf("  PASS\n");
 }
 
@@ -391,7 +420,7 @@ static void test_fast_flick_same_tick_registers() {
     InputTranslatorSDL tr;
     tr.Init();
     SlashEntity se;
-    se.Init(0);
+    WireBlade(im, se, 0);
 
     SDL_Event d = MakeFingerDown((SDL_FingerID)9, 0.3f, 0.5f);   // (-96, 0)
     SDL_Event m = MakeFingerMotion((SDL_FingerID)9, 0.6f, 0.5f); // ( 48, 0)
@@ -410,6 +439,7 @@ static void test_fast_flick_same_tick_registers() {
     tr.DrainSDLEvent(u, NULL);
     tr.DispatchForSimTick();
 
+    UnwireBlade(0);
     printf("  PASS\n");
 }
 

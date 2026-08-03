@@ -86,8 +86,10 @@ public:
     static void LoadContent();
     static void ReleaseContent();
 
-    // Port-only convenience: stores fingerId, calls binary-faithful 3-arg Init,
-    // then registers per-finger input callbacks (done by GameTaskInitInput in binary).
+    // Port-only convenience: stores fingerId, then calls the binary-faithful
+    // 3-arg Init. A SlashEntity does NOT subscribe to the InputManager -- the
+    // blade is driven from GameTaskInput.cpp's TouchDownCallback /
+    // PointerMoveCallback, which index g_pSlashEntities[] by finger.
     void Init(int fingerId = 0);
     void Release() override;
 
@@ -407,9 +409,6 @@ private:
     // interpolating intermediate points along the movement delta.
     void OnTouchActive(float x, float y);
 
-    // Marks blade for deactivation; the trail fades via alpha decay in UpdatePoints.
-    void OnTouchReleased();
-
     // ASM-spec v1.6.1 SlashEntity::AddPoint @0x001e9918 -- appends one vertex pair
     // into the heap buffers. Binary demangled order/types: (center, dir, pressure), all
     // BY VALUE. Guards: IsNearZero(dir) || IsNearZero(m_BladeDir) -> return.
@@ -532,11 +531,9 @@ public:
     // trail builder, forwards to OnTouchActive.
     void UpdateTouchDown(InputEvent* event);
 
-    // Port-only: explicit touch-release handler (SDL FINGERUP/MOUSEBUTTONUP).
-    bool TouchUp(InputEvent* event);
-
-    // Port-helper for registering per-finger callbacks on InputManager.
-    void RegisterInputCallbacks();
+    // NB: there is deliberately no TouchUp / release handler. v1.6.1 registers
+    // no per-finger release callback at all; the stroke ends when TouchDown
+    // stops arriving and Update decays m_BladeActive.
 
     // Accessor for the file-scope global g_OnComboCancel event (binary GOT 0x332bd8).
     // Binary subscribe sites load [GOT,0x77f8] to get the event address; port uses this
