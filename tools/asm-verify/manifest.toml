@@ -699,19 +699,12 @@ mangled      = "_Z10SplitWordsPKcRSt6vectorISsSaISsEE"
 port_mangled = "_ZN11WaveManager10SplitWordsEPKcRSt6vectorISsSaISsEE"
 notes        = "binary free function; port made it a WaveManager static"
 
-# MenuButton::UpdatePieces(float) @0x0019a624 (260 B)
-#   port: MenuButton::UpdatePeices(float)
-[[symbol]]
-mangled      = "_ZN10MenuButton12UpdatePiecesEf"
-port_mangled = "_ZN10MenuButton12UpdatePeicesEf"
-notes        = "port spells it UpdatePeices"
-
-# MenuButton::DeletePieces() @0x0019cf84 (224 B)
-#   port: MenuButton::DeletePeices()
-[[symbol]]
-mangled      = "_ZN10MenuButton12DeletePiecesEv"
-port_mangled = "_ZN10MenuButton12DeletePeicesEv"
-notes        = "port spells it DeletePeices"
+# MenuButton::UpdatePieces(float) @0x0019a624 / DeletePieces() @0x0019cf84
+# -- NO ALIAS NEEDED ANY MORE. Both aliases spelled the port side "Peices",
+# a typo the port has since corrected (MenuButton.h:398/401 declare
+# UpdatePieces/DeletePieces). The port_mangled targets no longer existed, so
+# the entries were dead: discover-symbols fell back to same-name pairing with
+# a WARN. Same-name pairing is now EXACT for both. Do not re-add.
 
 # SuperFruitControl::Reset() @0x001bb52c (196 B)
 #   port: SuperFruitControl::ResetAll()
@@ -844,19 +837,14 @@ notes        = "real body is the dt-only overload; the two ColAABB* bounds are d
 # differs, param TYPE differs, or a template) but that a source read confirmed
 # is a genuine 1:1 pair. Reviewed individually -- do not widen the auto rule.
 
-# MainScreen::MainScreen() @0x0019811c (1884 B)
-#   port: MainScreen::MainScreen(Game&)
-[[symbol]]
-mangled      = "_ZN10MainScreenC1Ev"
-port_mangled = "_ZN10MainScreenC1ER4Game"
-notes        = "port ctor takes an UNUSED Game& ((void)g); binary is 0-arg and reaches the game_work global. Dropping the param in src/ is the real fix"
-
-# MainScreen::MainScreen() @0x00198878 (1884 B)
-#   port: MainScreen::MainScreen(Game&)
-[[symbol]]
-mangled      = "_ZN10MainScreenC2Ev"
-port_mangled = "_ZN10MainScreenC2ER4Game"
-notes        = "see C1"
+# MainScreen::MainScreen() @0x0019811c (C1) / @0x00198878 (C2)
+# -- NO ALIAS NEEDED ANY MORE. Both aliases pointed at MainScreen(Game&), the
+# port's old ctor with an UNUSED Game& parameter. The note on the old entry
+# ("dropping the param in src/ is the real fix") has since been done:
+# MainScreen.h:69 / MainScreen.cpp:145 declare a 0-arg ctor, matching the
+# binary, which reaches the game_work global. The port_mangled targets no
+# longer existed, so both entries were dead and fell back to same-name pairing
+# with a WARN. Same-name pairing is now EXACT. Do not re-add.
 
 # ListBox::ListBox(_Vector3<float>, _Vector3<float>, std::vector<std::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::basic_string<char, std::char_traits<char>, std::allocator<char> > > >&, __gnu_cxx::__normal_iterator<std::basic_string<char, std::char_traits<char>, std::allocator<char> >*, std::vector<std::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::basic_string<char, std::char_traits<char>, std::allocator<char> > > > >, unsigned char, unsigned short, unsigned short, unsigned short) @0x00194d18 (676 B)
 #   port: ListBox::ListBox(_Vector3<float>, _Vector3<float>, std::vector<std::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::basic_string<char, std::char_traits<char>, std::allocator<char> > > >&, std::basic_string<char, std::char_traits<char>, std::allocator<char> >*, unsigned char, unsigned short, unsigned short, unsigned short)
