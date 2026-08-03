@@ -7,8 +7,28 @@
 
 #include <cstring>
 
-// ASM-verified: 2026-07-15T09:12Z v1.6.1 FNHighscore::FNHighscore @ 0x00178d5c (asm-inspector)
-// Binary default ctor @ 0x00178d5c. Zeroes name/extra and fields 0x40..0x50.
+// ASM-spec v1.6.1 FNHighscore::FNHighscore @ 0x00178d5c: the whole body is 9
+// instructions --
+//   mov  r2,#0
+//   strb r2,[r0,#0x00]   // m_Name[0]     = 0  -- null terminator ONLY
+//   strb r2,[r0,#0x20]   // m_ExtraStr[0] = 0  -- null terminator ONLY
+//   str  r2,[r0,#0x40]   // m_NameHash
+//   str  r2,[r0,#0x48]   // m_Rank
+//   str  r2,[r0,#0x44]   // m_Score
+//   str  r2,[r0,#0x4c]   // m_UserData
+//   strb r2,[r0,#0x50]   // m_IsCurrentUser
+//   bx   lr
+// So the binary zeroes fields 0x40..0x50 (that part of the old comment was right)
+// but it does NOT clear m_Name[1..31] / m_ExtraStr[1..31], and never touches _pad.
+// The previous "(asm-inspector)" stamp claimed the strings were zeroed outright --
+// 9 instructions cannot clear 64 bytes. Demoted to ASM-spec: this is a
+// disassembly read, not a compile+diff.
+//
+// DIFFERS: original = null-terminator byte only (strb at +0x00 / +0x20); port
+// memsets both 32-byte arrays and zeroes _pad. The port is a strict superset --
+// every byte the binary writes gets the same value -- and the extra zeroing is
+// unobservable, since every reader treats m_Name/m_ExtraStr as NUL-terminated C
+// strings and so stops at index 0.
 FNHighscore::FNHighscore()
 {
     memset(m_Name,     0, sizeof(m_Name));

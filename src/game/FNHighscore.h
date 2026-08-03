@@ -6,8 +6,16 @@
 // Stride proved by 3 embedded copies at FruitFactLeaderboard+0xC8/+0x11C/+0x170
 // (diff = 0x54).
 //
+// Reachability: dead code in v1.6.1. The only caller of the default ctor is the
+// thunk @ 0x00115990, reached solely from the two FruitFactLeaderboard ctors
+// (0x00176980 / 0x00176d54) -- and those have zero call sites. FNHighscore is a
+// linked-but-unreferenced relic, kept per the stub-don't-skip policy.
+//
 // Binary ctors:
-//   Default ctor @ 0x00178d5c -- zeroes name, extra, and fields 0x40..0x50.
+//   Default ctor @ 0x00178d5c -- null-terminates m_Name[0]/m_ExtraStr[0] (one
+//     strb each, NOT a full clear of the 32-byte arrays) and zeroes the fields at
+//     0x40..0x50. Full body is 9 instructions; see FNHighscore.cpp for the
+//     listing and for the port's DIFFERS (it memsets both arrays).
 //   Param ctor   @ 0x00137e48 -- (char* name, unsigned long nameHash,
 //                                 int rank, int score, void* userData,
 //                                 char* extraStr)

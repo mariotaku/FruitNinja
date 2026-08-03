@@ -455,7 +455,7 @@ void AboutScreen::CreateBackButton()
 // -----------------------------------------------------------------------
 void AboutScreen::Update(float dt)
 {
-    // OFN button creation stub (defunct -- OpenFeint/GameCenter)
+    // Defunct: OpenFeint/GameCenter — no-op stub; v1.6.1 AboutScreen::Update @ 0x0015c350
     if (s_TexSensei.IsValid() && m_pOFNButton == nullptr) {
         (void)POS_OFN_BUTTON;
     }

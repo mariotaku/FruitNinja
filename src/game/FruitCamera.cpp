@@ -224,13 +224,27 @@ Mortar::Entity* FruitCamera::GetFollowEntity() {
 
 // Non-virtual (0x001ee124) — 4-type ortho dispatch.
 //
-// ASM-spec v1.6.1 FruitCamera::SetupPerspective @ 0x001ee124
-// UNVERIFIED: the stamp here is not supported by the instruction counts -- the
-// port compiles to 186 against the binary's 274, i.e. 32% short on a projection
-// setup. Two candidate causes, neither settled: (1) the port opens with an
-// early-out on m_bDirty (`ldrb [this,+0x108]`) that the binary appears not to
-// have; (2) the header above calls this a 4-type ortho dispatch, but the port
-// branches only PT_GENERIC vs everything-else. Settle both before re-stamping.
+// ASM-spec v1.6.1 SetupPerspective @ 0x001ee124 (body 0x001ee124..0x001ee53f,
+// 271 instructions; last function in FruitCamera.cpp before that file's
+// static-ctor @ 0x001ee56c).
+// The port compiles to 186 against the binary's ~274. Of the two candidate
+// causes previously listed, a disassembly read settles both:
+//   (1) REFUTED — the binary DOES have the m_bDirty early-out. At 0x001ee180:
+//       `ldrb r3,[r5,#0x108]; cmp r3,#0; bne 0x001ee194; cmp r10,#0;
+//        beq 0x001ee4f8`, i.e. exactly `if (!m_bDirty && !forceUpdate)`, with
+//       0x001ee4f8 as the cheap re-upload tail. Not the source of the delta.
+//   (2) CONFIRMED — this is the whole gap. The binary dispatches through a
+//       jump table at 0x001ee1d4 (`cmp r7,#4; addls pc,pc,r7,lsl #2`) with five
+//       entries resolving to THREE distinct bodies (0x001ee1f0, 0x001ee298,
+//       0x001ee3a4) plus a default. The port branches only PT_GENERIC vs
+//       everything-else, so it collapses two of the three arms.
+// Port the two missing arms before re-stamping.
+//
+// CAUTION: the binary has a SECOND, different function actually named
+// `FruitCamera::SetupPerspective` @ 0x00257aac. That one is a true perspective
+// setup (reads fovy/aspect/near/far at +0x11c/+0x120/+0x124/+0x128 and calls
+// 0x0010dd60); it is NOT this ortho dispatcher. Do not merge the two, and note
+// that asm-verify pairs this port body against 0x001ee124 by instruction count.
 void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
@@ -256,7 +270,10 @@ void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) 
     mm.SetupLookAt(eye, up, at);
     m_localToWorld = Matrix43::FromMatrix44(mm.GetViewStack().m_Current);
 
-    // ASM-verified: 2026-05-16 v1.6.1 binary @ 0x001810ac..0x001813f4 (re-analyst).
+    // ASM-spec v1.6.1 SetupPerspective @ 0x001ee4ac..0x001ee4b8 -- the shared
+    // ortho tail of the function above: two vldr.32 into s4/s5, r1=0, then
+    // bl 0x001129ac (= MatrixManager::SetupOrtho). All three dispatch arms
+    // converge here via `b 0x001ee4ac`.
     // DIFFERS: opt-in widescreen (Layout::HalfWidth); faithful 240 under __bada__ --
     // horizontal bounds widen with Layout::HalfWidth() when Layout::g_WideLayout is
     // on (== 240.0f, i.e. the original bounds, otherwise). Vertical stays +-160.
@@ -296,12 +313,16 @@ void FruitCamera::CreateCameraShake(_Vector3<float> impact, float intensity, flo
     m_ShakeIntensity = intensity;
 }
 
-// 0x00180ea0 — constants verified from literal pool at 0x00181068
+// v1.6.1 FruitCamera::UpdateShake @ 0x001edcc0 (body 0x001edcc0..0x001edf00).
+// Constants verified by value from the v1.6.1 literal pool at 0x001edf08.
+// (The old 0x00180ea0 / 0x00181068 citations were v1.5.1 residue — in v1.6.1
+// 0x00180ea0 falls inside FruitFactZenPage::Init. The pool moved 0x00181068 ->
+// 0x001edf08; the four floats kept their order and values.)
 void FruitCamera::UpdateShake(float dt) {
-    static const float LERP_FACTOR    = 0.2f;    // DAT_00181068
-    static const float SNAP_NEG       = -0.01f;  // DAT_0018106c
-    static const float SNAP_POS       = 0.01f;   // DAT_00181070
-    static const float DAMP_FACTOR    = 0.8f;    // DAT_00181074
+    static const float LERP_FACTOR    = 0.2f;    // DAT_001edf08
+    static const float SNAP_NEG       = -0.01f;  // DAT_001edf0c
+    static const float SNAP_POS       = 0.01f;   // DAT_001edf10
+    static const float DAMP_FACTOR    = 0.8f;    // DAT_001edf14
 
     if (m_ShakeIntensity <= 0.0f) {
         if (m_Target.x >= SNAP_NEG && m_Target.x <= SNAP_POS)
