@@ -158,14 +158,19 @@ static Mortar::SmartPtr<Mortar::Texture>       s_SplatTex;
 // SplatEntity::LoadContent. Kept for CleanUpSplat teardown-shape parity only.
 static Mortar::SmartPtr<Mortar::Texture>       s_SplatTexUnused;
 
-// Sized to cover the whole splat pool: DrawActiveSplats @0x001ece34 walks
-// s_PoolCount with no per-frame cap, and GameInit step 15 calls
-// SplatEntity::CreatePool(0x100). The buffer must therefore hold 256 * 6 verts.
-// TODO: v1.6.1 0x001ece34 (SplatEntity::DrawActiveSplats) -- the binary's own
-// vertex-array size is not RE'd; 256 is derived from the port's CreatePool arg,
-// not read from the image. Confirm and replace with the real constant.
-static const int MAX_SPLATS_PER_FRAME = 256;
-static QUADCUSTOMVERTEX s_SplatVerts[MAX_SPLATS_PER_FRAME * 6];
+// ASM-spec v1.6.1 SplatEntity::DrawSplat @0x001eb5d8 / SplatEntity::m_points @0x00332c1c:
+// the vertex buffer is a separate, independently-sized static from the pool count.
+// m_points is a fixed 110592-byte static array; DrawSplat writes 6 verts/splat at
+// stride 0xd8 (216 = 6 * 0x24, QUADCUSTOMVERTEX = 36 bytes) -> 110592 / 216 = 512
+// splats (3072 verts). This is baked in at link time, NOT sized by CreatePool's
+// runtime argument (256, confirmed at GameInit 0x001ce938: `mov r0,#0x100 / bl
+// SplatEntity::CreatePool`). Corroborated by BombBlast::m_points @0x003178a4, which
+// is the exact same 110592 bytes despite BombBlast owning a separate pool -- the
+// vertex-buffer capacity is a shared, class-independent constant decoupled from any
+// one class's CreatePool(count). DrawActiveSplats @0x001ece34's loop bound is
+// s_PoolCount (256), unrelated to this buffer's capacity (512).
+static const int SPLAT_VERT_BUFFER_CAPACITY = 512;
+static QUADCUSTOMVERTEX s_SplatVerts[SPLAT_VERT_BUFFER_CAPACITY * 6];
 
 // ---------------------------------------------------------------------
 // Helpers
