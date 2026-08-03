@@ -21,16 +21,27 @@
 //   TODO: v1.6.1 0x0021e7e4 (Colour::Colour(unsigned long)) -- port the
 //   packed union member + the unsigned-long ctor (inverse of PlatformColour).
 //
-//   Also unported: the empty user-declared ~Colour @0x0021eadc and the
-//   user-declared `Colour operator=(Colour const&)` @0x0011e064 (returns by
-//   VALUE, sret). Those make Colour non-POD in the binary, so it is passed
-//   and returned in memory, not in r0. See the report notes in Colour.cpp.
+//   Still unported: the user-declared `Colour operator=(Colour const&)`
+//   @0x0011e064, which returns by VALUE (sret). The empty ~Colour @0x0021eadc
+//   IS ported (below) -- it is what makes Colour non-trivial for the purposes
+//   of calls, so the port passes and returns it in memory like the binary.
 struct Colour {
     uint8_t b, g, r, a;
 
     Colour() : b(0), g(0), r(0), a(255) {}
     Colour(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
         : b(b), g(g), r(r), a(a) {}
+
+    // ASM-verified: 2026-08-03T13:40Z v1.6.1 Colour::~Colour @ 0x0021eadc (asm-inspector)
+    //   The binary's dtor is a bare `bx lr`, but it is USER-DECLARED, which
+    //   makes Colour non-trivial for the purposes of calls: every `Colour`
+    //   parameter goes by invisible reference and every `Colour` return uses
+    //   sret. Declaring it here is what puts the port on the same calling
+    //   convention. Measured over the 54 symbols that take Colour by value:
+    //   mean LCS 23.6% -> 30.8% (35 improved, 7 regressed, 6 flat); whole
+    //   program +0.17 points, MATCH 459 -> 461. Layout is unaffected --
+    //   sizeof stays 4 (assert at the bottom of this header).
+    ~Colour() {}
 
     // ASM-spec v1.6.1 Colour::PlatformColour @ 0x0021e7f8:
     //   builds a byte-swapped temp (tmp.b=r, tmp.g=g, tmp.r=b, tmp.a=a) and
@@ -129,5 +140,11 @@ public:
 //   reaches the main path and reads arr[count].
 //   No NaN test -- the binary has none. See Colour.cpp for why.
 Colour LerpColourFromArray(float t, Colour* arr, int count);
+
+#if defined(__bada__)
+// The empty ~Colour() changes the calling convention, never the layout: the
+// six BSS statics at 0x0034e2f4 sit exactly 4 bytes apart.
+static_assert(sizeof(Colour) == 4, "Colour sizeof mismatch (expected 4)");
+#endif
 
 #endif

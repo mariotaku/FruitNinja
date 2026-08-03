@@ -174,9 +174,10 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z11CoinArrivedP4Coin": {
-  "asm_hash": "68c9e5f4a64927cc",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Port inlines AddCoins (game_work[+0x20]+=delta; if>0 game_work[+0x24]+=delta) matching Coin.cpp:63 spec. Binary tail-calls AddCoins. Same semantics.",
+  "asm_hash": "0473c0a1ba9e3488",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port inlines AddCoins (game_work[+0x20]+=delta; if>0 game_work[+0x24]+=delta) matching Coin.cpp:63 spec. Binary tail-calls AddCoins. Same semantics.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row MATCH. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z11DrawCritHitv": {
@@ -286,9 +287,10 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z12SetMissCountii": {
-  "asm_hash": "de0936d2ffc28f46",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Port adds Game::GetInstance() null guard before strb game_work.missCount [+20]; binary writes unconditionally. Same offset +20. Defensive guard.",
+  "asm_hash": "b59d5026954418f5",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port adds Game::GetInstance() null guard before strb game_work.missCount [+20]; binary writes unconditionally. Same offset +20. Defensive guard.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row MATCH. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z12SplashUpdatefb": {
@@ -305,12 +307,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z13EndRetryLevelv": {
-  "asm_hash": "7700e84ec93eb7b3",
-  "decided_at": "2026-07-28T13:10Z",
-  "max_score": 45,
-  "reason": "needs asm-inspector compile pass. 37.7% LCS, 45-instr retry-teardown. Rationale coverage ~50%: two port-added singleton null guards (`ldr [got]; ldr [r]; cmp #0; popeq` and a `cmp #0` that predicates the whole first block to ...ne) that the binary does not have, plus if-conversion. UNEXPLAINED: the field cluster is written 12 bytes apart -- binary `str [+0x118]` + `vstr [+0x11C]`, port `str [+0x10C]` + `vstr [+0x110]` -- and the binary reads `ldrb [+0x174]` before its tail branch with no port counterpart. Offsets +0x11C/+0x120/+0x124/+0x128 DO match on both sides, so the shifted pair is either a real struct-offset bug or a different base register; the normalizer masks the base. Settle before shipping -- this runs on every level retry.",
-  "score": 28018,
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "a7deb520d067bcb2",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "needs asm-inspector compile pass. 37.7% LCS, 45-instr retry-teardown. Rationale coverage ~50%: two port-added singleton null guards (`ldr [got]; ldr [r]; cmp #0; popeq` and a `cmp #0` that predicates the whole first block to ...ne) that the binary does not have, plus if-conversion. UNEXPLAINED: the field cluster is written 12 bytes apart -- binary `str [+0x118]` + `vstr [+0x11C]`, port `str [+0x10",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] NOT VERIFIABLE IN THIS PASS -- the body moved under the Colour destructor change (#170) mid-slice. My reading was taken against the 03:43Z sweep (46p vs 45b, 54.3%); the post-change sweep is 42p vs 45b at 51.1% with a different asm_hash, so any rationale I wrote would describe superseded asm. What the older reading showed, for the next pass to re-check rather than inherit: the prior \"field cluster written 12 bytes apart\" claim (binary +0x118/+0x11C vs port +0x10C/+0x110) had already gone stale -- both sides wrote +284/+288/+292/+296 -- while three items looked open, the binary \"str [+280]\" stores with no port counterpart, the binary \"ldrb [+372]\" early return with no port counterpart, and a port-added singleton null guard surviving as \"cmp #0; mvnne; strne\" predication. Re-score after the next full sweep. This runs on every level retry.",
+  "verdict": "UNSURE"
  },
  "_Z13ParseGameModem": {
   "asm_hash": "7d3ef50b2081d26d",
@@ -333,12 +334,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_Z13SetupGameWorkv": {
-  "asm_hash": "72a677aca72abc1e",
-  "decided_at": "2026-07-28T13:10Z",
-  "max_score": 54,
-  "reason": "needs asm-inspector compile pass. 53.4% LCS, 54-instr game_work initialiser. Extracted the store-offset SETS from the diff; 21 of 24 offsets match exactly (0,6,16,28,32,36,40,44,48,52,140,356,360,368,372,400,404,424,436,440,444). BINARY-ONLY: strb +0x1A0, strb +0x1A1, strb +0x1A6. PORT-ONLY:   strb +0x198, strb +0x199, strb +0x1A2..+0x1A5, vstr +0x1B0. src/game/GameWork.h:161 itself asserts 'SetupGameWork zeroes 1a2..1a6', which the binary side of this diff does not show, and src/game/SetupGameWork.cpp writes +0x198/+0x199/+0x1A2..0x1A5 but never +0x1A0/+0x1A1/+0x1A6. So either the port's SetupGameWork field list or GameWork.h's P2P byte-cluster layout is off by one cluster. The diff cannot settle it because several stores in this function use a second base register (m_SaveData / +272) that the normalizer masks to the same GREG. Disassemble 0x0011c06c and pin the base of each strb.",
-  "score": 25137,
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "b69a8dc47c92d08b",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "needs asm-inspector compile pass. 53.4% LCS, 54-instr game_work initialiser. Extracted the store-offset SETS from the diff; 21 of 24 offsets match exactly (0,6,16,28,32,36,40,44,48,52,140,356,360,368,372,400,404,424,436,440,444). BINARY-ONLY: strb +0x1A0, strb +0x1A1, strb +0x1A6. PORT-ONLY:   strb +0x198, strb +0x199, strb +0x1A2..+0x1A5, vstr +0x1B0. src/game/GameWork.h:161 itself asserts 'Setup",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR RATIONALE WAS WRONG (stale). It claimed a strb cluster off by one -- binary-only +0x1A0/+0x1A1/+0x1A6 against port-only +0x198/+0x199/+0x1A2..+0x1A5 and a port-only vstr +0x1B0. On the fresh sweep the store-offset SETS are IDENTICAL: zero port-only offsets, and the single binary-only offset is a second \"ldr [+80]\" reload (register pressure), not a store. 57.4% LCS at 54p vs 54b with matching sizes. Nothing left to fix; GameWork.h:161 and src/game/SetupGameWork.cpp now agree with the binary.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_Z13UpdateBombHitf": {
   "asm_hash": "69b00e5a283d1c90",
@@ -479,15 +479,17 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z19PointerDownCallbackP10InputEvent": {
-  "asm_hash": "09d1c38c29050be1",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Port adds null guard before strb [#162]/[#160]; binary writes unconditionally. Defensive addition; no semantic change on non-null path.",
+  "asm_hash": "339e30a4401c359c",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port adds null guard before strb [#162]/[#160]; binary writes unconditionally. Defensive addition; no semantic change on non-null path.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row COSMETIC. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z19RegressMenuCallbackP10InputEvent": {
-  "asm_hash": "2d7e548c6cd49c40",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Port adds null guard before strb [#1552]; binary writes unconditionally. Defensive addition; no semantic difference in non-null path.",
+  "asm_hash": "74b957f5cf9b8b1b",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port adds null guard before strb [#1552]; binary writes unconditionally. Defensive addition; no semantic difference in non-null path.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row COSMETIC. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z19UserChoseGameCenteri": {
@@ -511,15 +513,17 @@
   "verdict": "ACCEPT-deferred"
  },
  "_Z20PrepareForLevelStartv": {
-  "asm_hash": "5070b5d19321fb02",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Binary has ldr [game_work,#32]; str [game_work,#40] copy BEFORE WaveManager::Reset -- entirely missing from port (src/game/StartupEffects.cpp:84). Pre-level field snapshot (likely coins or score init). Needs RE to identify game_work fields at +0x20/+0x28.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "7bdcb019aebc0101",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Binary has ldr [game_work,#32]; str [game_work,#40] copy BEFORE WaveManager::Reset -- entirely missing from port (src/game/StartupEffects.cpp:84). Pre-level field snapshot (likely coins or score init). Needs RE to identify game_work fields at +0x20/+0x28.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row MATCH. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_Z21ShowPauseMenuCallbackP10InputEvent": {
-  "asm_hash": "7e28bb92afcc476a",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Port adds null guard for game_work ptr; binary accesses directly. addeq r0,r0,#1 vs moveq r0,#1: functionally identical on beq path where byte is 0. Semantics preserved.",
+  "asm_hash": "e7a9f18565a7f7f3",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port adds null guard for game_work ptr; binary accesses directly. addeq r0,r0,#1 vs moveq r0,#1: functionally identical on beq path where byte is 0. Semantics preserved.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row COSMETIC. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z22RegisterSocialNetworksv": {
@@ -583,9 +587,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_Z8SetScoreii": {
-  "asm_hash": "6a50cf01d63d89d5",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Port adds Game::GetInstance() null guard before str game_work.currentScore [+24]; binary writes unconditionally. Same offset +24. Defensive guard.",
+  "asm_hash": "61d91991e6c7e0ea",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port adds Game::GetInstance() null guard before str game_work.currentScore [+24]; binary writes unconditionally. Same offset +24. Defensive guard.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row MATCH. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
   "verdict": "ACCEPT-cosmetic"
  },
  "_Z9PauseGamev": {
@@ -1540,10 +1545,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11CoinCounter5ResetEv": {
-  "asm_hash": "fdb428d5c90cbbe4",
-  "decided_at": "2026-06-21T00:00Z",
-  "reason": "CoinCounter::Reset writes VFP field at wrong offset. Binary uses [this,#140]=0x8C and [this,#144]=0x90 for field_0x8C/field_0x90; port generates [this,#142] and [this,#20]. Offset 0x20=32 is wrong (should be 0x8C=140). HUDControl3d base size discrepancy. src/hud/CoinCounter.h:41 documents Reset touches field_0x8C and field_0x90. Score 9904/13 (762x).",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "f23b1101e88c457f",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "CoinCounter::Reset writes VFP field at wrong offset. Binary uses [this,#140]=0x8C and [this,#144]=0x90 for field_0x8C/field_0x90; port generates [this,#142] and [this,#20]. Offset 0x20=32 is wrong (should be 0x8C=140). HUDControl3d base size discrepancy. src/hud/CoinCounter.h:41 documents Reset touches field_0x8C and field_0x90. Score 9904/13 (762x).",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR RATIONALE WAS WRONG (stale). It claimed \"port generates [this,#142] and [this,#20]; offset 0x20 is wrong\". On the fresh sweep \"vldr [+140]\" is COMMON and both sides store +140 and +144 -- the offsets agree. The remaining delta is if-conversion only: the binary predicates the clamp (\"vldrls [pool]\" / \"vmovge\"), the port branches (\"bpl\" plus two arms). One immaterial nit: the binary low-clamps on \"<= 0\" where src/hud/CoinCounter.cpp:49 writes \"< 0\"; both store 0.0f when the value is already 0.0f, so it is not observable.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11CoinCounter6UpdateEf": {
   "decided_at": "2026-06-14T05:55Z",
@@ -2516,12 +2522,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11SlashEntity7ReleaseEv": {
-  "asm_hash": "b9b5be8d25b45767",
-  "decided_at": "2026-08-01T13:40Z",
-  "max_score": 33,
-  "reason": "The teardown head matches exactly (null-check, release, zero at +92, +96, +60), so the container/singleton rationale covers most of the body -- but not the tail. The binary ends with `add GREG,GREG,GREG; mov GREG,#0; strb GREG,[GREG,#204]` -- a byte cleared in an INDEXED object (base + index) at +204 -- and the port has no counterpart store at all; it writes `mov GREG,#0; str GREG,[GREG,#88]` instead (different offset, different width). A `-` store with no `+` partner is a missing write, not scheduling. STAMP: downgrade src/entities/SlashEntity.cpp:368 from ASM-verified to ASM-spec. [re-triaged 2026-08-01, hash-anchored]",
-  "score": 17134,
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "9c6ec0835b30b5f7",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "The teardown head matches exactly (null-check, release, zero at +92, +96, +60), so the container/singleton rationale covers most of the body -- but not the tail. The binary ends with `add GREG,GREG,GREG; mov GREG,#0; strb GREG,[GREG,#204]` -- a byte cleared in an INDEXED object (base + index) at +204 -- and the port has no counterpart store at all; it writes `mov GREG,#0; str GREG,[GREG,#88]` inst",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] THE NAMED MISSING WRITE LANDED; RESIDUE UNEXPLAINED. Fixed: the prior finding was a binary tail \"add GREG,GREG,GREG; mov #0; strb [GREG,#204]\" (a byte cleared in an indexed object) with no port counterpart -- the port now emits \"mov #0; strb GREG,[GREG,GREG]\", the same indexed byte store, so 31f7c260/cdcd9244 closed it. The teardown head still matches exactly (+92, +96, +60 null-check / release / zero). NOT EXPLAINED: 55p vs 33b. The port carries a port-only guarded-global block (\"ldr [pc,POOL]; ldr [GREG,GREG]; ldr [GREG]; tst #1; beq\") plus three extra CALLs off two more GOT loads, with no binary counterpart at the aligned point. Needs an asm-inspector pass to name those callees before this can be filed cosmetic.",
+  "verdict": "UNSURE"
  },
  "_ZN11SlashEntity8AddPointE8_Vector3IfES1_f": {
   "decided_at": "2026-07-01T00:00Z",
@@ -2828,10 +2833,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN11WaveManager12CriticalModeEi": {
-  "asm_hash": "091a8973cd1c7501",
-  "decided_at": "2026-07-02T00:00Z",
-  "reason": "Port always returns false. Binary @ 0x001219e4: GetCriticalChance(p) > (float)(*(int*)g_RandomState / 2) — approximately a 50% coin flip per call (RNG state sign). Called from Fruit::RandomFruit (Fruit.cpp:2325) to select special-only vs all-fruit spawning; with port always false, special-only fruit selection never activates, directly changing spawn composition each wave. Also called from SlashEntity.cpp:1805 (trail scale, visual). Fix: add Math::Random::PeekState() and implement: return GetCriticalChance(playerIdx) > (float)((int64_t)m_Random.PeekState() / 2). See src/game/WaveManager.cpp:2062.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "940f4682c117c686",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port always returns false. Binary @ 0x001219e4: GetCriticalChance(p) > (float)(*(int*)g_RandomState / 2) — approximately a 50% coin flip per call (RNG state sign). Called from Fruit::RandomFruit (Fruit.cpp:2325) to select special-only vs all-fruit spawning; with port always false, special-only fruit selection never activates, directly changing spawn composition each wave. Also called from SlashEnt",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row MATCH. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN11WaveManager12RecievedSyncEif": {
   "decided_at": "2026-06-18T01:24Z",
@@ -3309,9 +3315,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN12SPAWNER_INFO12GetRandCountEf": {
-  "asm_hash": "d9b896699b481cf4",
-  "decided_at": "2026-07-31T13:40Z",
-  "reason": "Concrete unexplained delta on a 21-vs-28 function. The binary reaches the RNG by LOADING A POINTER out of the WaveManager instance ('CALL GetInstance; mov r,r0; ldr r,[r,#32]; CALL Rand32') -- i.e. a Random* at WaveManager+0x20. The port takes the ADDRESS of an embedded member ('CALL GetInstance; mov; add r,r,#8; CALL') -- WaveManager+0x8 (src/game/WaveModifier.cpp:44, WaveManager::GetInstance()->GetRandom()). Either the offset or the indirection level is wrong. The other delta (the binary calls an out-of-line float-to-int helper twice, hence the vpush/vpop {d8}; the port inlines vcvt) is benign. Needs an asm-inspector pass on the WaveManager layout. NOTE src/game/WaveManager.cpp is dirty in the worktree. Downgrade the stamp at src/game/WaveModifier.cpp:39 -- it is (re-analyst), not asm-inspector.",
+  "asm_hash": "6b90245c9241a9e1",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Concrete unexplained delta on a 21-vs-28 function. The binary reaches the RNG by LOADING A POINTER out of the WaveManager instance ('CALL GetInstance; mov r,r0; ldr r,[r,#32]; CALL Rand32') -- i.e. a Random* at WaveManager+0x20. The port takes the ADDRESS of an embedded member ('CALL GetInstance; mov; add r,r,#8; CALL') -- WaveManager+0x8 (src/game/WaveModifier.cpp:44, WaveManager::GetInstance()->",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RE-AFFIRMED against the fresh sweep; the core finding is unchanged. The binary reaches the RNG by LOADING A POINTER out of the WaveManager instance (\"CALL GetInstance; mov; ldr [+32]; CALL Rand32\") -- a Random* at WaveManager+0x20. The port takes the ADDRESS of an embedded member (\"CALL GetInstance; mov; add #8; CALL\") -- WaveManager+0x08 (src/game/WaveModifier.cpp:44). Either the offset or the indirection level is wrong; needs an asm-inspector pass on the WaveManager layout. SECONDARY, NEW: the clamp reshaping in 25014535 moved the port FURTHER from the binary, not closer -- the binary computes \"rsb; cmp #0; movle #0\" (one difference, floored at 0) where the port now emits \"bic r,r,r,asr #31\" then \"cmp #0; rsbge; rsblt r,r,#0\" (each operand floored, then an absolute value). Re-check that commit against the binary.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN12ScoreControl14AddMultipliyerEi": {
@@ -3387,16 +3394,18 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN12ScoreControlD1Ev": {
-  "asm_hash": "5d1304c73edb90b2",
-  "decided_at": "2026-06-21T00:00Z",
-  "reason": "ScoreControl dtor D1 -- binary destructs SmartPtrs at [this,#256]=0x100 and [this,#260]=0x104; port only destructs [this,#248]=0xF8 (m_FruitDigitTex). Two SmartPtr fields missing from ScoreControl at +0x100/+0x104. src/hud/ScoreControl.h declares sizeof=0x100 but binary requires >=0x108. Score 37000/60.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "07a2debe897a90a6",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "ScoreControl dtor D1 -- binary destructs SmartPtrs at [this,#256]=0x100 and [this,#260]=0x104; port only destructs [this,#248]=0xF8 (m_FruitDigitTex). Two SmartPtr fields missing from ScoreControl at +0x100/+0x104. src/hud/ScoreControl.h declares sizeof=0x100 but binary requires >=0x108. Score 37000/60.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR RATIONALE WAS WRONG (stale). It claimed \"port only destructs [this,#248]; the two SmartPtr fields at +0x100/+0x104 are missing and ScoreControl.h sizeof=0x100 is too small\". On the fresh sweep BOTH sides run \"ldr [+256]; cmp #0; CALL; str #0,[+256]\" and \"ldr [+260]; cmp #0; CALL; str #0,[+260]\", then \"add #248\", \"add #164\", \"add #160\" -- the fields exist and are destroyed in the binary order. The whole 36p-vs-60b delta is the binary duplicated -fexceptions cleanup landing pads (the repeated \"b <SYM>\" + \"add #248/#164/#160; CALL\" blocks) plus register moves.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12ScoreControlD2Ev": {
-  "asm_hash": "5d1304c73edb90b2",
-  "decided_at": "2026-06-21T00:00Z",
-  "reason": "ScoreControl dtor D2 -- same as D1: binary destructs SmartPtrs at [this,#256]=0x100 and [this,#260]=0x104; port misses these. Two SmartPtr fields at +0x100/+0x104 missing. src/hud/ScoreControl.h size 0x100 too small. Score 37000/60.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "07a2debe897a90a6",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "ScoreControl dtor D2 -- same as D1: binary destructs SmartPtrs at [this,#256]=0x100 and [this,#260]=0x104; port misses these. Two SmartPtr fields at +0x100/+0x104 missing. src/hud/ScoreControl.h size 0x100 too small. Score 37000/60.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR RATIONALE WAS WRONG (stale). It claimed \"port only destructs [this,#248]; the two SmartPtr fields at +0x100/+0x104 are missing and ScoreControl.h sizeof=0x100 is too small\". On the fresh sweep BOTH sides run \"ldr [+256]; cmp #0; CALL; str #0,[+256]\" and \"ldr [+260]; cmp #0; CALL; str #0,[+260]\", then \"add #248\", \"add #164\", \"add #160\" -- the fields exist and are destroyed in the binary order. The whole 36p-vs-60b delta is the binary duplicated -fexceptions cleanup landing pads (the repeated \"b <SYM>\" + \"add #248/#164/#160; CALL\" blocks) plus register moves. D2 carries the same asm_hash as D1 (identical bodies).",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12ScreenButton14ControlDeletedEP10HUDControl": {
   "decided_at": "2026-06-14T05:55Z",
@@ -3727,12 +3736,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN12WaveModifier14RemoveModifierEv": {
-  "asm_hash": "2125632d9aa38d31",
-  "decided_at": "2026-08-01T13:40Z",
-  "max_score": 44,
-  "reason": "Prior rationale was FALSE on its face ('Port has bx lr stub vs binary') -- the port body is 271 instructions, six times the binary's 44. Real signal: after the GetInstance() CALL the binary reads `ldr GREG,[GREG,#568]` and the port reads `ldr GREG,[GREG,#564]` at the same point in the stream. WaveManager::IsWaveProcessing pins the m_WaveCount BASE at +564 on BOTH sides, so the binary gates on m_WaveCount[1] here while the port source reads m_WaveCount[0] -- an index/offset divergence in the wave-reset gate, not a codegen artifact. Secondary: the port erases override entries one at a time in a while loop (dst.erase(it) per element) where the binary does one bulk front-erase; that explains the size blow-up but not the +568/+564 read. STAMP: downgrade src/game/WaveModifier.cpp:392 from ASM-verified to ASM-spec. [re-triaged 2026-08-01, hash-anchored]",
-  "score": 40265,
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "712fb37330906ba5",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Prior rationale was FALSE on its face ('Port has bx lr stub vs binary') -- the port body is 271 instructions, six times the binary's 44. Real signal: after the GetInstance() CALL the binary reads `ldr GREG,[GREG,#568]` and the port reads `ldr GREG,[GREG,#564]` at the same point in the stream. WaveManager::IsWaveProcessing pins the m_WaveCount BASE at +564 on BOTH sides, so the binary gates on m_Wa",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] THE NAMED BUG IS FIXED; THE ROW IS STILL 8.9% AND THE RESIDUE IS NOT EXPLAINED. Fixed: the wave-reset gate read \"ldr [+568]\" is now COMMON to both sides -- the 29479db3 union reshape landed it (the prior finding was port \"ldr [+564]\" = m_WaveCount[0] against binary +568 = m_WaveCount[1]). The \"bge\" vs \"blt\" flip right after it is benign block reordering on the same predicate. NOT EXPLAINED: 271p against 44b. The binary calls GetInstance, tests +568, makes ONE further CALL and returns -- it delegates the override restore to an out-of-line callee. The port open-codes that whole callee inline (two 80-byte \"mov #80; CALL\" struct copies, the +132/+136/+140/+144 and +236..+248 walks, the one-at-a-time erase loop). Per the whole-delta rule this cannot be accepted: name the binary callee at that CALL site (re-analyst) and restore the function boundary before re-triaging.",
+  "verdict": "UNSURE"
  },
  "_ZN12WaveModifier14UpdateSpecificEf": {
   "decided_at": "2026-06-14T05:55Z",
@@ -4657,9 +4665,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN14GameOverScreen12PostCallbackEi": {
-  "asm_hash": "2c636ad7e57a3429",
-  "decided_at": "2026-06-21T00:00Z",
-  "reason": "GameOverScreen::PostCallback -- binary strb to [this,#236]=0xEC (m_PostInProgress) and [this,#237]=0xED (m_PostOk); port strb to [this,#204]=0xCC and [this,#205]=0xCD. Port 0x20=32 bytes too low. src/screens/GameOverScreen.h places m_PostOk at +0xCC but binary puts it at +0xEC. Missing 32 bytes in GameOverScreen layout between +0x7C and +0xCC. Score 4000/6 (667x).",
+  "asm_hash": "615e7ab68a548217",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "GameOverScreen::PostCallback -- binary strb to [this,#236]=0xEC (m_PostInProgress) and [this,#237]=0xED (m_PostOk); port strb to [this,#204]=0xCC and [this,#205]=0xCD. Port 0x20=32 bytes too low. src/screens/GameOverScreen.h places m_PostOk at +0xCC but binary puts it at +0xEC. Missing 32 bytes in GameOverScreen layout between +0x7C and +0xCC. Score 4000/6 (667x).",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR RATIONALE WAS WRONG (stale); a NEW, narrower finding replaces it. Stale: \"port strb to [this,#204]/[205], binary +236/+237, GameOverScreen is 32 bytes short\" -- both sides now write +236 and +237, so the layout is right (src/screens/GameOverScreen.h:94-95) and the byte roles line up. STILL OPEN: how the boolean is formed. The binary is \"mov X,#0; cmp A,B; strb X,[+237]; addeq X,X,#1; strb X,[+236]\" -- a register-vs-register equality. The port (src/screens/GameOverScreen.cpp, \"m_PostOk = (result == 0) ? 1 : 0\") emits \"rsbs r,result,#1; movcc r,#0\", which is a compare against the immediate 1, not 0, and does not clamp negative inputs. Six instructions each -- cheap for an asm-inspector pass to read the real operands. Do not close on inspection; the byte gates the online-post retry UI.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN14GameOverScreen12PreDrawOrderEPfi": {
@@ -5668,10 +5677,11 @@
   "verdict": "MATCH-FIX-APPLIED"
  },
  "_ZN17SuperFruitControl8SpawnRayEv": {
-  "asm_hash": "51c403cf66722d93",
-  "decided_at": "2026-07-31T13:40Z",
-  "reason": "Concrete lead: the binary builds a 16-byte lookup table on the stack ('ldm r!,{4}; stmia r!,{4}; ldm r,{4}; stm r,{4}'), indexes it by the spawn counter ('ldr r,[lr,#-128]') and compares the LOADED VALUE with 3 ('cmp r,#3'). The port skips the table entirely and compares the raw masked index ('and lr,r,#7; cmp lr,#3'). Unless that table is the identity permutation the ray-variant selection differs. The binary also uses signed-modulo idioms ('ands r,#-2147483641' plus 'mvnmi ... lsl#29' for %8, and the %4 variant) where the port uses 'and #7'/'and #3' -- equivalent only for a non-negative counter. Needs an asm-inspector pass to read the table contents. NOTE src/entities/SuperFruitControl.cpp is dirty in the worktree and FruitRay is being edited concurrently -- re-check after those land (the asm_hash will restale this entry). Downgrade the stamp at src/entities/SuperFruitControl.cpp:1607.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "b6871b9fd861aaa6",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Concrete lead: the binary builds a 16-byte lookup table on the stack ('ldm r!,{4}; stmia r!,{4}; ldm r,{4}; stm r,{4}'), indexes it by the spawn counter ('ldr r,[lr,#-128]') and compares the LOADED VALUE with 3 ('cmp r,#3'). The port skips the table entirely and compares the raw masked index ('and lr,r,#7; cmp lr,#3'). Unless that table is the identity permutation the ray-variant selection differs",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] THE CONCRETE LEAD IS RESOLVED; RESIDUE UNEXPLAINED. Resolved: the prior finding was that the binary builds a 16-byte lookup table on the stack (\"ldm r!,{4}; stmia r!,{4}\"), indexes it and compares the LOADED value with 3, while the port compared the raw masked index. The port now indexes a table too (\"and lr,r,#7; ldr GREG,[GREG,lr,lsl #2]\") and the \"cmp #3\" is COMMON -- 25014535 landed it. The port reads a static array through the GOT where the binary copies it to the stack first, equivalent if the contents match (the diff cannot see contents). The binary signed-modulo idioms (\"ands #-2147483641\" + \"mvnmi\") versus the port \"and #7\"/\"and #3\" are equivalent for the monotone non-negative spawn counter the port increments. NOT EXPLAINED: 176p vs 132b, roughly 44 extra port instructions of predicated VFP (\"vcmp; vmoveq; vmulne; vmoveq #112\") with no binary counterpart. NOTE src/entities/SuperFruitControl.cpp is dirty in the worktree; this hash will restale on commit.",
+  "verdict": "UNSURE"
  },
  "_ZN17SuperFruitControl9DrawOrderEPfi": {
   "asm_hash": "72b3b5a21f29abda",
@@ -6181,11 +6191,10 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN24GlobalProbabilityOveride16CheckForOverrideERi": {
-  "asm_hash": "b80c5a5872bae7d2",
-  "decided_at": "2026-07-28T13:10Z",
-  "max_score": 69,
-  "reason": "47.3% LCS, 69-instr LIVE wave-probability gate. Rationale coverage ~55%: inlining of the file-static T_872()/LerpF_int() helpers (src/game/GlobalProbabilityOveride.cpp:21,35) that the binary calls out-of-line, plus inlining of GetModeBitMask into `ands r,mask,r0,lsl r1`. UNEXPLAINED, two concrete items: (1) VTABLE SLOT -- the CanSpawn() dispatch is `ldr vptr,[obj]; ldr fn,[vptr]` (slot 0) in the binary but `ldr vptr,[obj]; ldr fn,[vptr,#8]` (slot 2) in the port. If the port added a virtual dtor pair the binary does not have, EVERY slot number asserted in that file is +2 (the comments claim PushbackSpawn=slot3 @0x00120b70, NewGameStarted=slot4 @0x00121c7c). This must be settled -- a shifted vtable breaks every override in the class hierarchy. (2) GUARD ORDER -- the port checks `!game_work.m_SaveData` FIRST (line 142) then the mode mask; the binary tests the mode mask first (`ldrb gameMode; bl GetModeBitMask; ldr [+28]; tst; beq`) and then dereferences m_SaveData with NO null check. The port's guard is a port-added defensive branch. Note the function already carries an `ASM-verified: 2026-06-26 (asm-inspector)` marker -- that marker is contradicted by this diff and should be re-checked.",
-  "score": 36364,
+  "asm_hash": "71299010c350b34d",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "47.3% LCS, 69-instr LIVE wave-probability gate. Rationale coverage ~55%: inlining of the file-static T_872()/LerpF_int() helpers (src/game/GlobalProbabilityOveride.cpp:21,35) that the binary calls out-of-line, plus inlining of GetModeBitMask into `ands r,mask,r0,lsl r1`. UNEXPLAINED, two concrete items: (1) VTABLE SLOT -- the CanSpawn() dispatch is `ldr vptr,[obj]; ldr fn,[vptr]` (slot 0) in the b",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] HALF THE PRIOR SPEC IS RESOLVED, THE DANGEROUS HALF IS NOT. Resolved: the guard-order item -- the port no longer leads with a \"!game_work.m_SaveData\" null test; it reads [+28] first and inlines GetModeBitMask into \"ands r,mask,r0,lsl r1\", matching the binary order. STILL OPEN and unchanged: the CanSpawn dispatch is \"ldr vptr,[obj]; ldr fn,[vptr]\" (SLOT 0) in the binary and \"ldr vptr,[obj]; ldr fn,[vptr,#8]\" (SLOT 2) in the port. If the port added a virtual dtor pair the binary lacks, every slot number asserted in src/game/GlobalProbabilityOveride.cpp is +2 and the hierarchy overrides are all shifted. Settle the real vtable layout with a re-analyst pass before touching the body. Remainder (T_872()/LerpF_int() inlining, the vcvt/vmul float-lerp the binary keeps in two out-of-line calls) is benign. NOTE src/game/GlobalProbabilityOveride.cpp is dirty in the worktree, so this hash will restale on commit.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN24GlobalProbabilityOverideD1Ev": {
@@ -6273,12 +6282,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN3HUD6UpdateEf": {
-  "asm_hash": "cd9b6d0eec2b1396",
-  "decided_at": "2026-08-01T13:40Z",
-  "max_score": 59,
-  "reason": "Prior rationale (std::list vs intrusive list) does not account for the whole delta. Same-slot condition flip: after `ldr GREG,[GREG,#8]; ldrb GREG,[GREG,#48]; cmp GREG,#0` the binary branches `beq <SYM>` and the port branches `bne <SYM>`, and both continue into `ldrb GREG,[GREG,#51]`. If the fallthrough paths are the same block, the per-control [+48] gate is inverted in the port. HUD::Update runs every frame -- verify the polarity before re-accepting. STAMP: downgrade src/hud/HUD.cpp:100 from ASM-verified to ASM-spec. [re-triaged 2026-08-01, hash-anchored]",
-  "score": 33000,
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "36dcd374fe0f0914",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Prior rationale (std::list vs intrusive list) does not account for the whole delta. Same-slot condition flip: after `ldr GREG,[GREG,#8]; ldrb GREG,[GREG,#48]; cmp GREG,#0` the binary branches `beq <SYM>` and the port branches `bne <SYM>`, and both continue into `ldrb GREG,[GREG,#51]`. If the fallthrough paths are the same block, the per-control [+48] gate is inverted in the port. HUD::Update runs ",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR FINDING RESOLVED. The prior verdict was an inverted [+0x30] m_Active gate (\"binary beq, port bne\"). On the fresh sweep \"ldrb [+48]; cmp #0; beq\" is COMMON to both sides -- 31f7c260 fixed it. Residual 54p vs 59b: the port inlines Delegate1::operator() (the port-only \"ldrb [+88]\" is the bound flag inside m_RemoveCallback at +0x38) where the binary tail-calls it, and GCC rotated the list loop so the port vtable+40 Update dispatch aligns late. Every offset in the diff (+48/+50/+51/+56/+8/+40) appears on BOTH sides. The !__bada__ modal-capture block (src/hud/HUD.cpp:11-14,25-33) is compiled out of the cross-build.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN3HUD7OnPauseEv": {
   "decided_at": "2026-06-14T05:55Z",
@@ -7572,12 +7580,11 @@
   "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar12ActorManager10InitialiseEll": {
-  "asm_hash": "81fe06abab369643",
-  "decided_at": "2026-07-30T00:00Z",
-  "max_score": 47,
-  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager10InitialiseEii. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager10InitialiseEii\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:75 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:74 is NOT contradicted; the contradiction was an artifact of the void pairing.",
-  "score": 46000,
-  "verdict": "UNSURE"
+  "asm_hash": "75b4de76b20931a5",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager10InitialiseEii. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12Act",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PAIRING NOW CORRECT (the manifest alias landed in c50a4202), so this is a real re-triage rather than a void. The whole delta is two DOCUMENTED deviations plus loop unrolling: (a) the binary allocates a 36-byte LinkedHeap (\"mov #36; CALL\" plus a second CALL) which the port deliberately drops for new[] -- documented at src/entities/ActorManager.cpp:70-74; (b) the port \"if (m_pHeap != nullptr) return;\" re-entry early-out carries a full \"// DIFFERS:\" block at src/entities/ActorManager.cpp:76-84 naming the two port call sites that force it. The remainder is GCC unrolling the per-list sentinel init the binary keeps rolled. Accepted while the duplicate GameInitialise.cpp:218 call site exists.",
+  "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar12ActorManager10LoadEntityEPNS_11EntityChunkEPvll": {
   "asm_hash": "513d96f2b3471c6e",
@@ -7646,12 +7653,11 @@
   "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEPl": {
-  "asm_hash": "c790e1c036ad75c5",
-  "decided_at": "2026-07-30T00:00Z",
-  "max_score": 17,
-  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager14GetNumEntitiesEPKl. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager14GetNumEntitiesEPKl\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:348 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:347 is NOT contradicted; the contradiction was an artifact of the void pairing.",
-  "score": 16000,
-  "verdict": "UNSURE"
+  "asm_hash": "ab248bc64b05a095",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager14GetNumEntitiesEPKl. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PAIRING NOW CORRECT (c50a4202); re-triaged against the real body. NEW FINDING, port-added guards. The binary is 17 instructions: accumulator, GOT type-list base, walk the -1-terminated id array (\"cmn #1; beq\"), call size() out of line, accumulate. No null checks, no per-id range check. The port adds \"cmp #0; cmpne #0; movne/moveq; beq\" (m_pTypeLists and the argument pointer) plus \"cmp #0; blt\" / \"movw #4124; ldr; cmp; ble\" per id -- src/entities/ActorManager.cpp:404-410. Residual after the guards is the inlined std::list size walk. ACTION: drop the guards to match the binary.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar12ActorManager14GetNumEntitiesEl": {
   "asm_hash": "3d05970e4a40234f",
@@ -7690,12 +7696,11 @@
   "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager21DeactivateAllEntitiesEl": {
-  "asm_hash": "9c073bbd12cb8390",
-  "decided_at": "2026-07-30T00:00Z",
-  "max_score": 27,
-  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager21DeactivateAllEntitiesEi. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager21DeactivateAllEntitiesEi\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:234 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:233 is NOT contradicted; the contradiction was an artifact of the void pairing.",
-  "score": 26000,
-  "verdict": "UNSURE"
+  "asm_hash": "5cfd88d9a36ebc35",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager21DeactivateAllEntitiesEi. FIX THE PAIRING: add port_mangled = \"_ZN6M",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PAIRING NOW CORRECT (c50a4202); re-triaged against the real body. NEW FINDING, port-added guards. The binary (27 instrs) indexes m_pTypeLists[typeIdx] straight off the GOT base and walks -- no null check, no range check anywhere in it. The port opens with THREE guards the binary does not have: \"cmp #0; bxeq lr\" (m_pTypeLists null), \"cmp #0; bxlt lr\" (typeIdx<0) and \"movw #4124; ldr; cmp; bxge lr\" (typeIdx>=m_NumTypes) -- src/entities/ActorManager.cpp:235-236. Same class as the 44 guards dropped in 51980b72. Everything else matches exactly: \"ldr [+8]; ldrb [+12]; orr #16; strb [+12]\" sets ENT_KILLED at identical offsets. ACTION: delete the two guard lines. NOTE the function is already marked Defunct (zero in-binary callers) at ActorManager.cpp:232, so runtime impact is nil -- fix for consistency, low priority.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar12ActorManager21RegisterHashConverterENS_9Delegate2IlmRbEE": {
   "decided_at": "2026-07-01T00:00Z",
@@ -7715,20 +7720,18 @@
   "verdict": "UNSURE"
  },
  "_ZN6Mortar12ActorManager3AddElb": {
-  "asm_hash": "bead314594bbdcd5",
-  "decided_at": "2026-07-30T00:00Z",
-  "max_score": 56,
-  "reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager3AddEib. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager3AddEib\" to tools/asm-verify/manifest.toml -- the identical alias already exists for three sibling overloads at manifest.toml:778-796 (GetEntity / GetEntityFirst / GetEntityNext); these were simply missed. Re-triage after the alias lands. The previous reason (\"ActorManager stub/partial-impl; see STUB markers\") was FALSE -- the body at src/entities/ActorManager.cpp:139 is fully implemented. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:138 is NOT contradicted; the contradiction was an artifact of the void pairing.",
-  "score": 55000,
-  "verdict": "UNSURE"
+  "asm_hash": "7409a101884d5165",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "PAIRING VOID (task #137): the binary long-width symbol is paired against the port's '// Port specific:' int-width convenience FORWARDER declared in src/entities/ActorManager.h:320-361, so the diff compares a 1-instruction tail-call thunk against a full binary body and scores nothing. The real port body is _ZN6Mortar12ActorManager3AddEib. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManage",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PAIRING NOW CORRECT (c50a4202); re-triaged against the real body. Confirmed port-added guards, same class as 51980b72: a null test on m_pHeap, a second on m_pTypeLists, and \"cmp #0; blt\" / \"movw #4124; ldr; cmp; bge\" on entityType -- src/entities/ActorManager.cpp:139-140. The binary (56 instrs) has room for none of them. ACTION: drop both guard lines. COVERAGE CAVEAT: that accounts for roughly 8 of the 78-instruction surplus; the rest is GCC unrolling the reverse free-pool scan x4 (four identical \"ldr [-4]; cmp #0; beq; ldrb [+53]; cmp; beq; subs #1; sub #4; bmi\" groups) and the compaction loop, which the binary keeps rolled. The recycle/factory offsets (+2056 free count, +53 entityType, +52 m_RecycleFlag, GOT type-list at 4112) all match. The unroll reading is NOT independently confirmed -- do not close the row on the guard fix alone.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar12ActorManager4DrawEv": {
-  "asm_hash": "9caffb75536eccc5",
-  "decided_at": "2026-07-30T00:00Z",
-  "max_score": 53,
-  "reason": "PAIRING VOID (task #137): classed SMALLER (10p vs 53b) but functionally a FORWARDER. The port's no-arg Draw() (src/entities/ActorManager.h:343) only does ldr GOT / ldr Renderer::GetInstance singleton / cmp / bxeq lr / b <Draw(Renderer&)> -- visible in the diff. The real body (type-list walk, ENT_SKIP_MASK 'tst #17', vtable[20] Draw, m_DebugDraw gate) is _ZN6Mortar12ActorManager4DrawER8Renderer at src/entities/ActorManager.cpp:281. FIX THE PAIRING: add port_mangled = \"_ZN6Mortar12ActorManager4DrawER8Renderer\" to tools/asm-verify/manifest.toml, then re-triage. Previous reason (\"Port has bx lr stub vs binary has draw loop. STUB: ActorManager::Draw. See src/entities/ActorManager.cpp:534\") was FALSE -- Draw is fully implemented and the cited line is wrong. The '// ASM-verified:' marker at src/entities/ActorManager.cpp:280 is NOT contradicted.",
-  "score": 50000,
-  "verdict": "UNSURE"
+  "asm_hash": "b3125583032ceb05",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "PAIRING VOID (task #137): classed SMALLER (10p vs 53b) but functionally a FORWARDER. The port's no-arg Draw() (src/entities/ActorManager.h:343) only does ldr GOT / ldr Renderer::GetInstance singleton / cmp / bxeq lr / b <Draw(Renderer&)> -- visible in the diff. The real body (type-list walk, ENT_SKIP_MASK 'tst #17', vtable[20] Draw, m_DebugDraw gate) is _ZN6Mortar12ActorManager4DrawER8Renderer at ",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PAIRING NOW CORRECT (c50a4202 aliased this to Draw(Renderer&)); re-triaged against the real body, not the forwarder. The skeleton matches: Renderer null check, GOT type-list base, \"ldr [+8]\", \"ldrb [+12]; tst #17\" ENT_SKIP_MASK, vtable+20 Draw dispatch, the m_DebugDraw byte at GOT+4128, tail call. ONE port-added guard: the port tests the entity pointer (\"ldr [+8]; cmp #0; beq\") inside the loop where the binary dereferences it unguarded -- the \"if (*it)\" in ActorManager::Draw(Renderer&), src/entities/ActorManager.cpp:281ff. Everything else is the inlined list walk (the binary calls begin/end/operator++ out of line) and the port hoisting the m_NumTypes<=0 test to the loop head. ACTION: drop the per-entity null test.",
+  "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar12ActorManager4FindElm": {
   "asm_hash": "e9e765e2800eab0b",
@@ -7782,10 +7785,11 @@
   "verdict": "ACCEPT-defunct"
  },
  "_ZN6Mortar12ActorManager9GetEntityElm": {
-  "asm_hash": "e0adc73496d9146d",
-  "decided_at": "2026-07-31T13:40Z",
-  "reason": "Port-added guards the binary does not have, plus a signature mismatch. The binary is ActorManager::GetEntity(long, unsigned long), non-const, 29 instructions total: GOT-load the type-list array, 'lsl r,#3' index, call begin(), call end(), advance slot times, return. There is no room for -- and no trace of -- a typeIdx range check or a 'slot >= list.size()' pre-check. The port opens with 'rsbs r,r,#1; movcc r,#0; orrs r,r,r,lsr#31; beq; mov r,#0; bx lr' (the !m_pTypeLists || typeIdx<0 || typeIdx>=m_NumTypes guard at src/entities/ActorManager.cpp:408) and adds the size() pre-check. The port also declares it const and (int, size_t), mangling to _ZNK...Eij -- paired only fuzzily. The inlined std::list walk explains the rest of the 63-vs-29 delta. Confirm with asm-inspector that the guards are genuinely absent before removing them. Downgrade the stamp.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "9ff6cf7a8ec3f079",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port-added guards the binary does not have, plus a signature mismatch. The binary is ActorManager::GetEntity(long, unsigned long), non-const, 29 instructions total: GOT-load the type-list array, 'lsl r,#3' index, call begin(), call end(), advance slot times, return. There is no room for -- and no trace of -- a typeIdx range check or a 'slot >= list.size()' pre-check. The port opens with 'rsbs r,r,",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR SPEC IS DONE. The three port-added guards (m_pTypeLists null, typeIdx range, slot>=size pre-test) are gone from src/entities/ActorManager.cpp:410-419 -- the fresh diff has no guard shape port-side. Residual 39p vs 29b is GCC inlining begin()/end()/operator++/operator!= (the binary calls them out of line) and peeling the first two counting iterations (\"mov #1; cmp; beq\" / \"mov #2; cmp; bne\"). Both sides return 0 on falling off the end. HANDOFF (shape, not asm): the port still declares this \"GetEntity(int, size_t) const\" (_ZNK..Eij) against the binary non-const \"GetEntity(long, unsigned long)\"; the row only pairs through a manifest alias.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar12ActorManagerC1Ev": {
   "asm_hash": "e7fa860f19203464",
@@ -8576,11 +8580,10 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN6Mortar17InputActionMapper12ProcessEventEP10InputEvent": {
-  "asm_hash": "54ff6e737793228c",
-  "decided_at": "2026-07-28T13:10Z",
-  "max_score": 43,
-  "reason": "43.1% LCS, 43-instr LIVE input dispatch. Rationale coverage ~50%: the port inlines Mortar::Delegate0::operator() (its +0x40 bound-flag check `ldrb [+64]; cmp #0; popne` and a vtable-slot-2 dispatch `ldr vptr,[+32]; ldr fn,[vptr,#8]`) where the binary tail-calls it out-of-line (`add r0,r0,#32; pop; b <SYM>`); plus if-conversion of the branch results into `movne #0 / moveq #1` booleans. Same Delegate0 shape as BSButton::Update / SliderControl::UpdateTouchPosition, which is why those are accepted. UNEXPLAINED: the binding-field reads do not line up -- binary `ldr [obj]` / `ldr [obj,#8]` / `ldrh [obj,#6]`, port `ldr [obj,#4]` / `ldr [obj,#32]` / `ldrh [obj,#28]`. The action-code compare (`ldrh [obj,#6]` vs `ldrh [event,#18]` in the binary) is reading a different field in the port. If these share a base the port matches the wrong binding and input actions silently never fire. Confirm the InputActionMapper binding layout with asm-inspector.",
-  "score": 24450,
+  "asm_hash": "4039832936452fd3",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "43.1% LCS, 43-instr LIVE input dispatch. Rationale coverage ~50%: the port inlines Mortar::Delegate0::operator() (its +0x40 bound-flag check `ldrb [+64]; cmp #0; popne` and a vtable-slot-2 dispatch `ldr vptr,[+32]; ldr fn,[vptr,#8]`) where the binary tail-calls it out-of-line (`add r0,r0,#32; pop; b <SYM>`); plus if-conversion of the branch results into `movne #0 / moveq #1` booleans. Same Delegat",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RE-AFFIRMED, finding unchanged on the fresh sweep. The event-mask decode matches exactly (\"lsr #16; lsl #16; tst\", the 131072/524288/65536 discriminators, the 136 bound, the \"add #32\" delegate address on both sides), but the binding-field reads still do not line up: binary \"ldr [obj]\" / \"ldr [obj,#8]\" / \"ldrh [obj,#6]\" against port \"ldr [obj,#4]\" / \"ldr [obj,#32]\" / \"ldrh [obj,#28]\". The action-code compare in particular (\"ldrh [obj,#6]\" vs \"ldrh [obj,#28]\", both against \"ldrh [event,#18]\") reads a different field port-side. If these share a base the port matches the wrong binding and input actions silently never fire. Needs asm-inspector on the real InputActionMapper binding layout -- the normalizer masks the base register so the diff cannot settle it.",
   "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar17InputActionMapperC1E10InputEventNS_9Delegate1IbPS1_EEmm": {
@@ -8601,10 +8604,11 @@
   "verdict": "FIX-NEEDED"
  },
  "_ZN6Mortar18Utf8StringIterator7AdvanceEi": {
-  "asm_hash": "16f1301a94b3ae32",
-  "decided_at": "2026-06-21T00:00Z",
-  "reason": "Utf8StringIterator::Advance -- binary reads cursor from [this,+0x00]/[this,+0x04], stores to [this,+0x00]/[this,+0x08]; port reads [this,#16]=+0x10 (m_PrevBegin) and stores to [this,#16]/[this,#24]=+0x18. Port offsets +0x10 higher than binary. src/engine/render/Utf8StringProxy.h has vptr at +0x00 but binary Advance reads +0x00 as cursor -- suggests no vptr in binary proxy or layout shift. Hash changed from prior ACCEPT-cosmetic. Score 19400/21 (924x).",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "e689b65814be87d4",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Utf8StringIterator::Advance -- binary reads cursor from [this,+0x00]/[this,+0x04], stores to [this,+0x00]/[this,+0x08]; port reads [this,#16]=+0x10 (m_PrevBegin) and stores to [this,#16]/[this,#24]=+0x18. Port offsets +0x10 higher than binary. src/engine/render/Utf8StringProxy.h has vptr at +0x00 but binary Advance reads +0x00 as cursor -- suggests no vptr in binary proxy or layout shift. Hash cha",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR RATIONALE WAS WRONG. It claimed \"port reads [this,#16] and stores [this,#16]/[this,#24]; port offsets are 0x10 higher than the binary\". The fresh diff shows BOTH sides working on +0x00 (m_Cursor), +0x04 (m_Src) and +0x08 (m_CurrentCodepoint) -- the layout in src/engine/render/Utf8StringIterator.h:68-78 matches the binary, and the only extra field, m_Begin at +0x0C, is a documented port-only addition (\"// DIFFERS:\" at Utf8StringIterator.h:70-76) that Advance never touches. The 58p-vs-21b blow-up is GCC 4.4.1 unrolling the counted advance loop x4 with an odd-count peel (\"tst #1; add #8\") around a body the binary keeps rolled -- the loop-rotation shape, not a divergence.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN6Mortar19IsParentFolderTokenERKNS_11AsciiStringE": {
   "decided_at": "2026-06-14T05:55Z",
@@ -9476,10 +9480,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN7ListBox6UpdateEf": {
-  "asm_hash": "e14a36ae8f2aa479",
-  "decided_at": "2026-07-31T13:40Z",
-  "reason": "Real divergence, two parts. (1) The binary's held-touch-slot state is the INT at +0xC8 ('ldr r,[r,#200]; cmn r,#1' / 'str r,[r,#200]' / 'strne r,[r,#200]'); the port instead stores the slot as a FLOAT in m_TouchX at +0xCC ('vldr [#204]; vcmpe #0.0', 'vcvt' + 'vstr [#204]'), round-tripping through vcvt and leaving +0xC8 (m_ActiveTouchId) vestigial -- see src/hud/ListBox.h:122-127. (2) Because m_TouchX is overloaded as the slot, the port loses the binary's horizontal band check on release: the binary range-checks BOTH the stored touch X at +0xCC and Y at +0xD0 against [left,right]/[bottom,top] (two vcmpe/blt/bhi pairs); the port checks only Y (src/hud/ListBox.cpp:236). Also the binary truncates the row index with 'uxth' (unsigned short, no clamp) where the port clamps negatives via 'bic r,r,r,asr#31'. The ASM-verified stamp at src/hud/ListBox.cpp:204 is (re-analyst), not asm-inspector -- downgrade it.",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "5a83bd7598a33e60",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Real divergence, two parts. (1) The binary's held-touch-slot state is the INT at +0xC8 ('ldr r,[r,#200]; cmn r,#1' / 'str r,[r,#200]' / 'strne r,[r,#200]'); the port instead stores the slot as a FLOAT in m_TouchX at +0xCC ('vldr [#204]; vcmpe #0.0', 'vcvt' + 'vstr [#204]'), round-tripping through vcvt and leaving +0xC8 (m_ActiveTouchId) vestigial -- see src/hud/ListBox.h:122-127. (2) Because m_Tou",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] ALL THREE PRIOR FINDINGS RESOLVED by 25014535. (1) the held-touch slot is now the INT at +0xC8 -- \"ldr [+200]; cmn #1\" is COMMON. (2) the release band check now tests BOTH axes port-side (\"vldr [+204]\" and \"vldr [+208]\", four vcmpe pairs) where it previously checked only Y. (3) the row index truncates via uxth (\"movwge #65535; vmovlt; uxthlt\"). Residual 188p vs 164b is the port inlining the std::vector accessor the binary calls out of line (\"ldm {r,lr}; rsb; asr #2\" = size()) plus if-conversion of the band test into movlt/movge booleans. Every offset in the diff (124/132/136/148/152/156/160/200/204/208/216) appears on both sides.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN7PowerUp10DeactivateEb": {
   "decided_at": "2026-06-14T05:55Z",
@@ -9489,10 +9494,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN7PowerUp11AddModifierEP12GameModifier": {
-  "asm_hash": "8a263344804c25bc",
-  "decided_at": "2026-06-21T00:00Z",
-  "reason": "PowerUp::AddModifier -- binary stores stack addr to [this,#28]=+0x1C (not a documented PowerUp field; m_ModList at +0x04, m_NameHash at +0x0C); port calls operator new(12) and chains STL list node. Binary uses non-STL list structure at +0x1C not present in src/game/PowerUp.h. Score 6153/8 (769x).",
-  "verdict": "FIX-NEEDED"
+  "asm_hash": "36aacc03265455fe",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "PowerUp::AddModifier -- binary stores stack addr to [this,#28]=+0x1C (not a documented PowerUp field; m_ModList at +0x04, m_NameHash at +0x0C); port calls operator new(12) and chains STL list node. Binary uses non-STL list structure at +0x1C not present in src/game/PowerUp.h. Score 6153/8 (769x).",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] PRIOR RATIONALE WAS WRONG. It claimed the binary uses a \"non-STL list structure at +0x1C not present in src/game/PowerUp.h\". The \"str GREG,[GREG,#28]\" is COMMON to both sides -- it is \"mod->m_pDeferInfo = this\" writing GameModifier+0x1C (src/game/PowerUp.cpp), not a list head. The rest is one std::list<GameModifier*>::push_back: the binary calls the out-of-line pre-C++11 push_back(const value_type&) through a stack temp (\"add r0,sp,#8; str arg,[r0,#-4]!; CALL\"), the port inlines the node (\"mov #12; CALL operator new; strne [+8]/[+4]/[]\"). Same container, same semantics.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN7PowerUp12LoadTexturesEv": {
   "decided_at": "2026-06-14T06:00Z",
@@ -9646,10 +9652,11 @@
   "verdict": "ACCEPT-deferred"
  },
  "_ZN8BSButton10SetTextureEN6Mortar8SmartPtrINS0_7TextureEEEb": {
-  "asm_hash": "6d81173f2c774117",
-  "decided_at": "2026-06-26T00:00Z",
-  "reason": "Port expands SmartPtr refcount inline (inc new ref, dec old, delete-if-zero); binary delegates via single CALL. Structurally different but semantically equivalent.",
-  "verdict": "ACCEPT-deferred"
+  "asm_hash": "b725c8e0874b3251",
+  "decided_at": "2026-08-03T05:25Z",
+  "prior_reason": "Port expands SmartPtr refcount inline (inc new ref, dec old, delete-if-zero); binary delegates via single CALL. Structurally different but semantically equivalent.",
+  "reason": "[#137 drifted-bucket re-verify 2026-08-03, post-Colour-dtor sweep] RESOLVED: the fresh post-Colour-dtor sweep scores this row COSMETIC. The prior verdict no longer describes the body. Hash anchored so it restales if the code moves again.",
+  "verdict": "ACCEPT-cosmetic"
  },
  "_ZN8BSButton6UpdateEf": {
   "asm_hash": "ead0cab5db5514f0",
