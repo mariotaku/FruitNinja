@@ -23,9 +23,10 @@
 //   m_SegLenSq = |mid - tail|^2
 //   CollideWithEntity: early-returns true when |anchor - eCenter|^2 < r^2.
 //
-// No SDL_Init, no GL, no GameInit, no audio. The one global the fixture must
-// still provide is game_work.mHud (see main() -- PlaySwipe derefs it unguarded,
-// as the binary does); the HUD ctor allocates nothing but the object itself.
+// No SDL_Init, no GL, no GameInit, no audio. The globals the fixture must still
+// provide are game_work.mHud and game_work.mGameSound -- PlaySwipe derefs both
+// unguarded, as the binary does. The HUD ctor allocates nothing but the object
+// itself, and GameSound without an initialised SoundManager is inert.
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
 #include "entities/SlashEntity.h"
@@ -34,6 +35,7 @@
 #include "engine/input/InputEvent.h"
 #include "game/GameWork.h"
 #include "hud/HUD.h"
+#include "engine/audio/GameSound.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -268,13 +270,23 @@ int main() {
     // exists. The ctor leaves m_globalTimeScale at 1.0 (HUD.cpp:16), so the test
     // exercises the normal-speed gain 0.4 + 0.6*1.0 = 1.0 rather than 0.
     //
-    // Nothing else on the PlaySwipe path needs booting: ItemManager::GetInstance()
-    // lazily constructs with m_DefaultItems[0] == NULL, so
-    // PlayAlternateSwipeSound returns false (stock-swipe branch taken);
-    // game_work.mGameSound stays NULL and is checked at the SFXPlay call site, so
-    // no audio is played; ActorManager::GetNumEntities returns 0 with no type
-    // lists allocated.
+    // ItemManager::GetInstance() lazily constructs with m_DefaultItems[0] == NULL,
+    // so PlayAlternateSwipeSound returns false (stock-swipe branch taken), and
+    // ActorManager::GetNumEntities returns 0 with no type lists allocated.
+    //
+    // mGameSound must be provided too. This fixture used to rely on
+    // PlaySwipe's `if (game_work.mGameSound)` guard, but that guard was
+    // port-added -- v1.6.1 PlaySwipe @0x001e8550 calls SFXPlay through the
+    // global unguarded -- so it was removed in the #156 sweep and a NULL here is
+    // now a segfault. Per the standing rule the fixture supplies the global
+    // rather than production re-growing the guard; same pattern as
+    // test_powerup.cpp:77.
+    //
+    // Constructing GameSound does not open a device or play anything: SoundManager
+    // is never initialised here, so SFXPlay resolves no sample and is inert. Tests
+    // must never actually play audio.
     game_work.mHud = new HUD();
+    game_work.mGameSound = new GameSound();
 
     test_crossing_hit();
     test_blank_miss();

@@ -1722,11 +1722,20 @@ void SlashEntity::Update(float dt) {
     //    set m_HeadThickScale = 0 AND skip the slice-test iterator blocks.
     //    Inside the else: first check bomb timer, then run fruit+bomb iter.
     // =====================================================================
-    Game* game = Game::GetInstance();
-
+    // v1.6.1 SlashEntity::Update @0x001e867c calls Game::GetInstance nowhere in the
+    // whole body -- its only GetInstance calls are PowerUpManager / ActorManager /
+    // PSPParticleManager / WaveManager / BonusManager / AchievementManager. The
+    // port-added `game != nullptr` term on this gate had no binary counterpart and
+    // is removed; the binary's gate is the bomb-hit timer alone.
+    // ASM-verified: 2026-08-03T00:00:00Z v1.6.1 SlashEntity::Update @ 0x001e87d4 (re-analyst):
+    //   vldr.32 s15,[r3,#0x10] / vcmpe.f32 s15,#0 / vmrs apsr,fpscr / bhi 0x001e8f4c.
+    //   BHI is "ordered and greater than", so the slice pass runs on
+    //   m_BombHitTimer <= 0.0f. The port had ==, which drops the pass on the one
+    //   tick where the timer is already negative and GameInit's countdown has not
+    //   yet clamped it back to 0 (see GameInit.cpp, "if (m_BombHitTimer < 0) = 0").
     if (m_PointCount < 4 || (s_ModPowerMask & 0x40u) != 0) {
         m_HeadThickScale = 0.0f;
-    } else if (game && game_work.m_BombHitTimer == 0.0f) {
+    } else if (game_work.m_BombHitTimer <= 0.0f) {
         // Slice-test pass -- fruit (type 0) and bomb (type 1).
         // Binary uses the low-level ActorManager iterator API:
         //   ActorManager::GetEntityFirst(actorMgr, type, &iter)
@@ -2038,7 +2047,10 @@ void SlashEntity::Update(float dt) {
                     }
                     // (b) Combo body: only if count > 2 AND m_ComboFruitTypes[1] >= 0.
                     if (m_ComboCounter > 2 && m_ComboFruitTypes[1] >= 0) {
-                        if (game && game_work.gameMode == GAME_MODE_ARCADE) {
+                        // v1.6.1 SlashEntity::Update @0x001e867c tests game_work+0x4
+                        // (gameMode) alone -- there is no Game-instance term. The
+                        // port-added `game &&` is removed.
+                        if (game_work.gameMode == GAME_MODE_ARCADE) {
                             LOG_INFO("BLITZ", "SlashEntity arcade combo: count=%d amount=%.3f -> AddSpeed",
                                        m_ComboCounter, (float)m_ComboCounter / 3.0f);
                             WaveManager::GetInstance()->AddSpeed(
@@ -2049,11 +2061,22 @@ void SlashEntity::Update(float dt) {
                         }
                         BonusManager::GetInstance()->AddCombo(m_ComboCounter);
                         // v1.6.1 SlashEntity::Update @0x001e867c: the combo-stat block
-                        // reads game_work.m_SaveData (+0x50) with no null test.
-                        if (game) {
+                        // reads game_work.m_SaveData (+0x50) with no null test and runs
+                        // unconditionally -- the binary never calls Game::GetInstance in
+                        // Update, so the port-added `if (game)` wrapper is removed.
+                        {
                             char buf[64];
                             snprintf(buf, sizeof(buf), "%s_combos", GetModeName((GAME_MODE)game_work.gameMode));
                             game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
+                            // TODO: v1.6.1 0x001e867c (SlashEntity::Update) -- nesting gap.
+                            // In the binary the strawberry_combo_total scan sits OUTSIDE this
+                            // `m_ComboCounter > 2 && m_ComboFruitTypes[1] >= 0` block, one
+                            // level up in the `m_ComboCounter > 1 && m_ComboFruitTypes[0] >= 0`
+                            // block, after UnlockComboAchievement and under its own
+                            // `2 < m_ComboCounter` test. Same for UnlockComboAchievement and
+                            // the best-combo save below, and BonusManager::AddCombo sits
+                            // inside the arcade arm, not after the if/else. Left as-is here:
+                            // re-nesting is a separate change, not part of the guard sweep.
                             static int s_StrawberryType = -2;
                             if (s_StrawberryType == -2)
                                 s_StrawberryType = Fruit::FruitType("strawberry", false);

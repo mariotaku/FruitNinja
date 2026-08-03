@@ -503,16 +503,22 @@ float Bomb::GetWait() {
 
 // ASM-spec v1.6.1 Bomb::CollisionResponse @ 0x1d5d4c
 // Returns 0. Three branches: arcade bomb hit / classic+zen bomb hit / menu-bomb re-hit.
-int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
+int Bomb::CollisionResponse(Mortar::Entity* hitter,
                              unsigned long /*flagsA*/,
                              unsigned long /*flagsB*/,
                              _Vector3<float>* /*bladeVelocity*/) {
     // Guard: DO NOT set guard=1 here; Disable() sets it
     if (m_bCollisionGuard != 0) return 0;
 
-    Game* game = Game::GetInstance();
-
-    if (m_bMenuBombHit == 0 && game != nullptr) {
+    // v1.6.1 Bomb::CollisionResponse @0x001d5d4c gates the fresh-bomb-hit arm on
+    // `param_1 != 0` -- the HITTER -- and never calls Game::GetInstance. The port
+    // used to test a Game instance here instead, which was a stand-in for this
+    // gate; the real parameter is restored.
+    // Callers that pass hitter == nullptr (MenuButton::Update's back-key forced
+    // slice @0x0019ad14) always target a menu bomb, whose m_bMenuBombHit was set
+    // to 1 by Bomb::SetCallback -- so they take the menu-rehit arm below and are
+    // unaffected. The blade (SlashEntity::Update @0x001e867c) passes itself.
+    if (m_bMenuBombHit == 0 && hitter != nullptr) {
         const bool isArcade = (game_work.gameMode == GAME_MODE_ARCADE);
 
         if (isArcade) {
