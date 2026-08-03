@@ -57,7 +57,14 @@ enum EntityFlagBits : uint8_t {
 
 namespace Mortar {
 
-// ASM-verified: 2026-04-28T15:55Z v1.6.1 Mortar::Entity::Entity @ 0x00256370 (asm-inspector)
+// ASM-spec v1.6.1 Mortar::Entity::Entity @ 0x00256370 -- see Entity.cpp for the
+// ctor's field-by-field spec.
+// UNVERIFIED: this carried an ASM-verified stamp the diff does not support. The
+// binary bulk-fills 0x3C bytes and copies a zero Vector3 from a GOT global; the
+// port initialises each member individually, so the padding at +0x0a/+0x0d is
+// zeroed by the binary and left alone by the port. Every named field ends up
+// with the same value, so no divergence is proven -- but this is the base ctor
+// for every entity, so it wants a real asm-inspector pass, not a carried stamp.
 class Entity {
 public:
     // +0x04: RuntimeID / loader field. Set by LoadEntity; matched by

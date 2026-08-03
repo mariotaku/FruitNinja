@@ -43,9 +43,15 @@ static const float TRAIL_FADE_IN_END =    0.85f; // DAT_001635c0
 static const float TRAIL_FADE_OUT_START = 2.0f;  // from binary phase logic
 
 // ===================================================================
-// ASM-verified: 2026-07-04T00:00 v1.6.1 TutorialControl::TutorialControl @ 0x001c2fdc (C1)
+// ASM-spec v1.6.1 TutorialControl::TutorialControl @ 0x001c2fdc (C1)
 // (duplicate C2 body @ 0x001c30cc, unreferenced GCC ctor clone -- cosmetic)
-// Texture assignment (verified):
+// UNVERIFIED: the previous ASM-verified stamp carried no asm-inspector
+// provenance, and the body already deviates deliberately (see the m_Colour
+// DIFFERS below), so it could not have been a whole-body match anyway. The port
+// compiles to 37 instructions against the binary's 60. The binary's two
+// sub-object ctor calls land on +0x74 (m_Texture) and +0x8C (m_PressTex), which
+// agrees with this layout; the rest of the shortfall is unexplained.
+// Texture assignment:
 //   swipe_fruit_begin.tex -> super.m_Texture (+0x74)  [arrow graphic]
 //   press_indicate.tex    -> m_PressTex (+0x8C)       [trail quads]
 // ===================================================================

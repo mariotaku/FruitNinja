@@ -18,7 +18,12 @@ BombFlash::~BombFlash() {}
 // v1.6.1 BombFlash::Init @0x001d4dbc — stub (real init logic not yet ported)
 void BombFlash::Init(void*, long, _Vector3<float>*) {}
 
-// ASM-verified: 2026-07-04T00:00:00Z v1.6.1 BombFlash::Update @ 0x001d4dd4 (asm-inspector)
+// ASM-spec v1.6.1 BombFlash::Update @ 0x001d4dd4
+// UNVERIFIED: this carried an ASM-verified stamp the instruction counts do not
+// support -- the port compiles to 64 instructions against the binary's 86. The
+// binary builds a Vector3 temp on the stack where the port assigns m_Scale
+// directly, which covers only part of the 26% shortfall. No divergence proven,
+// but the stamp is not earned; needs a fresh body-level read.
 // Quadratic scale-grow + linear fade-in / quadratic fade-out over a 0.6s lifetime;
 // deactivates and returns the slot to the pool once m_Timer exceeds 0.6s.
 void BombFlash::Update(float dt) {

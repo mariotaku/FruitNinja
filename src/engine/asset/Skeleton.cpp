@@ -59,10 +59,12 @@ uint32_t Skeleton::FindIndex(const char* name) const {
     return FindIndex(Mortar::AsciiString(name));
 }
 
-// ASM-verified: 2026-06-18 v1.6.1 Skeleton::BuildArrays @ 0x0023b6f0 (asm-inspector)
-// Binary allocates ONE block new Matrix44[count*3], partitions into 3 pointers.
-// No per-element Identity() -- memory left uninitialized.
-// Port uses resize (still calls Matrix44 ctor per element; port limitation).
+// DIFFERS: original = one `new Matrix44[count*3]` (v1.6.1 Mortar::Skeleton::BuildArrays @0x0023b6f0)
+// partitioned into three pointers with no per-element init; using three
+// std::vector<Matrix44>::resize because the port owns the arrays via the
+// vectors. resize value-constructs each element (identity), so the port runs a
+// per-element ctor the binary does not. Result-equivalent: BuildLocalMatrices
+// overwrites every entry before any read.
 void Skeleton::BuildArrays(unsigned long count) {
     if (count == m_LocalMatrices.size() && !m_LocalMatrices.empty()) return;
     if (count == 0) {

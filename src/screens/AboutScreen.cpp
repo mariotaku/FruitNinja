@@ -444,7 +444,14 @@ void AboutScreen::CreateBackButton()
 // State machine + marquee scroll.
 // ASM-spec v1.6.1 AboutScreen::Update @0x0015c350: after state machine,
 // m_EntryDelay countdown gate then scroll loop per m_Marquees item.
-// ASM-verified: 2026-07-15T01:20Z v1.6.1 AboutScreen::Update @ 0x0015c350..0x0015c913 (asm-inspector)
+// UNVERIFIED GAP: the __bada__ path of this body compiles to 103 instructions
+// against the binary's 369 -- two thirds of the binary's Update is unaccounted
+// for. The function-boundary split into UpdateRealtime() does NOT explain it
+// (the cross-build defines __bada__, so UpdateRealtime is not compiled and the
+// easing/scroll live inline here, as in the binary). The defunct OFN-button
+// creation stubbed at the top of the body is a partial candidate only. This
+// carried an ASM-verified stamp that the instruction counts do not support;
+// needs a real body-level read before it can be re-stamped.
 // -----------------------------------------------------------------------
 void AboutScreen::Update(float dt)
 {

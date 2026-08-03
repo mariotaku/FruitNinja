@@ -184,8 +184,14 @@ void ScoreControl::Release() {
     m_HighscoreBannerTex.SetNull();
 }
 
-// v1.6.1 ScoreControl::Reset @ 0x001ac1c8
-// ASM-verified: 2026-05-09 v1.6.1 ScoreControl::Reset @ 0x001ac1c8 (re-analyst)
+// ASM-spec v1.6.1 ScoreControl::Reset @ 0x001ac1c8
+// UNVERIFIED: this carried an ASM-verified stamp whose provenance was a
+// re-analyst read, not an instruction diff, and the two bodies do not obviously
+// agree on what Reset touches. The binary's visible work is the +0x74 <- +0xF8
+// texture copy and `m_bDirty = 1` (strb at +0x7C). The port also writes size
+// (+0x28), m_LayerFlags (+0x34), m_DigitCount/m_LastDigitCount and the whole
+// m_DigitAlpha block (+0xB8..+0xF7). Open question: does the binary clear that
+// block here, elsewhere, or not at all? Settle before re-stamping.
 void ScoreControl::Reset() {
     // Binary copies m_FruitDigitTex (+0xF8 = hud_fruit.tex) into m_Texture
     // (+0x74) unconditionally so HUDControl3d::Draw renders the watermelon

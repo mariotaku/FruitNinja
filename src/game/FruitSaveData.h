@@ -259,7 +259,11 @@ public:
     std::map<uint32_t, AchievementItem> m_PendingUnlocks;
 
     // +0x174: fully unlocked achievements; persisted in <achievements> XML block.
-    // ASM-verified: 2026-05-18 v1.6.1 FruitSaveData::Update @ 0x0015498c (re-analyst)
+    // ASM-spec v1.6.1 FruitSaveData::Update @ 0x0015498c -- Update moves entries
+    // here off m_PendingUnlocks. The offset is corroborated (the binary's Update
+    // bases its map access at +0x15C, matching m_PendingUnlocks above), but the
+    // Update body itself is not ASM-verified -- see the UNVERIFIED note on
+    // FruitSaveData::Update in FruitSaveData.cpp.
     std::map<uint32_t, AchievementItem> m_UnlockedAchievements;
 
     // +0x18c..+0x194: blitz mode state.

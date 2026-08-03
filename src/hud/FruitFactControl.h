@@ -45,7 +45,14 @@
 //   +0xAC        : std::vector<FruitFactPage*> m_Pages
 //   total 0xB8
 //
-// ASM-verified: layout v1.6.1 FruitFactControl @ 0x00170c78
+// ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: the field layout above.
+// UNVERIFIED: the layout carried an ASM-verified stamp that no asm-inspector run
+// backs. Supporting evidence is circumstantial but consistent -- the __bada__
+// offset asserts below pass, and the binary ctor's sub-object ctor calls land on
+// +0x88 (m_FactTexture), +0x98 (m_FactColour) and +0xAC (m_Pages), exactly where
+// this layout puts them. The ctor's instruction diff (port 43 vs binary 63) is a
+// separate open question about inline-vs-out-of-line field init, not about these
+// offsets.
 //
 // Singleton: static instance @ DATA 0x002d7520 (v1.6.1); constructed at
 // static-init time (entry-point xref). Not reached via a menu button.
@@ -119,35 +126,35 @@ public:
     // Binary struct fields -- public to allow offsetof() in layout static_asserts
     // (GCC 4.4 __bada__ cross-build: offsetof on private members is an error).
     // +0x7C: current fact string (result of Fruit::GetFact; ctor inits NULL)
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     const char* m_FactText;                                // @+0x7C
     // +0x80: combo index A (ctor inits 0xFFFFFFFF)
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     unsigned int m_ComboA;                                 // @+0x80
     // +0x84: combo index B (ctor inits 0xFFFFFFFF)
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     unsigned int m_ComboB;                                 // @+0x84
     // +0x88: fact page texture
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     Mortar::SmartPtr<Mortar::Texture> m_FactTexture;       // @+0x88
     // +0x8C: fact offset Vec3 (Init sets (-69,53,0)); replaces old 3x SmartPtr slots
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     _Vector3<float> m_FactOffset;                                     // @+0x8C..+0x97
     // +0x98: fact colour (ctor inits (0x74,0x5D,0x3B))
     Colour m_FactColour;                                   // @+0x98
     // +0x9C: current page index (ctor inits 0)
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     int m_PageFlag;                                        // @+0x9C
     // +0xA0: next arrow MenuButton (lazily new'd in Update when pages>1)
     MenuButton* m_NextButton;                              // @+0xA0
     // +0xA4: prev arrow MenuButton (lazily new'd in Update when pages>1)
     MenuButton* m_PrevButton;                              // @+0xA4
     // +0xA8: game-mode snapshot byte (= game_work.gameMode at Init time)
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     uint8_t m_GameStateSnapshot;                           // @+0xA8
     uint8_t _pad_A9[3];                                    // padding to align m_Pages
     // +0xAC: pages vector
-    // ASM-verified: v1.6.1 FruitFactControl @ 0x00170c78
+    // ASM-spec v1.6.1 FruitFactControl @ 0x00170c78: layout
     std::vector<FruitFactPage*> m_Pages;                   // @+0xAC
 };
 

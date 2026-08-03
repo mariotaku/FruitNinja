@@ -295,7 +295,13 @@ void FruitSaveData::DownloadTweaks() {
 // v1.6.1 FruitSaveData::Update @0x0015498c. Achievement timer tick: find the pending entry with the
 // smallest timer, decrement it, fire when it reaches zero, then move to unlocked map.
 // Name prefix '0'..'9' -> UnlockAchievementInNetwork (defunct online ID); else -> ItemManager::UnlockItem.
-// ASM-verified: 2026-05-18 v1.6.1 FruitSaveData::Update @ 0x0015498c (re-analyst)
+// ASM-spec v1.6.1 FruitSaveData::Update @ 0x0015498c
+// UNVERIFIED: this carried an ASM-verified stamp whose provenance was a
+// re-analyst read, not an instruction diff. The map offsets do check out (the
+// port's std::map base lands on +0x15C, as in the binary), but the port
+// compiles to 75 instructions against the binary's 192, and inlined-vs-
+// out-of-line std::map codegen does not obviously cover a 61% shortfall.
+// Re-read the unlock-dispatch tail before re-stamping.
 void FruitSaveData::Update(float dt, HUD* hud) {
     if (m_PendingUnlocks.empty()) return;
 

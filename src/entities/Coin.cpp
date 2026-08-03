@@ -136,11 +136,14 @@ void Coin::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* /*p3*/) {}
 void Coin::PostUpdate(float /*dt*/) {}
 
 // ---------------------------------------------------------------------------
-// ASM-verified: 2026-07-04T00:00:00Z v1.6.1 Coin::Arrived @ 0x001d79bc
 // Only m_pFlyEmitter is torn down here; m_pCollectEmitter is left running so
 // the collect/sparkle burst plays to completion (InitCoin re-nulls it on
-// next reuse, so there's no leak). flags |= 0x11, but ENT_INACTIVE is dead
-// for Coin (force-cleared on recycle) -- keep ENT_KILLED-only.
+// next reuse, so there's no leak).
+// DIFFERS: original calls the arrival delegate at [this+112] unconditionally and
+// ends `orr flags,#0x11` = ENT_INACTIVE|ENT_KILLED (v1.6.1 Coin::Arrived @0x001d79bc).
+// The port gates the call on Delegate validity, and sets ENT_KILLED only,
+// because ENT_INACTIVE is dead for Coin -- InitCoin's `flags &= 0xEE`
+// force-clears it on every recycle.
 // ---------------------------------------------------------------------------
 void Coin::Arrived() {
     if (m_OnArrived) {

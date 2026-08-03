@@ -195,7 +195,13 @@ public:
     void AddModifier(GameModifier* mod);
 
     // v1.6.1 PowerUp::PowerUp(PowerUp*) C1 @0x00141b58 / C2 @0x00141cdc — copy constructor
-    // ASM-verified: 2026-05-18 v1.6.1 PowerUp::PowerUp(PowerUp*) @ 0x00141b58 (re-analyst)
+    // ASM-spec v1.6.1 PowerUp::PowerUp(PowerUp*) @ 0x00141b58
+    // UNVERIFIED: this carried an ASM-verified stamp whose provenance was a
+    // re-analyst read, not an instruction diff, and the copy ctor is still one
+    // of the file's biggest divergences (binary 97 instructions). The offsets
+    // the binary reaches for -- +0xa4 (m_Colour) and +0xac (m_Texture1) -- do
+    // agree with the layout above, so the older "shifted bases" reading is not
+    // supported and no divergence is proven. Needs a real asm-inspector pass.
     PowerUp(PowerUp* src);
 
     // @ 0x00117a44 — returns coin cost if purchaseable, else 0

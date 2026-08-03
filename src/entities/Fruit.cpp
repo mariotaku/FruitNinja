@@ -2029,7 +2029,14 @@ void Fruit::SetupSliceRotations(bool isSuperFruit, bool sliceDirFlag) {
         // Binary @0x001dad40..0x001dadf0: three CreateFromAxisAngle calls with
         // angle 0x3FFC, 0x3FFC, then m_SliceArcAngle; axes (0,0,1)/(0,1,0)/(0,0,1).
         // Product: m_Rot[idx] = (q1*q2)*q3, stored WITHOUT normalize.
-        // ASM-verified: 2026-07-26T06:00Z v1.6.1 Fruit::SetupSliceRotations @ 0x001da968..0x001dae54 (asm-inspector)
+        // ASM-spec v1.6.1 Fruit::SetupSliceRotations @ 0x001da968..0x001dae54
+        // UNVERIFIED: the stamp here claimed asm-inspector coverage of the WHOLE
+        // function while sitting on this quaternion sub-block, and the whole
+        // function does not match -- the port compiles to 584 instructions
+        // against the binary's 316. Inlined Quaternion::Multiply and cosf/sinf
+        // vs the binary's angle-16 LUT (the accepted cause on the sibling
+        // RotateFacingUp) is the obvious suspect for the 85% excess, but nobody
+        // has shown it accounts for all of it.
         Quaternion* q = (idx == 0) ? &m_Rot1 : &m_Rot2;
         Quaternion q1, q2, q3;
         q1.CreateFromAxisAngle(0.0f, 0.0f, 1.0f, 0x3FFCu);

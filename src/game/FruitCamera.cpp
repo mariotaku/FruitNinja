@@ -224,7 +224,13 @@ Mortar::Entity* FruitCamera::GetFollowEntity() {
 
 // Non-virtual (0x001ee124) — 4-type ortho dispatch.
 //
-// ASM-verified: 2026-05-06T00:00 v1.6.1 FruitCamera::SetupPerspective @ 0x001ee124 (asm-inspector)
+// ASM-spec v1.6.1 FruitCamera::SetupPerspective @ 0x001ee124
+// UNVERIFIED: the stamp here is not supported by the instruction counts -- the
+// port compiles to 186 against the binary's 274, i.e. 32% short on a projection
+// setup. Two candidate causes, neither settled: (1) the port opens with an
+// early-out on m_bDirty (`ldrb [this,+0x108]`) that the binary appears not to
+// have; (2) the header above calls this a 4-type ortho dispatch, but the port
+// branches only PT_GENERIC vs everything-else. Settle both before re-stamping.
 void FruitCamera::SetupPerspective(PERSPECIVE_TYPE perspType, bool forceUpdate) {
     MatrixManager& mm = MatrixManager::GetInstance();
 
