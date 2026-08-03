@@ -45,10 +45,16 @@ struct GlyphTTF {
                                 //       (pen step, = GetKerning value); .y = (horiBearingY -
                                 //       height)/64 (ink bottom, baseline-relative). Both * fontScale.
     FontAtlasPage* m_SurfaceKey; // +0x10 owning atlas page (binary: TextureAtlasPage* rec[0x40])
-    float       m_UvU0;         // +0x14 cell UVs straight from the rec -- NO inset stored
-    float       m_UvV0;         // +0x18 (the 1/512 inset is applied in FinishMesh)
-    float       m_UvV1;         // +0x1c
-    float       m_UvU1;         // +0x20
+    // Cell UVs straight from the atlas rec -- NO inset stored (the 1/512 inset is
+    // applied in FinishMesh). Order is (u0, v0, u1, v1), copied 1:1 from the rec's
+    // own +0x08/+0x0c/+0x10/+0x14 quad by FetchGlyph @0x0024fa24.
+    // The u1/v1 pair used to be declared the other way round here; the binary's
+    // FinishMesh @0x002480a8 proves +0x1c feeds the RIGHT column's u and +0x20 the
+    // BOTTOM row's v, so u1 comes first.
+    float       m_UvU0;         // +0x14 left   U
+    float       m_UvV0;         // +0x18 top    V
+    float       m_UvU1;         // +0x1c right  U
+    float       m_UvV1;         // +0x20 bottom V
     _Vector2<float> m_QuadMin;      // +0x24 CELL ORIGIN = (padL, padT) * fontScale -- the baked
                                 //       bearing pad (NOT the pen; set by FetchGlyph)
     _Vector2<float> m_RotBasis;     // +0x2c PEN (penX, penY) -- on-baseline placement, set by
@@ -62,6 +68,10 @@ struct GlyphTTF {
 static_assert(sizeof(GlyphTTF) == 0x44, "GlyphTTF sizeof mismatch");
 static_assert(__builtin_offsetof(GlyphTTF, m_GlyphScale) == 0x08, "m_GlyphScale offset mismatch");
 static_assert(__builtin_offsetof(GlyphTTF, m_SurfaceKey) == 0x10, "m_SurfaceKey offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_UvU0)       == 0x14, "m_UvU0 offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_UvV0)       == 0x18, "m_UvV0 offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_UvU1)       == 0x1c, "m_UvU1 offset mismatch");
+static_assert(__builtin_offsetof(GlyphTTF, m_UvV1)       == 0x20, "m_UvV1 offset mismatch");
 static_assert(__builtin_offsetof(GlyphTTF, m_QuadMin)    == 0x24, "m_QuadMin offset mismatch");
 static_assert(__builtin_offsetof(GlyphTTF, m_RotBasis)   == 0x2c, "m_RotBasis offset mismatch");
 static_assert(__builtin_offsetof(GlyphTTF, m_QuadSize)   == 0x34, "m_QuadSize offset mismatch");
@@ -106,12 +116,29 @@ struct BakedStringTTF_Surface {
     // AddGlyph @0x00248718: push_back into m_Glyphs (+0x3c).
     void AddGlyph(GlyphTTF* g);
 
+    // ClearVerts @0x00247774: free m_Verts (delete[]), null it, zero m_VertCount.
+    // FinishMesh opens with this; it is the only vertex-buffer release point the
+    // binary has, so a surface can be re-meshed in place any number of times.
+    void ClearVerts();
+
+    // Rotate2DVector @0x00247f68 (static member, NOT a free function):
+    //   returns (cos*v.x - sin*v.y, cos*v.y + sin*v.x).
+    // Out-of-line in the binary and called 4x per glyph by FinishMesh.
+    static _Vector2<float> Rotate2DVector(_Vector2<float> v, float angle);
+
     // FinishMesh @0x002480a8: build this surface's 6-vert/glyph tri-list.
-    // Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1)x(h+1) with local
-    // corners offset by -m_QuadMin (cell origin); each corner is rotated by
-    // m_RotAngle then translated by m_RotBasis (pen). The 1/512 UV inset is
-    // applied here (u0-=, v0+=, v1-=, u1+=). Winding: GLES uses the non-RT-flip
-    // (ELSE) branch of the binary's FontInterface[0x14c] switch.
+    // ClearVerts(); count drawable glyphs (cell w>=1 and h>=1); m_VertCount =
+    // drawable*6; allocate that many verts. Per drawable glyph: quad = (w+1)x(h+1)
+    // with local corners offset by -m_QuadMin (cell origin); each corner is rotated
+    // by m_RotAngle (Rotate2DVector, called BR/TL/BL/TR in that order) then
+    // translated by m_RotBasis (pen). The 1/512 UV inset is applied here as a
+    // uniform translate: both U -= 1/512, both V += 1/512. Winding comes from
+    // FontInterface +0x14c (see the k_FontInterfaceWinding note in the .cpp).
+    // A rolled 6-iteration pass then writes z=0, normal=(0,0,1) and the packed
+    // m_PlatformColour (+0x38) into all six verts.
+    // TAIL: m_Glyphs.clear() -- the surface drops its (non-owning) glyph list once
+    // the mesh is baked, so a re-meshed surface never accumulates duplicates and
+    // never holds pointers that BakedStringTTF::DeleteGlyphs has freed.
     // Called per surface by BakedStringTTF::BuildSurfaces @0x00248c14.
     void FinishMesh();
 

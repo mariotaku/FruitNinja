@@ -31,17 +31,54 @@ static const float k_PI      = 3.14159265f;
 static const float k_DEG2RAD = 0.017453292f;
 static const float k_UvInset = 0.001953125f;  // 1/512 -- FinishMesh UV inset
 
-// Rotate a 2D point (x,y) by angle (radians), result in (ox,oy).
-// v1.6.1 Rotate2DVector used in FinishMesh @0x002480a8
-static void Rotate2DVector(float x, float y, float angle, float& ox, float& oy)
-{
-    float s = sinf(angle);
-    float c = cosf(angle);
-    ox = c * x - s * y;
-    oy = s * x + c * y;
-}
+// Winding selector for BakedStringTTF_Surface::FinishMesh.
+//
+// The binary reads it per glyph as FontInterface::GetInstance()[+0x14c] and picks
+// one of two vertex-emission orders: ==1 emits BR,TL,BL,TR,TL,BR (counter-
+// clockwise), anything else emits BR,BL,TL,TR,BR,TL (clockwise). The field is the
+// integer half of a pair with +0x150 (=1.0f, the Y scale BakedStringTTF::Draw
+// @0x002497a8 applies in its step 6): together they are the atlas Y orientation,
+// and the winding has to flip with the Y scale to keep the triangle facing.
+//
+// v1.6.1 FontInterface::FontInterface @0x002502e0 stores 1 into +0x14c and NOTHING
+// else in the binary writes it -- every FontInterface member was checked, plus a
+// program-wide scan for `str r,[r,#0x14c]`. So it is a constant 1 for the whole
+// process life and the counter-clockwise arm is the only one that ever runs.
+//
+// DIFFERS: original = FontInterface::GetInstance()[+0x14c] (v1.6.1
+//   Mortar::BakedStringTTF_Surface::FinishMesh @0x002480a8), using a pinned 1
+//   because the port's FontInterface is not a layout-faithful port of the binary
+//   class -- it has neither the field nor a GetInstance() singleton. The value is
+//   exact, not an approximation (see above), so this costs no fidelity.
+// Winding itself is unobservable either way: Renderer::DrawTriList disables face
+// culling for every 2D/text draw on both the GL and GX backends.
+static const int k_FontInterfaceWinding = 1;
 
 namespace Mortar {
+
+// Rotate2DVector @0x00247f68: rotate v by angle (radians).
+// A static member of BakedStringTTF_Surface in the binary, out-of-line, called 4x
+// per glyph by FinishMesh (once per quad corner).
+// ASM-spec v1.6.1 Mortar::BakedStringTTF_Surface::Rotate2DVector @0x00247f68:
+//   cosf/sinf of the angle, then (c*v.x - s*v.y, c*v.y + s*v.x).
+_Vector2<float> BakedStringTTF_Surface::Rotate2DVector(_Vector2<float> v, float angle)
+{
+    const float c = cosf(angle);
+    const float s = sinf(angle);
+    return _Vector2<float>(c * v.x - s * v.y, c * v.y + s * v.x);
+}
+
+// ClearVerts @0x00247774: release the baked vertex buffer.
+// ASM-spec v1.6.1 Mortar::BakedStringTTF_Surface::ClearVerts @0x00247774:
+//   if (m_Verts) { delete[] m_Verts; m_Verts = 0; } m_VertCount = 0;
+void BakedStringTTF_Surface::ClearVerts()
+{
+    if (m_Verts) {
+        delete[] m_Verts;
+        m_Verts = 0;
+    }
+    m_VertCount = 0;
+}
 
 // FetchGlyph: return a fully-populated heap GlyphTTF for
 // (cp, scaledHeight, radius, effect). Binary: hash -> TextureAtlas::FindItem;
@@ -58,7 +95,7 @@ GlyphTTF* FetchGlyph(FontCacheObjectTTF* fc, float scaledHeight, uint32_t cp,
     g->m_Font       = fc;
     g->m_GlyphScale = _Vector2<float>(0.0f, 0.0f);
     g->m_SurfaceKey = 0;
-    g->m_UvU0 = g->m_UvV0 = g->m_UvV1 = g->m_UvU1 = 0.0f;
+    g->m_UvU0 = g->m_UvV0 = g->m_UvU1 = g->m_UvV1 = 0.0f;
     g->m_QuadMin    = _Vector2<float>(0.0f, 0.0f);
     g->m_RotBasis   = _Vector2<float>(0.0f, 0.0f);
     g->m_QuadSize   = _Vector2<float>(0.0f, 0.0f);
@@ -71,10 +108,12 @@ GlyphTTF* FetchGlyph(FontCacheObjectTTF* fc, float scaledHeight, uint32_t cp,
     if (rec) {
         g->m_GlyphScale = _Vector2<float>(rec->layoutX, rec->layoutY);
         g->m_SurfaceKey = rec->page;
+        // Binary: rec[+0x08..+0x14] is a (u0, v0, u1, v1) quad copied straight into
+        // GlyphTTF[+0x14..+0x20] in the same order.
         g->m_UvU0       = rec->cellU0;
         g->m_UvV0       = rec->cellV0;
-        g->m_UvV1       = rec->cellV1;
         g->m_UvU1       = rec->cellU1;
+        g->m_UvV1       = rec->cellV1;
         g->m_QuadMin    = _Vector2<float>(rec->cellOriginX, rec->cellOriginY);
         g->m_QuadSize   = _Vector2<float>(rec->cellW, rec->cellH);
     }
@@ -190,10 +229,7 @@ void BakedStringTTF::DeleteSurfaces()
     for (size_t i = 0; i < m_Surfaces.size(); ++i) {
         BakedStringTTF_Surface* s = m_Surfaces[i];
         if (s) {
-            if (s->m_Verts) {
-                delete[] s->m_Verts;
-                s->m_Verts = 0;
-            }
+            s->ClearVerts();
             delete s;
         }
     }
@@ -313,19 +349,20 @@ void BakedStringTTF_Surface::AddGlyph(GlyphTTF* g)
 }
 
 // BuildSurfaces @0x00248c14:
-// if(!m_GlyphsBuilt) BuildGlyphs; per glyph: FindOrCreateSurface(g->m_SurfaceKey)
+// if(!m_GlyphsBuilt) BuildGlyphs; if(m_SurfacesBuilt) DeleteSurfaces;
+// m_SurfacesBuilt = true; per glyph: FindOrCreateSurface(g->m_SurfaceKey)
 // ->AddGlyph(g). Then per surface: m_PlatformColour = PlatformColour(gradient
 // stop 0); surf->FinishMesh(). Then UpdateBounds.
 // ASM-spec v1.6.1 BakedStringTTF::BuildSurfaces @0x00248c14.
 void BakedStringTTF::BuildSurfaces()
 {
-    // Port safety: drop the previous build first. The binary's rebuild callers
-    // (FullInternalRebuild path via BuildGlyphs invalidation, Circle_Internal)
-    // clear surfaces before reaching here; keeping the clear local is idempotent
-    // and prevents stale-glyph dangling after DeleteGlyphs.
-    DeleteSurfaces();
-
     if (!m_GlyphsBuilt) BuildGlyphs();
+
+    // Binary order: the delete is gated on m_SurfacesBuilt and the flag is set
+    // before the two loops, not after them. m_Surfaces is non-empty exactly when
+    // m_SurfacesBuilt is set (DeleteSurfaces clears both), so the gate is exact.
+    if (m_SurfacesBuilt) DeleteSurfaces();
+    m_SurfacesBuilt = true;
 
     for (size_t i = 0; i < m_Glyphs.size(); ++i) {
         GlyphTTF* g = m_Glyphs[i];
@@ -345,92 +382,114 @@ void BakedStringTTF::BuildSurfaces()
     }
 
     UpdateBounds();
-    m_SurfacesBuilt = true;
 }
 
 // BakedStringTTF_Surface::FinishMesh @0x002480a8: build this surface's
 // 6-vert/glyph tri-list.
-// Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1) x (h+1).
-// Local corners with (Ox,Oy) = m_QuadMin (cell origin, the baked bearing pad):
+//
+// ClearVerts(); count the drawable glyphs (cell w>=1 AND h>=1); write
+// m_VertCount = drawable*6 and allocate that many QUADCUSTOMVERTEX up front.
+//
+// Per drawable glyph the quad is (w+1) x (h+1). Local corners with (Ox,Oy) =
+// m_QuadMin (cell origin, the baked bearing pad):
 //   BL(-Ox,-Oy)  TL(-Ox, h+1-Oy)  BR(w+1-Ox, -Oy)  TR(w+1-Ox, h+1-Oy)
-// Each corner = Rotate2DVector(corner, m_RotAngle) + m_RotBasis (pen).
+// Each corner = Rotate2DVector(corner, m_RotAngle) + m_RotBasis (pen). The binary
+// makes the four calls in the order BR, TL, BL, TR.
 // +Y is up; the pen (m_RotBasis.y = layout .y = ink bottom) anchors the quad
-// bottom, so the top corners (larger y) sample the cell-top V (v0).
-// UV inset applied HERE (uniform translate): all-U -= 1/512, all-V += 1/512
-// (u0 -= 1/512, u1 -= 1/512, v0 += 1/512, v1 += 1/512).
-// Winding: the binary keys two orders on FontInterface[0x14c]==1 (RT Y-flip);
-// GLES uses the ELSE branch: tri0=(BL,TL,BR), tri1=(TR,BR,TL) -- tri-list
-// consumed by Mesh::DrawTriList (port: Renderer::DrawTriList).
-// ASM-spec v1.6.1 Mortar::BakedStringTTF_Surface::FinishMesh @ 0x002480a8:
-//   quad geometry (corners, (w+1)x(h+1) cell, origin sub, rotate+pen, m_QuadSize
-//   skip) and the uniform-translate UV inset were matched by the 2026-07-09
-//   asm-inspector pass. That pass ran while this body was still a member of the
-//   OUTER class (BakedStringTTF::FinishMesh(Surface*)), so every this-relative
-//   offset it compared was shifted by a class -- the old `ASM-verified` stamp was
-//   not testable and is downgraded here. The method now sits on the surface, which
-//   is what the binary symbol says, so the pairing is exact.
-// TODO: v1.6.1 0x002480a8 (Mortar::BakedStringTTF_Surface::FinishMesh) -- re-diff
-//   after the next sweep and settle the two leads the mis-paired diff still showed:
-//   (a) the port writes 8 floats + colour per 36-byte vertex where the binary writes
-//   3 (+4,+28,+32) plus the packed colour; (b) the port indexes the glyph array
-//   (ldr [r,r,lsl#2]) where the binary post-increments a pointer (ldr [r],#4).
+// bottom, so the top corners (larger y) sample the cell-top V (m_UvV0).
+//
+// UV inset applied HERE, as a uniform translate: both U -= 1/512, both V += 1/512.
+//
+// Winding: the binary keys two vertex orders on FontInterface[+0x14c]
+// (k_FontInterfaceWinding above -- a constant 1 in v1.6.1):
+//   ==1  BR, TL, BL, TR, TL, BR   -- tri0 (BR,TL,BL), tri1 (TR,TL,BR); CCW
+//   else BR, BL, TL, TR, BR, TL   -- tri0 (BR,BL,TL), tri1 (TR,BR,TL); CW
+// Both cover the same two triangles; only the facing differs, and face culling is
+// off for every text draw, so this is an ordering match, not a visual one.
+//
+// A rolled 6-iteration pass then fills z=0, normal=(0,0,1) and the packed
+// m_PlatformColour (+0x38) into all six verts -- every one of the 9 words of the
+// 0x24-byte vertex is written, so the buffer needs no pre-zeroing.
+//
+// TAIL: m_Glyphs.clear() (binary: the `m_Glyphs.end = m_Glyphs.begin` store at
+// +0x40 <- +0x3c). The surface's glyph list is non-owning scratch that only
+// BuildSurfaces fills and only this function consumes; dropping it here is what
+// makes a surface safe to re-mesh and stops it outliving the GlyphTTF objects
+// BakedStringTTF::DeleteGlyphs frees.
+//
+// Tri-list consumed by Mesh::DrawTriList (port: Renderer::DrawTriList).
+// ASM-spec v1.6.1 Mortar::BakedStringTTF_Surface::FinishMesh @0x002480a8.
 void BakedStringTTF_Surface::FinishMesh()
 {
-    if (m_Verts) {
-        delete[] m_Verts;
-        m_Verts = 0;
-    }
-    m_VertCount = 0;
+    ClearVerts();
 
     uint32_t drawable = 0;
     for (size_t i = 0; i < m_Glyphs.size(); ++i) {
         GlyphTTF* g = m_Glyphs[i];
-        if (g->m_QuadSize.x < 1.0f || g->m_QuadSize.y < 1.0f) continue;
-        drawable++;
+        if (g->m_QuadSize.x >= 1.0f && g->m_QuadSize.y >= 1.0f) drawable++;
     }
-    if (drawable == 0) return;
 
-    m_Verts = new QUADCUSTOMVERTEX[drawable * 6];
-    memset(m_Verts, 0, sizeof(QUADCUSTOMVERTEX) * drawable * 6);
+    m_VertCount = drawable * 6;
+    m_Verts = new QUADCUSTOMVERTEX[m_VertCount];
 
-    const uint32_t packed = m_PlatformColour;
-    uint32_t vi = 0;
+    uint32_t quad = 0;
     for (size_t i = 0; i < m_Glyphs.size(); ++i) {
         GlyphTTF* g = m_Glyphs[i];
-        float w = g->m_QuadSize.x;
-        float h = g->m_QuadSize.y;
+        const float w = g->m_QuadSize.x;
+        const float h = g->m_QuadSize.y;
         if (w < 1.0f || h < 1.0f) continue;
 
-        const float Ox = g->m_QuadMin.x;
-        const float Oy = g->m_QuadMin.y;
+        const float Ox    = g->m_QuadMin.x;
+        const float Oy    = g->m_QuadMin.y;
+        const float angle = g->m_RotAngle;
+        const float penX  = g->m_RotBasis.x;
+        const float penY  = g->m_RotBasis.y;
 
-        // BL, TL, BR, TR (see function comment).
-        float cx[4] = { -Ox,           -Ox,           w + 1.0f - Ox, w + 1.0f - Ox };
-        float cy[4] = { -Oy,           h + 1.0f - Oy, -Oy,           h + 1.0f - Oy };
+        // Binary call order: BR, TL, BL, TR.
+        const _Vector2<float> rBR = Rotate2DVector(_Vector2<float>(w + 1.0f - Ox, -Oy), angle);
+        const _Vector2<float> rTL = Rotate2DVector(_Vector2<float>(-Ox, h + 1.0f - Oy), angle);
+        const _Vector2<float> rBL = Rotate2DVector(_Vector2<float>(-Ox, -Oy), angle);
+        const _Vector2<float> rTR = Rotate2DVector(_Vector2<float>(w + 1.0f - Ox, h + 1.0f - Oy), angle);
 
-        float wx[4], wy[4];
-        for (int k = 0; k < 4; k++) {
-            float rx, ry;
-            Rotate2DVector(cx[k], cy[k], g->m_RotAngle, rx, ry);
-            wx[k] = g->m_RotBasis.x + rx;
-            wy[k] = g->m_RotBasis.y + ry;
+        const float brX = penX + rBR.x, brY = penY + rBR.y;
+        const float tlX = penX + rTL.x, tlY = penY + rTL.y;
+        const float blX = penX + rBL.x, blY = penY + rBL.y;
+        const float trX = penX + rTR.x, trY = penY + rTR.y;
+
+        const float uL = g->m_UvU0 - k_UvInset;   // left   column U
+        const float vT = g->m_UvV0 + k_UvInset;   // top    row    V
+        const float uR = g->m_UvU1 - k_UvInset;   // right  column U
+        const float vB = g->m_UvV1 + k_UvInset;   // bottom row    V
+
+        QUADCUSTOMVERTEX* v = m_Verts + quad * 6;
+        if (k_FontInterfaceWinding == 1) {
+            v[0].x = brX; v[0].y = brY; v[0].u = uR; v[0].v = vB;  // BR
+            v[1].x = tlX; v[1].y = tlY; v[1].u = uL; v[1].v = vT;  // TL
+            v[2].x = blX; v[2].y = blY; v[2].u = uL; v[2].v = vB;  // BL
+            v[3].x = trX; v[3].y = trY; v[3].u = uR; v[3].v = vT;  // TR
+            v[4].x = tlX; v[4].y = tlY; v[4].u = uL; v[4].v = vT;  // TL
+            v[5].x = brX; v[5].y = brY; v[5].u = uR; v[5].v = vB;  // BR
+        } else {
+            v[0].x = brX; v[0].y = brY; v[0].u = uR; v[0].v = vB;  // BR
+            v[1].x = blX; v[1].y = blY; v[1].u = uL; v[1].v = vB;  // BL
+            v[2].x = tlX; v[2].y = tlY; v[2].u = uL; v[2].v = vT;  // TL
+            v[3].x = trX; v[3].y = trY; v[3].u = uR; v[3].v = vT;  // TR
+            v[4].x = brX; v[4].y = brY; v[4].u = uR; v[4].v = vB;  // BR
+            v[5].x = tlX; v[5].y = tlY; v[5].u = uL; v[5].v = vT;  // TL
         }
 
-        const float u0 = g->m_UvU0 - k_UvInset;
-        const float v0 = g->m_UvV0 + k_UvInset;
-        const float v1 = g->m_UvV1 + k_UvInset;
-        const float u1 = g->m_UvU1 - k_UvInset;
-
-        QUADCUSTOMVERTEX* v = m_Verts + vi;
-        v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1; // BL
-        v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0; // TL
-        v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1; // BR
-        v[3] = QUADCUSTOMVERTEX(); v[3].x=wx[3]; v[3].y=wy[3]; v[3].z=0; v[3].nx=0; v[3].ny=0; v[3].nz=1; v[3].colour=packed; v[3].u=u1; v[3].v=v0; // TR
-        v[4] = v[2]; // BR
-        v[5] = v[1]; // TL
-        vi += 6;
+        for (int k = 0; k < 6; ++k) {
+            v[k].colour = m_PlatformColour;
+            v[k].z  = 0.0f;
+            v[k].nx = 0.0f;
+            v[k].ny = 0.0f;
+            v[k].nz = 1.0f;
+        }
+        quad++;
     }
-    m_VertCount = vi;
+
+    // Binary tail: m_Glyphs.end = m_Glyphs.begin.
+    m_Glyphs.clear();
 }
 
 // BakedStringTTF_Surface::UpdateBounds @0x00247dd4:
