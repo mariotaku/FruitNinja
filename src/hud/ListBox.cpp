@@ -93,9 +93,8 @@ ListBox::ListBox(_Vector3<float> inPos, _Vector3<float> inSize, std::vector<std:
                                            (uint16_t)(visibleRows * 16));
         m_pScroller->AdjustByWidth();
         m_pScroller->Init();
-        if (game_work.mHud) {
-            game_work.mHud->AddControl(m_pScroller, false);
-        }
+        // v1.6.1 ListBox::ListBox @0x00194a74: HUD::AddControl(game_work.mHud, ...) unguarded.
+        game_work.mHud->AddControl(m_pScroller, false);
     }
 }
 
@@ -120,9 +119,7 @@ void ListBox::Init() {
 // (and its up/down arrows) stayed visible even after the ListBox itself closed.
 void ListBox::Release() {
     if (m_pScroller) {
-        if (game_work.mHud) {
-            game_work.mHud->RemoveControl(m_pScroller);
-        }
+        game_work.mHud->RemoveControl(m_pScroller);
         delete m_pScroller;
         m_pScroller = NULL;
     }

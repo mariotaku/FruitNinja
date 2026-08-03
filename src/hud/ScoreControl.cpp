@@ -225,7 +225,10 @@ void ScoreControl::Skip() {
     }
 }
 
-// ASM-verified: 2026-05-03T00:00 v1.6.1 ScoreControl::Update @ 0x001ac5c0 (asm-inspector)
+// ASM-spec v1.6.1 ScoreControl::Update @ 0x001ac5c0
+//   (downgraded from ASM-verified 2026-05-03: the stamp covered a body that carried
+//    port-added `game_work.mGameSound` / `game_work.m_SaveData` null guards the
+//    binary has not.)
 void ScoreControl::Update(float dt) {
     int currentScore = GetCurrentScore(m_PlayerIdx);
 
@@ -315,8 +318,9 @@ void ScoreControl::Update(float dt) {
             game_work.pGameOverScreen->m_State > 0 &&
             game_work.pGameOverScreen->m_Timer > 0.0f) {
             s_SfxCooldown = 0.05f;  // DAT_001588b4
-            if (game_work.mGameSound)
-                game_work.mGameSound->SFXPlay("Bonus-count-up", 1.0f, 1.0f);
+            // v1.6.1 ScoreControl::Update @0x001ac5c0: SFXPlay is reached with no null
+            // test on game_work.mGameSound.
+            game_work.mGameSound->SFXPlay("Bonus-count-up", 1.0f, 1.0f);
         }
         m_PulseAngle = 0x8000;  // DAT_001588d4 = 32768.0
     }
@@ -401,8 +405,10 @@ void ScoreControl::Update(float dt) {
     }
 
     // Stage 7: highscore banner animation
+    // v1.6.1 ScoreControl::Update @0x001ac5c0: `*(byte*)(game_work.m_SaveData + 300)` is
+    // loaded straight off the GOT-resolved +0x50 slot -- no null test on m_SaveData.
     bool wantBanner = (waveTimer > SCORE_BANNER_TIMER_THRESH) &&
-                      (game_work.m_SaveData && game_work.m_SaveData->newBestThisGame);
+                      game_work.m_SaveData->newBestThisGame;
     if (wantBanner) {
         float prev = m_BannerScaleTime;
         m_BannerScaleTime = std::min(1.0f, m_BannerScaleTime + dt * 5.0f);
@@ -412,8 +418,7 @@ void ScoreControl::Update(float dt) {
             m_BannerSinIdx = 0;
         }
         if (m_BannerScaleTime > 0.0f && prev <= 0.0f) {
-            if (game_work.mGameSound)
-                game_work.mGameSound->SFXPlay("New-best-score", 1.0f, 1.0f);
+            game_work.mGameSound->SFXPlay("New-best-score", 1.0f, 1.0f);
         }
     } else {
         m_BannerScaleTime = std::max(-1.5f, m_BannerScaleTime - dt * 20.0f);

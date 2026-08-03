@@ -259,9 +259,8 @@ void Coin::_Update(float dt) {
         vel.y = CosIdx(m_Angle) * m_Speed * 1.5f;
         vel.z = 0.0f;
         if (m_Silent != 0) goto TAIL;
-        if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
-        }
+        // v1.6.1 Coin::_Update @0x001d81bc: m_Silent is the only gate before SFXPlay.
+        game_work.mGameSound->SFXPlay("achievement", 1.0f, 1.0f);
         m_Timer = 0.0f;
         transitionState = 4;   // non-silent launches go straight to HOMING...
         goto TRANSITION;       // ...via the trail-emitter spawn.
@@ -625,9 +624,8 @@ void AddToScoreOnArrival(Coin* coin) {
         if (cam) {
             cam->CreateCameraShake(_Vector3<float>(-230.0f, 150.0f, 0.0f), 0.15f, 0.75f);
         }
-        if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay("Bonus-Firework-Explode", 1.0f, 1.0f);
-        }
+        // v1.6.1 AddToScoreOnArrival @0x00162ab8: SFXPlay unguarded.
+        game_work.mGameSound->SFXPlay("Bonus-Firework-Explode", 1.0f, 1.0f);
         PSPParticleManager& pm = PSPParticleManager::GetInstance();
         PSPParticleEmitter* em = pm.AddEmitter(StringHash("bonus_mode_fx_red"), 0, false);
         if (em) {

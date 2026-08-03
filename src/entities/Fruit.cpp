@@ -455,8 +455,10 @@ void Fruit::Chuck(float delay) {
     // game_work.m_SaveData->m_TimeRemainingSave -- TimeControl::Update writes it
     // every frame (binary @ 0x00162830).
     const FruitInfoData* chuckInfo = FruitInfo_Get(m_FruitType);
-    if (chuckInfo->m_pPowers && chuckInfo->m_pPowers->m_pArray
-            && game_work.m_SaveData) {
+    // v1.6.1 Fruit::Chuck @0x001db5f0: the tests are `m_pPowers != 0` and the 8s
+    // window; m_TimeRemainingSave is read through game_work.m_SaveData (+0x50)
+    // with no null test.
+    if (chuckInfo->m_pPowers && chuckInfo->m_pPowers->m_pArray) {
         static const uint32_t kFreezeHash = StringHash("freeze");
         const float waveTimer = game_work.m_SaveData->m_TimeRemainingSave;
         if ((waveTimer - delay) < 8.0f
@@ -471,7 +473,9 @@ void Fruit::Chuck(float delay) {
     SuperFruitControl::SuperFruitThrown(this);
 }
 
-// ASM-verified: 2026-06-15T00:00Z v1.6.1 binary @ 0x001df828 (asm-inspector)
+// ASM-spec v1.6.1 Fruit::Update @ 0x001df828
+//   (downgraded from ASM-verified 2026-06-15T00:00Z: the stamp covered a body that
+//    carried a port-added `game_work.mGameSound` null guard the binary has not.)
 // binary @0x001df828 -- m_TimeScale(0x98) applied to integration dt; dtNorm = dtScaled*60 (DAT_1dfb90=1/60)
 void Fruit::Update(float dt) {
     // binary @0x001df828: dtScaled = dt * m_TimeScale(0x98); all integration uses dtScaled.
@@ -513,8 +517,8 @@ void Fruit::Update(float dt) {
                 && game_work.bM_bPaused == 0)
             {
                 s_FruitThrowSfxFiredThisFrame = true;
-                if (game_work.mGameSound)
-                    game_work.mGameSound->SFXPlay("Throw-fruit", 1.0f, 1.0f);
+                // v1.6.1 Fruit::Update @0x001df828: SFXPlay unguarded.
+                game_work.mGameSound->SFXPlay("Throw-fruit", 1.0f, 1.0f);
             }
 
             // binary @0x001dfb38: when delay is still positive after the gated countdown
@@ -1016,7 +1020,8 @@ void Fruit::KillFruit(bool doMissPenalty) {
                         Mortar::SmartPtr<Mortar::Texture> defTex;
                         mc->MakeDisappear(pos, 0, defTex);
                     }
-                    if (game_work.mGameSound) game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
+                    // v1.6.1 Fruit::KillFruit @0x001deba8: SFXPlay unguarded.
+                    game_work.mGameSound->SFXPlay("gank", 1.0f, 1.0f);
                     game_work.missCount++;
                     if (game_work.missCount > 2) {
                         // ASM-spec v1.6.1 Fruit::KillFruit @0x001deba8 -- combo reset only inside game-over branch
@@ -1355,7 +1360,8 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         if (!altPlayed && info->m_pSounds && info->m_SoundCount > 0) {
             for (int si = 0; si < info->m_SoundCount; ++si) {
                 const char* sndName = info->m_pSounds[si].m_SoundName;
-                if (sndName && game_work.mGameSound) {
+                // v1.6.1 Fruit::CollisionResponse @0x001dd500: SFXPlay unguarded.
+                if (sndName) {
                     game_work.mGameSound->SFXPlay(sndName, 0.5f, 1.0f,
                         Mortar::Delegate1<bool, Mortar::MortarSound*>());
                 }
@@ -1491,22 +1497,22 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             // is written only in KillFruit's drop path (@0x001deba8) -- writing it here
             // over-counted strawberry_drops on every slice, breaking NOTHING BUT BERRY
             // (max-strawberry_drops=0) + polluting lifetime _drops.
-            if (game_work.m_SaveData) {
-                game_work.m_SaveData->AddToTotal(info->m_Name, info->m_NameHash, 1,
-                                         /*trackSession=*/false, false);
-                game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
-                                         /*trackSession=*/true, false);
+            // The binary passes the GOT-resolved game_work.m_SaveData (+0x50) straight
+            // into FruitSaveData::AddToTotal -- no null test at any of these call sites.
+            game_work.m_SaveData->AddToTotal(info->m_Name, info->m_NameHash, 1,
+                                     /*trackSession=*/false, false);
+            game_work.m_SaveData->AddToTotal(info->m_TotalStatKey, info->m_TotalStatHash, 1,
+                                     /*trackSession=*/true, false);
 
-                // On critical hit, record crit totals.
-                if (isCritical) {
-                    static const uint32_t hCrit      = StringHash("crit");
-                    static const uint32_t hCritTotal = StringHash("crits_total");
-                    game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
-                    game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
-                    char critBuf[128];
-                    snprintf(critBuf, 128, "%scrit", info->m_Name);
-                    game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
-                }
+            // On critical hit, record crit totals.
+            if (isCritical) {
+                static const uint32_t hCrit      = StringHash("crit");
+                static const uint32_t hCritTotal = StringHash("crits_total");
+                game_work.m_SaveData->AddToTotal("crit",        hCrit,      1, false, false);
+                game_work.m_SaveData->AddToTotal("crits_total", hCritTotal, 1, true,  false);
+                char critBuf[128];
+                snprintf(critBuf, 128, "%scrit", info->m_Name);
+                game_work.m_SaveData->AddToTotal(critBuf, StringHash(critBuf), 1, false, false);
             }
         }
         // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500
@@ -1517,7 +1523,7 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         //   last_fruit  = set to current m_FruitType+1 via delta math (total := newVal).
         if (game_work.gameMode == GAME_MODE_ARCADE) {
             WaveManager::GetInstance()->AddToSpeedLossTime(0.05f, 0);
-            if (game_work.m_SaveData) {
+            {
                 static const uint32_t hFirstFruit = StringHash("first_fruit");
                 static const uint32_t hLastFruit  = StringHash("last_fruit");
                 const int newVal = (int)m_FruitType + 1;
@@ -1812,7 +1818,8 @@ void Fruit::Slice() {
 
     // TODO: re-RE inner offset against v1.6.1 Fruit::Slice 0x001dcba0
     // (was: ASM-verified 0x001770e0 -- stale v1.5.x address, re-verify at v1.6.1 range)
-    if (splatCount > 0 && game_work.mGameSound) {
+    // v1.6.1 Fruit::Slice @0x001dcba0: `0 < splatCount` is the only gate on the SFX.
+    if (splatCount > 0) {
         char cleanSliceBuf[16];
         uint32_t r = Math::g_Random.Rand32(3);
         snprintf(cleanSliceBuf, sizeof(cleanSliceBuf), "Clean-Slice-%u", r + 1);
@@ -2193,9 +2200,8 @@ void AddSlice(_Vector3<float> v, float posX, float posY, int modelIdx, Fruit* fr
         if (Math::g_Random.Rand32(3) == 0)      sfxName = "Visceral-impact-1";
         else if (Math::g_Random.Rand32(2) == 0) sfxName = "Visceral-impact-3";
         else                                    sfxName = "Visceral-impact-2";
-        if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
-        }
+        // v1.6.1 AddSlice @0x001dc990: SFXPlay unguarded.
+        game_work.mGameSound->SFXPlay(sfxName, 1.0f, 1.0f);
     }
 
     if (!g_fruitData.s_slices || !g_fruitData.s_pool) {
@@ -2950,7 +2956,9 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
         if (chosen->m_FactCount < 1) {
             return GetFact(outType, outFactIdx, -1, -1);  // re-roll
         }
-        if (game_work.m_SaveData) {
+        // v1.6.1 Fruit::GetFact @0x001db7b4: both AddToTotal calls take the
+        // GOT-resolved game_work.m_SaveData (+0x50) with no null test.
+        {
             static const uint32_t hFactsGlobal = StringHash("facts");
             game_work.m_SaveData->AddToTotal("facts", hFactsGlobal, 1, true, true);
 
@@ -2958,8 +2966,6 @@ const char* Fruit::GetFact(int* outType, int* outFactIdx, int fruitType, int fac
             snprintf(buf, sizeof(buf), "%s_facts", chosen->m_Name);
             int newTotal = game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);
             fi = (newTotal - 1) % chosen->m_FactCount;
-        } else {
-            fi = 0;  // Port specific: unit tests run without save data
         }
     } else {
         if (chosen->m_FactCount <= 0) return nullptr;

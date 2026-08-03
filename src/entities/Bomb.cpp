@@ -236,7 +236,9 @@ static inline void AccelGrowth(_Vector3<float>& vel, _Vector3<float>& accel, flo
     accel *= (newLen / len);
 }
 
-// ASM-verified: 2026-07-25T17:31Z v1.6.1 Bomb::Update @ 0x001d6098 (asm-inspector)
+// ASM-spec v1.6.1 Bomb::Update @ 0x001d6098
+//   (downgraded from ASM-verified 2026-07-25T17:31Z: the stamp covered a body that
+//    carried a port-added `game_work.mGameSound` null guard the binary has not.)
 void Bomb::Update(float dt) {
     const float gameDt   = game_work.dt;               // countdown/SFX/spawn-timer gating only, ASM @0x1d60ec/0x1d6350
     const float scaledDt = dt * m_SpeedMult;            // v1.6.1 @0x1d6098: scaledDt derives from the incoming dt param, NOT game_work.dt
@@ -265,8 +267,9 @@ void Bomb::Update(float dt) {
                 // slot 0 (PreLoadSound) with "Bomb-Fuse" (rodata 0x00283fdd),
                 // immediately before the throw SFX.
                 Mortar::SoundManager::GetInstance().PreLoadSound("Bomb-Fuse");
-                if (game_work.mGameSound)
-                    game_work.mGameSound->SFXPlay("Throw-bomb", 1.0f, 1.0f);
+                // v1.6.1 Bomb::Update @0x001d6098: SFXPlay is reached with no null test
+                // on game_work.mGameSound -- the surrounding gates are the fuse/pause ones.
+                game_work.mGameSound->SFXPlay("Throw-bomb", 1.0f, 1.0f);
                 g_bombData.bFuseSfxFiredThisFrame = 1;  // @0x1d6488: set after the play
             }
 
@@ -514,8 +517,9 @@ int Bomb::CollisionResponse(Mortar::Entity* /*hitter*/,
 
         if (isArcade) {
             // Arcade path: stat first, then ResetSpeed FIRST, then HitMenuBomb, shake, score, powers
-            if (game_work.m_SaveData)
-                game_work.m_SaveData->AddToTotal("bombs_hit", 1);
+            // v1.6.1 Bomb::CollisionResponse @0x001d5d4c: AddToTotal takes the GOT-resolved
+            // game_work.m_SaveData (+0x50) with no null test.
+            game_work.m_SaveData->AddToTotal("bombs_hit", 1);
             WaveManager::GetInstance()->ResetSpeed(0);
             m_bMenuBombHit = 1;
             HitMenuBomb(pos);  // timer=2.0, flash-flag=1, "menu-bomb" SFX
@@ -623,8 +627,8 @@ void Bomb::MakeFat(bool skipSpawnFx) {
     m_OrigScale = scale;
     if (m_Col) static_cast<ColSphere*>(m_Col)->radius *= 1.33002f;
     if (!skipSpawnFx) {
-        if (game_work.mGameSound)
-            game_work.mGameSound->SFXPlay("player-bomb-launch", 1.0f, 1.0f);
+        // v1.6.1 Bomb::MakeFat @0x001d6fd4: the only gate is `!skipSpawnFx`.
+        game_work.mGameSound->SFXPlay("player-bomb-launch", 1.0f, 1.0f);
         // TODO: v1.6.1 0x1d6fd4 (Bomb::MakeFat) -- AddEmitter at +/-240 X anchor (emitter hash variant)
         Chuck(0.25f);
     }
@@ -656,13 +660,12 @@ bool BombFlashFull() {
 // Classic/Zen bomb hit: timer=3.2, shake(1.6,2.0), SFX, stat.
 void HitBomb(_Vector3<float> pos) {
     if (game_work.bM_bPaused) return;
-    if (game_work.m_SaveData) {
-        // ASM-spec v1.6.1 HitBomb @ 0x1cf27c: AddToTotal(saveData,"bomb",hash,1,true,true)
-        // -- trackSession=true, achievementGate=true (unlike other AddToTotal call
-        // sites in this file, which pass both flags false).
-        game_work.m_SaveData->AddToTotal("bomb", StringHash("bomb"), 1,
-                                          /*trackSession=*/true, /*achievementGate=*/true);
-    }
+    // ASM-spec v1.6.1 HitBomb @0x001cf27c: AddToTotal(saveData,"bomb",hash,1,true,true)
+    // -- trackSession=true, achievementGate=true (unlike other AddToTotal call
+    // sites in this file, which pass both flags false). m_SaveData (+0x50) is read
+    // straight off the GOT with no null test.
+    game_work.m_SaveData->AddToTotal("bomb", StringHash("bomb"), 1,
+                                      /*trackSession=*/true, /*achievementGate=*/true);
     game_work.m_BombHitTimer = 3.2f;
     if (game_work.m_FruitCamera)
         game_work.m_FruitCamera->CreateCameraShake(pos, 1.6f, 2.0f);
@@ -670,8 +673,7 @@ void HitBomb(_Vector3<float> pos) {
     if (GameTaskState* ts = GetTaskState()) {
         ts->m_bMenuBombFlashFlag = 0;
     }
-    if (game_work.mGameSound)
-        game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
+    game_work.mGameSound->SFXPlay("Bomb-explode", 1.0f, 1.0f);
 }
 
 // ASM-spec v1.6.1 HitMenuBomb @0x001cf42c:
@@ -684,8 +686,9 @@ void HitMenuBomb(_Vector3<float> pos) {
     if (game_work.mMainScreen && game_work.mMainScreen->m_State == STATE_CREATE_BUTTONS)
         return;
 
-    if (game_work.mGameSound)
-        game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
+    // v1.6.1 HitMenuBomb @0x001cf42c: the only early-out is the MainScreen state test
+    // above; SFXPlay then runs with no null test on game_work.mGameSound.
+    game_work.mGameSound->SFXPlay("menu-bomb", 1.0f, 1.0f);
     game_work.m_BombHitTimer = 2.0f;
     g_BombHitPos = pos;
     if (GameTaskState* ts = GetTaskState()) {

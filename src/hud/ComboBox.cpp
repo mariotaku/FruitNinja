@@ -235,9 +235,9 @@ void ComboBox::Update(float dt) {
                 Mortar::Delegate0<void> cb =
                     Mortar::Delegate0<void>::QCallee<ComboBox>(this, &ComboBox::ListBoxClosed);
                 m_pListBox->SetCallback(cb);
-                if (game_work.mHud) {
-                    game_work.mHud->AddControl(m_pListBox, false);
-                }
+                // v1.6.1 ComboBox::Update @0x00167f70 tail: HUD::AddControl(game_work.mHud,
+                // m_pListBox, false) -- no null test on the GOT-resolved game_work.mHud.
+                game_work.mHud->AddControl(m_pListBox, false);
                 return;
             }
             CleanUpListBox();
@@ -323,10 +323,10 @@ void ComboBox::SetListTextColour(Colour c) {
 // that dtor never ran because nothing here (or the deferred sweep) triggered it
 // in the same frame the flag was set -- this was the (b) never-closes bug.
 void ComboBox::CleanUpListBox() {
+    // v1.6.1 ComboBox::CleanUpListBox @0x00167f10: the only test is `m_pListBox != 0`;
+    // HUD::RemoveControl(game_work.mHud, m_pListBox) then runs unguarded.
     if (m_pListBox) {
-        if (game_work.mHud) {
-            game_work.mHud->RemoveControl(m_pListBox);
-        }
+        game_work.mHud->RemoveControl(m_pListBox);
         delete m_pListBox;
         m_pListBox = NULL;
     }

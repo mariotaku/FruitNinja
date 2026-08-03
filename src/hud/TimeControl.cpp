@@ -215,7 +215,8 @@ void TimeControl::Update(float dt) {
                 g_ComboCount     = 0;
                 g_ComboFruitType = -1;
                 m_DrawColour = Colour(255, 100, 100, 255);
-                if (game_work.mGameSound) game_work.mGameSound->SFXPlay("time-up", 1.0f, 1.0f);
+                // v1.6.1 TimeControl::Update @0x001c0a48: SFXPlay unguarded.
+                game_work.mGameSound->SFXPlay("time-up", 1.0f, 1.0f);
             } else {
                 // Colour tint bands as time runs low.
                 // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
@@ -241,9 +242,7 @@ void TimeControl::Update(float dt) {
                 static uint8_t s_TickTockToggle = 1;   // GOT byte at 0x001f3d80
                 s_TickTockToggle ^= 1;
                 const char* name = s_TickTockToggle ? "Time-tick" : "Time-tock";
-                if (game_work.mGameSound) {
-                    game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
-                }
+                game_work.mGameSound->SFXPlay(name, 1.0f, 1.0f);
             }
 
             // Arcade q value for slow-clock join below.

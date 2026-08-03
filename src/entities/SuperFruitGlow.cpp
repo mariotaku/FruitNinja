@@ -59,11 +59,10 @@ SuperFruitGlow::SuperFruitGlow(Fruit* fruit)
     // (target @ iVar4+DAT_001c0870); the port follows the established convention
     // (Fruit.cpp:1175) of passing an empty delegate for the looping-SFX finish hook.
     // The handle is stored (asm: str r0,[r4,#0x84]); port keeps it in m_pSound (+0x84).
-    if (game_work.mGameSound) {
-        m_pSound = game_work.mGameSound->SFXPlay(
-            "pome-lp", 1.0f, 0.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>());
-    }
+    // v1.6.1 SuperFruitGlow::SuperFruitGlow @0x001c06bc: SFXPlay unguarded.
+    m_pSound = game_work.mGameSound->SFXPlay(
+        "pome-lp", 1.0f, 0.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*>());
 }
 
 // dtor @ 0x1c02b4
@@ -134,9 +133,13 @@ void SuperFruitGlow::Update(float dt) {
             m_Fade = v;
             if (v <= 0.0f) {
                 // Release the looping sound handle
-                if (m_pSound && game_work.mGameSound) {
+                // v1.6.1 SuperFruitGlow::Update @0x001c0024: the only test is
+                // `m_pSound != 0`; GameSound::Release takes game_work.mGameSound
+                // (+0x18c) straight off the GOT.
+                if (m_pSound) {
                     game_work.mGameSound->Release(m_pSound, "pome-lp");
-                    // TODO: 0x1c0024 — pass exact DAT_001c01bc string arg to GameSound::Release
+                    // TODO: v1.6.1 0x001c0024 (SuperFruitGlow::Update) -- pass exact
+                    // DAT_001c01bc string arg to GameSound::Release
                 }
                 m_pSound = 0;
                 // Mark for HUD removal (+0x33 = m_bPendingRemoval = 1)

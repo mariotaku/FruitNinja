@@ -1049,7 +1049,9 @@ void SplatEntity::DrawSplat() {
 // HUD::scales[3..5], then for each alive landed splat calls DrawSplat()
 // (pure thiscall, vtable slot 4) and increments s_NumActiveSplats.
 // Submits the completed batch.
-// ASM-verified: 2026-05-18 v1.6.1 SplatEntity::DrawActiveSplats @ 0x001ece34 (re-analyst)
+// ASM-spec v1.6.1 SplatEntity::DrawActiveSplats @ 0x001ece34
+//   (downgraded from ASM-verified 2026-05-18: the binary body has no game_work.mHud
+//    read, so the stamp cannot cover the s_CurrentTintRGB hookup below.)
 // Depth state owned by GameDraw (binary @ 0x0016b888): no per-call
 // glEnable/glDisable(GL_DEPTH_TEST) or glDepthMask in the binary's body.
 //
@@ -1066,6 +1068,11 @@ void SplatEntity::DrawActiveSplats() {
     s_NumActiveSplats = 0;
 
     s_CurrentTintRGB = Colour::IdentityTint();
+    // NOTE (guard sweep #156): this mHud test is NOT settled either way. Unlike its
+    // siblings elsewhere in src/entities, it cannot be called a port-added guard --
+    // v1.6.1 DrawActiveSplats @0x001ece34 does not read game_work.mHud (+0x40) at all,
+    // and neither does DrawSplat @0x001eb5d8, so the whole tint hookup above needs its
+    // own RE pass before anyone strips or keeps it. Left as-is deliberately.
     if (game_work.mHud) {
         s_CurrentTintRGB = &game_work.mHud->scales[3];
     }

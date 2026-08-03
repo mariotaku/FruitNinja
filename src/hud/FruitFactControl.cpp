@@ -130,15 +130,15 @@ void FruitFactControl::Init() {
     m_FactOffset = _Vector3<float>(-69.0f, 53.0f, 0.0f);
 
     // 6. Combo-mode seed: if game session state+4 == 3 (Zen combo mode).
-    if (game_work.m_SaveData) {
-        // Binary reads *(state+4) from Game+0x50 (session object, FruitSaveData mode byte).
-        // FruitSaveData has no +4 mode byte in the port. The binary's "state+4" == gameMode
-        // stored in the session. Use game_work.gameMode as the equivalent.
-        if (game_work.gameMode == 3) {
-            int* comboArr = game_work.m_SaveData->m_BestComboFruits;
-            int  comboCount = game_work.m_SaveData->m_BestComboLength;
-            FruitFact::CheckCombo(comboArr, comboCount, (int*)&m_ComboA);
-        }
+    // v1.6.1 FruitFactControl::Init @0x0017160c: the ONLY test is `gameMode == 3`;
+    // m_SaveData (+0x50) is then dereferenced with no null test.
+    // Binary reads *(state+4) from Game+0x50 (session object, FruitSaveData mode byte).
+    // FruitSaveData has no +4 mode byte in the port. The binary's "state+4" == gameMode
+    // stored in the session. Use game_work.gameMode as the equivalent.
+    if (game_work.gameMode == 3) {
+        int* comboArr = game_work.m_SaveData->m_BestComboFruits;
+        int  comboCount = game_work.m_SaveData->m_BestComboLength;
+        FruitFact::CheckCombo(comboArr, comboCount, (int*)&m_ComboA);
     }
 
     // 7. Snapshot game mode.
@@ -283,7 +283,8 @@ void FruitFactControl::Update(float /*dt*/) {
         // Next arrow re-uses the right-arrow texture mirrored: UVLeft=1, UVRight=0.
         m_NextButton->m_UVLeft  = 1.0f;                  // [btn+0x64]
         m_NextButton->m_UVRight = 0.0f;                  // [btn+0x6c]
-        if (game_work.mHud) game_work.mHud->AddControl(m_NextButton);
+        // v1.6.1 FruitFactControl::Update @0x00170eb4: AddControl(game_work.mHud,...) unguarded.
+        game_work.mHud->AddControl(m_NextButton);
     }
 
     // ---- Prev arrow (this+0xA4) ----
@@ -297,7 +298,7 @@ void FruitFactControl::Update(float /*dt*/) {
                                        Mortar::Delegate0<void>::MakeFree(&MenuCallbackClicked));
         m_PrevButton->Init();                            // vtable slot 2
         m_PrevButton->m_AnimFlag = 1;                    // strb #1,[btn+0xd2]
-        if (game_work.mHud) game_work.mHud->AddControl(m_PrevButton);
+        game_work.mHud->AddControl(m_PrevButton);
     }
 
     // ---- Per-frame repositioning (still inside the pages>1 guard) ----
@@ -325,7 +326,7 @@ void FruitFactControl::SetPage(int idx, bool playSound) {
 
     // 1) Play the page-flip SFX. UNCONDITIONAL in the binary -- playSound does
     //    NOT gate this. The finish-callback is a default (empty) global delegate.
-    if (game_work.mGameSound) {
+    {
         Mortar::Delegate1<bool, Mortar::MortarSound*> finishCb;
         game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f, finishCb);
     }
@@ -342,7 +343,9 @@ void FruitFactControl::SetPage(int idx, bool playSound) {
 
     // 5) playSound actually gates a save-data write: record that this fact page
     //    has been viewed (1-based page index) under the "factMode" total.
-    if (playSound && game_work.m_SaveData) {
+    // v1.6.1 FruitFactControl::SetPage @0x0017132c: the only test is `param_2 != 0`;
+    // m_SaveData (+0x50) is passed to SetTotal with no null test.
+    if (playSound) {
         game_work.m_SaveData->SetTotal("factMode", m_PageFlag + 1, true, true);
     }
 }
@@ -370,10 +373,8 @@ void FruitFactControl::LeftButton() {
     // previous page with wrap-around.
     // Disasm: ldr r1,[r6,#0x9c] (m_PageFlag); cmp #0; subne r1,r1,#1
     //         (curPage-1); if ==0 -> r1 = m_Pages.size()-1; SetPage(r1, 1).
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>());
-    }
+    game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*>());
     int idx;
     if (m_PageFlag != 0) {
         idx = m_PageFlag - 1;
@@ -386,10 +387,8 @@ void FruitFactControl::LeftButton() {
 void FruitFactControl::RightButton() {
     // Binary @ 0x00171458: plays a click SFX via GameSound::SFXPlay, then advances the page.
     // Page nav: if on last page, wrap to 0; otherwise advance by 1.
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>());
-    }
+    game_work.mGameSound->SFXPlay("Next-screen-button", 1.0f, 1.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*>());
     int next;
     if (m_PageFlag == (int)m_Pages.size() - 1) {
         next = 0;

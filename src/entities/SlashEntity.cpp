@@ -592,9 +592,9 @@ void SlashEntity::PlaySwipe() {
         // Binary derefs mHud unguarded (boot guarantees it; PlaySwipe only fires
         // during live slash input, after GameInit created the HUD).
         const float gain = 0.4f + 0.6f * game_work.mHud->m_globalTimeScale;
-        if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay(buf, 1.0f, gain);
-        }
+        // v1.6.1 SlashEntity::PlaySwipe @0x001e8550: mGameSound is likewise deref'd
+        // unguarded -- the only gate is ItemManager::PlayAlternateSwipeSound above.
+        game_work.mGameSound->SFXPlay(buf, 1.0f, gain);
     }
 
     (void)Math::g_Random.RandF(0.5f);
@@ -2048,7 +2048,9 @@ void SlashEntity::Update(float dt) {
                             AddToCurrentScore(m_ComboCounter, m_ComboOnlineMode, true, false);
                         }
                         BonusManager::GetInstance()->AddCombo(m_ComboCounter);
-                        if (game && game_work.m_SaveData) {
+                        // v1.6.1 SlashEntity::Update @0x001e867c: the combo-stat block
+                        // reads game_work.m_SaveData (+0x50) with no null test.
+                        if (game) {
                             char buf[64];
                             snprintf(buf, sizeof(buf), "%s_combos", GetModeName((GAME_MODE)game_work.gameMode));
                             game_work.m_SaveData->AddToTotal(buf, StringHash(buf), 1, true, true);

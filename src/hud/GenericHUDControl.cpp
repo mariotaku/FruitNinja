@@ -241,10 +241,10 @@ void GenericHUDControl::Update(float dt) {
         if (!s.m_Played &&
             prevTimer < s.m_StartT && m_GHCTimer >= s.m_StartT &&
             s.m_Name && s.m_Name[0] != '\0') {
-            if (game_work.mGameSound) {
-                game_work.mGameSound->SFXPlay(s.m_Name, 1.0f, 1.0f,
-                    Mortar::Delegate1<bool, Mortar::MortarSound*>());
-            }
+            // v1.6.1 GenericHUDControl::Sound::Play @0x00189d74: SFXPlay runs with no
+            // null test on the GOT-resolved game_work.mGameSound.
+            game_work.mGameSound->SFXPlay(s.m_Name, 1.0f, 1.0f,
+                Mortar::Delegate1<bool, Mortar::MortarSound*>());
             s.m_Played = true;
             it = m_Sounds.erase(it);
         } else {

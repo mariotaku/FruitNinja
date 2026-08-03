@@ -76,11 +76,12 @@ SpeedControl::~SpeedControl() {
             "Combo-Blitz-Backing-Light",
             "Combo-Blitz-Backing"
         };
-        if (game_work.mGameSound) {
-            game_work.mGameSound->Release(static_cast<Mortar::MortarSound*>(m_pSound), kSfxNames[m_SoundIdx]);
-            m_pSound = nullptr;
-            game_work.mGameSound->m_MasterVolume = 1.0f;
-        }
+        // v1.6.1 SpeedControl::~SpeedControl @0x001b8ba4: the only test is `m_pSound != 0`;
+        // GameSound::Release(game_work.mGameSound, ...) and the m_MasterVolume=1.0 store
+        // both run off the GOT-resolved +0x18c slot with no null test.
+        game_work.mGameSound->Release(static_cast<Mortar::MortarSound*>(m_pSound), kSfxNames[m_SoundIdx]);
+        m_pSound = nullptr;
+        game_work.mGameSound->m_MasterVolume = 1.0f;
     }
 }
 

@@ -198,11 +198,9 @@ SuperFruitControl::SuperFruitControl(Fruit* fruit)
             Mortar::Delegate0<void>::Make(this, &SuperFruitControl::TransitionFin));
     }
     // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*) @0x001be1c8:
-    //   SFXPlay("pome-rampdown", atten=0.125, gain=1.0, pitch=0.0).
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("pome-rampdown", 0.125f, 1.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
-    }
+    //   SFXPlay("pome-rampdown", atten=0.125, gain=1.0, pitch=0.0) -- unguarded.
+    game_work.mGameSound->SFXPlay("pome-rampdown", 0.125f, 1.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
 }
 
 // ASM-spec v1.6.1 SuperFruitControl::SuperFruitControl(Fruit*,SuperFruitState&) @0x001bea90:
@@ -357,10 +355,8 @@ void SuperFruitControl::Update(float dt)
     // whoosh SFX: one-shot on crossing (Lifetime - 0.1)
     if (m_Timer >= m_Lifetime - 0.1f && m_PrevTimer < m_Lifetime - 0.1f) {
         // ASM-spec v1.6.1 SuperFruitControl::Update @0x001bca10: whoosh SFXPlay("pome-zoomout", vol=1.0, pitch=0.125).
-        if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay("pome-zoomout", 1.0f, 1.0f,
-                Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.125f);
-        }
+        game_work.mGameSound->SFXPlay("pome-zoomout", 1.0f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.125f);
     }
 
     if (m_Timer >= m_Lifetime) {
@@ -857,10 +853,9 @@ void SuperFruitControl::Sliced(Mortar::Entity* slashEntity)
         snprintf(key, sizeof(key), "pome-slice-%i", n);
         float t = (float)m_SliceCount / 28.0f;
         float pitch = (t <= 0.8f) ? (t - 0.4f) : 0.4f;
-        if (game_work.mGameSound) {
-            game_work.mGameSound->SFXPlay(key, 0.125f, 1.0f,
-                Mortar::Delegate1<bool, Mortar::MortarSound*>(), pitch);
-        }
+        // v1.6.1 SuperFruitControl::Sliced @0x001bb994: SFXPlay unguarded.
+        game_work.mGameSound->SFXPlay(key, 0.125f, 1.0f,
+            Mortar::Delegate1<bool, Mortar::MortarSound*>(), pitch);
     }
 
     // ASM-spec v1.6.1 SuperFruitControl::Sliced @0x001bb994: per-hit PSP emitter hookup.
@@ -959,12 +954,10 @@ void SuperFruitControl::ExplodeSuperFruit()
     CriticalFlash(hostPos, Colour(255, 255, 255, 255));
 
     // ---- (C) explosion SFX ----
-    // ASM-spec v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001babf4:
-    //   SFXPlay("pome-burst", atten=0.125, gain=2.0, pitch=0.0).
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("pome-burst", 0.125f, 2.0f,
-            Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
-    }
+    // ASM-spec v1.6.1 SuperFruitControl::ExplodeSuperFruit @0x001baa20:
+    //   SFXPlay("pome-burst", atten=0.125, gain=2.0, pitch=0.0) -- unguarded.
+    game_work.mGameSound->SFXPlay("pome-burst", 0.125f, 2.0f,
+        Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
 
     // ---- (D) 8 lettered mesh fragments (cube-corner pattern) ----
     // fmt string @ 0x0028383a: "models/Fruit/%s_%c_piece_%d.mmd"
