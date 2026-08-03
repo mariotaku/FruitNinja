@@ -127,14 +127,14 @@ bool TimeControl::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// ASM-spec v1.6.1 TimeControl::Update @ 0x001c0a48
-//   (downgraded from ASM-verified 2026-06-24: the stamp covered a body that
-//    carried port-added `Game::GetInstance()`, `m_SaveData` and
-//    `PowerUpManager::GetInstance()` null guards the binary has not.)
+// ASM-verified: 2026-08-03T12:00:00Z v1.6.1 TimeControl::Update @ 0x001c0a48..0x001c0fd7 (asm-inspector)
 //   Count-down branch: two independent PowersEnabled gates @0x001c0afc/@0x001c0b80 with
 //   IsInSuperFruitState between them overriding dt to 0.0 (DAT_001c0e54) @0x001c0b70 (true
 //   freeze); m_StopClockAccum +0x68, m_SlowClockMult +0x6c. Gate structure + field offsets
-//   instruction-faithful.
+//   instruction-faithful. Clock-string formatting was moved here from Draw (compile+diff
+//   confirmed, evidence in tmp/asm-compare/) -- both "%i:%02i" and the "+%i" powerup
+//   overlay format calls now live in Update together, matching the binary; Draw only
+//   reads m_TextBuffer/m_PowerupOverlay.
 void TimeControl::Update(float dt) {
     // 0x001c0a48
     float entrySizeX = size.x;   // cached before the IsTimedGame call (binary s16)
@@ -160,7 +160,7 @@ void TimeControl::Update(float dt) {
     pos.x = (fieldWidthU - entrySizeX) * 0.5f - 5.0f;
 
     // Pause / suppress gate — three conditions suppress the timer tick
-    // (but NOT the LAB_00162818 mirror write / pos.y re-anchor).
+    // (but NOT the LAB_001c0f00 mirror write / pos.y re-anchor).
     bool suppress = game_work.bM_Mode
                  || game_work.bM_bPaused
                  // v1.6.1 TimeControl::Update @0x001c0ad0-0x001c0ae4:
@@ -187,7 +187,7 @@ void TimeControl::Update(float dt) {
                     m_DrawColour = Colour(255, 100, 100, 255);
                     snprintf(m_PowerupOverlay, sizeof(m_PowerupOverlay),
                              "+%i", (int)pum->m_StopClockAccum + 1);
-                    goto LAB_00162818;
+                    goto LAB_001c0f00;
                 }
                 m_PowerupOverlay[0] = '\0';
             }
@@ -249,13 +249,15 @@ void TimeControl::Update(float dt) {
             q = (int)(m_CountdownStart - m_TimeRemaining);
         }
         // Single slow-clock join point for both Zen and Arcade paths.
-        // StopClock overlay path (goto LAB_00162818) skips this.
+        // StopClock overlay path (goto LAB_001c0f00) skips this.
         m_SlowClockPhase = (float)(q % 6) + 0.5f;
     }
 
-    // LAB_00162818 — runs unconditionally for all timed modes (including when suppressed).
-    // Write HUD-side timer mirror every frame.
-    LAB_00162818:
+    // 0x001c0f00 (LAB_001c0f00) -- runs unconditionally for all timed modes (including
+    // when suppressed). Write HUD-side timer mirror every frame.
+    LAB_001c0f00:
+    // Port specific: the m_TimeRemainingDisplay mirror has no binary counterpart --
+    // it exists so the desktop debug overlay can read the clock. Host build only.
 #ifndef __bada__
     if (game_work.mMainScreen) {
         game_work.mMainScreen->m_TimeRemainingDisplay = m_TimeRemaining;
@@ -267,6 +269,18 @@ void TimeControl::Update(float dt) {
     // Binary @0x001c0f00 stores through pM_SaveData unguarded.
     game_work.m_SaveData->m_TimeRemainingSave = m_TimeRemaining;
 
+    // Format countdown string EVERY FRAME -- v1.6.1 builds "%i:%02i" here in Update,
+    // not in Draw. vstr s15,[r3,#0x10c] (the m_TimeRemainingSave mirror write just
+    // above) is the instruction directly preceding the sprintf block in the binary,
+    // so this placement is instruction-adjacent, not just same-function.
+    // OS_SPrintf(this+0x80, 0x40, "%i:%02i", mins, secs) -- format string @0x0028394e.
+    // Binary divides as a FLOAT (vdiv.f32, divisor literal 60.0) then truncates, and
+    // takes the remainder via __aeabi_idivmod(secs_int, 60) -- not a shared
+    // totalSecs/60 integer pair (the two ops use different operand widths in asm).
+    int mins = (int)(m_TimeRemaining / SECS_PER_MIN);
+    int secs = (int)m_TimeRemaining % (int)SECS_PER_MIN;
+    snprintf(m_TextBuffer, sizeof(m_TextBuffer), "%i:%02i", mins, secs);
+
     // pos.y re-anchor every timed frame based on camera transition. Non-MP branch:
     //   tiltMix = 1.0 - |cameraTransition|
     //   pos.y   = size.y * -2 * tiltMix * m_globalTimeScale + (2*size.y + 320) * 0.5
@@ -274,36 +288,29 @@ void TimeControl::Update(float dt) {
     // ASM-spec v1.6.1 TimeControl::Update @0x001c0f90: the tilt term is scaled by
     // HUD+0x24 (m_globalTimeScale), so during slow-mo the clock slides toward
     // size.y+160. The binary derefs game_work.m_pHud (+0x40) unguarded.
-    float camTilt = 0.0f;
-    if (game_work.mMainScreen) {
-        camTilt = fabsf(game_work.mMainScreen->GetCameraTransition());
-    }
+    // @0x001c0f80: vldr.32 s0,[r6,#0xc] (game_work.m_PauseAmount) -> Math::Abs -> vsub 1.0-s0.
+    const float camTilt = fabsf(game_work.m_PauseAmount);
     const float tiltMix = 1.0f - camTilt;   // non-MP path; SameScreenMP unported
     pos.y = (size.y * -2.0f) * (tiltMix * game_work.mHud->m_globalTimeScale) +
             (size.y * 2.0f + 320.0f) * 0.5f;
 }
 
-// v1.6.1 TimeControl::Draw @0x001c12d4
+// ASM-verified: 2026-08-03T12:00:00Z v1.6.1 TimeControl::Draw @ 0x001c12d4..0x001c1577 (asm-inspector)
+//   No formatting here -- the only +0x80 (m_TextBuffer) touch is `add r1,r4,#128`
+//   feeding Utf8StringIterator straight into DrawString. Clock-string formatting
+//   lives in Update (see there).
 void TimeControl::Draw(float* hudScaleRaw) {
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
-    // Guard: camera fully transitioned to menu -> skip
-    if (game_work.mMainScreen) {
-        float ct = game_work.mMainScreen->GetCameraTransition();
-        if (fabsf(ct) >= 1.0f) return;
-    }
+    // Guard: camera fully transitioned to menu -> skip. @0x001c12f8:
+    // vldr.32 s0,[r7,#0xc]; bl Math::Abs; vcmp.f32 s0,1.0; bpl 0x001c156c -- unconditional.
+    if (fabsf(game_work.m_PauseAmount) >= 1.0f) return;
 
     // Guard: non-timed mode (m_LayerFlags=0 set by Update, but also gate here)
     if (!IsTimedGame()) return;
 
+    // @0x001c131c: ldr r10,[r7,#0x5c] (pFontNumbers) straight into Font::DrawString, no null test.
     Mortar::Font* font = game_work.pFontNumbers.Get();
-    if (!font) return;
-
-    // Format countdown: OS_SPrintf("%i:%02i", min, sec) -- DAT_00162bc4 = "%i:%02i"
-    int totalSecs = (int)m_TimeRemaining;
-    int mins = totalSecs / (int)SECS_PER_MIN;
-    int secs = totalSecs % (int)SECS_PER_MIN;
-    snprintf(m_TextBuffer, sizeof(m_TextBuffer), "%i:%02i", mins, secs);
 
     // DAT_00162b04 = -0.6, DAT_00162b08 = 0.0
     float drawX = pos.x + TEXT_X_MULT * size.x;

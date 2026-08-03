@@ -140,6 +140,9 @@ public:
 
     // NewDraw -- all visible rendering, v1.6.1 TTF path.
     // v1.6.1 ShopListItem::NewDraw @0x001b58e8:
+    //   Head gate re-checks m_bOnscreen (+0x2D, ldrb @0x001b5910); when clear it
+    //   runs DrawDarkness() and returns. m_pItemInfo is NOT tested -- it is
+    //   dereferenced unguarded from 0x001b5960 on.
     //   Lazily builds m_pBox0 (title, fontSize=16, 195x30) and
     //   m_pBox1 (category, fontSize=14, 175x30) from game_work.m_pTTFFontMain.
     //   m_pBox1 is rebuilt whenever m_TintA != m_Type (m_TintA caches last type).

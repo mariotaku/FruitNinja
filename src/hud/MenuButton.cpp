@@ -46,6 +46,8 @@ namespace {
 // Port: returns game_work.m_pTTFFontMain (populated at GameInitialise time by
 //   PreloadFontsTTF, before MenuButton::LoadContent is called). Falls back to a
 //   lazy local load if somehow null (e.g. TTF file missing).
+// Port specific: the binary reads +0x614 unconditionally. The null branch below is a
+//   port-only safety net with no binary counterpart.
 static Mortar::FontCacheObjectTTF* GetSharedTTFFont() {
     if (game_work.m_pTTFFontMain) return game_work.m_pTTFFontMain;
     static Mortar::SmartPtr<Mortar::Font> s_TTFFont =
@@ -757,10 +759,10 @@ void MenuButton::Update(float dt) {
                                  m_FruitType, (int)m_bClickOnRelease,
                                  entity->pos.x, entity->pos.y, magSqr);
                         m_ClickCallback();
-                        // v1.6.1 MenuButton::Update @0x0019aa78: thunk 0x00105ec4 -> TutorialControl::ResetTutePos(nullptr)
-                        if (game_work.m_TutorialControl) {
-                            game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
-                        }
+                        // v1.6.1 MenuButton::Update @0x0019aa78: thunk 0x00105ec4 -> TutorialControl::ResetTutePos(nullptr).
+                        // Unguarded in the binary (ldr r0,[r3,#0x16c]; bl) -- ResetTutePos
+                        // @0x001c2658 tests its param, never `this`.
+                        game_work.m_TutorialControl->ResetTutePos((MenuButton*)nullptr);
                         entity->scale = m_BaseScale;
                         // Binary @ 0x19aa34..0x19ac20 (Site B): set respawn flag if halves are
                         // already at rest on the same frame as the slice (rare; normally Site A
@@ -772,6 +774,9 @@ void MenuButton::Update(float dt) {
                         // m_bClearsMenuItems gate: cascades to clear menu fruits.
                         if (m_bClearsMenuItems) {
                             ClearMenuItems();
+                            // NOTE: the mMainScreen null test IS in the binary (v1.6.1
+                            // MenuButton::Update @0x0019aaf8, ldr r0,[r3,#0x164]; cmp r0,#0;
+                            // beq 0x0019ab04) -- do not strip.
                             if (game_work.mMainScreen) {
                                 game_work.mMainScreen->OnMenuItemsCleared();
                             }

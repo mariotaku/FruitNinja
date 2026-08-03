@@ -83,7 +83,7 @@ void ScrollingMenuItem::SetText(const char* text) {
 //          clipRect.left   = parent.pos.x + w * -0.5   (sp+0x2c)
 //          clipRect.right  = parent.pos.x + w * 0.5    (sp+0x34)
 //          clipRect = &{left, top, right, bottom}      (memory order at sp+0x2c)
-//   4. font  = game_work.pFontMain  (*(Font**)(game_work + 0x54))
+//   4. font  = game_work.pFontMain  (*(Font**)(game_work + 0x58))
 //      iter  = Utf8StringIterator(m_Text)
 //      colour = m_Colour
 //      maxWH = *globalDefaultMaxWH (GOT+0x78c0 -> BSS Vec2, load-time (0,0))
@@ -113,14 +113,9 @@ void ScrollingMenuItem::Draw() {
         pClip = &clipRect;
     }
 
-    // (4) Resolve the main font from game_work (binary reads game_work + 0x54).
-    if (!game_work.pFontMain.IsValid()) {
-        return;
-    }
+    // (4) Resolve the main font from game_work. @0x001afe14: ldr r7,[r3,#0x58] =
+    // pFontMain, unguarded. (The +0x54 load nearby is ldr r1,[r4,#0x54] = this->m_pText.)
     Mortar::Font* font = game_work.pFontMain.Get();
-    if (!font) {
-        return;
-    }
 
     Mortar::Utf8StringIterator iter(m_pText);
     // m_Colour is the packed 4-byte BGRA field (binary Colour::Colour copy-ctor

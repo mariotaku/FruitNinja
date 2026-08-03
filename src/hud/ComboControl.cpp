@@ -1,6 +1,6 @@
 // Defunct: ComboControl — unused in binary; class shape and vtable preserved
 // per stub-don't-skip policy. Zero call sites in binary; combo popup is
-// rendered by MissControl (binary @ 0x0017dad8). Binary @ 0x00136cc4 ctor.
+// rendered by MissControl (binary @ 0x0017dad8).
 // re-analyst confirmed 2026-05-20.
 //
 // Analysed: 2026-04-30T00:00
@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <cstring>
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136cc4 (re-analyst) -- format is "%i", not "x%d"
+// ASM-verified: 2026-05-20 v1.6.1 ComboControl::ComboControl (re-analyst) -- format is "%i", not "x%d"
 ComboControl::ComboControl(int comboCount)
     : m_Lifetime(1.0f), m_ComboCount(comboCount) {
     std::memset(m_Label, 0, sizeof(m_Label));
@@ -46,12 +46,13 @@ void ComboControl::Skip() {}
 // ASM-verified: 2026-05-20 v1.6.1 ComboControl::PreDraw @ 0x001693ac (re-analyst) -- extra vtable slot, no-op
 void ComboControl::PreDraw() {}
 
-// ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00136d74 (re-analyst) -- font=pFontNumbers, white,
-// center, scale=30, no z/maxWH/rot/clip. Binary's Draw is the extra-vtable slot +0x40
-// no-args form; port wires the body inside the base Draw(hudScale,layerMask) override
-// since no port-side caller hits the +0x40 slot.
+// ASM-verified: 2026-08-03T00:00Z v1.6.1 ComboControl::Draw @ 0x001695b0 (re-analyst)
+// font=pFontNumbers, white, center, scale=30, no z/maxWH/rot/clip. Binary's Draw is the
+// extra-vtable slot +0x40 no-args form; port wires the body inside the base
+// Draw(hudScale,layerMask) override since no port-side caller hits the +0x40 slot.
+// @0x001695d8 loads pFontNumbers (ldr r7,[r3,#0x5c]) straight into DrawString
+// @0x00169644 -- no null test anywhere in the 41-insn body.
 void ComboControl::Draw(float* /*hudScaleRaw*/) {
-    if (!game_work.pFontNumbers.IsValid()) return;
     Mortar::Utf8StringIterator iter(m_Label);
     Colour col(0xFF, 0xFF, 0xFF, 0xFF);
     game_work.pFontNumbers->DrawString(

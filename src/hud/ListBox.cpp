@@ -144,6 +144,7 @@ void ListBox::PreDraw(float* hudScale) {
 //   hudScale) at (pos.x - m_CellWidth*0.5 + size.x*5, rowY + size.y*7), font size
 //   = m_CellHeightParam * size.x.
 void ListBox::Draw(float* hudScaleRaw) {
+    // Port specific: the binary holds m_pItems as a reference and never null-checks it.
     if (!m_pItems) return;
 
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);

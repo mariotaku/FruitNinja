@@ -426,9 +426,12 @@ void ShopListItem::Draw() {
 // ShopListItem::NewDraw @ v1.6.1 0x001b58e8 -- all visible rendering (TTF)
 // ---------------------------------------------------------------------------
 void ShopListItem::NewDraw() {
-    if (!m_pItemInfo) { DrawDarkness(); return; }
-    if (!game_work.m_pTTFFontMain) { DrawDarkness(); return; }
+    // v1.6.1 ShopListItem::NewDraw @0x001b5910: ldrb r3,[r4,#0x2d]; cmp r3,#0;
+    // beq 0x001b5d94 -- the head gate is ScrollingMenuItem::m_bOnscreen (+0x2D),
+    // NOT m_pItemInfo (+0x278). m_pItemInfo is dereferenced unguarded at 0x001b5960.
+    if (!m_bOnscreen) { DrawDarkness(); return; }
 
+    // @0x001b5954: ldr r1,[r3,#0x614] -- m_pTTFFontMain read unguarded.
     Mortar::FontCacheObjectTTF* ttfFont = game_work.m_pTTFFontMain;
 
     bool isLocked = (m_pItemInfo->IsLocked() != 0);
@@ -443,6 +446,8 @@ void ShopListItem::NewDraw() {
         // Binary base = pos + m_Size(60,13,0), then box0 offset (-195,+16,0):
         //   title right edge = (pos.x+60)-195+195 = pos.x+60; icon left ~ pos.x+63 -> ~3px gap.
         m_pBox0 = new Mortar::BakedStringBox(ttfFont, 16.0f, 195, 30, (Mortar::ALIGNMENT_TYPE)0x0e, 1, 0);
+        // TODO: v1.6.1 0x001b5910 (ShopListItem::NewDraw) -- binary SetText source may be
+        // m_pDisplayName, not m_pTitle; field identity unverified.
         const char* title = m_pItemInfo->m_pTitle ? m_pItemInfo->m_pTitle : "";
         m_pBox0->SetText(title);
         // v1.6.1 ShopListItem::NewDraw @0x001b58e8: shadow Colour(0,0,0,0x40).
@@ -494,8 +499,8 @@ void ShopListItem::NewDraw() {
 // ShopListItem::DrawDividers @ v1.6.1 0x001b1a98
 // ---------------------------------------------------------------------------
 void ShopListItem::DrawDividers() {
-    if (!m_pItemInfo) return;
-
+    // No head gate in the binary: DrawDividers @0x001b1a98 issues divider 1's matrix
+    // and draw before its only +0x278 read at 0x001b1b58.
     MatrixManager& mm = MatrixManager::GetInstance();
     const Colour colGrey(128, 128, 128, 255);
     const Colour colWhite(255, 255, 255, 200);
@@ -660,8 +665,8 @@ void ShopListItem::DrawInAppPurchaseTags() {
 // ---------------------------------------------------------------------------
 void ShopListItem::DrawDescription() {
     if (!m_pShopScreen) return;
+    // NOTE: fused with the alpha<=0 test in the binary (cmp r3,#0; cmpne r10,#0; ble @0x001b1f68) -- genuine.
     if (!m_pItemInfo) return;
-    if (!game_work.m_pTTFFontMain) return;
 
     uint32_t alphaU = (uint32_t)(m_CostAlpha * 255.0f);
     if (alphaU > 0xFF) alphaU = 0xFF;

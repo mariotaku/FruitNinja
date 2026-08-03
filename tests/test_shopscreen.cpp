@@ -143,6 +143,10 @@ int main(int argc, char* argv[]) {
             ShopListItem item;
             // pShopScreen=nullptr is safe: DrawDescription() early-returns on null.
             item.Create(&info, nullptr);
+            // NewDraw's head gate is m_bOnscreen (+0x2D), matching the binary
+            // @0x001b5910. ScrollingMenu::Update normally sets it; this fixture
+            // drives NewDraw directly.
+            item.SetOnscreen(true);
 
             // Precondition: boxes are null before NewDraw (lazy-build).
             if (item.m_pBox0 != nullptr || item.m_pBox1 != nullptr) {

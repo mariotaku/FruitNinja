@@ -41,7 +41,7 @@ public:
     void Update(float dt) override;
     void Draw(float* hudScaleRaw) override;
 
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00137124 (re-analyst) -- returns 6
+    // ASM-verified: 2026-05-20 v1.6.1 ComboControl::GetType @ 0x00169aa8 (re-analyst) -- returns 6
     int GetType() override { return 6; }
 
     void Init() override;

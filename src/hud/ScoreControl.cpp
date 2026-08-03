@@ -30,6 +30,8 @@
 // Shared TTF face for BakedStringBox labels in ScoreControl.
 // v1.6.1 ScoreControl::ScoreControl @0x001ad5fc reads game_work.m_pTTFFontMain
 //   (GameWork+0x614 = locale face; arabic.ttf when languageFlag==0x14, else gangofchinese.ttf).
+// Port specific: the binary reads +0x614 unconditionally. The null branch below is a
+//   port-only safety net with no binary counterpart.
 static Mortar::FontCacheObjectTTF* GetScoreControlTTFFont() {
     if (game_work.m_pTTFFontMain) {
         return game_work.m_pTTFFontMain;

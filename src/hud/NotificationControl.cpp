@@ -79,11 +79,9 @@ NotificationControl::NotificationControl(const char* name, int points,
 
     // Measure text width and scale down if exceeds maxWidth.
     // Binary reads game_work.pM_Fonts[1] unguarded @0x001a4428.
-    if (game_work.pFontMain.IsValid()) {
-        float measured = game_work.pFontMain->MeasureWidth(m_TextScale, m_DisplayName);
-        if (measured > maxWidth) {
-            m_TextScale *= maxWidth / measured;
-        }
+    float measured = game_work.pFontMain->MeasureWidth(m_TextScale, m_DisplayName);
+    if (measured > maxWidth) {
+        m_TextScale *= maxWidth / measured;
     }
 
     // v1.6.1 NotificationControl::NotificationControl @0x001a4178/0x001a4428:

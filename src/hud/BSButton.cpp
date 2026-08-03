@@ -31,6 +31,8 @@ namespace {
 //   by PreloadFontsTTF @0x0011c1fc (gangofchinese.ttf or arabic.ttf).
 // Port: returns game_work.m_pTTFFontMain (populated at GameInitialise time by
 //   PreloadFontsTTF). Falls back to a lazy local load if somehow null.
+// Port specific: the binary reads +0x614 unconditionally. The null branch below is a
+//   port-only safety net with no binary counterpart.
 static Mortar::FontCacheObjectTTF* GetSharedTTFFont() {
     if (game_work.m_pTTFFontMain) return game_work.m_pTTFFontMain;
     static Mortar::SmartPtr<Mortar::Font> s_TTFFont =

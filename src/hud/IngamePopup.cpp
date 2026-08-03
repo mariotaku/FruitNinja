@@ -24,6 +24,8 @@
 // Shared TTF face for IngamePopup BakedStringBox labels (NEW / SELECTED / NEW BEST! / combo).
 // v1.6.1 IngamePopup ctor @0x0016dbac: every BakedStringBox reads game_work.m_pTTFFontMain
 //   (GameWork+0x614 = locale face; arabic.ttf when languageFlag==0x14, else gangofchinese.ttf).
+// Port specific: the binary reads +0x614 unconditionally. The null branch below is a
+//   port-only safety net with no binary counterpart.
 static Mortar::FontCacheObjectTTF* GetIngamePopupTTFFont() {
     if (game_work.m_pTTFFontMain) {
         return game_work.m_pTTFFontMain;

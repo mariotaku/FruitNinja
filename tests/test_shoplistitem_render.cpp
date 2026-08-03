@@ -129,9 +129,9 @@ static void DrawPass(
     MatrixManager::GetInstance().SetupOrtho(
         160.0f, -160.0f, -240.0f, 240.0f, 2000.0f, -6000.0f);
 
-    // Draw all item rows by calling NewDraw() directly.
-    // This bypasses the m_bOnscreen dispatch in Draw() and renders the full
-    // TTF path regardless of the base ScrollingMenuItem::m_bOnscreen state.
+    // Draw all item rows by calling NewDraw() directly, bypassing Draw()'s
+    // dispatch. The rows were marked onscreen at setup so NewDraw's own
+    // m_bOnscreen head gate passes.
     for (int i = 0; i < kNumRows; ++i) {
         items[i].NewDraw();
     }
@@ -313,6 +313,10 @@ int main(int argc, char* argv[]) {
         //   items[4].m_SelectedAlpha starts at 0 (not in ItemManager); decrements slightly.
         for (int i = 0; i < kNumRows; ++i) {
             items[i].Move(_Vector3<float>(kItemX, kRowY[i], 0.0f));
+            // NewDraw's head gate is m_bOnscreen (+0x2D), matching the binary
+            // @0x001b5910. Normally ScrollingMenu::Update sets it; this fixture
+            // drives NewDraw directly, so mark the rows onscreen by hand.
+            items[i].SetOnscreen(true);
         }
 
         // Force SELECTED alpha on row 4 after Move() decremented it.

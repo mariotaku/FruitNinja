@@ -79,6 +79,9 @@ int main(int argc, char* argv[]) {
     // -------------------------------------------------------------------------
     ShopListItem item;
     item.Create(&info, nullptr /* pShopScreen */);
+    // NewDraw's head gate is m_bOnscreen (+0x2D), matching the binary @0x001b5910.
+    // ScrollingMenu::Update normally sets it; this fixture drives NewDraw directly.
+    item.SetOnscreen(true);
 
     // Preconditions.
     check(item.m_pBox0 == nullptr, "m_pBox0 null before NewDraw (lazy-build guard)");
@@ -86,7 +89,8 @@ int main(int argc, char* argv[]) {
     check(item.m_TintA == 0xFF,    "m_TintA == 0xFF (sentinel) before NewDraw");
 
     // -------------------------------------------------------------------------
-    // Call NewDraw() directly (bypasses the m_bOnscreen dispatch in Draw()).
+    // Call NewDraw() directly (bypasses Draw()'s dispatch; the item was marked
+    // onscreen above so NewDraw's own head gate passes).
     // Boxes are built before any GL Draw() call, so assertions hold even if
     // GL state is not perfect in headless context.
     // -------------------------------------------------------------------------
