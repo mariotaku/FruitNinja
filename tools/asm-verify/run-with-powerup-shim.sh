@@ -20,7 +20,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE="fnverify"
+# Track run.sh/compile-one.sh's default (fnverify-bada) and honour the same
+# override; this was hardcoded to "fnverify", a name setup.sh never builds.
+IMAGE="${ASM_VERIFY_IMAGE:-fnverify-bada}"
 
 to_docker_path() {
     local p="$1"

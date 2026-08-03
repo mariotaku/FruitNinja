@@ -36,7 +36,12 @@ EXTRA_FLAGS="$*"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-IMAGE="${ASM_VERIFY_IMAGE:-fnverify}"
+# Image name MUST track run.sh/compile-one.sh's default (fnverify-bada). This said
+# "fnverify" -- the name setup.sh does NOT build -- so the inspect below always
+# missed and the script printed a notice and exited 0. Third instance of this same
+# typo (see asm-verify-hook.sh, fixed in b49a2342), and the worst of the three:
+# this is the LAYOUT GATE, so "cannot verify" was reporting as "verified".
+IMAGE="${ASM_VERIFY_IMAGE:-fnverify-bada}"
 
 # Resolve the .cpp path to a project-relative form.
 if [[ "$CPP" = /* ]]; then
@@ -79,7 +84,7 @@ docker run --rm \
     -v "$PROJECT_ROOT_DOCKER:/work" \
     -e REL="$REL" \
     -e EXTRA="$EXTRA_FLAGS" \
-    "$IMAGE" -c '
+    "$IMAGE" bash -c '
 set -e
 mkdir -p /tmp/portsrc/src /tmp/portsrc/cross-headers
 rsync -aq /work/src/ /tmp/portsrc/src/
@@ -100,7 +105,7 @@ OUT=/tmp/check.o
 [ -n "$EXTRA" ] && OUT=/tmp/check.out  # for -E or -S the output is text
 
 set +e
-arm-none-eabi-g++ $CXXFLAGS $INCS $EXTRA -c "/tmp/portsrc/$REL" -o "$OUT" 2>&1
+arm-samsung-nucleuseabi-g++ $CXXFLAGS $INCS $EXTRA -c "/tmp/portsrc/$REL" -o "$OUT" 2>&1
 EXIT=$?
 set -e
 
