@@ -4,27 +4,26 @@
 namespace Mortar {
 
 // v1.6.1 InputActionMapper::InputActionMapper @0x002756b0.
-// ev is a by-value template event: only its actionFlags/keycode/m_mapper
-// fields feed the filter, matching the binary reading its 3 relevant words
-// out of the by-value InputEvent (0x14 bytes -- see InputEvent.h).
-// TODO: v1.6.1 0x002756b0 (Mortar::InputActionMapper::InputActionMapper) --
-// the binary also copies InputEvent words 3 and 4 (binary +0x0c / +0x10) into
-// m_Param4 / m_Param5. The port's InputEvent is remapped and carries no field
-// for those words, so both are hardcoded 0 here; wire them once InputEvent is
-// made layout-faithful.
+// ev is a by-value template event; the ctor copies its five words verbatim into
+// this+0x0c..this+0x1c (`ldmia lr!,{r0-r3} / stmia r12!,{r0-r3}` then word 4).
+// Word 1 is the packed m_Tag | m_KeyCode<<16 halfword pair, so it is rebuilt here
+// rather than read as a single member.
 InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
                                       unsigned long actionHash,
                                       unsigned long configSourceHash)
     : m_Enabled(true)
     , m_ActionHash(actionHash)
     , m_ConfigSourceHash(configSourceHash)
-    , m_ActionMask(ev.actionFlags)
-    , m_MatchValue(ev.keycode << 16)
-    , m_KeyMask((uint32_t)(uintptr_t)ev.m_mapper)
-    , m_Param4(0)
-    , m_Param5(0)
+    , m_ActionMask(ev.m_Flags)                                        // event word 0
+    , m_MatchValue(((uint32_t)ev.m_KeyCode << 16) | (uint32_t)ev.m_Tag) // event word 1
+    , m_KeyMask(ev.m_KeyId)                                           // event word 2
+    , m_Param4(0)                                                     // event word 3, set below
+    , m_Param5(ev.m_Stamp)                                            // event word 4
     , m_callback(cb)
 {
+    // Word 3 is a float in the event and an untyped word in the mapper; copy the
+    // bits rather than converting.
+    memcpy(&m_Param4, &ev.m_Delta, sizeof(m_Param4));
 }
 
 // ASM-verified: 2026-07-31T00:00Z v1.6.1 Mortar::InputActionMapper::ProcessEvent @ 0x00275728 (asm-inspector)
@@ -46,14 +45,14 @@ InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
 //   typeBits  = eventWord & 0xffff0000               (DOWN/MOVE/UP)
 //   if ((typeBits & m_ActionMask) == 0) return 0;            // type must overlap
 //   if ((eventWord & m_ActionMask & 0xffff) == 0) return 0;  // device mask must overlap
-//   0x20000 (MOVE): kc = m_MatchValue >> 16;                 // ldrh [this,#0x12]
+//   0x20000 (AXIS): kc = m_MatchValue >> 16;                 // ldrh [this,#0x12]
 //                   if (kc < 0x89) { if ((kc & ev[+6]) == 0) return 0;   // bitmask finger set
 //                                    return Call(); }                    // tail call
 //                   /* else fall into the shared exact compare below */
-//   0x80000 (UP):   /* fall into the shared exact compare below */
+//   0x80000 (?):    /* fall into the shared exact compare below */
 //   shared:         if (ev[+6] != kc) return 0;
 //                   return Call();                           // tail call, returns its bool
-//   0x10000 (DOWN): if (ev[+8] != m_KeyMask) return 0;
+//   0x10000 (BUTTON): if (ev[+8] != m_KeyMask) return 0;
 //                   Call(); return 0;                        // NOT a tail call: 0x0027577c
 //                     `bl Call` then `b 0x002757c8` -> `mov r12,#0; cpy r0,r12`, so the
 //                     DOWN arm discards the handler's result and always returns 0.
@@ -70,18 +69,11 @@ InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
 //   m_ActionMask (+0x0c) <-> event word 0        m_MatchValue (+0x10) <-> event word 1
 //   m_KeyMask    (+0x14) <-> event word 2
 //
-// DIFFERS: the binary reads a 0x14-byte InputEvent -- combined action-word at
-//   +0x00, ushort keycode at +0x06 (the high half of word 1, written by
-//   InputDevice::AxisEvent @0x0027582c as (axisId<<16 | tag) & 0xffffff), and
-//   word 2 at +0x08 (the float axis value for AxisEvent, the button/key id for
-//   ButtonPressed @0x00275864). The port's InputEvent is remapped, so those
-//   three reads land at +0x04 / +0x1c / +0x20 instead of +0x00 / +0x06 / +0x08.
-//   eventWord maps to actionFlags (carries the 0x10000/0x20000/0x80000 type bits
-//   plus the low-16 device mask), binary +0x06 maps to InputEvent::keycode, and
-//   binary +0x08 maps to InputEvent::m_mapper -- misnamed, it is a value word,
-//   not an InputActionMapper*. This is the only remaining source of divergence
-//   in this function and it cannot be closed until InputEvent is made
-//   layout-faithful; that is gated on InputManager::LoadConfigFile (see below).
+// The three event reads now land on the binary's own offsets: m_Flags +0x00,
+// m_KeyCode +0x06, m_KeyId +0x08. (They used to land at +0x04 / +0x1c / +0x20 —
+// the last remaining divergence in this function, closed by the layout-faithful
+// InputEvent.) The ASM-verified stamp above predates that offset fix and is due a
+// re-verify.
 //
 // TODO: v1.6.1 0x002442fc (Mortar::InputManager::LoadConfigFile) — still a stub,
 //   so nothing ever constructs an InputActionMapper and this whole path is dead
@@ -93,7 +85,7 @@ InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
 //   binding list, the consume, and the `return false` workaround it forces on
 //   PointerMoveCallback (src/game/GameTaskInput.cpp:169).
 bool InputActionMapper::ProcessEvent(InputEvent* event) {
-    uint32_t eventWord = event->actionFlags;
+    uint32_t eventWord = event->m_Flags;
     uint32_t typeBits  = eventWord & 0xffff0000u;
 
     if ((typeBits & m_ActionMask) == 0) {
@@ -106,9 +98,9 @@ bool InputActionMapper::ProcessEvent(InputEvent* event) {
     uint16_t kc   = 0;   // this->m_MatchValue >> 16  -- ldrh [this,#0x12]
     uint16_t evKc = 0;   // binary event +0x06        -- ldrh [event,#0x06]
 
-    if (typeBits == INPUT_ACTION_MOVE) {            // 0x20000
+    if (typeBits == INPUT_ARM_AXIS) {               // 0x20000
         kc   = (uint16_t)(m_MatchValue >> 16);
-        evKc = (uint16_t)event->keycode;
+        evKc = event->m_KeyCode;
         if (kc < 0x89) {
             // Finger-set bitmask, not a keycode: any overlapping bit matches.
             if ((kc & evKc) == 0) {
@@ -117,11 +109,11 @@ bool InputActionMapper::ProcessEvent(InputEvent* event) {
             return m_callback(event);
         }
         // kc >= 0x89: falls through to the shared exact compare (binary 0x002757ac).
-    } else if (typeBits == INPUT_ACTION_UP) {       // 0x80000
-        evKc = (uint16_t)event->keycode;
+    } else if (typeBits == INPUT_ARM_UNKNOWN) {     // 0x80000
+        evKc = event->m_KeyCode;
         kc   = (uint16_t)(m_MatchValue >> 16);
-    } else if (typeBits == INPUT_ACTION_DOWN) {     // 0x10000
-        if ((uint32_t)(uintptr_t)event->m_mapper != this->m_KeyMask) {
+    } else if (typeBits == INPUT_ARM_BUTTON) {      // 0x10000
+        if (event->m_KeyId != this->m_KeyMask) {
             return false;
         }
         m_callback(event);

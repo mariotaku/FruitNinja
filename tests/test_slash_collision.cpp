@@ -71,31 +71,20 @@ struct TestEntity : public Mortar::Entity {
 // OnTouchActive(x, y) to build the ribbon.
 // ---------------------------------------------------------------------------
 
-static InputEvent MakeMove(float x, float y) {
+// TouchAxisX0 / TouchAxisY0 axis events -- one axis value per event
+// (InputEvent +0x08), matching InputDevice::AxisEvent @0x0027582c.
+static InputEvent MakeMove(int channel, bool yAxis, float x, float y) {
     InputEvent ev;
-    ev.actionHash  = 0;
-    ev.actionFlags = INPUT_ACTION_MOVE;
-    ev.fingerId    = 0;
-    ev.x           = x;
-    ev.y           = y;
-    ev.deltaX      = 0.0f;
-    ev.deltaY      = 0.0f;
-    ev.keycode     = 0;
-    ev.m_mapper    = 0;
+    FN_MakeTouchAxisEvent(ev, 0, channel, yAxis, x, y);
     return ev;
 }
 
-static InputEvent MakeDown(float x, float y, bool pressEdge) {
+// Touch<channel+1> button event.
+static InputEvent MakeDown(int channel, float x, float y, bool pressEdge) {
     InputEvent ev;
-    ev.actionHash  = 0;
-    ev.actionFlags = INPUT_ACTION_DOWN | (pressEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
-    ev.fingerId    = 0;
-    ev.x           = x;
-    ev.y           = y;
-    ev.deltaX      = 0.0f;
-    ev.deltaY      = 0.0f;
-    ev.keycode     = 0;
-    ev.m_mapper    = 0;
+    FN_MakeTouchButtonEvent(ev, 0,
+                            INPUT_ACTION_DOWN | (pressEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
+                            channel, x, y);
     return ev;
 }
 
@@ -103,10 +92,11 @@ static InputEvent MakeDown(float x, float y, bool pressEdge) {
 // pressEdge=true: fires Reset() + seeds a new stroke.
 // pressEdge=false: extends the current stroke.
 static void Touch(SlashEntity& se, float x, float y, bool pressEdge) {
-    InputEvent move = MakeMove(x, y);
-    se.TouchMoveX(&move);
-    se.TouchMoveY(&move);
-    InputEvent down = MakeDown(x, y, pressEdge);
+    InputEvent moveX = MakeMove(0, false, x, y);
+    se.TouchMoveX(&moveX);
+    InputEvent moveY = MakeMove(0, true, x, y);
+    se.TouchMoveY(&moveY);
+    InputEvent down = MakeDown(0, x, y, pressEdge);
     se.TouchDown(&down);
 }
 

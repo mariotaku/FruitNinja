@@ -105,21 +105,20 @@ void EnsurePointerActionHashes() {
 }  // namespace
 
 // Stands in for AxisEvent(0x74/0x75, ...) -> "PointerMove".
-// `value` is the binary's single axis-value word (InputEvent +0x08); the port
-// carries it in InputEvent::x and names the axis in InputEvent::keycode, which
-// is what PointerMoveCallback @0x001cbfcc branches on.
+// `value` is the binary's single axis-value word (m_Value, InputEvent +0x08);
+// m_KeyCode names the axis, which is what PointerMoveCallback @0x001cbfcc
+// branches on. Only actionHash is a port addition.
 static void EmitPointerAxisAction(InputDeviceBada* dev, unsigned long keycode,
                                   float value) {
     EnsurePointerActionHashes();
 
     InputEvent ie;
     memset(&ie, 0, sizeof(ie));
-    ie.actionHash  = (uint32_t)s_hashPointerMove;
     // Binary word0 = ParseAction("move") | 0x20000.
-    ie.actionFlags = INPUT_ACTION_MOVE | 0x20u;
-    ie.fingerId    = -1;              // global pointer, not a finger slot
-    ie.keycode     = (uint32_t)keycode;
-    ie.x           = value;
+    ie.m_Flags    = INPUT_ACTION_MOVE;
+    ie.m_KeyCode  = (uint16_t)keycode;
+    ie.m_Value    = value;
+    ie.actionHash = (uint32_t)s_hashPointerMove;
     dev->DispatchEvent(&ie);
 }
 
@@ -141,13 +140,13 @@ static void EmitPointerButtonAction(InputDeviceBada* dev, unsigned long mask,
 
     InputEvent ie;
     memset(&ie, 0, sizeof(ie));
-    ie.actionHash  = (uint32_t)hash;
     // Binary word0 = mask | 0x10000.
-    ie.actionFlags = INPUT_ACTION_DOWN | (uint32_t)mask;
-    ie.fingerId    = -1;            // global pointer, not a finger slot
-    ie.keycode     = 0x6c;          // MouseButton1
-    ie.x           = x;
-    ie.y           = y;
+    ie.m_Flags    = INPUT_ARM_BUTTON | (uint32_t)mask;
+    ie.m_KeyId    = INPUT_KEY_MOUSEBUTTON1;
+    ie.m_Delta    = 1.0f;           // ButtonPressed's float value arg
+    ie.actionHash = (uint32_t)hash;
+    ie.x          = x;
+    ie.y          = y;
     dev->DispatchEvent(&ie);
 }
 

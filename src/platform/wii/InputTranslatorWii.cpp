@@ -303,25 +303,20 @@ void InputTranslatorWii::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.fingerId = ch;
-                ie.x = gx;
-                ie.y = gy;
 
-                ie.actionHash  = hashTouchScreen;
-                ie.actionFlags = INPUT_ACTION_DOWN;
+                FN_MakeTouchButtonEvent(ie, hashTouchScreen, INPUT_ACTION_DOWN, ch, gx, gy);
                 mgr->DispatchEvent(&ie);
 
                 if (motionSinceDown[ch]) {
-                    ie.actionHash  = hashTouchMoveX[ch];
-                    ie.actionFlags = INPUT_ACTION_MOVE;
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false, gx, gy);
                     mgr->DispatchEvent(&ie);
-                    ie.actionHash  = hashTouchMoveY[ch];
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true, gx, gy);
                     mgr->DispatchEvent(&ie);
                 }
 
-                ie.actionHash  = hashTouchDown[ch];
-                ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
+                FN_MakeTouchButtonEvent(ie, hashTouchDown[ch],
+                                        INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
+                                        ch, gx, gy);
                 mgr->DispatchEvent(&ie);
             }
         } else if (phase == 0) {
@@ -331,23 +326,17 @@ void InputTranslatorWii::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.fingerId = ch;
-                ie.x = gx;
-                ie.y = gy;
 
                 // Press-vs-motion gate, same as the press frame.
                 if (motionSinceDown[ch]) {
-                    ie.actionHash  = hashTouchMoveX[ch];
-                    ie.actionFlags = INPUT_ACTION_MOVE;
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false, gx, gy);
                     mgr->DispatchEvent(&ie);
 
-                    ie.actionHash  = hashTouchMoveY[ch];
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true, gx, gy);
                     mgr->DispatchEvent(&ie);
                 }
 
-                ie.actionHash  = hashTouchDown[ch];
-                ie.actionFlags = INPUT_ACTION_DOWN;
+                FN_MakeTouchButtonEvent(ie, hashTouchDown[ch], INPUT_ACTION_DOWN, ch, gx, gy);
                 mgr->DispatchEvent(&ie);
             }
         } else if (wasActive && !nowActive) {
@@ -357,12 +346,7 @@ void InputTranslatorWii::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = hashTouchUp[ch];
-                ie.actionFlags = INPUT_ACTION_UP;
-                ie.fingerId    = ch;
-                ie.x = gx;
-                ie.y = gy;
+                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch, gx, gy);
                 mgr->DispatchEvent(&ie);
             }
         }
@@ -380,26 +364,24 @@ void InputTranslatorWii::DispatchForSimTick() {
             if (!mgr) continue;
 
             InputEvent ie;
-            memset(&ie, 0, sizeof(ie));
-            ie.fingerId = ch;
-            ie.x = fingerX[ch];
-            ie.y = fingerY[ch];
 
-            ie.actionHash  = hashTouchScreen;
-            ie.actionFlags = INPUT_ACTION_DOWN;
+            FN_MakeTouchButtonEvent(ie, hashTouchScreen, INPUT_ACTION_DOWN, ch,
+                                    fingerX[ch], fingerY[ch]);
             mgr->DispatchEvent(&ie);
 
             // Press-vs-motion gate (see channels 0-7).
             if (motionSinceDown[ch]) {
-                ie.actionHash  = hashTouchMoveX[ch];
-                ie.actionFlags = INPUT_ACTION_MOVE;
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
-                ie.actionHash  = hashTouchMoveY[ch];
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
             }
 
-            ie.actionHash  = hashTouchDown[ch];
-            ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
+            FN_MakeTouchButtonEvent(ie, hashTouchDown[ch],
+                                    INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
+                                    ch, fingerX[ch], fingerY[ch]);
             mgr->DispatchEvent(&ie);
 
         } else if (pendingUp[ch]) {
@@ -408,12 +390,8 @@ void InputTranslatorWii::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = hashTouchUp[ch];
-                ie.actionFlags = INPUT_ACTION_UP;
-                ie.fingerId    = ch;
-                ie.x = fingerX[ch];
-                ie.y = fingerY[ch];
+                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch,
+                                        fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
             }
 
@@ -422,23 +400,20 @@ void InputTranslatorWii::DispatchForSimTick() {
             if (!mgr) continue;
 
             InputEvent ie;
-            memset(&ie, 0, sizeof(ie));
-            ie.fingerId = ch;
-            ie.x = fingerX[ch];
-            ie.y = fingerY[ch];
 
             // Press-vs-motion gate (see channels 0-7).
             if (motionSinceDown[ch]) {
-                ie.actionHash  = hashTouchMoveX[ch];
-                ie.actionFlags = INPUT_ACTION_MOVE;
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
 
-                ie.actionHash  = hashTouchMoveY[ch];
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
             }
 
-            ie.actionHash  = hashTouchDown[ch];
-            ie.actionFlags = INPUT_ACTION_DOWN;
+            FN_MakeTouchButtonEvent(ie, hashTouchDown[ch], INPUT_ACTION_DOWN, ch,
+                                    fingerX[ch], fingerY[ch]);
             mgr->DispatchEvent(&ie);
         }
     }
@@ -490,12 +465,8 @@ void InputTranslatorWii::ReleaseAllFingers() {
 
         if (mgr) {
             InputEvent ie;
-            memset(&ie, 0, sizeof(ie));
-            ie.actionHash  = hashTouchUp[ch];
-            ie.actionFlags = INPUT_ACTION_UP;
-            ie.fingerId    = ch;
-            ie.x = fingerX[ch];
-            ie.y = fingerY[ch];
+            FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch,
+                                    fingerX[ch], fingerY[ch]);
             mgr->DispatchEvent(&ie);
         }
 

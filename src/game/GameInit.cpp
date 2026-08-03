@@ -396,7 +396,9 @@ void InstantLevelDestroy() {
 // (defunct online news path -- see FruitNinjaNewsControl::StartNewsRender).
 int TouchReleasedCallback(InputEvent* event) {
     if (game_work.m_pActiveTouchSink == NULL) return 0;
-    int finger = event->fingerId;
+    // Touch<n+1> button event: the key id at InputEvent +0x08 names the finger
+    // (Touch1 = 0x89, see Mortar::InputManager::ParseKey @0x002438c8).
+    int finger = (int)event->m_KeyId - (int)INPUT_KEY_TOUCH1;
     game_work.m_pActiveTouchSink->TouchReleased(event, &game_work.m_FingerSpawnPos[finger]);
     return 1;
 }

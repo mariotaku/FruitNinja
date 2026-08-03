@@ -250,12 +250,8 @@ void InputTranslatorSDL::ReleaseAllFingers() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = hashTouchUp[ch];
-                ie.actionFlags = INPUT_ACTION_UP;
-                ie.fingerId    = ch;
-                ie.x = fingerX[ch];
-                ie.y = fingerY[ch];
+                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch,
+                                        fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
             }
         }
@@ -732,25 +728,20 @@ void InputTranslatorSDL::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.fingerId = ch;
-                ie.x = gx;
-                ie.y = gy;
 
-                ie.actionHash  = hashTouchScreen;
-                ie.actionFlags = INPUT_ACTION_DOWN;
+                FN_MakeTouchButtonEvent(ie, hashTouchScreen, INPUT_ACTION_DOWN, ch, gx, gy);
                 mgr->DispatchEvent(&ie);
 
                 if (motionSinceDown[ch]) {
-                    ie.actionHash  = hashTouchMoveX[ch];
-                    ie.actionFlags = INPUT_ACTION_MOVE;
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false, gx, gy);
                     mgr->DispatchEvent(&ie);
-                    ie.actionHash  = hashTouchMoveY[ch];
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true, gx, gy);
                     mgr->DispatchEvent(&ie);
                 }
 
-                ie.actionHash  = hashTouchDown[ch];
-                ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
+                FN_MakeTouchButtonEvent(ie, hashTouchDown[ch],
+                                        INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
+                                        ch, gx, gy);
                 mgr->DispatchEvent(&ie);
             }
         } else if (phase == 0) {
@@ -763,26 +754,20 @@ void InputTranslatorSDL::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.fingerId = ch;
-                ie.x = gx;
-                ie.y = gy;
 
                 // Port specific: same press-vs-motion gate as the press
                 // frame -- a held-but-never-moved finger (long-press tap)
                 // emits TouchDown only (re-arms the blade latch at the
                 // stroke's existing position) and no TouchMove.
                 if (motionSinceDown[ch]) {
-                    ie.actionHash  = hashTouchMoveX[ch];
-                    ie.actionFlags = INPUT_ACTION_MOVE;
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false, gx, gy);
                     mgr->DispatchEvent(&ie);
 
-                    ie.actionHash  = hashTouchMoveY[ch];
+                    FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true, gx, gy);
                     mgr->DispatchEvent(&ie);
                 }
 
-                ie.actionHash  = hashTouchDown[ch];
-                ie.actionFlags = INPUT_ACTION_DOWN;
+                FN_MakeTouchButtonEvent(ie, hashTouchDown[ch], INPUT_ACTION_DOWN, ch, gx, gy);
                 mgr->DispatchEvent(&ie);
             }
         } else if (wasActive && !nowActive) {
@@ -794,12 +779,7 @@ void InputTranslatorSDL::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = hashTouchUp[ch];
-                ie.actionFlags = INPUT_ACTION_UP;
-                ie.fingerId    = ch;
-                ie.x = gx;
-                ie.y = gy;
+                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch, gx, gy);
                 mgr->DispatchEvent(&ie);
             }
         }
@@ -820,26 +800,24 @@ void InputTranslatorSDL::DispatchForSimTick() {
                  ch, (int)isEdge, fingerX[ch], fingerY[ch]);
 
             InputEvent ie;
-            memset(&ie, 0, sizeof(ie));
-            ie.fingerId = ch;
-            ie.x = fingerX[ch];
-            ie.y = fingerY[ch];
 
-            ie.actionHash  = hashTouchScreen;
-            ie.actionFlags = INPUT_ACTION_DOWN;
+            FN_MakeTouchButtonEvent(ie, hashTouchScreen, INPUT_ACTION_DOWN, ch,
+                                    fingerX[ch], fingerY[ch]);
             mgr->DispatchEvent(&ie);
 
             // Port specific: press-vs-motion gate (see channels 0-7).
             if (motionSinceDown[ch]) {
-                ie.actionHash  = hashTouchMoveX[ch];
-                ie.actionFlags = INPUT_ACTION_MOVE;
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
-                ie.actionHash  = hashTouchMoveY[ch];
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
             }
 
-            ie.actionHash  = hashTouchDown[ch];
-            ie.actionFlags = INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u);
+            FN_MakeTouchButtonEvent(ie, hashTouchDown[ch],
+                                    INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
+                                    ch, fingerX[ch], fingerY[ch]);
             mgr->DispatchEvent(&ie);
 
         } else if (pendingUp[ch]) {
@@ -851,12 +829,8 @@ void InputTranslatorSDL::DispatchForSimTick() {
 
             if (mgr) {
                 InputEvent ie;
-                memset(&ie, 0, sizeof(ie));
-                ie.actionHash  = hashTouchUp[ch];
-                ie.actionFlags = INPUT_ACTION_UP;
-                ie.fingerId    = ch;
-                ie.x = fingerX[ch];
-                ie.y = fingerY[ch];
+                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch,
+                                        fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
             }
 
@@ -868,23 +842,20 @@ void InputTranslatorSDL::DispatchForSimTick() {
                  ch, fingerX[ch], fingerY[ch]);
 
             InputEvent ie;
-            memset(&ie, 0, sizeof(ie));
-            ie.fingerId = ch;
-            ie.x = fingerX[ch];
-            ie.y = fingerY[ch];
 
             // Port specific: press-vs-motion gate (see channels 0-7).
             if (motionSinceDown[ch]) {
-                ie.actionHash  = hashTouchMoveX[ch];
-                ie.actionFlags = INPUT_ACTION_MOVE;
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
 
-                ie.actionHash  = hashTouchMoveY[ch];
+                FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true,
+                                      fingerX[ch], fingerY[ch]);
                 mgr->DispatchEvent(&ie);
             }
 
-            ie.actionHash  = hashTouchDown[ch];
-            ie.actionFlags = INPUT_ACTION_DOWN;
+            FN_MakeTouchButtonEvent(ie, hashTouchDown[ch], INPUT_ACTION_DOWN, ch,
+                                    fingerX[ch], fingerY[ch]);
             mgr->DispatchEvent(&ie);
         }
     }

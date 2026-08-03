@@ -126,8 +126,8 @@ void GameTaskInitInput() {
 // of this file.
 
 // ASM-spec v1.6.1 PointerMoveCallback @ 0x001cbfcc:
-//   uint  kc  = ev->keycode;            // binary InputEvent +0x06 (ushort)
-//   float v   = ev->axisValue;          // binary InputEvent +0x08 (float)
+//   uint  kc  = ev->m_KeyCode;          // binary InputEvent +0x06 (ushort)
+//   float v   = ev->m_Value;            // binary InputEvent +0x08 (float)
 //   Vector2 dim = DisplayManager::GetInstance()->vtable[+0x40](&rect);  // screen w/h
 //   float px  =   v - dim.x * 0.5f;
 //   float py  = -(v - dim.y * 0.5f);
@@ -150,8 +150,8 @@ void GameTaskInitInput() {
 //   SlashEntity::TouchMoveX/Y directly to the TouchMove_X<i>/Y<i> hashes in
 //   SlashEntity::Init, and InputTranslatorSDL::DispatchForSimTick writes
 //   game_work.m_FingerSpawnPos[] from the drained Mortar::Touch state. The
-//   InputTranslatorSDL per-finger dispatch leaves InputEvent::keycode at 0, so
-//   neither keycode branch below fires on that path.
+//   per-finger dispatch stamps m_KeyCode with TouchAxisX/Y<i> (0x99..0xb8), so
+//   neither MouseAxis branch below fires on that path.
 //
 // DIFFERS: the binary re-centres the raw device pixel coordinate here
 //   (px = v - W/2, py = H/2 - v, from GlesForm's top-left Y-down 480x320
@@ -171,11 +171,11 @@ bool PointerMoveCallback(InputEvent* ev) {
 
     // Binary InputEvent +0x08 -- the single axis-value word. See
     // InputDevice::AxisEvent @0x0027582c and the emitter in InputDeviceBada.cpp.
-    const float value = ev->x;
+    const float value = ev->m_Value;
 
-    if (ev->keycode == 0x74) {          // MouseAxisX
+    if (ev->m_KeyCode == INPUT_KEY_MOUSEAXISX) {
         game_work.worldPos.x = value;
-    } else if (ev->keycode == 0x75) {   // MouseAxisY
+    } else if (ev->m_KeyCode == INPUT_KEY_MOUSEAXISY) {
         game_work.worldPos.y = value;
     }
 

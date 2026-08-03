@@ -2703,7 +2703,7 @@ bool SlashEntity::TouchDown(InputEvent* event) {
     //   Multi-touch: g_pSlashEntities[ch] gives each finger its own SlashEntity,
     //   so a press-edge on channel N resets only channel N's blade; channels M!=N
     //   are separate instances and are unaffected.
-    bool pressEdge = (event && (event->actionFlags & INPUT_ACTION_DOWN_EDGE));
+    bool pressEdge = (event && (event->m_Flags & INPUT_ACTION_DOWN_EDGE));
     if (m_BombHitEdge == 0 && (m_BladeActive == 0 || pressEdge)) {
 #if !defined(__bada__)
         // Port specific: seed the NEW stroke at this event's press position.
@@ -2716,6 +2716,8 @@ bool SlashEntity::TouchDown(InputEvent* event) {
         // TouchDown runs. Deliberately INSIDE the stroke-reset gate: when the
         // bomb-hit latch blocks Reset, the stale position keeps OnTouchActive
         // in its below-threshold skip path, so a tap appends nothing.
+        // event->x/y are the port-side side channel (InputEvent.h): a faithful
+        // Touch<n> button event carries no position word.
         if (event) {
             m_RawTouchPos.x = event->x;
             m_RawTouchPos.y = event->y;
@@ -2735,12 +2737,14 @@ bool SlashEntity::TouchDown(InputEvent* event) {
 // No Game::GetInstance call, no null test.
 bool SlashEntity::TouchMoveX(InputEvent* event) {
     if (game_work.m_BombHitTimer > 0.0f) return false;
+    // TouchAxisX<n+1> axis event: the position is the axis-value word
+    // (InputEvent +0x08), exactly as InputDevice::AxisEvent @0x0027582c packs it.
 #if !defined(__bada__)
-    m_RawTouchPos.x = event->x;
+    m_RawTouchPos.x = event->m_Value;
 #else
     // Binary writes Entity::pos directly (v1.6.1 SlashEntity::TouchMoveX @0x001e785c);
     // m_RawTouchPos is the port-only SDL cache of the same value.
-    pos.x = event->x;
+    pos.x = event->m_Value;
 #endif
     return true;
 }
@@ -2749,11 +2753,12 @@ bool SlashEntity::TouchMoveX(InputEvent* event) {
 // game_work from the GOT, m_BombHitTimer(+0x10) > 0 -> return false. No guards.
 bool SlashEntity::TouchMoveY(InputEvent* event) {
     if (game_work.m_BombHitTimer > 0.0f) return false;
+    // TouchAxisY<n+1> axis event -- see TouchMoveX above.
 #if !defined(__bada__)
-    m_RawTouchPos.y = event->y;
+    m_RawTouchPos.y = event->m_Value;
 #else
     // Binary writes Entity::pos directly (v1.6.1 SlashEntity::TouchMoveY @0x001e77b4).
-    pos.y = event->y;
+    pos.y = event->m_Value;
 #endif
     return true;
 }

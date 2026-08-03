@@ -74,16 +74,11 @@ public:
     // 0..4 (ctor @0x002756b0: `ldmia lr!,{r0-r3} / stmia r12!,{r0-r3}` into
     // this+0x0c, then word 4 into this+0x1c). ProcessEvent therefore compares
     // template-word-N against event-word-N, field for field.
-    uint32_t  m_ActionMask;        // +0x0c  event word 0 (type bits | device mask)
-    uint32_t  m_MatchValue;        // +0x10  event word 1; hi16 = keycode/finger discriminator
-    uint32_t  m_KeyMask;           // +0x14  event word 2 (button/key id on DOWN events)
-    // TODO: v1.6.1 0x002756b0 (Mortar::InputActionMapper::InputActionMapper) — the ctor
-    //   copies InputEvent words 3 and 4 (binary InputEvent +0x0c / +0x10) into these two
-    //   fields; the port's InputEvent has no counterpart for those words (its layout is
-    //   remapped, see InputEvent.h), so the ctor hardcodes 0. Port a layout-faithful
-    //   InputEvent before wiring them.
-    uint32_t  m_Param4;            // +0x18  binary: InputEvent word 3
-    uint32_t  m_Param5;            // +0x1c  binary: InputEvent word 4
+    uint32_t  m_ActionMask;        // +0x0c  event word 0 = InputEvent::m_Flags
+    uint32_t  m_MatchValue;        // +0x10  event word 1 = m_Tag | m_KeyCode<<16
+    uint32_t  m_KeyMask;           // +0x14  event word 2 = m_Value / m_KeyId
+    uint32_t  m_Param4;            // +0x18  event word 3 = m_Delta (float bits)
+    uint32_t  m_Param5;            // +0x1c  event word 4 = m_Stamp
     InputDeviceCallback m_callback; // +0x20  36 bytes (0x24) both sides; its m_bInline lands at +0x40
 };
 

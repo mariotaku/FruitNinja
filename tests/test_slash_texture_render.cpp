@@ -75,27 +75,29 @@
 // test_shoplistitem_render.cpp's kItemX/kRowY comments.
 // ---------------------------------------------------------------------------
 static void SimulateTouchDown(SlashEntity* s, float x, float y) {
-    InputEvent evPos;
-    memset(&evPos, 0, sizeof(evPos));
-    evPos.x = x;
-    evPos.y = y;
-    s->TouchMoveX(&evPos);
-    s->TouchMoveY(&evPos);
+    InputEvent evX;
+    FN_MakeTouchAxisEvent(evX, 0, 0, false, x, y);
+    s->TouchMoveX(&evX);
+    InputEvent evY;
+    FN_MakeTouchAxisEvent(evY, 0, 0, true, x, y);
+    s->TouchMoveY(&evY);
 
+    // The press event deliberately carries position (0,0): TouchDown's
+    // press-edge arm re-seeds the stroke from it, which is what this test's
+    // golden was captured against.
     InputEvent evDown;
-    memset(&evDown, 0, sizeof(evDown));
-    evDown.actionFlags = INPUT_ACTION_DOWN_EDGE;
+    FN_MakeTouchButtonEvent(evDown, 0, INPUT_ACTION_DOWN_EDGE, 0, 0.0f, 0.0f);
     s->TouchDown(&evDown);
 }
 
 static void SimulateTouchMove(SlashEntity* s, float x, float y) {
-    InputEvent ev;
-    memset(&ev, 0, sizeof(ev));
-    ev.x = x;
-    ev.y = y;
-    s->TouchMoveX(&ev);
-    s->TouchMoveY(&ev);
-    s->UpdateTouchDown(&ev);
+    InputEvent evX;
+    FN_MakeTouchAxisEvent(evX, 0, 0, false, x, y);
+    s->TouchMoveX(&evX);
+    InputEvent evY;
+    FN_MakeTouchAxisEvent(evY, 0, 0, true, x, y);
+    s->TouchMoveY(&evY);
+    s->UpdateTouchDown(&evY);
 }
 
 // One simulation tick -- mirrors GameUpdate's per-frame SlashEntity dispatch
