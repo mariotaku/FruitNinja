@@ -37,6 +37,8 @@
 #include "audio/GameSound.h"
 #include "hud/HUD.h"
 #include "hud/TimeControl.h"
+#include "entities/ActorManager.h"
+#include "entities/Entity.h"
 #include "Game.h"
 #include "engine/asset/FileManager.h"
 #include "engine/asset/FileSystem_Direct.h"
@@ -62,6 +64,19 @@ int main() {
         FileManager::GetInstance().AddSystem(fs, /*id=*/0, /*priority=*/0);
     }
 
+    // Entity system, mirroring GameInit step 7 (v1.6.1 GameInit @0x001ce1c0):
+    // HeapCreate(0x20000) then ActorManager::Initialise(7, 0x2000). Freeze's
+    // wave rewind reaches Fruit::ClearUnspawned (v1.6.1 @0x001def68), which walks
+    // ActorManager type list 0 through GetEntityFirst/GetEntityNext. Those index
+    // m_pTypeLists (+0x1010) with no null test -- ASM-spec v1.6.1
+    // ActorManager::GetEntityFirst @0x001d2f48 is 14 insns: begin(), end(),
+    // operator!=, NE-predicated load. Initialise is what allocates the array, so
+    // a fixture that skips it faults inside begin(). The factory / hash-converter
+    // delegates GameInit also registers are omitted: this test creates no
+    // entities, it only walks the (empty) lists.
+    Mortar::Entity::HeapCreate(0x20000);
+    Mortar::ActorManager::GetInstance()->Initialise(7, 0x2000);
+
     // Freeze's <wave_mod waveOveride="-100"> makes WaveModifier::ApplyModifier
     // (v1.6.1 @0x001282d4) rewind the wave via WaveManager::SetCurrentWave(-100)
     // -> GetNextWave, which seeds m_pCurrentWave from m_WaveInfo[gameMode].front()
@@ -71,14 +86,21 @@ int main() {
     // here: arcade mode (freeze is an arcade banana) + wave lists loaded.
     // Without this, front() on the empty vector aborts (MSVC debug STL).
     game_work.gameMode = GAME_MODE_ARCADE;
-    WaveManager::GetInstance()->Init();
 
-    // GetNextWave's head derefs game_work.m_SaveData unguarded, exactly like the
-    // binary (v1.6.1 WaveManager::GetNextWave @0x0012573c -- `ldr r0,[r7,#0x50]`
-    // @0x00125768 straight into FruitSaveData::UnlockTotals, no null test).
+    // The save MUST exist before WaveManager::Init(), not after it. Init ->
+    // ParseGlobalProbabilityOverides (v1.6.1 @0x00129718) derefs
+    // game_work.m_SaveData unguarded: `ldr r0,[r3,#0x50]` @0x0012975c feeds
+    // FruitSaveData::GetTotal @0x00129760 with no cmp between, and the only gate
+    // in that function is `TiXmlDocument::LoadFile() != 0` @0x00129744.
+    // GetNextWave's head does the same (@0x00125768 straight into UnlockTotals).
     // GameInitialise always creates the save before gameplay; mirror that here.
+    // This assignment used to sit AFTER Init() and got away with it only because
+    // the port carried a null guard the binary lacks.
     static FruitSaveData s_saveData;
     game_work.m_SaveData = &s_saveData;
+
+    // Freeze's wave rewind needs the wave lists loaded (see above).
+    WaveManager::GetInstance()->Init();
 
     // ScreenEffect::Update's SFX tail (v1.6.1 @0x00148d84) derefs
     // game_work.mGameSound unguarded, exactly like the binary (GameInitialise

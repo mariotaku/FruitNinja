@@ -586,9 +586,10 @@ void WaveManager::ParseGlobalProbabilityOverides(const char* path)
     TiXmlDocument doc;
     if (!doc.LoadFile(path)) return;
 
-    int sys = 0;
-    if (game_work.m_SaveData)
-        sys = game_work.m_SaveData->GetTotal("super_fruit_probability_system");
+    // v1.6.1 ParseGlobalProbabilityOverides @0x00129718: `ldr r0,[r3,#0x50]`
+    // @0x0012975c feeds FruitSaveData::GetTotal @0x00129760 with no cmp between. The
+    // only gate in the function is `TiXmlDocument::LoadFile() != 0` @0x00129744.
+    int sys = game_work.m_SaveData->GetTotal("super_fruit_probability_system");
 
     char buf[64];
     // OS_SPrintf equivalent: build "probabilityFileN"
@@ -728,7 +729,9 @@ void WaveManager::Reset(bool fullReset) {
     m_WaveCount[0] = -1;      // pre-incremented by GetNextWave
     // Camera reset not ported (FruitCamera stubs).
 
-    // HUD reset — binary @ 0x00144b78 called when game->display->field_0x3c (HUD) exists.
+    // NOTE: this HUD test is GENUINE. v1.6.1 WaveManager::Reset @0x0012ba78 does
+    // `ldr r0,[r3,#0x40] ; cmp r0,#0x0 ; beq 0x0012bd20` at 0x0012bd10-0x0012bd18
+    // before HUD::ResetControls (0x0010761c).
     if (game_work.mHud) {
         game_work.mHud->ResetControls();
     }
@@ -821,13 +824,16 @@ void WaveManager::Resume() {
     // Resume is only called on restore-from-save, never on cold boot.
     // Cold boot uses WaveManager::NewGame() -> Reset(true) -> GetNextWave(0).
 
-    // NOTE: the binary has no Game / m_SaveData null guard -- it dereferences
-    // game_work.pM_SaveData straight away (SetScore((game_work.pM_SaveData)->m_CurrentScore,-1)
-    // is the first statement of v1.6.1 WaveManager::Resume @0x0012bf58).
+    // v1.6.1 WaveManager::Resume @0x0012bf58: the entry block is
+    // `ldr r6,[r5,r3] ; ldr r3,[r6,#0x50] ; ldr r0,[r3,#0x64] ; bl SetScore` at
+    // 0x0012bf74-0x0012bf80 -- no branch of any kind before 0x0012bfd8.
     FruitSaveData* sd = game_work.m_SaveData;
-    if (!sd) return;
 
-    // Sentinel: if no active game was saved, nothing to restore.
+    // TODO: v1.6.1 0x0012bf58 (WaveManager::Resume) -- the m_bHasActiveGame sentinel
+    //   below is NOT the binary's; there is no such test in the entry block. Settle
+    //   what actually stops the binary re-entering Resume on a cold boot before
+    //   dropping it, since removing it blind would run a full restore over a fresh
+    //   game.
     if (!sd->m_bHasActiveGame) return;
 
     // 1. Restore score + miss count.
@@ -924,10 +930,12 @@ void WaveManager::Resume() {
             // AddControl is the separate HUD registration that makes HUD::Update tick it
             // (both needed, no double-register).
             if (es.m_pSuperFruitState != NULL) {
+                // v1.6.1 Resume @0x0012bf58: `ldr r0,[r3,#0x40] ; bl HUD::AddControl`
+                // at 0x0012c1a0-0x0012c1a4, no cmp between. The real gates are the two
+                // above it -- Entity b_pad_35 == 0 (@0x0012c140) and
+                // es.m_pSuperFruitState != NULL (@0x0012c158).
                 SuperFruitControl* ctrl = new SuperFruitControl(f, *es.m_pSuperFruitState);
-                if (game_work.mHud) {
-                    game_work.mHud->AddControl(ctrl, false);
-                }
+                game_work.mHud->AddControl(ctrl, false);
                 delete es.m_pSuperFruitState;
                 es.m_pSuperFruitState = NULL;
             }
@@ -1029,9 +1037,9 @@ void WaveManager::Resume() {
 }
 
 int WaveManager::SaveWaveInfo(FruitSaveData* sd) {
-    // v1.6.1 WaveManager::SaveWaveInfo @ 0x001254b0
-    if (!sd) return 0;
-
+    // v1.6.1 WaveManager::SaveWaveInfo @ 0x001254b0: the very first instruction pair
+    // stores through the argument (`vstr.32 s15,[r1,#0x100]` @0x001254b8) -- there is
+    // no `cmp r1,#0` anywhere in the function.
     sd->m_Speed_P0       = 0.0f;
     sd->m_Speed_P0_alias = 0.0f;
     sd->m_Speed_P1       = 0.0f;
@@ -1420,13 +1428,16 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
 
                         int blitzAdvance = 0;
                         bool gateOpen = false;
+                        // v1.6.1 UpdateWave @0x00125d7c, gate @0x00125f64-0x00125f8c:
+                        // `cmp r9,#0x2 ; bne` on gameMode is the ONLY gate. The
+                        // TimeControl deref that follows is unconditional
+                        // (`ldr r0,[r3,#0x184] ; vldr.32 s17,[r0,#0x7c]` @0x00125f70)
+                        // -- mCountDown is a hard invariant in Arcade. The port's old
+                        // zero-init fallback did not merely skip the read, it forced
+                        // `-m_NextBlitzTime >= 0` and silently held the blitz gate shut.
                         if (game_work.gameMode == GAME_MODE_ARCADE) {
-                            float timeRemaining = 0.0f;
-                            float countdownStart = 0.0f;
-                            if (game_work.mCountDown) {
-                                timeRemaining  = game_work.mCountDown->m_TimeRemaining;
-                                countdownStart = game_work.mCountDown->GetCountDown();
-                            }
+                            float timeRemaining  = game_work.mCountDown->m_TimeRemaining;
+                            float countdownStart = game_work.mCountDown->GetCountDown();
                             if (countdownStart - m_NextBlitzTime >= timeRemaining) {
                                 gateOpen = true;
                             }
@@ -1690,7 +1701,10 @@ void WaveManager::UpdateComboSpeed(float dtIn) {
         // m_SpeedControl when the control is torn down on GameExit.
         sc->m_RemoveCallback = Mortar::Delegate1<void, HUDControl*>::Make(
             this, &WaveManager::DeleteSpeedControl);
-        if (game_work.mHud) game_work.mHud->AddControl(sc, false);
+        // v1.6.1 UpdateComboSpeed @0x001238dc: `ldr r0,[r3,#0x40] ; bl HUD::AddControl`
+        // at 0x00123a30-0x00123a34, no cmp. The only gate is the lazy-alloc test
+        // `ldr r3,[r4,#0x4] ; cmp r3,#0x0 ; bne` @0x00123990.
+        game_work.mHud->AddControl(sc, false);
     }
     SpeedControl* spc = static_cast<SpeedControl*>(sc);
     spc->m_DisplayedSpeed = cur;
@@ -1739,7 +1753,9 @@ void WaveManager::GetNextWave(int playerIdx) {
     //   am->UnlockScoreAchievement(score);
     //   am->UnlockTotalFruitAchievement((int)(intptr_t)game_work.m_pLastScoredSaveEntry);
     AchievementManager* am = AchievementManager::GetInstance();
-    if (game_work.m_SaveData) game_work.m_SaveData->UnlockTotals();
+    // v1.6.1 GetNextWave @0x0012573c: `ldr r0,[r7,#0x50]` @0x00125768 feeds
+    // FruitSaveData::UnlockTotals @0x0012576c with no cmp between.
+    game_work.m_SaveData->UnlockTotals();
     int liveScore = GetCurrentScore(0);
     am->UnlockScoreAchievement(liveScore);
     am->UnlockTotalFruitAchievement((int)(intptr_t)game_work.m_pLastScoredSaveEntry);
@@ -2433,64 +2449,70 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     // On amount>0 set m_ComboTimer (+0x50) to 1.
     m_ComboTimer = 1.0f;
 
-    Game* game = Game::GetInstance();
-    FruitSaveData* sd = game ? game_work.m_SaveData : nullptr;
+    // v1.6.1 WaveManager::AddSpeed @0x00124f48: the whole blitz block has exactly four
+    // gates and none of them is a pointer test --
+    //   amount > 0            `vcmpe.f32 s16,#0 ; ble 0x001253b4` @0x00124f94
+    //   m_ColdTimer <= 0      `vcmpe.f32 s15,#0 ; ble 0x0012517c` @0x00125018
+    //   cold-start only       `vcmpe.f32 s14,s15(2.9) ; ble`      @0x00125188
+    //   continuation only     `vcmpe.f32 s16,#0 ; bhi`            @0x00125028
+    // Every m_SaveData use is an untested `ldr rN,[gw,#0x50]` (0x0012505c, 0x001251b4,
+    // 0x001251d4, and twice in the best_blitz tail 0x00125368-0x001253b0), and both
+    // SFXPlay calls read an untested +0x18c (0x001250c0, 0x0012527c).
+    FruitSaveData* sd = game_work.m_SaveData;
 
     if (m_ColdTimer <= 0.0f) {
-        // Cold-start path (binary @ 0x001236da onwards).
-        if (m_TargetComboSpeed > 2.9f) {    // DAT_00123828
-            if (sd) {
-                m_ColdTimer = 3.0f;  // binary vmov.f32 #0x40200000
-                sd->ClearTotal(s_blitzBonusHash);
-                int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
-                m_BlitzLevel = newCount;
-                AddToCurrentScore(5, playerIdx, false, false);
-                // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x00123760..0x00123798 (re-analyst).
-                // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773).
-                static uint32_t s_blitz1Hash = 0;
-                if (!s_blitz1Hash) s_blitz1Hash = StringHash("blitz_1");
-                PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitz1Hash);
-                if (game_work.mGameSound) game_work.mGameSound->SFXPlay("combo-blitz-1", 1.0f, 1.0f);
-                LOG_INFO("BLITZ", "  COLD-START FIRE p=%d level=%d +5 score, combo-blitz-1 SFX, blitz_1 effect",
-                         playerIdx, newCount);
-            } else {
-                LOG_INFO("BLITZ", "  cold-start gate passed (speed>2.9) but FruitSaveData is null -- skipped");
-            }
+        // Cold-start path (v1.6.1 AddSpeed @0x00124f48, block 0x0012517c-0x001252e0).
+        if (m_TargetComboSpeed > 2.9f) {    // vcmpe.f32 s14,s15 @0x00125188
+            // The binary writes m_ColdTimer at 0x001251a8, BEFORE it touches the save
+            // at all -- the old `if (sd)` wrapper made both this and m_BlitzLevel
+            // conditional on state the binary never inspects.
+            m_ColdTimer = 3.0f;  // vstr.32 s15,[r3,#0x4] @0x001251a8 (3.0f)
+            sd->ClearTotal(s_blitzBonusHash);                                    // 0x001251b8
+            int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false); // 0x001251d8
+            m_BlitzLevel = newCount;
+            AddToCurrentScore(5, playerIdx, false, false);
+            // ASM-verified: 2026-08-03 v1.6.1 WaveManager::AddSpeed @ 0x0012526c (re-analyst).
+            // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773).
+            static uint32_t s_blitz1Hash = 0;
+            if (!s_blitz1Hash) s_blitz1Hash = StringHash("blitz_1");
+            PowerUpManager::GetInstance()->ActivateScreenEffect(s_blitz1Hash);
+            game_work.mGameSound->SFXPlay("combo-blitz-1", 1.0f, 1.0f);          // 0x001252ac
+            LOG_INFO("BLITZ", "  COLD-START FIRE p=%d level=%d +5 score, combo-blitz-1 SFX, blitz_1 effect",
+                     playerIdx, newCount);
         } else {
             LOG_INFO("BLITZ", "  cold-start: speed=%.3f <= 2.9, no fire yet (need %.3f more)",
                      m_TargetComboSpeed, 2.9f - m_TargetComboSpeed);
         }
     } else {
-        // Combo continuation path (binary @ 0x001235d2 onwards).
-        // Binary subtracts the FLOAT amount from the cold-timer (vsub.f32).
+        // Combo continuation path (v1.6.1 AddSpeed @0x00124f48, block
+        // 0x00125024-0x00125178). Binary subtracts the FLOAT amount from the
+        // cold-timer (vsub.f32), then gates on `vcmpe.f32 s16,#0 ; bhi` @0x00125028.
         const float oldTimer = m_ColdTimer;
         m_ColdTimer -= amount;
         if (m_ColdTimer <= 0.0f) {
-            if (sd) {
-                int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false);
-                int level = (newCount < 6) ? newCount : 6;
-                m_BlitzLevel = newCount;
+            int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false); // 0x00125068
+            int level = (newCount < 6) ? newCount : 6;
+            m_BlitzLevel = newCount;
 
-                {
-                    // ASM-verified: 2026-05-23 v1.6.1 binary @ 0x00123614..0x00123642 (re-analyst).
-                    // Continuation tier uses format "blitz_%i" (rodata @ 0x001ba76a).
-                    char buf[16];
-                    std::snprintf(buf, sizeof(buf), "blitz_%i", level);
-                    PowerUpManager::GetInstance()->ActivateScreenEffect(StringHash(buf));
-                }
-                {
-                    int sfxLevel = newCount;
-                    if (sfxLevel < 1) sfxLevel = 1;
-                    if (sfxLevel > 6) sfxLevel = 6;
-                    if (game_work.mGameSound) game_work.mGameSound->SFXPlay(k_BlitzSfx[sfxLevel - 1], 1.0f, 1.0f);
-                }
-
-                int clamped = (m_BlitzLevel > 5) ? 6 : m_BlitzLevel;
-                AddToCurrentScore(clamped * 5, playerIdx, false, false);
-                m_ColdTimer = 3.0f;  // reset timer for next level-up
-                LOG_INFO("BLITZ", "  LEVEL-UP FIRE p=%d level=%d (clamped=%d) +%d score, combo-blitz-%d SFX, blitz_%d effect",
-                         playerIdx, newCount, clamped, clamped * 5, level, level);
+            {
+                // ASM-verified: 2026-08-03 v1.6.1 WaveManager::AddSpeed @ 0x001250b4 (re-analyst).
+                // Continuation tier uses format "blitz_%i" (snprintf @0x00125098).
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "blitz_%i", level);
+                PowerUpManager::GetInstance()->ActivateScreenEffect(StringHash(buf));
             }
+            {
+                int sfxLevel = newCount;
+                if (sfxLevel < 1) sfxLevel = 1;
+                if (sfxLevel > 6) sfxLevel = 6;
+                game_work.mGameSound->SFXPlay(k_BlitzSfx[sfxLevel - 1], 1.0f, 1.0f);  // 0x00125104
+            }
+
+            int clamped = (m_BlitzLevel > 5) ? 6 : m_BlitzLevel;
+            AddToCurrentScore(clamped * 5, playerIdx, false, false);
+            m_ColdTimer = 3.0f;  // reset timer for next level-up
+            LOG_INFO("BLITZ", "  LEVEL-UP FIRE p=%d level=%d (clamped=%d) +%d score, combo-blitz-%d SFX, blitz_%d effect",
+                     playerIdx, newCount, clamped, clamped * 5, level, level);
         } else {
             LOG_INFO("BLITZ", "  continuation: timer %.3f->%.3f (need %.3f more drain to fire next tier)",
                      oldTimer, m_ColdTimer, m_ColdTimer);
@@ -2501,7 +2523,8 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
     // Binary: AddToTotal("best_blitz", max(m_BlitzLevel - GetTotal("best_blitz"), 0))
     static uint32_t s_bestBlitzHash = 0;
     if (!s_bestBlitzHash) s_bestBlitzHash = StringHash("best_blitz");
-    if (sd) {
+    // Tail at 0x00125368-0x001253b0 derefs +0x50 twice, both untested.
+    {
         int existing = sd->GetTotal(s_bestBlitzHash);
         int delta    = m_BlitzLevel - existing;
         if (delta > 0)
@@ -2628,13 +2651,12 @@ SPAWNER_INFO* GetRandomPowerSpawner(bool includeCenter) {
 // ASM-spec v1.6.1 ReachedEnd @0x1253c0
 // Saves "limitsReached" stat, plays "time-up" SFX, then triggers game over.
 void ReachedEnd() {
+    // v1.6.1 ReachedEnd @0x001253c0 has ZERO conditional branches -- every `b` in the
+    // body is an unconditional fallthrough from an EH landing pad. +0x50 is loaded at
+    // 0x001253e4 and used at 0x00125404; +0x18c at 0x00125408 and used at 0x00125444.
     FruitSaveData* sd = game_work.m_SaveData;
-    if (sd) {
-        uint32_t h = StringHash("limitsReached");
-        sd->AddToTotal("limitsReached", h, 1, true, true);
-    }
-    if (game_work.mGameSound) {
-        game_work.mGameSound->SFXPlay("time-up", 1.0f, 1.0f);
-    }
+    uint32_t h = StringHash("limitsReached");
+    sd->AddToTotal("limitsReached", h, 1, true, true);
+    game_work.mGameSound->SFXPlay("time-up", 1.0f, 1.0f);
     GameOver(-1, -1.0f, -1);
 }
