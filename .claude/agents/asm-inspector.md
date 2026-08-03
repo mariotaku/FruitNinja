@@ -30,17 +30,24 @@ If the question is too broad ("is the spin loop correct?") refuse to start until
 
 ### 2. Extract binary ASM with the SAME objdump
 
-Use the container's `arm-none-eabi-objdump` to dump the binary function. Both
-binary and port sides come from the same disassembler — no cross-tool
-formatting differences.
+Use the container's `arm-samsung-nucleuseabi-objdump` to dump the binary
+function. Both binary and port sides come from the same disassembler — no
+cross-tool formatting differences.
 
-First, find the ELF address range via GhidraMCP (`get_function_by_address`).
+First, find the address range via GhidraMCP (`get_function_by_address`), and
+make sure you have the function ENTRY, not an address inside it — a caller-cited
+address is often mid-body.
+
+**Ghidra is rebased +0x10000 relative to the on-disk ELF.** Subtract 0x10000
+from every Ghidra address before passing it to objdump. Source-side markers keep
+citing Ghidra addresses; this conversion is only for objdump.
+
 The binary ELF is at `FruitNinjaBada/Bin/FruitNinja.exe` inside the container
 at `/work/FruitNinjaBada/Bin/FruitNinja.exe`.
 
 ```sh
-docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify -c "
-  arm-none-eabi-objdump -d --start-address=0x<begin> --stop-address=0x<end> \
+docker run --rm -v "$(cygpath -m "$(pwd)"):/work" fnverify-bada bash -c "
+  arm-samsung-nucleuseabi-objdump -d --start-address=0x<begin> --stop-address=0x<end> \
     /work/FruitNinjaBada/Bin/FruitNinja.exe \
     > /work/tmp/asm-compare/<name>_binary.s
 "
@@ -53,8 +60,9 @@ objdump output format — no Ghidra-specific normalization needed.
 
 The cross toolchain is **Sourcery G++ Lite 2010q1-188 (GCC 4.4.1)** -- the
 upstream of Samsung's `Sourcery G++ 4.4-261` that built the binary (per its
-`.comment` section). It's baked into the `fnverify` Docker image at
-`/opt/sourcery-2010q1/`. If the image isn't built, run `bash tools/asm-verify/setup.sh` once.
+`.comment` section). It's baked into the `fnverify-bada` Docker image at
+`/opt/codesourcery/bin/`, prefix `arm-samsung-nucleuseabi-`. If the image isn't
+built, run `bash tools/asm-verify/setup.sh` once.
 
 **Authoritative flags** (extracted from the binary's ARM build attributes via `readelf -A`):
 - `Tag_CPU_name: CORTEX-A8` -> `-mcpu=cortex-a8`
