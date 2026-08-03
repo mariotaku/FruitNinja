@@ -193,6 +193,8 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* scaleOrNull) {
     static const float VISUAL_SCALE_MULT = 0.01f;  // DAT_001726b0
     _Vector3<float> computedScale = _Vector3<float>::One() * (bombSize * VISUAL_SCALE_MULT * scaleFactor);
 
+    // Genuine binary test: Bomb::Init @0x001d69e0, @0x001d69f8
+    // `cmp r3,#0x0 / bne 0x001d6a2c` -- allocate only when m_Col is null.
     if (!m_Col) m_Col = new ColSphere();
     {
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
@@ -365,10 +367,12 @@ void Bomb::Update(float dt) {
         pos.x <= BOUNDS_MIN_X || pos.x >= BOUNDS_MAX_X) {
         KillBomb();
     } else if (!m_pEmitter) {
-        // ASM-spec v1.6.1 Bomb::Update @ 0x001d6098: index particleHash directly by m_BombVariant.
+        // The `!m_pEmitter` test is genuine: Bomb::Update @0x001d66e4
+        // `ldr r6,[r4,#0x7c] / cmp r6,#0 / bne 0x001d6744`.
+        // ASM-spec v1.6.1 Bomb::Update @ 0x001d6098: index fuseHash directly by
+        // m_BombVariant -- @0x001d6700 `add r3,r3,r2,lsl #0x2`, no clamp to 0/1.
         // AddEmitter call site is @0x001d6728; updateWhenPaused = (game_work.m_PauseAmount == 0.0f).
-        const int variant = m_BombVariant;
-        const uint32_t hash = g_bombData.fuseHash[(variant != 0) ? 1 : 0];
+        const uint32_t hash = g_bombData.fuseHash[m_BombVariant];
         m_pEmitter = PSPParticleManager::GetInstance().AddEmitter(
             hash, nullptr,
             /*updateWhenPaused*/ game_work.m_PauseAmount == 0.0f);
@@ -381,6 +385,7 @@ void Bomb::Update(float dt) {
 // ASM-spec v1.6.1 Bomb::DrawUpdate (PostUpdate) @ 0x1d53a0
 // Pure 2D circle in XY using m_RotY only; emitter tip + direction cosines.
 void Bomb::PostUpdate(float /*dt*/) {
+    // Genuine binary early-out: @0x001d53a0 `ldr r7,[r0,#0x7c] / cmp r7,#0 / beq 0x001d5480`.
     if (!m_pEmitter) return;
 
     static const float FUSE_OFFSET_LEN   = 0.9f;    // DAT_0017159c

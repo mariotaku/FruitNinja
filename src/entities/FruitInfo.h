@@ -51,7 +51,10 @@ struct FRUIT_POWERS {
     // Binary @ 0x00175714. Returns true if any power in m_pArray is currently active.
     bool AnyActivePowers();
 
-    // Binary @ 0x0017a7d8. Weighted random pick; returns m_PowerHash of selected entry.
+    // v1.6.1 FRUIT_POWERS::RandomPower @0x001e2e38. Weighted random pick; returns
+    // the m_PowerHash of the selected entry, or m_pArray[0].m_PowerHash if no
+    // entry matches the roll. Callers must guarantee m_Count > 0 and a non-null
+    // m_pArray -- the binary dereferences both without a test.
     uint32_t RandomPower();
 };
 

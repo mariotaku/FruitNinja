@@ -35,6 +35,7 @@
 #include "game/AchievementManager.h"
 #include "game/FruitSaveData.h"
 #include "engine/network/NetworkManager.h"
+#include "engine/core/SystemManager.h"
 #include "engine/util/Event.h"
 #include "Fruit.h"
 #include "Bomb.h"
@@ -403,6 +404,11 @@ void SlashEntity::RegisterInputCallbacks() {
 //   loaded = 0                       <- strb r3,[r5,#0xcc] @0x001e7a20
 //   tail-call Mortar::Entity::Release
 // The binary does NOT touch m_PointCount (+0x58) here; the port used to zero it.
+// So a Released blade keeps a stale m_PointCount alongside null buffers, in the
+// binary as much as in the port. GetHeadThicknessScale and AddPoint therefore stay
+// buffer-null-unguarded to match the binary -- neither is reachable after Release,
+// because Init/Reset re-allocate the buffers and zero m_PointCount before any
+// touch callback can run. Do not "fix" this by zeroing m_PointCount here.
 void SlashEntity::Release() {
     if (m_pLeftBuffer) {
         delete[] m_pLeftBuffer;
@@ -613,17 +619,13 @@ void SlashEntity::PlaySwipe() {
 // scale = half the L/R edge separation at the LAST stored vertex, normalized by the
 // nominal full half-width (ModSlashThickness*9). Range [0,1]. Consumed by
 // OnTouchActive (binary UpdateTouchDown @0x001e9f08) as per-point taper pressure.
-// Two known deltas from the binary body (downgraded from ASM-verified on
-// re-inspection -- the old marker overstated an instruction-level match):
-//   1. The binary's only early-out is `m_PointCount < 1`; the buffer null checks
-//      below are port-added. They are dominated by that test (both buffers are
-//      allocated by InitPoints before m_PointCount can exceed 0), so they are
-//      dead in practice -- kept only because Release now leaves m_PointCount
-//      untouched while nulling the buffers.
-//   2. The binary calls IsSameScreenMultiplayer() and discards the result before
-//      reading ModSlashThickness. Same-screen MP is defunct; the call is dropped.
+// One known delta from the binary body: the binary calls IsSameScreenMultiplayer()
+// and discards the result before reading ModSlashThickness. Same-screen MP is
+// defunct; the call is dropped.
+// The binary's only early-out is `m_PointCount < 1` (@0x001e684c
+// `ldr r3,[r0,#0x58] / cmp r3,#0 / ble 0x001e68fc`); it then indexes [+0x5c]/[+0x60]
+// unguarded. The port's buffer null checks were port-added and have been removed.
 float SlashEntity::GetHeadThicknessScale() const {
-    if (!m_pLeftBuffer || !m_pRightBuffer) return 0.0f;
     if (m_PointCount < 1) return 0.0f;
     const int i = m_PointCount - 1;                  // last written vertex index
     const float dx = m_pLeftBuffer[i].x - m_pRightBuffer[i].x;
@@ -943,7 +945,8 @@ void SlashEntity::OnTouchReleased() {
 //   and set m_PointCount = m_SplitPoint-4.
 // ---------------------------------------------------------------------------
 void SlashEntity::AddPoint(_Vector3<float> center, _Vector3<float> dir, float pressure) {
-    if (!m_pLeftBuffer || !m_pRightBuffer) return;
+    // AddPoint @0x001e9918 entry is just `bl 0x001e8340` (the zero-direction test);
+    // there is no buffer null check. The port's was port-added and has been removed.
 
     // ASM-spec v1.6.1 T_1399 @0x1e8340: skip only if dir AND m_BladeDir both zero.
     // Binary OR-guard: if both are (0,0,0) there is no direction to draw with.
@@ -1827,19 +1830,20 @@ void SlashEntity::Update(float dt) {
                                 if (m_ComboCounter > 9) {
                                     m_ComboTimer = 0.095f;
                                 }
-                                // MissControl popup: gated on count>2, non-COMBO mode, not ModPowerMask bit 7
-                                // TODO: v1.6.1 0x001e8950 (SlashEntity::Update) -- the binary
-                                // calls CombosEnabled() @0x0010c410 where the port substitutes
-                                // `game_work.gameMode != GAME_MODE_COMBO`, and its gate ORDER is
+                                // MissControl popup: binary gate order is
                                 // `count>2 -> CombosEnabled() -> (online && mode==2 -> skip) ->
-                                // (ModPowerMask & 0x80 -> skip)`. The port evaluates the mask term
-                                // second. Port CombosEnabled and re-order once it is RE'd.
-                                if (m_ComboCounter > 2
-                                    && game_work.gameMode != GAME_MODE_COMBO
-                                    && (s_ModPowerMask & 0x80u) == 0)
+                                // (ModPowerMask & 0x80 -> skip)`. All four terms are pure, so the
+                                // order is asm-cosmetic only; it is kept to match the binary.
+                                // CombosEnabled @0x00119fd0 is `game_work.gameMode != 1`
+                                // (0x0010c410 is only its PLT stub).
+                                // IsOnlineMultiplayer @0x0011a09c is a free function in the binary
+                                // (`mov r0,#0; bx lr`); the port routes it through the
+                                // NetworkManager singleton. Cosmetic call-shape difference.
+                                if (m_ComboCounter > 2 && CombosEnabled())
                                 {
                                     bool online = Mortar::NetworkManager::GetInstance()->IsOnlineMultiplayer();
-                                    if (!online || m_ComboOnlineMode != 2) {
+                                    if ((!online || m_ComboOnlineMode != 2)
+                                        && (s_ModPowerMask & 0x80u) == 0) {
                                         // Outer test is genuine: 'ldr r7,[r4,#0x11c]; cmp r7,#0;
                                         // bne' @0x001e8988. The post-GetFree null test is NOT --
                                         // @0x001e8994 is 'bl GetFree; cpy r10,r0; str r0,[r4,#0x11c]'
@@ -2315,7 +2319,10 @@ void SlashEntity::DrawSlice() {
     }
 #endif // __bada__
 
-    // Unconditional clamp: binary @ 0x1e8444 runs after the latch block every DrawSlice.
+    // ASM-spec v1.6.1 SlashEntity::DrawSlice @0x001e83b0: the `> 0` test is genuine,
+    // not an unconditional clamp. @0x001e843c is
+    // `ldr r2,[r3,#0xbc] / cmp r2,#0 / movgt r2,#0 / strgt r2,[r3,#0xbc]` -- the
+    // store is predicated on GT, so a zero/negative counter is left alone.
     // s_slashes is incremented per sim tick (UpdatePoints) and cleared per render frame here.
     if (s_slashes > 0) {
         s_slashes = 0;
@@ -2772,6 +2779,8 @@ bool SlashEntity::TouchUp(InputEvent* /*event*/) {
     return true;
 }
 
-// @ 0x0017e504. Ghost slots not yet ported -- no-op stub.
+// v1.6.1 SlashEntity::PreDraw @0x001e8514 -- `for (i = 0; i < 8; ++i)
+// SlashEntityGhost::Draw(&s_ghosts[i]);` (stride 0x10). SlashEntityGhost is not ported
+// yet, so the body stays empty.
 void SlashEntity::PreDraw() {
 }

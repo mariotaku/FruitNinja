@@ -118,7 +118,11 @@ public:
     // v1.6.1 SlashEntity::PlaySwipe @0x001e8550 -- mod-override swipe SFX, else "Sword-swipe-%d" via Rand32.
     void PlaySwipe();
 
-    // v1.6.1 @ 0x1e684c -- derive head taper scale.
+    // v1.6.1 SlashEntity::GetHeadThicknessScale @0x001e684c -- derive head taper scale
+    // in [0,1] from the L/R edge separation at the last stored vertex.
+    // Returns 0 when m_PointCount < 1. Otherwise it indexes m_pLeftBuffer /
+    // m_pRightBuffer WITHOUT a null check, matching the binary -- only call it on a
+    // blade that Init/Reset has set up, never on a Released one.
     float GetHeadThicknessScale() const;
 
     // v1.6.1 SlashEntity::CreateGhost @0x001e67f4 -- advance the global ghost ring
@@ -412,6 +416,8 @@ private:
     // Updates ghost ring, m_BladeDir, m_AngleIndex, m_Angle.
     // dir zero-case mutates the LOCAL by-value copy (dir = m_BladeDir) -- since the
     // binary passes dir by value, this mutation is never caller-visible.
+    // Writes m_pLeftBuffer / m_pRightBuffer WITHOUT a null check, matching the binary --
+    // only call it on a blade that Init/Reset has set up, never on a Released one.
     void AddPoint(_Vector3<float> center, _Vector3<float> dir, float pressure);
 
     // v1.6.1 SlashEntity::UpdatePoints @0x001e6914 -- per-frame full geometry
@@ -457,8 +463,10 @@ public:
     // ColoursChanged v1.6.1 @ 0x1e76fc. Per-instance live-update.
     void ColoursChanged();
 
-    // @ 0x0016ba84 -- blade pre-pass.
-    void PreDraw();
+    // Blade pre-pass. v1.6.1 SlashEntity::PreDraw @0x001e8514 -- a static in disguise:
+    // the body ignores `this` and draws the 8 global SlashEntityGhost slots (stride
+    // 0x10) once. GameDraw calls it ONCE per frame, not once per finger slot.
+    static void PreDraw();
 
     static const Mortar::SmartPtr<Mortar::Texture>& GetModTexture();
     static uint32_t GetTrailEmitterHash();

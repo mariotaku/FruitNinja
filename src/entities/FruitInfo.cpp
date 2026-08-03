@@ -515,20 +515,19 @@ bool FRUIT_POWERS::AnyActivePowers() {
     return false;
 }
 
-// ASM-verified: 2026-05-22 v1.6.1 binary @ 0x0017a7d8 (re-analyst).
+// ASM-spec v1.6.1 FRUIT_POWERS::RandomPower @ 0x001e2e38.
 // Weighted random pick. m_CumulativeWeight is a running total set at XML load;
 // total weight == m_pArray[m_Count-1].m_CumulativeWeight. Roll in [0, total),
-// return first entry whose cumulative > roll. Falls back to last entry (cannot
-// happen given roll < total, but the binary's loop structure permits it).
+// return first entry whose cumulative > roll. When no entry matches, the binary
+// falls through to m_pArray[0].m_PowerHash (@0x001e2ea4), not the last entry.
+// The entry block is `ldmia r0,{r1,r2} / sub r2,r2,#1 / mla` then a straight
+// deref -- there is no m_Count / m_pArray test.
 uint32_t FRUIT_POWERS::RandomPower() {
-    if (m_Count == 0 || m_pArray == nullptr) return 0;
     Math::Random& rng = WaveManager::GetInstance()->GetRandom();
     uint32_t total = m_pArray[m_Count - 1].m_CumulativeWeight;
     uint32_t roll  = rng.Rand32(total);
-    FRUIT_POWER* p = m_pArray;
     for (uint32_t i = 0; i < m_Count; ++i) {
-        p = &m_pArray[i];
-        if (roll < p->m_CumulativeWeight) break;
+        if (roll < m_pArray[i].m_CumulativeWeight) return m_pArray[i].m_PowerHash;
     }
-    return p->m_PowerHash;
+    return m_pArray[0].m_PowerHash;
 }

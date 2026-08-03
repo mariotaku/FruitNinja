@@ -109,11 +109,11 @@ void InputManager::ClearActions(unsigned long actionHash) {
 }
 
 // Search devices by GetDeviceType.
-// TODO: v1.6.1 (Mortar::InputManager::HasInputDevice) — body address UNRESOLVED.
-// 0x00195fe8 is a 5-insn PIC thunk (`b 0x0010436c`), not the function body, so the
-// old marker cited the wrong thing. Find the real body before trusting any claim
-// about this function -- in particular, the two `if (out)` guards below are
-// UNSETTLED and must not be stripped on the strength of the thunk.
+// ASM-spec v1.6.1 Mortar::InputManager::HasInputDevice @ 0x00244298
+// The `if (out)` on the match path is genuine: @0x002442c8
+// `cmp r6,#0x0 / movne r0,#0x1 / ldrne r3,[r7] / strne r3,[r6]`, then @0x002442dc
+// `b 0x002442f4` -> `mov r0,#1`. A match with out==NULL returns true without writing.
+// The not-found path writes nothing: @0x002442ec `mov r0,#0x0 / ldmia sp!,{...,pc}`.
 bool InputManager::HasInputDevice(InputDeviceTypes type, InputDevice** out) {
     for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
          it != m_inputDevices.end(); ++it) {
@@ -122,7 +122,6 @@ bool InputManager::HasInputDevice(InputDeviceTypes type, InputDevice** out) {
             return true;
         }
     }
-    if (out) *out = NULL;
     return false;
 }
 

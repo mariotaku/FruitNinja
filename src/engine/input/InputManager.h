@@ -59,7 +59,11 @@ public:
     // Mortar::InputDevice::ClearActions(hash, last=true on final).
     void ClearActions(unsigned long actionHash);
 
-    // Binary @ 0x00195fe8 — HasInputDevice: search devices by GetDeviceType.
+    // v1.6.1 Mortar::InputManager::HasInputDevice @0x00244298 — search the device
+    // list for the first device whose GetDeviceType() matches `type`.
+    // Returns true on a match, and writes that device to *out when out != NULL.
+    // On no match it returns false and leaves *out UNTOUCHED — callers must
+    // pre-initialise their out variable, the binary does not null it.
     bool HasInputDevice(InputDeviceTypes type, InputDevice** out);
 
     // v1.6.1 Mortar::InputManager::OnAxisExtentsChanged @0x00244238 — OnAxisExtentsChanged: broadcast.

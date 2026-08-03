@@ -351,7 +351,10 @@ public:
     // Binary @ 0x00175624 — "is either half outside the play field" predicate
     bool IsOffscreen() const;
 
-    // Binary @ 0x00176354 — toggle collision sphere; radius = m_CollisionScale + 0.52 * m_Scale
+    // v1.6.1 Fruit::EnableCollision @0x001dc1d8 — toggle the collision sphere.
+    // radius = m_CollisionScale + 0.52 * m_Scale. enable==false destroys the sphere,
+    // and so does enable==true when that radius is <= 0 (locked shop fruits use a
+    // negative m_CollisionScale to be uncollidable). Never stores a negative radius.
     void EnableCollision(bool enable);
 
     // Binary @ 0x001db778 (v1.6.1) — sets m_PlayerIdx; online-MP side-effect: partition 2 radius *= 0.66 (Defunct)

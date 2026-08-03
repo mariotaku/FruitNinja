@@ -432,6 +432,8 @@ void Fruit::SetFruitType(long fruitType, float scaleParam) {
         delete m_Col;
         m_Col = nullptr;
     } else {
+        // Genuine binary test, not a port-added guard: @0x001dc108
+        // `cmp r0,#0x0 / bne 0x001dc13c` -- allocate only when m_Col is null.
         if (!m_Col) m_Col = new ColSphere();
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
@@ -2882,13 +2884,19 @@ bool Fruit::IsOffscreen() const {
     return false;
 }
 
-// v1.6.1 Fruit::EnableCollision @0x001dc1d8
+// ASM-spec v1.6.1 Fruit::EnableCollision @0x001dc1d8
+// enable==true does NOT force a sphere: @0x001dc210 `vcmpe.f32 s16,#0 / ble 0x001dc2c4`
+// sends a non-positive radius down the same destroy path as enable==false. Locked shop
+// equip fruits carry a negative m_CollisionScale precisely so they end up with no
+// collision sphere -- same case as the SetFruitType gate above.
+// The `!m_Col` allocate test is genuine: @0x001dc220 `cmp r3,#0x0 / bne 0x001dc254`.
 void Fruit::EnableCollision(bool enable) {
+    float radius = 0.0f;
     if (enable) {
         const FruitInfoData* info = FruitInfo_Get(m_FruitType);
-        const float fScale   = info->m_Scale;
-        const float fColBase = info->m_CollisionScale;
-        const float radius   = fColBase + COL_RADIUS_FACTOR * fScale;
+        radius = info->m_CollisionScale + COL_RADIUS_FACTOR * info->m_Scale;
+    }
+    if (radius > 0.0f) {
         if (!m_Col) m_Col = new ColSphere();
         ColSphere* cs = static_cast<ColSphere*>(m_Col);
         cs->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
