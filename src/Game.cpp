@@ -89,6 +89,20 @@ void Game::CreateFileSystems(const char* a, const char* b) {
 }
 
 // slot 13 v1.6.1 Game::TellGameToStart @0x001206c8 — sets HUD multiplayer state, resets WaveManager
+// ASM-spec v1.6.1 Game::TellGameToStart @0x001206c8 (12 instructions):
+//   ldr r0,[game_work,#0x40] / cmp r0,#0 / ldmiaeq -> early return when mHud is null
+//   bl 0x00110524 (PLT -> HUD::SetToMultiplayerState @0x0018c4d8)
+//   bl WaveManager::GetInstance / mov r1,#1 / b WaveManager::Reset
+// The `multiplayer` argument arrives in r1 and is NEVER read -- the binary does
+// not gate on it. `(void)multiplayer;` is faithful; do not "restore" a gate here.
+//
+// Dead in v1.6.1: this function has no code xrefs. It exists only as Game vtable
+// slot 13 (@0x002cc24c) and MortarGame slot 13 (@0x002cfac4), and nothing in
+// .plt+.text loads a MortarGame vptr +0x34 (program-wide instruction scan).
+// GameInit @0x001ce1c0, the game-start path, does not call it. That makes the
+// whole HUD::SetToMultiplayerState / HUDControl slot-11 chain unreachable --
+// see PauseScreen::SetToMultiplayerState for the full chain. The port likewise
+// has no call site; the body is kept so the vtable shape matches.
 void Game::TellGameToStart(int multiplayer) {
     (void)multiplayer;
     if (game_work.mHud) {

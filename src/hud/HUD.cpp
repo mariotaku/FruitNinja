@@ -207,14 +207,23 @@ void HUD::Save() {
     }
 }
 
-// TODO: HUD::Skip -- v1.6.1 address unconfirmed (old marker 0x00144a58 is stale v1.5.x; needs re-RE)
+// ASM-spec v1.6.1 HUD::Skip @0x0018bf24: walks `controls` begin..end and calls
+// vtable +0x34 (HUDControl::Skip, slot 13) on each. `ldr r3,[r3,#0x34]` @0x0018bf24.
 void HUD::Skip() {
     for (std::list<HUDControl*>::iterator it = controls.begin(); it != controls.end(); ++it) {
         (*it)->Skip();
     }
 }
 
-// TODO: HUD::SetToMultiplayerState -- v1.6.1 address unconfirmed (old marker 0x00144dcc is stale v1.5.x; needs re-RE)
+// ASM-spec v1.6.1 HUD::SetToMultiplayerState @0x0018c4d8 (PLT thunk @0x00110524).
+// Pass 1 walks `controls` and calls vtable +0x2c (HUDControl::SetToMultiplayerState,
+// slot 11) on each, collecting the ones that return non-zero. Pass 2 removes them.
+// The `ldr r3,[r3,#0x2c]` @0x0018c510 is the ONLY slot-11 dispatch in the program.
+//
+// Dead in v1.6.1: the only caller is Game::TellGameToStart @0x001206e8, which has
+// no code xrefs of its own. See Game::TellGameToStart in src/Game.cpp for the
+// evidence. Kept so the call graph matches the binary.
+//
 // DIFFERS-trivial: binary's literal shape has a defensive inner-loop that re-scans
 //                  controls before each RemoveControl. Omitted here because list::remove
 //                  is a no-op on missing elements, making the inner loop observable no-op.

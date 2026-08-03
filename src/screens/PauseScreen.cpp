@@ -389,17 +389,26 @@ void PauseScreen::Release() {
 
 // -------------------------------------------------------------------------
 // vtable[4]: Reset -- restores SP-mode tex assignments on resume/retry buttons
-// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::Reset @0x001a58ac (re-analyst)
+// ASM-spec v1.6.1 PauseScreen::Reset @0x001a58ac
 //
 // Two if-blocks, no other PauseScreen field is touched:
-//   if (m_RetryButton) {
-//       retry->m_bAcceptsTouch = 1;          // +0x149
-//       retry->m_Texture = m_RetryButtonTex;   // src is +0xc4 (binary)
+//   if (m_RetryButton) {              // ldr r0,[r0,#0xac]
+//       retry->m_bAcceptsTouch = 1;   // strb r3,[r0,#0x149]   @0x001a58c8
+//       retry->m_Texture = *(this+0xc4);   // add r1,r4,#0xc4  @0x001a58c4
 //   }
-//   if (m_ResumeButton) resume->m_Texture = m_PlayButtonTex;
+//   if (m_ResumeButton)               // ldr r0,[r4,#0x98]
+//       resume->m_Texture = *(this+0xb8);  // add r1,r4,#0xb8  @0x001a58e4
 //
-// Inverse of SetToMultiplayerState: re-enables RetryButton and restores
-// SecondaryTex assignments so SP layout is correct after MP session ends.
+// The source slot is +0xb8, NOT +0xbc. The ctor's LoadLocalisedTexture string
+// literals pin the slots: +0x74 "pause_title.tex", +0xb8 "pause_button.tex",
+// +0xc4 "retry_button.tex", +0xbc "play_button.tex", +0xc0 "quit_title.tex"
+// (v1.6.1 PauseScreen::PauseScreen @0x001a7204, GOT base 0x002d1130, string
+// pool 0x002831e4..0x00283226). An earlier marker here claimed +0xbc
+// (m_PlayButtonTex) and was wrong.
+//
+// Inverse of SetToMultiplayerState: re-enables RetryButton and restores the
+// SP texture assignments. Update() re-picks the resume icon every frame off
+// m_Alpha, so this assignment only holds until the next Update.
 // -------------------------------------------------------------------------
 void PauseScreen::Reset() {
     if (m_RetryButton) {
@@ -407,7 +416,7 @@ void PauseScreen::Reset() {
         m_RetryButton->m_Texture = m_RetryButtonTex;
     }
     if (m_ResumeButton) {
-        m_ResumeButton->m_Texture = m_PlayButtonTex;
+        m_ResumeButton->m_Texture = m_PauseButtonTex;
     }
 }
 
@@ -495,17 +504,45 @@ void PauseScreen::DrawOrder(float* hudScaleRaw, int layerMask) {
 }
 
 // -------------------------------------------------------------------------
-// vtable[11]: SetToMultiplayerState -- Tier-2 stub
-// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::SetToMultiplayerState @0x001a5e74 (re-analyst)
+// vtable[11]: SetToMultiplayerState
+// ASM-spec v1.6.1 PauseScreen::SetToMultiplayerState @0x001a5e74
+//
+// Defunct: multiplayer HUD switch -- unreachable in v1.6.1; v1.6.1
+// PauseScreen::SetToMultiplayerState @ 0x001a5e74. Ported faithfully anyway
+// (the body is three stores and costs nothing), per stub-don't-skip.
+//
+// Why it never runs -- the whole chain above it is dead:
+//   * slot 11 (vtable +0x2c) has exactly ONE dispatcher in the program:
+//     HUD::SetToMultiplayerState @0x0018c510 (`ldr r3,[r3,#0x2c]`). Verified
+//     by a program-wide instruction scan (383228 instructions, .plt 0x00102964
+//     + .text 0x00116d18..0x0027f4cf -- the "OspMain" label at 0x000e3328 is
+//     bogus, that address is inside .gnu.version).
+//   * HUD::SetToMultiplayerState @0x0018c4d8 has ONE caller: the PLT thunk
+//     @0x00110524, called only from Game::TellGameToStart @0x001206e8.
+//   * Game::TellGameToStart @0x001206c8 has NO code xrefs. It sits in the Game
+//     vtable slot 13 (@0x002cc24c) and MortarGame slot 13 (@0x002cfac4), and
+//     nothing anywhere loads a MortarGame vptr +0x34. GameInit @0x001ce1c0
+//     (the game-start path) does not call it either.
+//   * Corroboration: this function derefs m_RetryButton and m_ResumeButton with
+//     NO null test (unlike Reset, which tests both). The ctor @0x001a7204 nulls
+//     both and Update creates them lazily, so a call at game start would store
+//     to address 0x149 and fault. It cannot be on a live path.
+//
+// Body (3 stores, in binary order), no null guards -- matches the binary:
+//   1. SmartPtr<Texture>::operator=(m_RetryButton+0x74, NULL)  @0x001a5e88
+//      (via T.1065 @0x001a5bb4 = `mov r1,#0; b 0x00104fb0`)
+//   2. m_RetryButton->m_bAcceptsTouch = 0                      @0x001a5e98
+//   3. SmartPtr<Texture>::operator=(m_ResumeButton+0x74, this+0xc0)  @0x001a5ea0
+//      +0xc0 is m_QuitTitleTex ("quit_title.tex"), not m_RetryButtonTex.
+// Returns 0. It does NOT chain to HUDControl::SetToMultiplayerState -- calling
+// the base would report "not singular" and let HUD::SetToMultiplayerState
+// remove the PauseScreen from the control list.
 // -------------------------------------------------------------------------
 bool PauseScreen::SetToMultiplayerState() {
-    // Tier-2 deferred (v1.6.1 @0x001a5e74): vtable[11], called from PauseScreen::Reset on MP entry.
-    // Body (3 stores):
-    //   1. m_RetryButton->m_Texture = SmartPtr::Null;     // retry+0x74
-    //   2. m_RetryButton->m_bAcceptsTouch = 0;             // retry+0x149 -- disable interactability
-    //   3. m_ResumeButton->m_Texture = m_QuitTitleTex;    // resume+0x74 <- this+0xc0 (add r1,r5,#0xc0), NOT m_RetryButtonTex
-    // Activates only when split-screen MP is enabled. Trivial 3-line port -- RE complete.
-    return HUDControl::SetToMultiplayerState();
+    m_RetryButton->m_Texture.SetNull();
+    m_RetryButton->m_bAcceptsTouch = 0;
+    m_ResumeButton->m_Texture = m_QuitTitleTex;
+    return false;
 }
 
 // -------------------------------------------------------------------------

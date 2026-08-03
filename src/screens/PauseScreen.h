@@ -170,7 +170,11 @@ public:
     void UpdateRealtime(float dtSeconds) override;
 #endif
 
-    // vtable[11]: SetToMultiplayerState -- Tier-2; stub
+    // vtable[11]: SetToMultiplayerState -- blanks the Retry button (texture +
+    // touch) and swaps the Resume button to quit_title.tex. Unconditional: the
+    // binary has no MP gate and no null tests. Unreachable in v1.6.1 -- the
+    // dispatch chain above it is dead; see the .cpp for the evidence.
+    // v1.6.1 PauseScreen::SetToMultiplayerState @0x001a5e74
     bool SetToMultiplayerState() override;
 
     // Button delegate callbacks (press-action targets)
