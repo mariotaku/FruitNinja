@@ -180,7 +180,8 @@ public:
     // Note: SetColour/SetTranslation use bool; SetShadow uses int — they are NOT uniform.
     void SetShadow(float scale, Colour col, _Vector3<float> offset, int flag);
 
-    // SetStroke  binary @ 0x00245314 (1 colour) / 0x0024536c (2) / 0x002453f0 (3)
+    // SetStroke  v1.6.1 Mortar::BakedStringBox::SetStroke @0x00245314 (1 colour)
+    //            / @0x0024536c (2) / @0x002453f0 (3)
     // Outline/stroke of `width` px drawn behind the glyph fill (after shadow, before fg).
     // count 1/2/3 selects how many concentric stroke colours are layered.
     // Change-detection gate matches SetGradient/SetShadow: dirties the bake on any field change.
@@ -194,9 +195,13 @@ public:
     // 2/3-colour stroke gradient (m_StrokeCount>=2/3): per-line top->bottom lerp over the
     // glow(stroke) mesh's own Y-bbox; count==3 additionally overpaints m_StrokeCol1 on the
     // upper half. See ApplyStrokeGradient ASM-spec comments in RebuildMeshes (BakedStringBox.cpp).
-    void SetStroke(float width, const Colour& c0);
-    void SetStroke(float width, const Colour& c0, const Colour& c1);
-    void SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2);
+    //
+    // Colour is passed BY VALUE, matching the binary's mangling
+    // (_ZN6Mortar14BakedStringBox9SetStrokeEf6Colour, i.e. `Ef6Colour`, not
+    // `EfRK6Colour`). Same ABI shape as the neighbouring SetShadow/SetBevel.
+    void SetStroke(float width, Colour c0);
+    void SetStroke(float width, Colour c0, Colour c1);
+    void SetStroke(float width, Colour c0, Colour c1, Colour c2);
 
     // Box dimension accessors -- v1.6.1 IngamePopup::Draw @0x0016d41c reads these to
     // compute the rotation-aware text anchor delta. Binary fields: +0x24 (boxW), +0x28 (boxH).

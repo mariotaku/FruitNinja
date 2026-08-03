@@ -315,7 +315,7 @@ void BakedStringTTF_Surface::AddGlyph(GlyphTTF* g)
 // BuildSurfaces @0x00248c14:
 // if(!m_GlyphsBuilt) BuildGlyphs; per glyph: FindOrCreateSurface(g->m_SurfaceKey)
 // ->AddGlyph(g). Then per surface: m_PlatformColour = PlatformColour(gradient
-// stop 0); FinishMesh(surf). Then UpdateBounds.
+// stop 0); surf->FinishMesh(). Then UpdateBounds.
 // ASM-spec v1.6.1 BakedStringTTF::BuildSurfaces @0x00248c14.
 void BakedStringTTF::BuildSurfaces()
 {
@@ -341,14 +341,15 @@ void BakedStringTTF::BuildSurfaces()
     for (size_t si = 0; si < m_Surfaces.size(); ++si) {
         BakedStringTTF_Surface* s = m_Surfaces[si];
         s->m_PlatformColour = packed;
-        FinishMesh(s);
+        s->FinishMesh();
     }
 
     UpdateBounds();
     m_SurfacesBuilt = true;
 }
 
-// FinishMesh @0x002480a8: build the surface's 6-vert/glyph tri-list.
+// BakedStringTTF_Surface::FinishMesh @0x002480a8: build this surface's
+// 6-vert/glyph tri-list.
 // Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1) x (h+1).
 // Local corners with (Ox,Oy) = m_QuadMin (cell origin, the baked bearing pad):
 //   BL(-Ox,-Oy)  TL(-Ox, h+1-Oy)  BR(w+1-Ox, -Oy)  TR(w+1-Ox, h+1-Oy)
@@ -360,32 +361,42 @@ void BakedStringTTF::BuildSurfaces()
 // Winding: the binary keys two orders on FontInterface[0x14c]==1 (RT Y-flip);
 // GLES uses the ELSE branch: tri0=(BL,TL,BR), tri1=(TR,BR,TL) -- tri-list
 // consumed by Mesh::DrawTriList (port: Renderer::DrawTriList).
-// ASM-verified: 2026-07-09T04:51:41Z v1.6.1 BakedStringTTF::FinishMesh @ 0x002480a8 (asm-inspector)
-//   quad geometry byte-identical (corners, (w+1)x(h+1) cell, origin sub, rotate+pen,
-//   m_QuadSize skip); UV inset now uniform-translate matching the binary.
-void BakedStringTTF::FinishMesh(BakedStringTTF_Surface* surf)
+// ASM-spec v1.6.1 Mortar::BakedStringTTF_Surface::FinishMesh @ 0x002480a8:
+//   quad geometry (corners, (w+1)x(h+1) cell, origin sub, rotate+pen, m_QuadSize
+//   skip) and the uniform-translate UV inset were matched by the 2026-07-09
+//   asm-inspector pass. That pass ran while this body was still a member of the
+//   OUTER class (BakedStringTTF::FinishMesh(Surface*)), so every this-relative
+//   offset it compared was shifted by a class -- the old `ASM-verified` stamp was
+//   not testable and is downgraded here. The method now sits on the surface, which
+//   is what the binary symbol says, so the pairing is exact.
+// TODO: v1.6.1 0x002480a8 (Mortar::BakedStringTTF_Surface::FinishMesh) -- re-diff
+//   after the next sweep and settle the two leads the mis-paired diff still showed:
+//   (a) the port writes 8 floats + colour per 36-byte vertex where the binary writes
+//   3 (+4,+28,+32) plus the packed colour; (b) the port indexes the glyph array
+//   (ldr [r,r,lsl#2]) where the binary post-increments a pointer (ldr [r],#4).
+void BakedStringTTF_Surface::FinishMesh()
 {
-    if (surf->m_Verts) {
-        delete[] surf->m_Verts;
-        surf->m_Verts = 0;
+    if (m_Verts) {
+        delete[] m_Verts;
+        m_Verts = 0;
     }
-    surf->m_VertCount = 0;
+    m_VertCount = 0;
 
     uint32_t drawable = 0;
-    for (size_t i = 0; i < surf->m_Glyphs.size(); ++i) {
-        GlyphTTF* g = surf->m_Glyphs[i];
+    for (size_t i = 0; i < m_Glyphs.size(); ++i) {
+        GlyphTTF* g = m_Glyphs[i];
         if (g->m_QuadSize.x < 1.0f || g->m_QuadSize.y < 1.0f) continue;
         drawable++;
     }
     if (drawable == 0) return;
 
-    surf->m_Verts = new QUADCUSTOMVERTEX[drawable * 6];
-    memset(surf->m_Verts, 0, sizeof(QUADCUSTOMVERTEX) * drawable * 6);
+    m_Verts = new QUADCUSTOMVERTEX[drawable * 6];
+    memset(m_Verts, 0, sizeof(QUADCUSTOMVERTEX) * drawable * 6);
 
-    const uint32_t packed = surf->m_PlatformColour;
+    const uint32_t packed = m_PlatformColour;
     uint32_t vi = 0;
-    for (size_t i = 0; i < surf->m_Glyphs.size(); ++i) {
-        GlyphTTF* g = surf->m_Glyphs[i];
+    for (size_t i = 0; i < m_Glyphs.size(); ++i) {
+        GlyphTTF* g = m_Glyphs[i];
         float w = g->m_QuadSize.x;
         float h = g->m_QuadSize.y;
         if (w < 1.0f || h < 1.0f) continue;
@@ -410,7 +421,7 @@ void BakedStringTTF::FinishMesh(BakedStringTTF_Surface* surf)
         const float v1 = g->m_UvV1 + k_UvInset;
         const float u1 = g->m_UvU1 - k_UvInset;
 
-        QUADCUSTOMVERTEX* v = surf->m_Verts + vi;
+        QUADCUSTOMVERTEX* v = m_Verts + vi;
         v[0] = QUADCUSTOMVERTEX(); v[0].x=wx[0]; v[0].y=wy[0]; v[0].z=0; v[0].nx=0; v[0].ny=0; v[0].nz=1; v[0].colour=packed; v[0].u=u0; v[0].v=v1; // BL
         v[1] = QUADCUSTOMVERTEX(); v[1].x=wx[1]; v[1].y=wy[1]; v[1].z=0; v[1].nx=0; v[1].ny=0; v[1].nz=1; v[1].colour=packed; v[1].u=u0; v[1].v=v0; // TL
         v[2] = QUADCUSTOMVERTEX(); v[2].x=wx[2]; v[2].y=wy[2]; v[2].z=0; v[2].nx=0; v[2].ny=0; v[2].nz=1; v[2].colour=packed; v[2].u=u1; v[2].v=v1; // BR
@@ -419,7 +430,7 @@ void BakedStringTTF::FinishMesh(BakedStringTTF_Surface* surf)
         v[5] = v[1]; // TL
         vi += 6;
     }
-    surf->m_VertCount = vi;
+    m_VertCount = vi;
 }
 
 // BakedStringTTF_Surface::UpdateBounds @0x00247dd4:

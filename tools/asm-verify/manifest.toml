@@ -308,29 +308,14 @@ mangled      = "_ZN6Mortar4MeshC2ERKNS_8SmartPtrINS_22SharedEffectPropertiesEEER
 port_mangled = "_ZN6Mortar4MeshC2ENS_8SmartPtrINS_22SharedEffectPropertiesEEERKNS_11AsciiStringE"
 notes        = "signature-mismatch write-back: same qualified name, port signature (Mortar::SmartPtr<Mortar::SharedEffectProperties>, Mortar::AsciiString const&)"
 
-# Mortar::BakedStringBox::SetStroke @0x00245314 (88 B)  [MED]
-#   binary: Mortar::BakedStringBox::SetStroke(float, Colour)
-#   port:   Mortar::BakedStringBox::SetStroke(float, Colour const&)   [BakedStringBox.cpp.obj]
-[[symbol]]
-mangled      = "_ZN6Mortar14BakedStringBox9SetStrokeEf6Colour"
-port_mangled = "_ZN6Mortar14BakedStringBox9SetStrokeEfRK6Colour"
-notes        = "signature-mismatch write-back: same qualified name, port signature (float, Colour const&)"
-
-# Mortar::BakedStringBox::SetStroke @0x0024536c (132 B)  [MED]
-#   binary: Mortar::BakedStringBox::SetStroke(float, Colour, Colour)
-#   port:   Mortar::BakedStringBox::SetStroke(float, Colour const&, Colour const&)   [BakedStringBox.cpp.obj]
-[[symbol]]
-mangled      = "_ZN6Mortar14BakedStringBox9SetStrokeEf6ColourS1_"
-port_mangled = "_ZN6Mortar14BakedStringBox9SetStrokeEfRK6ColourS3_"
-notes        = "signature-mismatch write-back: same qualified name, port signature (float, Colour const&, Colour const&)"
-
-# Mortar::BakedStringBox::SetStroke @0x002453f0 (168 B)  [MED]
-#   binary: Mortar::BakedStringBox::SetStroke(float, Colour, Colour, Colour)
-#   port:   Mortar::BakedStringBox::SetStroke(float, Colour const&, Colour const&, Colour const&)   [BakedStringBox.cpp.obj]
-[[symbol]]
-mangled      = "_ZN6Mortar14BakedStringBox9SetStrokeEf6ColourS1_S1_"
-port_mangled = "_ZN6Mortar14BakedStringBox9SetStrokeEfRK6ColourS3_S3_"
-notes        = "signature-mismatch write-back: same qualified name, port signature (float, Colour const&, Colour const&, Colour const&)"
+# Mortar::BakedStringBox::SetStroke @0x00245314 / 0x0024536c / 0x002453f0
+# -- NO ALIAS NEEDED ANY MORE. The three write-back aliases here paired the
+# binary's BY-VALUE Colour overloads (Ef6Colour...) against the port's
+# `const Colour&` ones (EfRK6Colour...). That is an ABI difference, not a
+# naming artifact: the binary spills the by-value Colour to the stack while
+# the port passes a pointer, so a third of every diff was the calling
+# convention. The port now takes Colour by value (BakedStringBox.h), the
+# mangled names match on both sides, and discover-symbols pairs them exactly.
 
 # Mortar::SubstituteApparentSizeTextureSource::SubstituteApparentSizeTextureSource @0x00225ea8 (148 B)  [MED]
 #   binary: Mortar::SubstituteApparentSizeTextureSource::SubstituteApparentSizeTextureSource(Mortar::SmartPtr<Mortar::TextureSource> const&, Mortar::SmartPtr<Mortar::TextureSource> const&)
@@ -692,11 +677,13 @@ port_mangled = "_ZN11SplatEntity11UpdateSplatEf"
 notes        = "port renamed the vtable Update to UpdateSplat"
 
 # Mortar::BakedStringTTF_Surface::FinishMesh() @0x002480a8 (928 B)
-#   port: Mortar::BakedStringTTF::FinishMesh(Mortar::BakedStringTTF_Surface*)
-[[symbol]]
-mangled      = "_ZN6Mortar22BakedStringTTF_Surface10FinishMeshEv"
-port_mangled = "_ZN6Mortar14BakedStringTTF10FinishMeshEPNS_22BakedStringTTF_SurfaceE"
-notes        = "binary member of BakedStringTTF_Surface; port made it a BakedStringTTF member taking the surface explicitly"
+# -- NO ALIAS NEEDED ANY MORE, and the alias that used to sit here was a
+# WRONG-CLASS pairing: it diffed the binary's SURFACE member (this = the
+# surface) against the port's BakedStringTTF::FinishMesh(Surface*) (this = the
+# outer string, surface in r1), so every this-relative offset was shifted and
+# the 176521 score was mostly artifact. FinishMesh now lives on
+# BakedStringTTF_Surface (it only ever touched surface + glyph state), so the
+# mangled names match and the pairing is exact.
 
 # LoadLocalisedTexture(char const*) @0x0011a768 (356 B)
 #   port: Mortar::TextureManager::LoadLocalisedTexture(char const*)
@@ -777,6 +764,14 @@ notes        = "vtable slot 6 rename: binary DrawUpdate == port PostUpdate"
 
 # Mortar::ActorManager::GetEntity(long, unsigned long) @0x001d30d4 (116 B)
 #   port: Mortar::ActorManager::GetEntity(int, unsigned int) const
+# Re-checked (#163): long/int and unsigned long/size_t are the same width on
+# ARM32, so this alias is ABI-equivalent and the pairing is correct as written.
+# The port's own (long, unsigned long) overload (ActorManager.h:346) is CONST
+# (_ZNK...Elm) while the binary's is NOT (_ZN...Elm), so it never collides with
+# this entry -- and it is only a forwarder, so aliasing to it would be inverted.
+# The residual diff on this row is real (the binary calls out-of-line
+# std::list begin/end/operator++ where the port walks the list inline), NOT a
+# pairing artifact.
 [[symbol]]
 mangled      = "_ZN6Mortar12ActorManager9GetEntityElm"
 port_mangled = "_ZNK6Mortar12ActorManager9GetEntityEij"
@@ -908,6 +903,35 @@ notes        = "SmartPtr by value vs const&; auto write-back skips templates, th
 mangled      = "_ZN12GameModifier13ApplyModifierEbPf"
 port_mangled = "_ZN12GameModifier15OnDeferCompleteEbPf"
 notes        = "port ApplyModifier is a 20-byte forwarder; the binary body is ported as OnDeferComplete (see GameModifier.h)"
+
+# BaseScreen::SetExtraControlsDefaultPos() @0x0015f618 -- ADDRESS REPOINT.
+# The binary has TWO overloads:
+#   0x0015f5b4  SetExtraControlsDefaultPos(_Vector3<float>&)   100 B  -- the body
+#   0x0015f618  SetExtraControlsDefaultPos()                     8 B  -- forwarder:
+#               `add r1,r0,#8` (this->pos) then `b` into the body's veneer.
+# The port merged the two into the single 0-arg entry point (BaseScreen.cpp:433
+# reads `pos` directly), so pairing the port body against the 8-byte forwarder
+# scored a real function against a tail-call thunk: 13.3% LCS, 15 port insns vs
+# 2 binary. addr/size below repoint the BINARY side at the overload that
+# actually holds the body. The (_Vector3&) symbol stays unpaired on purpose --
+# this row already diffs its bytes, and a second entry would double-count it.
+[[symbol]]
+mangled = "_ZN10BaseScreen26SetExtraControlsDefaultPosEv"
+addr    = "0x0014f5b4"
+size    = 100
+notes   = "binary 0x0015f618 is an 8-byte forwarder into SetExtraControlsDefaultPos(_Vector3<float>&) @0x0015f5b4; the port merged both overloads into the 0-arg one, so diff against the body"
+
+# SlashModInfo::SlashSoundMods::SlashSoundMods() @0x0013a8c8 (68 B)
+#   port: SlashSoundMods::SlashSoundMods()   [ItemInfo.cpp.obj]
+# Same scope drift as the six SlashSoundMods method aliases above (the port
+# declares the class at global scope instead of nested in SlashModInfo);
+# ABI-identical, so the ctor is aliased for the same reason. Without this the
+# ctor had no row at all. The binary's ~SlashSoundMods() @0x0013ac38 stays
+# unpaired: the port emits no out-of-line destructor for the class.
+[[symbol]]
+mangled      = "_ZN12SlashModInfo14SlashSoundModsC1Ev"
+port_mangled = "_ZN14SlashSoundModsC1Ev"
+notes        = "scope drift: binary nests SlashSoundMods in SlashModInfo, port declares it at global scope"
 
 # WaveModifier::ApplyModifier @0x0015068c -- NO ALIAS ON PURPOSE.
 # An alias pointing this at the port's OnDeferComplete was added and then removed:

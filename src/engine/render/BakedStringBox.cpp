@@ -755,8 +755,13 @@ void BakedStringBox::SetShadow(float scale, Colour col, _Vector3<float> offset, 
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z v1.6.1 binary @ 0x00245314 (asm-inspector)
-void BakedStringBox::SetStroke(float width, const Colour& c0) {
+// ASM-verified: 2026-06-13T04:05Z v1.6.1 Mortar::BakedStringBox::SetStroke @ 0x00245314 (asm-inspector)
+// Colour by value (binary mangling Ef6Colour). Residual codegen delta: the binary
+// compares the stored vs incoming Colour as ONE 32-bit word (ldr +92 / ldr [r] / cmp);
+// the port compares the four bytes separately. Same semantics -- Mortar::Colour has no
+// out-of-line operator== in the binary, so the word compare is inlined from a form the
+// port's plain 4-byte struct cannot express without a union.
+void BakedStringBox::SetStroke(float width, Colour c0) {
     if (m_StrokeCount != 1 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
         m_StrokeCol0.b != c0.b || m_StrokeCol0.a != c0.a) {
@@ -767,8 +772,8 @@ void BakedStringBox::SetStroke(float width, const Colour& c0) {
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z v1.6.1 binary @ 0x0024536c (asm-inspector)
-void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1) {
+// ASM-verified: 2026-06-13T04:05Z v1.6.1 Mortar::BakedStringBox::SetStroke @ 0x0024536c (asm-inspector)
+void BakedStringBox::SetStroke(float width, Colour c0, Colour c1) {
     if (m_StrokeCount != 2 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
         m_StrokeCol0.b != c0.b || m_StrokeCol0.a != c0.a ||
@@ -782,8 +787,8 @@ void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1) 
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z v1.6.1 binary @ 0x002453f0 (asm-inspector)
-void BakedStringBox::SetStroke(float width, const Colour& c0, const Colour& c1, const Colour& c2) {
+// ASM-verified: 2026-06-13T04:05Z v1.6.1 Mortar::BakedStringBox::SetStroke @ 0x002453f0 (asm-inspector)
+void BakedStringBox::SetStroke(float width, Colour c0, Colour c1, Colour c2) {
     if (m_StrokeCount != 3 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
         m_StrokeCol0.b != c0.b || m_StrokeCol0.a != c0.a ||

@@ -106,6 +106,15 @@ struct BakedStringTTF_Surface {
     // AddGlyph @0x00248718: push_back into m_Glyphs (+0x3c).
     void AddGlyph(GlyphTTF* g);
 
+    // FinishMesh @0x002480a8: build this surface's 6-vert/glyph tri-list.
+    // Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1)x(h+1) with local
+    // corners offset by -m_QuadMin (cell origin); each corner is rotated by
+    // m_RotAngle then translated by m_RotBasis (pen). The 1/512 UV inset is
+    // applied here (u0-=, v0+=, v1-=, u1+=). Winding: GLES uses the non-RT-flip
+    // (ELSE) branch of the binary's FontInterface[0x14c] switch.
+    // Called per surface by BakedStringTTF::BuildSurfaces @0x00248c14.
+    void FinishMesh();
+
     // UpdateBounds @0x00247dd4: seed +/-999999, then per vert (stride 0x24,
     // x=v[0], y=v[1]) fold floor(x)/ceil(x)/ceil(y)/floor(y) into the bounds.
     void UpdateBounds();
@@ -350,7 +359,7 @@ private:
 
     // BuildSurfaces @0x00248c14: if(!m_GlyphsBuilt) BuildGlyphs; per glyph:
     //   FindOrCreateSurface(g->m_SurfaceKey)->AddGlyph(g). Then per surface:
-    //   m_PlatformColour = PlatformColour(gradientStop0); FinishMesh(surf).
+    //   m_PlatformColour = PlatformColour(gradientStop0); surf->FinishMesh().
     //   Then UpdateBounds.
     void BuildSurfaces();
 
@@ -358,14 +367,6 @@ private:
     // else new BakedStringTTF_Surface(0x48) + push_back.
     // Binary mangled: ...FindOrCreateSurfaceEPNS_16TextureAtlasPageE -- TextureAtlasPage*.
     BakedStringTTF_Surface* FindOrCreateSurface(TextureAtlasPage* page);
-
-    // FinishMesh @0x002480a8: build the surface's 6-vert/glyph tri-list.
-    // Per drawable glyph (skip if cell w<1 or h<1): quad = (w+1)x(h+1) with local
-    // corners offset by -m_QuadMin (cell origin); each corner is rotated by
-    // m_RotAngle then translated by m_RotBasis (pen). The 1/512 UV inset is
-    // applied here (u0-=, v0+=, v1-=, u1+=). Winding: GLES uses the non-RT-flip
-    // (ELSE) branch of the binary's FontInterface[0x14c] switch.
-    void FinishMesh(BakedStringTTF_Surface* surf);
 
     // ApplyEffects @0x00249684: tail dispatch, replayed on every rebuild:
     //   1. m_Radius != 0        -> ApplyFormatting_Circle_Internal(m_Radius)
