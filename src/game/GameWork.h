@@ -253,8 +253,11 @@ extern float g_repauseDelay;   // @ 0x00316710
 // Same .bss block, +0x99 (v1.6.1 GameDraw @0x001cddcc: `ldrb r3,[r5,#0x99]`).
 // GameDraw's tail drains it: when set, it clears the Input/Input.txt action set and
 // re-clears the flag. GameInit zeroes it at boot.
-// TODO: v1.6.1 0x00316799 (clearInput) — no port-side writer yet; whichever binary
-//   function arms this flag is not RE'd, so the drain below never fires in the port.
+// The drain is dead code IN THE BINARY, and the port is faithful in leaving it that way.
+// v1.6.1's only non-GameDraw access is GameInit @0x001ce6a4 `strb r2,[r3,#0x99]` with
+// r2 = 0 -- the same block that sets the init-done flag at +0x9a. Nothing ever ARMS the
+// flag, so the drain never fires. It is a leftover from an earlier build. Do not invent
+// a writer for it.
 extern int   g_clearInput;     // @ 0x00316799 (byte in binary)
 
 #ifdef __bada__

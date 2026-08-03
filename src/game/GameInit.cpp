@@ -311,6 +311,16 @@ static float slowTimeSpeed = 1.0f;    // _ZL13slowTimeSpeed @ 0x002d8c88 (ST .da
 static float slowTimeTime  = 0.0f;    // _ZL12slowTimeTime @ 0x00316704 (.bss -- zero; SlowTime sets to 1.0)
 static float quickener     = 1.0f;    // _ZL9quickener @ 0x002d8cd8 (ST .data 0x3f800000)
 
+// Per-frame particle-dt divisor. GameUpdate computes it once and stores it here;
+// GameDraw only READS it, so a frame whose GameUpdate bailed early keeps the previous
+// frame's value. Binary spelling ("paticlesDt") preserved.
+// ASM-spec v1.6.1 GameUpdate @0x001cfb8c (writer) / GameDraw @0x001cda18 (reader).
+// File-local like its neighbours: 0x002d8ca4 sits INSIDE the _ZL static block
+// (slowTimeSpeed 0x2d8c88 .. quickener 0x2d8cd8), and both the writer (GameUpdate)
+// and the reader (GameDraw) live in this TU. A non-static global here would export
+// a symbol the binary does not have.
+static float paticlesDt = 1.0f;       // _ZL10paticlesDt @ 0x002d8ca4 (ST .data 0x3f800000)
+
 // Global pause flag block @ 0x00316700 (binary .bss, adjacent to slowTimeTime @ 0x316704).
 // These occupy 0x316708/0x31670c/0x316710; the 4-byte gap at 0x316700..0x316707 is the
 // unnamed block head (possibly alignment / reserved).
@@ -684,16 +694,25 @@ void GameUpdate(float dt, bool active) {
 
     // --- PSPParticleManager ---
     {
-        float particleDtNorm = 1.0f;
+        // ASM-spec v1.6.1 GameUpdate @0x001cfb8c..0x001cfbd8: the divisor is computed
+        // ONCE per frame here and parked in paticlesDt; GameDraw only reads it.
+        // The gate is bM_Mode ALONE -- while paused the binary leaves the divisor at
+        // 1.0 and never divides by the wave dt. Do not fold SettingsScreen::IsOpen()
+        // in here; that port-specific term belongs to the `paused` argument only.
+        paticlesDt = 1.0f;
         WaveManager* wm = WaveManager::GetInstance();
         float wavedt = wm->GetWavedt(0);
-        if (wavedt != 0.0f) {
-            particleDtNorm = 1.0f / wavedt;
+        if (wavedt == 0.0f) {
+            wavedt = 1.0f;
         }
-        if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
-            particleDtNorm = 1.0f;
+        if (game_work.bM_Mode == 0) {
+            float norm = 1.0f / wavedt;
+            if (norm < 1.0f) {
+                norm = 1.0f;
+            }
+            paticlesDt = norm;
         }
-        const float particleDt = fVar9 / particleDtNorm;
+        const float particleDt = fVar9 / paticlesDt;   // @0x001cfbf0
         // ASM-spec v1.6.1 PSPParticleManager::Update @0x0013cee8: GameUpdate passes
         // paused = (bM_Mode != 0). The extra SettingsScreen term is port specific --
         // that modal has no binary counterpart (see its header) and does not set
@@ -954,14 +973,10 @@ void GameDraw(float dt, bool active) {
         game_work.mHud->Draw(Mortar::HUD_LAYER_MENU_BG);        // @0x001cd96c  0x40
         SplatEntity::DrawActiveSplats();                        // @0x001cd970
         Fruit::DrawShadows();                                   // @0x001cd974
-        // SlashEntity::PreDraw -- blade pre-pass.
-        // TODO: v1.6.1 0x001cd978 (SlashEntity::PreDraw) — the binary makes ONE call here
-        //   (like DrawActiveSplats / DrawShadows / DrawActiveBlasts, which are all
-        //   draw-them-all statics); the port instead loops the 16 finger slots. Confirm
-        //   whether the binary's PreDraw walks the slots internally before collapsing this.
-        for (int i = 0; i < 16; ++i) {
-            if (g_pSlashEntities[i]) g_pSlashEntities[i]->PreDraw();
-        }
+        // SlashEntity::PreDraw -- blade pre-pass. ONE call, like the neighbouring
+        // draw-them-all statics: v1.6.1 SlashEntity::PreDraw @0x001e8514 ignores `this`
+        // and walks the 8 global ghost slots itself (@0x001cd978 `bl 0x0010a240`).
+        SlashEntity::PreDraw();
         // Shockwave rings belong to this post-actor block, NOT to layer 0x200.
         BombBlast::DrawActiveBlasts();                          // @0x001cd97c
         BombFlash::DrawActiveFlashes();                         // @0x001cd980
@@ -981,30 +996,17 @@ void GameDraw(float dt, bool active) {
         // Particle dt: the binary recomputes s0 = frameDt / paticlesDt before each of
         // the three pm.Draw calls (@0x001cda20 / 0x001cdafc / 0x001cdbc4) and passes
         // paused = (bM_Mode != 0).
-        // TODO: v1.6.1 0x001cda18 (paticlesDt) — the binary divides by a single global
-        //   (block base +0x20, adjacent to s_startFadeInTime at +0x1c); the port instead
-        //   derives the divisor from WaveManager::GetWavedt(0) below. Not verified to be
-        //   the same value -- RE paticlesDt's writer before trusting either.
-        float particleDt;
-        bool particlesPaused;
-        {
-            float particleDtNorm = 1.0f;
-            WaveManager* wm = WaveManager::GetInstance();
-            float wavedt = wm->GetWavedt(0);
-            if (wavedt != 0.0f) {
-                particleDtNorm = 1.0f / wavedt;
-            }
-            if (!game_work.bM_Mode && particleDtNorm < 1.0f) {
-                particleDtNorm = 1.0f;
-            }
-            particleDt = dt / particleDtNorm;
-            // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: GameDraw passes
-            // paused = (bM_Mode != 0) to all three pm.Draw calls. The extra
-            // SettingsScreen term is port specific -- that modal has no binary
-            // counterpart and does not set bM_Mode, so it is OR'd into the same
-            // `paused` argument rather than carrying a second freeze mechanism.
-            particlesPaused = (game_work.bM_Mode != 0) || SettingsScreen::IsOpen();
-        }
+        // ASM-spec v1.6.1 GameDraw @0x001cda18: GameDraw only READS the paticlesDt
+        // global (@0x002d8ca4); its sole writer is GameUpdate @0x001cfb8c. Do not
+        // recompute it here -- on a frame whose GameUpdate bailed early the binary
+        // divides by the STALE value.
+        const float particleDt = dt / paticlesDt;
+        // ASM-spec v1.6.1 PSPParticleManager::Draw @0x0013eccc: GameDraw passes
+        // paused = (bM_Mode != 0) to all three pm.Draw calls. The extra
+        // SettingsScreen term is port specific -- that modal has no binary
+        // counterpart and does not set bM_Mode, so it is OR'd into the same
+        // `paused` argument rather than carrying a second freeze mechanism.
+        const bool particlesPaused = (game_work.bM_Mode != 0) || SettingsScreen::IsOpen();
 
         // @0x001cda34: background particles, drawn BEHIND the logo/shade.
         pm.Draw(particleDt, particlesPaused, -1);
@@ -1023,8 +1025,8 @@ void GameDraw(float dt, bool active) {
         // -- unconditional, no null test in the binary. ActorManager::Draw above already
         // walked the type-3 SlashEntity slots but their Draw(Renderer&) vtable slot is a
         // `bx lr` stub, so all blade rendering comes from here.
-        // TODO: v1.6.1 0x001cdab8 (SlashEntity vtable +0x34) — slot identity is carried
-        //   over from an earlier port comment, not re-confirmed against the vtable dump.
+        // Slot confirmed: _ZTV11SlashEntity @0x002cea08 (vptr 0x2cea10), +0x34 ->
+        // v1.6.1 SlashEntity::DrawSlice @0x001e83b0.
         for (int i = 0; i < 16; ++i) {
             if (g_pSlashEntities[i]) g_pSlashEntities[i]->DrawSlice();
         }
@@ -1160,8 +1162,8 @@ void GameDraw(float dt, bool active) {
     // GameDraw fires the actual bM_Mode clear + ClearActions on the NEXT rendered frame,
     // after the fade overlay has settled -- the binary clears bM_Mode here (not in
     // UnpauseGame) so the gameplay tick cannot restart mid-fade.
-    // TODO: v1.6.1 0x001cddb0 (debugMenu) — the binary also does `strb r7,[r6,#0x98]`
-    //   (debugMenu = 0) inside this block; the port has no debugMenu global to clear.
+    // v1.6.1 also does debugMenu(0x00316798) = 0 here; that global is write-only dead in
+    // v1.6.1 (no reader) -- deliberately not ported.
     if (g_unpause_game != 0 && game_work.bM_Mode != 0) {
         g_unpause_game = 0;
         Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/PauseMenu.txt"));
