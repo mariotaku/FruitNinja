@@ -39,7 +39,14 @@ static_assert(offsetof(TypeChance, m_CumChance) == 0x08, "TypeChance::m_CumChanc
 class GlobalProbabilityOveride {
 public:
     GlobalProbabilityOveride();
-    virtual ~GlobalProbabilityOveride();
+    // Non-virtual: the binary has NO dtor vtable slot (5 slots total, CanSpawn
+    // at slot 0). WaveManager::Destroy @0x00123b54 calls
+    // ~GlobalProbabilityOveride(this) as a direct static call + operator_delete,
+    // never through the vptr (~GlobalProbabilityOveride @0x00120fb0 has zero
+    // vtable xrefs). Do not re-add `virtual` here -- it would insert two
+    // Itanium-ABI dtor slots (D1+D0) ahead of CanSpawn and shift every
+    // dispatch index by 2.
+    ~GlobalProbabilityOveride();
 
     // v1.6.1 vtable @0x002cc350 — 5 slots
     virtual bool CanSpawn();                            // slot0 @0x00120d2c
@@ -100,7 +107,7 @@ static_assert(offsetof(GlobalProbabilityOveride, m_MinFruitCount) == 0x2c,
 class GlobalProbabilityOveridePointBased : public GlobalProbabilityOveride {
 public:
     GlobalProbabilityOveridePointBased();
-    virtual ~GlobalProbabilityOveridePointBased();
+    ~GlobalProbabilityOveridePointBased(); // non-virtual, see base dtor note
 
     void ParseSpecific(TiXmlElement* e);    // slot1 @0x00120c44
     bool CheckForOverride(int& outType);    // slot2 @0x00121320
@@ -129,7 +136,7 @@ static_assert(offsetof(GlobalProbabilityOveridePointBased, m_Every) == 0x30,
 class GlobalProbabilityOverideTimed : public GlobalProbabilityOveride {
 public:
     GlobalProbabilityOverideTimed();
-    virtual ~GlobalProbabilityOverideTimed();
+    ~GlobalProbabilityOverideTimed(); // non-virtual, see base dtor note
 
     void ParseSpecific(TiXmlElement* e);    // slot1 @0x00120aac (no-op)
     bool CheckForOverride(int& outType);    // slot2 @0x00120e90

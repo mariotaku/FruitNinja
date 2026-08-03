@@ -140,6 +140,10 @@ void GlobalProbabilityOveride::ParseSpecific(TiXmlElement* /*e*/)
 // (downgraded from ASM-verified 2026-06-26: that pass missed a port-added
 // game_work.m_SaveData null guard the binary does not have -- the binary enters
 // GetModeBitMask directly and passes game_work.pM_SaveData to GetTotal unguarded.)
+// The CanSpawn() call below dispatches through the vtable at slot 0, matching
+// the binary (ldr r3,[r3,#0x0] at 0x00121290) now that ~GlobalProbabilityOveride
+// is non-virtual -- see GlobalProbabilityOveride.h dtor note. No fresh
+// compile+diff has run since that fix, so this stays ASM-spec, not ASM-verified.
 bool GlobalProbabilityOveride::CheckForOverride(int& out)
 {
     if (!(GetModeBitMask((GAME_MODE)game_work.gameMode) & m_ModeMask)) return false;
@@ -232,6 +236,10 @@ void GlobalProbabilityOveridePointBased::ParseSpecific(TiXmlElement* e)
 // ASM-spec v1.6.1 GlobalProbabilityOveridePointBased::CheckForOverride @0x00121320
 // (downgraded from ASM-verified 2026-06-26: that pass missed a port-added
 // game_work.m_SaveData null guard the binary does not have.)
+// CanSpawn() is inherited from GlobalProbabilityOveride and dispatches at
+// vtable slot 0, matching the binary, now that the base dtor is non-virtual
+// (see GlobalProbabilityOveride.h dtor note). No fresh compile+diff has run
+// since that fix, so this stays ASM-spec, not ASM-verified.
 // Score-based gate: fires when saved score threshold n <= current game score
 // and CanSpawn(). NewGameStarted seeds n = T_877(from, fromMax) as initial
 // score milestone. After firing, rearms by adding T_877(every, everyMax) to n.
