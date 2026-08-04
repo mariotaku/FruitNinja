@@ -549,7 +549,17 @@ void MainScreen::Update(float dt) {
         if (m_Timer2 <= STATE_8_LERP_THRESHOLD) {
             // Port specific: dt-normalize the per-frame ease (dtN = dt*60) so the menu slide-in
             //   plays at the intended ~60Hz speed regardless of render framerate (binary is frame-based@fixed-60Hz).
-            m_Timer2 = 1.0f - (1.0f - m_Timer2) * powf(1.0f - (STATE_8_LERP_RATE * FN::g_DebugTimeScale), dtN);
+            // Port specific: do NOT also fold FN::g_DebugTimeScale into the rate here.
+            //   dtN comes from game_work.dt, which Game::stepUpdate already multiplied by
+            //   FN::g_DebugTimeScale, so the F7 scale arrives through the powf exponent.
+            //   Scaling the rate as well applied it twice (0.1 scale => 100x slower, not 10x):
+            //   m_Timer2 then needed ~90s to pass STATE_8_LERP_THRESHOLD, so the slide-in never
+            //   handed over to STATE_CAMERA_ZOOM -- CreateButtons() never ran and the menu
+            //   buttons never appeared -- and UpdateScreenElements' settle gate
+            //   (transitionTimer > 0.99, fed by this same m_Timer2) never opened, so the logo /
+            //   "slice fruit to begin" plate kept bouncing. At scale 1.0 this is bit-identical
+            //   to the old form (`STATE_8_LERP_RATE * 1.0f == STATE_8_LERP_RATE`).
+            m_Timer2 = 1.0f - (1.0f - m_Timer2) * powf(1.0f - STATE_8_LERP_RATE, dtN);
             posAlpha = m_Timer2;
         } else {
             m_Timer2 += dt;

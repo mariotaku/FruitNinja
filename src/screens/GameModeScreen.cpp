@@ -135,21 +135,30 @@ static const float ARCADE_RECENTER = 0.32f;
 // Rate-independence macros for the per-present (UpdateRealtime) split of
 // m_TransitionAlpha/m_SecondaryAlpha easing (states 2 and 0xf only -- states
 // 0/1 stay in Update() at 60Hz, see the UpdateRealtime() doc comment for why).
-// Mirrors ShopScreen's SS_APPROACH_F/SS_DECAY_F (see ShopScreen.cpp) and
-// ScrollingMenu's SM_DECAY_F/SM_SPRING_F. Under __bada__ these are unused
-// (Update() keeps the original scalar forms inline, folding g_DebugTimeScale
-// into the rate as `1 - (1-k)*scale` per the existing MainScreen/GameModeScreen
-// convention); under the port, UpdateRealtime() uses the powf dt-scaled forms
-// with the same g_DebugTimeScale fold so f==1 (dtSeconds == 1/60) reproduces
-// one 60Hz tick.
+// Mirrors ShopScreen's SS_APPROACH_F/SS_DECAY_F (see ShopScreen.cpp),
+// DojoScreen's DS_*, AboutScreen's AS_*, PauseScreen's PS_* and ScrollingMenu's
+// SM_DECAY_F/SM_SPRING_F -- all of which take the time scale through `f` alone.
+// Under __bada__ these are unused (Update() keeps the original scalar forms
+// inline, folding g_DebugTimeScale into the rate as `1 - (1-k)*scale`, which is
+// correct there because a 60Hz tick carries no dt).
+//
+// Port specific: these must NOT fold FN::g_DebugTimeScale into the rate `k`.
+// `f` is dtSeconds*60 and Game::tickRealtimeUi already multiplies dtSeconds by
+// FN::g_DebugTimeScale, so the scale arrives through the powf exponent. An
+// earlier version scaled the rate as well, which applied F7 slow-mo TWICE
+// (0.1 scale => 100x slower, not 10x): case 0xf's back-out decay then took ~45s
+// to reach ALPHA_OUT_DONE and ~9s to cross 0.25, so the hand-off that puts
+// MainScreen into STATE_SLIDE_IN was effectively stuck. At scale 1.0 the two
+// forms are bit-identical (`k * 1.0f == k`, and `1 - (1 - 0.75f) * 1.0f ==
+// 0.75f` exactly), so normal-speed behaviour is unchanged.
 // ---------------------------------------------------------------------------
 #ifndef __bada__
-    // v += (to - v) * effective_k  (spring towards `to`, g_DebugTimeScale-scaled, dt-scaled)
+    // v += (to - v) * effective_k  (spring towards `to`; time scale rides in `f`)
     #define GMS_APPROACH_F(v, to, k) \
-        ((v) += ((to) - (v)) * (1.0f - powf(1.0f - ((k) * FN::g_DebugTimeScale), f)))
-    // v *= effective_k  (decay towards zero, g_DebugTimeScale-scaled, dt-scaled)
+        ((v) += ((to) - (v)) * (1.0f - powf(1.0f - (k), f)))
+    // v *= effective_k  (decay towards zero; time scale rides in `f`)
     #define GMS_DECAY_F(v, k) \
-        ((v) *= powf(1.0f - (1.0f - (k)) * FN::g_DebugTimeScale, f))
+        ((v) *= powf((k), f))
 #endif
 
 // Shared TTF face for BakedStringBox text on the Zen sign plate.
