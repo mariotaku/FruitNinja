@@ -108,9 +108,6 @@ int main(int argc, char* argv[]) {
     //                         faithful 3:2 (240 half-width) stays the default when omitted.
     //   --window WxH         : Port specific: explicit initial window size, overrides
     //                         the aspect-from-setting default below (e.g. 1024x600).
-    //   --bomb-spin-timescaled : DIFFERS: opt-in time-scaled alive-bomb spin (same as F9
-    //                         at runtime); the binary's unscaled per-frame add stays the
-    //                         default when omitted. See DebugFlags.h / Bomb::Update.
     int winW = 960, winH = 640;
     bool winExplicit = false;
     for (int i = 1; i < argc; ++i) {
@@ -122,8 +119,6 @@ int main(int argc, char* argv[]) {
 #ifndef __bada__
             Layout::SetWideLayout(true);
 #endif
-        } else if (strcmp(argv[i], "--bomb-spin-timescaled") == 0) {
-            FN::g_BombSpinTimeScaled = true;
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
             int w = 0, h = 0;
             if (sscanf(argv[i + 1], "%dx%d", &w, &h) == 2 && w > 0 && h > 0) {

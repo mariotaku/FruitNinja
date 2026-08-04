@@ -331,20 +331,21 @@ void Bomb::Update(float dt) {
         // DEFAULT. It was reported as a suspected bug 2026-08-04 and settled as
         // correct.
         //
-        // DIFFERS: opt-in time-scaled alive-bomb spin (FN::g_BombSpinTimeScaled);
-        // faithful unscaled add under __bada__ and whenever the flag is off. With
-        // the flag ON the increment is scaled by the SAME dtNorm the fruit spin
-        // uses, so slow-mo slows bomb and fruit together. Never make that path
-        // unconditional -- it is a deliberate deviation, not a fix.
+        // Port specific: under the F7 debug time scale (FN::g_DebugTimeScale,
+        // src/debug/DebugFlags.h) only, the increment is scaled by the SAME
+        // dtNorm the fruit spin uses so both slow together while debugging.
+        // g_DebugTimeScale has no binary equivalent and is pinned to the
+        // constant 1.0f under __bada__, so this never fires there or during
+        // real gameplay slow-mo -- the freeze power-up scales dt via the
+        // separate slowTime/quickener globals (GameInit.cpp), not this flag,
+        // so gameplay bomb spin stays on the faithful unscaled path.
         if (scaledDt > 0.0f && !freezeMenuSpin) {
             int16_t rotStepX = m_RotVelX;
             int16_t rotStepY = m_RotVelY;
-#if !defined(__bada__)
-            if (FN::g_BombSpinTimeScaled) {
+            if (FN::g_DebugTimeScale != 1.0f) {
                 rotStepX = (int16_t)(int)((float)m_RotVelX * dtNorm);
                 rotStepY = (int16_t)(int)((float)m_RotVelY * dtNorm);
             }
-#endif
             m_RotX = (int16_t)(m_RotX + rotStepX);
             m_RotY = (int16_t)(m_RotY + rotStepY);
         }

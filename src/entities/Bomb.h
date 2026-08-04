@@ -80,10 +80,11 @@ public:
     // +0x70..+0x77: rotation state. Update: alive arm does a plain wrapping
     // int16 rot+=vel (@0x1d6654); menu-hit arm adds vel*dtNorm with u32
     // truncation (@0x1d624c).
-    // DIFFERS: opt-in time-scaled alive-bomb spin (FN::g_BombSpinTimeScaled,
-    // src/debug/DebugFlags.h) multiplies the alive arm's step by dtNorm too, so
-    // slow-mo slows the bomb like it slows the fruit. Default OFF = the faithful
-    // unscaled add; the flag does not exist under __bada__.
+    // Port specific: under the F7 debug time scale (FN::g_DebugTimeScale,
+    // src/debug/DebugFlags.h) only, the alive arm's step is also scaled by
+    // dtNorm so slow-mo slows the bomb like it slows the fruit. That constant
+    // is pinned to 1.0f under __bada__ and is untouched by gameplay slow-mo
+    // (the freeze power-up), so this never affects real gameplay.
     int16_t m_RotVelX;                       // +0x70
     int16_t m_RotVelY;                       // +0x72
     int16_t m_RotX;                          // +0x74
