@@ -10,7 +10,8 @@
 //              -> InputActionMapper::ProcessEvent
 //                 -> GameTaskInput.cpp's PointerMoveCallback / TouchDownCallback
 //                    -> g_pSlashEntities[n]
-//   SlashEntity::Update                               (decays m_BladeActive)
+//   SlashEntity::Update + PostUpdate                  (GameUpdate's pair)
+//   SlashEntity::DrawSlice                            (decays m_BladeActive)
 //
 // The mappers come from Input/Input.txt via InputManager::LoadConfigFile
 // @0x002442fc, so the fixture registers a FileSystem_Direct first.
@@ -21,12 +22,16 @@
 //     current finger position BEFORE TouchDown runs, which is what makes a new
 //     stroke seed at the press point without any position on the button event.
 //   * A held finger re-arms m_BladeActive every tick. A released finger raises
-//     no mask-2 event, so one tick without a TouchDown is enough for
-//     SlashEntity::Update's `(old << 1) & 2` shift to decay the latch to 0 --
+//     no mask-2 event, so one frame without a TouchDown is enough for
+//     SlashEntity::DrawSlice's `(old << 1) & 2` shift to decay the latch to 0 --
 //     and the NEXT press then Resets. That decay is the binary's only
 //     new-stroke trigger; there is no press-edge flag.
 //   * Consecutive taps therefore never bridge: each tap Resets and re-seeds a
-//     degenerate stroke at its own position.
+//     degenerate stroke at its own position. This holds after a bomb hit too --
+//     UpdateBombHit -> ResetGameEntities clears the m_BombHitEdge latch that
+//     would otherwise keep TouchDown's Reset gate shut.
+//   * UpdateTouchDown refuses to append until SlashEntity::DrawUpdate (Entity
+//     vtable slot 6, spelled PostUpdate here) has run at least once.
 //   * A swipe tracks: points are appended and the stroke starts at the press
 //     position.
 //   * A fast flick whose DOWN and first MOTION drain within the same sim tick
@@ -52,6 +57,7 @@
 #include "input/InputEvent.h"
 #include "util/StringHash.h"
 #include "entities/SlashEntity.h"
+#include "entities/Bomb.h"
 #include "game/GameTaskInput.h"
 #include "game/GameWork.h"
 #include "game/FruitSaveData.h"
@@ -59,6 +65,8 @@
 #include "engine/audio/GameSound.h"
 #include "engine/asset/FileManager.h"
 #include "engine/asset/FileSystem_Direct.h"
+#include "entities/ActorManager.h"
+#include "entities/Entity.h"
 #include "config.h"
 #include <SDL.h>
 #include <cstdio>
@@ -139,12 +147,24 @@ static void ResetTouch() {
     }
 }
 
-// One sim tick in game order: drain the ring, run the device poll (which raises
-// every action event), then update the blade (which decays m_BladeActive).
+// One sim tick + one render pass, in game order: drain the ring, run the device
+// poll (which raises every action event), then GameUpdate's Update+PostUpdate
+// pair, then GameDraw's DrawSlice.
+//
+// DrawSlice is not optional here. v1.6.1 SlashEntity::DrawSlice @0x001e83b0 owns
+// the m_BladeActive shift register, so a fixture that skips it never decays the
+// latch and every tap after the first extends the previous stroke.
+// PostUpdate (v1.6.1 SlashEntity::DrawUpdate @0x001e613c) arms the touch-ingest
+// latch that UpdateTouchDown @0x001ea0a0 gates on.
+//
+// No GL context here: DrawSlice returns at its `bladeTex.IsValid()` check
+// because this fixture never calls SlashEntity::LoadContent.
 static void SimTick(InputTranslatorSDL& tr, Mortar::InputManager& im, SlashEntity& se) {
     tr.DispatchForSimTick();
     im.Update(0.0f);
     se.Update(SIM_DT);
+    se.PostUpdate(SIM_DT);
+    se.DrawSlice();
 }
 
 // One 2-tick tap: DOWN, sim tick (press frame), UP, sim tick (release frame).
@@ -187,6 +207,18 @@ static void BootFixture() {
     game_work.mGameSound = new GameSound();
     static FruitSaveData s_saveData;
     game_work.m_SaveData = &s_saveData;
+
+    // Entity system, mirroring GameInit step 7 (v1.6.1 GameInit @0x001ce1c0):
+    // HeapCreate(0x20000) then ActorManager::Initialise(7, 0x2000).
+    // UpdateBombHit -> RemoveFlashEntities walks ActorManager type lists through
+    // GetEntityFirst/GetEntityNext, which index m_pTypeLists (+0x1010) with no
+    // null test -- ASM-spec v1.6.1 ActorManager::GetEntityFirst @0x001d2f48 is
+    // 14 insns: begin(), end(), operator!=, NE-predicated load. Initialise is
+    // what allocates the array, so a fixture that skips it faults inside begin().
+    // The factory / hash-converter delegates GameInit also registers are omitted:
+    // this test creates no entities, it only walks the (empty) lists.
+    Mortar::Entity::HeapCreate(0x20000);
+    Mortar::ActorManager::GetInstance()->Initialise(7, 0x2000);
 }
 
 // Build the mapper list the way GameTaskInitInput @0x001cae0c does: parse
@@ -222,6 +254,12 @@ static void LoadMappers(Mortar::InputManager& im) {
 // ---------------------------------------------------------------------------
 static void WireBlade(Mortar::InputManager& im, SlashEntity& se, int channel) {
     se.Init(channel);
+    // Arm the touch-ingest latch before the first press. UpdateTouchDown
+    // @0x001ea0a0 returns early until SlashEntity::DrawUpdate @0x001e613c has
+    // run once; in game that happens on the tick before any input can land,
+    // but SimTick dispatches input BEFORE PostUpdate (GameUpdate's order), so
+    // tick 1's press would otherwise be swallowed.
+    se.PostUpdate(0.0f);
 
     char buf[20];
     for (int i = 0; i < 16; ++i) {
@@ -274,6 +312,7 @@ static void test_axis_events_precede_down() {
     tr.Init();
     SlashEntity se;
     se.Init(0);
+    se.PostUpdate(0.0f);   // arm the touch-ingest latch -- see WireBlade
 
     // --- press frame ---
     ResetCounters();
@@ -456,6 +495,135 @@ static void test_fast_flick_same_tick_registers() {
     printf("  PASS\n");
 }
 
+// ---------------------------------------------------------------------------
+// The bomb-hit latch is TRANSIENT, and this pins the chain that clears it.
+//
+// SlashEntity::Update @0x001e8ce0 sets m_BombHitEdge when a blade slices a bomb,
+// and nothing in SlashEntity ever clears it -- TouchDown's `m_BombHitEdge == 0`
+// gate would stay shut for the rest of the session if that were the whole story.
+// It is not: GameUpdate drains m_BombHitTimer and calls UpdateBombHit
+// @0x001cbbac, which on the 1.5s crossing calls ResetGameEntities @0x001cb9c0,
+// which Resets all 16 blades -- clearing the latch and re-seeding the -65535
+// tail sentinel roughly 1.7s before the timer reaches 0 and taps can reach the
+// blade again.
+// ---------------------------------------------------------------------------
+static void test_bomb_latch_cleared_on_timer_crossing() {
+    printf("  test_bomb_latch_cleared_on_timer_crossing...\n");
+    ResetTouch();
+
+    Mortar::InputManager im;
+    im.Init(0);
+    LoadMappers(im);
+    InputTranslatorSDL tr;
+    tr.Init();
+    SlashEntity se;
+    WireBlade(im, se, 0);
+
+    // Dirty the tail so the sentinel re-seed below is observable.
+    Tap(tr, im, se, (SDL_FingerID)20, 0.3f, 0.3f);
+    CHECK(se.GetTailPos().x > -65520.0f);
+
+    // Latch every wired blade, as a bomb slice does.
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) g_pSlashEntities[i]->TestSetBombHitEdge(1);
+    }
+    CHECK(se.TestGetBombHitEdge() == 1);
+
+    // One GameUpdate bomb-hit tick that drops the timer through 1.5
+    // (GameInit.cpp's active branch: save prev, drain, then UpdateBombHit(prev)).
+    game_work.m_BombHitTimer = 1.51f;
+    const float prevTimer = game_work.m_BombHitTimer;
+    game_work.m_BombHitTimer -= SIM_DT;
+    CHECK(game_work.m_BombHitTimer < 1.5f);
+    UpdateBombHit(prevTimer);
+
+    for (int i = 0; i < 16; ++i) {
+        if (!g_pSlashEntities[i]) continue;
+        printf("    blade %d: bombHitEdge=%d tail.x=%.1f\n",
+               i, (int)g_pSlashEntities[i]->TestGetBombHitEdge(),
+               g_pSlashEntities[i]->GetTailPos().x);
+        CHECK(g_pSlashEntities[i]->TestGetBombHitEdge() == 0);
+        CHECK(g_pSlashEntities[i]->GetTailPos().x <= -65520.0f);
+    }
+
+    // Leave the timer drained -- TouchMoveX/Y and UpdateTouchDown all return
+    // early while it is > 0.
+    game_work.m_BombHitTimer = 0.0f;
+
+    UnwireBlade(0);
+    printf("  PASS\n");
+}
+
+// ---------------------------------------------------------------------------
+// Post-bomb-hit taps still do not bridge. Same shape as
+// test_taps_do_not_bridge, but run AFTER a full bomb-hit cycle so a blade whose
+// m_BombHitEdge got stuck would append tap B onto tap A's tail instead of
+// starting a new stroke. The decay that opens TouchDown's gate between the two
+// taps comes from DrawSlice, which SimTick now drives.
+// ---------------------------------------------------------------------------
+static void test_taps_do_not_bridge_after_bomb_hit() {
+    printf("  test_taps_do_not_bridge_after_bomb_hit...\n");
+    ResetTouch();
+
+    Mortar::InputManager im;
+    im.Init(0);
+    LoadMappers(im);
+    InputTranslatorSDL tr;
+    tr.Init();
+    SlashEntity se;
+    WireBlade(im, se, 0);
+
+    // Bomb hit: latch, then cross 1.5 to clear it.
+    se.TestSetBombHitEdge(1);
+    game_work.m_BombHitTimer = 1.51f;
+    const float prevTimer = game_work.m_BombHitTimer;
+    game_work.m_BombHitTimer -= SIM_DT;
+    UpdateBombHit(prevTimer);
+    game_work.m_BombHitTimer = 0.0f;
+    CHECK(se.TestGetBombHitEdge() == 0);
+
+    // Tap A, top-left.
+    const float ax = 0.25f * 480.0f - 240.0f;   // -120
+    const float ay = 160.0f - 0.25f * 320.0f;   //   80
+    Tap(tr, im, se, (SDL_FingerID)21, 0.25f, 0.25f);
+    printf("    tap A: pointCount=%d tail=(%.1f,%.1f) bladeActive=%d\n",
+           se.GetPointCount(), se.GetTailPos().x, se.GetTailPos().y,
+           (int)se.IsBladeActive());
+    CHECK(se.GetPointCount() <= 2);
+    CHECK_NEAR(se.GetTailPos().x, ax, 1.0f);
+    CHECK_NEAR(se.GetTailPos().y, ay, 1.0f);
+
+    // The release tick's DrawSlice decayed the latch to 0, which is the ONLY
+    // thing that lets the next TouchDown take its Reset path.
+    CHECK(!se.IsBladeActive());
+
+    // Tap B, bottom-right -- ~277 units away. A bridge would interpolate one
+    // point pair every POINT_SPACING (64) units and push pointCount past 6.
+    const float bx = 0.75f * 480.0f - 240.0f;   //  120
+    const float by = 160.0f - 0.75f * 320.0f;   //  -80
+    Tap(tr, im, se, (SDL_FingerID)22, 0.75f, 0.75f);
+    printf("    tap B: pointCount=%d tail=(%.1f,%.1f) head=(%.1f,%.1f)\n",
+           se.GetPointCount(), se.GetTailPos().x, se.GetTailPos().y,
+           se.GetHeadPos().x, se.GetHeadPos().y);
+
+    // Reset path taken: degenerate stroke AT tap B, nothing carried from A.
+    CHECK(se.GetPointCount() <= 2);
+    CHECK_NEAR(se.GetTailPos().x, bx, 1.0f);
+    CHECK_NEAR(se.GetTailPos().y, by, 1.0f);
+    CHECK_NEAR(se.GetHeadPos().x, se.GetTailPos().x, 0.01f);
+    CHECK_NEAR(se.GetHeadPos().y, se.GetTailPos().y, 0.01f);
+
+    // No vertex sits anywhere near tap A's row (y = +80): the whole strip is at
+    // tap B (y = -80), plus at most the ribbon half-width.
+    for (int i = 0; i < se.GetPointCount(); ++i) {
+        const float vy = se.GetVertexY(i);
+        CHECK(vy < 40.0f);
+    }
+
+    UnwireBlade(0);
+    printf("  PASS\n");
+}
+
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
     // SDL event types only -- no video, no audio, no GL context.
@@ -472,6 +640,8 @@ int main(int argc, char* argv[]) {
     test_taps_do_not_bridge();
     test_swipe_tracks_and_starts_at_press();
     test_fast_flick_same_tick_registers();
+    test_bomb_latch_cleared_on_timer_crossing();
+    test_taps_do_not_bridge_after_bomb_hit();
 
     printf("test_slash_input: PASS\n");
 

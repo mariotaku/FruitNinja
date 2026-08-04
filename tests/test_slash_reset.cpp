@@ -155,6 +155,10 @@ static InputEvent MakeDown(int channel) {
 // raises the three events for one slot. TouchDown starts a new stroke only when
 // m_BladeActive == 0 (fresh blade); otherwise it extends the current one.
 static void Touch(SlashEntity& se, float x, float y) {
+    // Entity vtable slot 6 (v1.6.1 SlashEntity::DrawUpdate @0x001e613c) arms the
+    // touch-ingest latch that UpdateTouchDown @0x001ea0a0 gates on. In game the
+    // ActorManager dispatches it every tick; here it has to be driven by hand.
+    se.PostUpdate(0.0f);
     InputEvent moveX = MakeMove(0, false, x, y);
     se.TouchMoveX(&moveX);
     InputEvent moveY = MakeMove(0, true, x, y);

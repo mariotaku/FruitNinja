@@ -39,7 +39,7 @@
 //   Draw            v1.6.1 0x001e6168  (4 bytes, single BX lr)
 //   CollisionResponse     v1.6.1 0x001e616c  (8 bytes, `mov r0,#0; bx lr`)
 //   UpdateCollisionLine   0x17B3C0  (4-byte stub, returns 0)
-//   DrawUpdate      0x17B398
+//   DrawUpdate      v1.6.1 0x001e613c  (Entity vtable slot 6)
 //
 
 #include "Entity.h"
@@ -100,11 +100,15 @@ public:
     // Matches SlashEntity::Update (v1.6.1 @ 0x1e867c). Per-frame update.
     void Update(float dt) override;
 
-    // Frozen-branch stub -- no deferred post-step work.
-    // TODO: v1.6.1 <addr unresolved> (SlashEntity::PostUpdate) -- the address this
-    // slot previously cited belongs to SlashEntity::Draw (v1.6.1 @0x001e6168), so
-    // it was a mis-stamp rather than a stale remap. PostUpdate's own entry point is
-    // unresolved; re-RE before trusting any body here.
+    // Entity vtable slot 6 (+0x18). The binary's slot-6 body is
+    // SlashEntity::DrawUpdate @0x001e613c (_ZTV11SlashEntity+0x20); the port
+    // names the slot PostUpdate on every Entity subclass, so this forwards to
+    // DrawUpdate below rather than holding a second copy.
+    //
+    // MUST be dispatched at least once before any touch reaches the blade:
+    // DrawUpdate arms the latch that UpdateTouchDown @0x001ea0a0 gates on.
+    // Both ActorManager::Update and GameUpdate's 16-slot loop do this every
+    // tick; a unit-test fixture that pokes TouchDown directly must call it too.
     void PostUpdate(float dt) override;
 
     // Matches SlashEntity::PreUpdate (0x17C584). Ticks ghost frame counters,
@@ -148,7 +152,10 @@ public:
     // Binary @ 0x17B3C0 -- 4-byte stub, returns 0.
     int UpdateCollisionLine(long dt);
 
-    // Binary @ 0x17B398 -- clears g_state.bombSkipFlag, sets needsDrawFlag.
+    // v1.6.1 SlashEntity::DrawUpdate @0x001e613c -- the real Entity slot-6 body,
+    // reached through PostUpdate above. Arms the file-static touch-ingest latch
+    // (0x00332a7c) that UpdateTouchDown reads, and clears its dead sibling
+    // (0x00332a7d). Nothing ever disarms the latch.
     void DrawUpdate(float dt);
 
     // Binary @ 0x17B0F4 -- advance palette progress by dt*lifeScale,
@@ -369,8 +376,8 @@ public:
 
 #ifdef FN_TEST
     // Test-seam: bomb-hit latch (m_BombHitEdge, +0x4c) access. Lets
-    // test_slash_input simulate the post-bomb game-over state where the
-    // latch blocks TouchDown's per-press Reset(). Test targets only.
+    // test_slash_input latch a blade the way a bomb slice does, then prove
+    // UpdateBombHit -> ResetGameEntities -> Reset clears it again. Test targets only.
     void    TestSetBombHitEdge(uint8_t v) { m_BombHitEdge = v; }
     uint8_t TestGetBombHitEdge() const    { return m_BombHitEdge; }
 #endif
@@ -532,7 +539,7 @@ public:
 
     // NB: there is deliberately no TouchUp / release handler. v1.6.1 registers
     // no per-finger release callback at all; the stroke ends when TouchDown
-    // stops arriving and Update decays m_BladeActive.
+    // stops arriving and DrawSlice decays m_BladeActive.
 
     // Accessor for the file-scope global g_OnComboCancel event (binary GOT 0x332bd8).
     // Binary subscribe sites load [GOT,0x77f8] to get the event address; port uses this

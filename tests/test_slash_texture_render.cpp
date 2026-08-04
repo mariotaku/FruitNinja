@@ -75,6 +75,10 @@
 // test_shoplistitem_render.cpp's kItemX/kRowY comments.
 // ---------------------------------------------------------------------------
 static void SimulateTouchDown(SlashEntity* s, float x, float y) {
+    // Entity vtable slot 6 (v1.6.1 SlashEntity::DrawUpdate @0x001e613c) arms the
+    // touch-ingest latch that UpdateTouchDown @0x001ea0a0 gates on. Tick() below
+    // does this too, but the first SimulateTouchDown runs before any Tick.
+    s->PostUpdate(0.0f);
     InputEvent evX;
     FN_MakeTouchAxisEvent(evX, 0, false, x);
     s->TouchMoveX(&evX);
