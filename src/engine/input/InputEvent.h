@@ -45,22 +45,6 @@ struct InputEvent {
     };
     float    m_Delta;      // +0x0c
     uint32_t m_Stamp;      // +0x10
-
-#if !defined(__bada__)
-    // DIFFERS: original = no such fields; the binary's InputEvent is exactly the
-    //   0x14 bytes above. These three exist only to feed the port's m_bindings
-    //   dispatch substitute (InputDeviceBada::m_bindings), which stands in for
-    //   Mortar::InputManager::LoadConfigFile @0x002442fc — a Defunct stub here, and
-    //   the binary's ONLY producer of InputActionMappers. Under the mapper chain the
-    //   action hash lives on the mapper, not on the event, and a press carries no
-    //   position at all.
-    //
-    // Port specific: DELETE ALL THREE together with m_bindings when LoadConfigFile
-    //   is ported (see InputDevice.h DIFFERS). They are compiled out of the
-    //   cross-build, so the 0x14 layout asserts below still pin the faithful shape.
-    uint32_t actionHash;   // m_bindings dispatch key
-    float    x, y;         // press-frame position (a button event has no value word for it)
-#endif
 };
 
 #if defined(__bada__)
@@ -95,23 +79,11 @@ static const uint32_t INPUT_MASK_ACTIVE   = 0x10;
 static const uint32_t INPUT_MASK_MOVE     = 0x20;
 static const uint32_t INPUT_MASK_DEAD     = 0x40;
 
-// Composite m_Flags values the port's event producers emit.
+// Composite m_Flags values Touch::SendIndividualTouchCallbacks @0x00242bc4 and
+// InputDeviceBada::Update @0x00242f40 raise through AxisEvent / ButtonPressed.
 static const uint32_t INPUT_ACTION_DOWN = INPUT_ARM_BUTTON | INPUT_MASK_DOWN;  // 0x10002
 static const uint32_t INPUT_ACTION_MOVE = INPUT_ARM_AXIS   | INPUT_MASK_MOVE;  // 0x20020
 static const uint32_t INPUT_ACTION_UP   = INPUT_ARM_BUTTON | INPUT_MASK_UP;    // 0x10008
-
-// Port specific: genuine press-edge flag, not present in binary.
-// Set ONLY on real SDL_FINGERDOWN (first frame of a new touch), never on
-// PollHeldFingers re-dispatches. Used by SlashEntity::TouchDown to force
-// Reset() even when m_BladeActive is still armed from a prior slice -- mirrors
-// the binary's behaviour where the 10ms poll guarantees >=2 DrawSlice frames
-// between lift and repress so the latch always decays before the next TouchDown.
-// It rides in the unused arm-selector bit 0x0010 of m_Flags' high half (the binary
-// only ever sets 0x0001 / 0x0002 there), so an event carrying it matches NO arm in
-// InputActionMapper::ProcessEvent. That is harmless while the mapper chain is dead,
-// and it is why the flag must go when m_bindings does. DELETE together with
-// m_bindings — the mapper path has no press-edge concept to migrate it to.
-static const uint32_t INPUT_ACTION_DOWN_EDGE = 0x100000;
 
 // --- Key codes -------------------------------------------------------------
 // v1.6.1 Mortar::InputManager::ParseKey @0x002438c8, table @0x002d8dd4.
@@ -124,44 +96,35 @@ static const uint16_t INPUT_KEY_TOUCHAXISX1  = 0x99;  // TouchAxisX1..16 = 0x99.
 static const uint16_t INPUT_KEY_TOUCHAXISY1  = 0xa9;  // TouchAxisY1..16 = 0xa9..0xb8
 
 #if !defined(__bada__)
-// Port specific: the two event shapes the port's input translators emit, in one
-// place so SDL and Wii cannot drift apart. Both fill the faithful words the way
-// AxisEvent/ButtonPressed would, plus the m_bindings side-channel fields.
-// DELETE together with m_bindings (see the struct comment above).
+// Port specific: TEST-ONLY event builders. Live dispatch never uses these — it
+// goes through Mortar::InputDevice::AxisEvent @0x0027582c /
+// Mortar::InputDevice::ButtonPressed @0x00275864, which pack the very same words.
+// They exist so a unit test can drive SlashEntity / a callback directly without
+// standing up a device + mapper chain. Keep them byte-identical to what those two
+// producers emit, or a test will pin a shape the game never sees.
 
-// Touch<channel+1> button event — TouchScreen / TouchDown_N / TouchUp_N.
-// `flags` is one of INPUT_ACTION_DOWN / INPUT_ACTION_UP, optionally OR'd with
-// INPUT_ACTION_DOWN_EDGE. gx/gy are the press position (side channel only — a
-// binary button event carries no position).
-inline void FN_MakeTouchButtonEvent(InputEvent& ie, uint32_t actionHash,
-                                    uint32_t flags, int channel,
-                                    float gx, float gy) {
-    ie.m_Flags    = flags;
-    ie.m_Tag      = 0;
-    ie.m_KeyCode  = 0;
-    ie.m_KeyId    = (uint32_t)(INPUT_KEY_TOUCH1 + channel);
-    ie.m_Delta    = 1.0f;   // InputDeviceBada::Update passes 1.0f as the value arg
-    ie.m_Stamp    = 0;
-    ie.actionHash = actionHash;
-    ie.x          = gx;
-    ie.y          = gy;
+// Touch<channel+1> button event, as ButtonPressed(0x89 + channel, mask, 1.0f, 0, 0)
+// packs it. `flags` is INPUT_ACTION_DOWN or INPUT_ACTION_UP.
+inline void FN_MakeTouchButtonEvent(InputEvent& ie, uint32_t flags, int channel) {
+    ie.m_Flags   = flags;
+    ie.m_Tag     = 0;
+    ie.m_KeyCode = 0;
+    ie.m_KeyId   = (uint32_t)(INPUT_KEY_TOUCH1 + channel);
+    ie.m_Delta   = 1.0f;   // SendIndividualTouchCallbacks passes 1.0f as the value arg
+    ie.m_Stamp   = 0;
 }
 
-// TouchAxisX<channel+1> / TouchAxisY<channel+1> axis event — TouchMove_XN/_YN.
-// The axis value goes in m_Value, exactly as AxisEvent packs it.
-inline void FN_MakeTouchAxisEvent(InputEvent& ie, uint32_t actionHash,
-                                  int channel, bool yAxis,
-                                  float gx, float gy) {
-    ie.m_Flags    = INPUT_ACTION_MOVE;
-    ie.m_Tag      = 0;
-    ie.m_KeyCode  = (uint16_t)((yAxis ? INPUT_KEY_TOUCHAXISY1
-                                      : INPUT_KEY_TOUCHAXISX1) + channel);
-    ie.m_Value    = yAxis ? gy : gx;
-    ie.m_Delta    = 0.0f;
-    ie.m_Stamp    = 0;
-    ie.actionHash = actionHash;
-    ie.x          = gx;
-    ie.y          = gy;
+// TouchAxisX<channel+1> / TouchAxisY<channel+1> axis event, as
+// AxisEvent(0x99/0xa9 + channel, 0x20, value, delta, 0, 0) packs it.
+inline void FN_MakeTouchAxisEvent(InputEvent& ie, int channel, bool yAxis,
+                                  float value) {
+    ie.m_Flags   = INPUT_ACTION_MOVE;
+    ie.m_Tag     = 0;
+    ie.m_KeyCode = (uint16_t)((yAxis ? INPUT_KEY_TOUCHAXISY1
+                                     : INPUT_KEY_TOUCHAXISX1) + channel);
+    ie.m_Value   = value;
+    ie.m_Delta   = 0.0f;
+    ie.m_Stamp   = 0;
 }
 #endif
 

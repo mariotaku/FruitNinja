@@ -1,69 +1,57 @@
 // test_input_tick_invariant -- regression guard for the #173 bridge-to-origin
-// bug and the #175 120Hz slashing bug (ring-buffer dispatch fix).
+// bug and the #175 120Hz slashing bug (ring-buffer latch fix).
 //
-// ROOT CAUSE (#173): Game::pollInput() (per display-frame) was calling
-// InputManager::DispatchEvent -> SlashEntity::AddPoint -> m_PointCount advance.
-// Game::stepUpdate() (per sim-tick) ran UpdatePoints (head-cap reconcile) AFTER
-// AddPoint. On steps==0 (high-refresh interpolated frame): AddPoint ran
-// (m_PointCount changed) but UpdatePoints did NOT -> DrawSlice drew a stale
-// head-cap at origin -> bridge-to-origin artefact.
+// ROOT CAUSE (#173): Game::pollInput() (per display-frame) was dispatching
+// straight into SlashEntity::AddPoint, so m_PointCount advanced on frames where
+// Game::stepUpdate() (per sim-tick) never ran UpdatePoints (head-cap reconcile).
+// DrawSlice then drew a stale head-cap at origin -> bridge-to-origin artefact.
 //
-// ROOT CAUSE (#175): The old pending-bool model cancelled a DOWN edge when an
-// UP arrived before the next sim tick (pendingDown=false, pendingUp=true). At
-// 120Hz, two drains fed one dispatch, so a fast flick (DOWN then UP within
-// ~8.3ms) lost the DOWN edge entirely -- no blade/slice registered.
+// ROOT CAUSE (#175): the old pending-bool model cancelled a DOWN edge when an
+// UP arrived before the next sim tick. At 120Hz two drains fed one dispatch, so
+// a fast flick (DOWN then UP within ~8.3ms) lost the DOWN edge entirely.
 //
-// CORRECTED DESIGN (ring-buffer dispatch):
-//   DrainSDLEvent()      -- pollInput(), per display frame.
-//                           For channels 0-7: immediately pushes each touch event
-//                           into the Mortar::Touch ring buffer (OnPressed/OnMoved/
-//                           OnReleased). Both DOWN and UP from a fast flick enter
-//                           the ring; neither edge is cancelled.
-//                           For channels 8-15: falls back to pending-bool model.
-//   DispatchForSimTick() -- stepUpdate(), per sim tick.
-//                           Calls Touch::Update(0.0f) which drains the ENTIRE
-//                           ring buffer accumulated since last tick. Then reads
-//                           drained states1 to emit InputManager hash events.
+// CURRENT DESIGN: InputTranslatorSDL only LATCHES SDL edges into the
+// Mortar::Touch ring buffer; it raises no action events. The binary's own
+// per-frame poll (InputDeviceBada::Update @0x00242f40 ->
+// Touch::SendIndividualTouchCallbacks @0x00242bc4) replays the drained slot
+// state as Touch<n> actions, once per sim tick. This file pins the LATCH half
+// of that (the replay half is covered by tests/test_slash_input.cpp).
+//
+//   DrainSDLEvent()      -- pollInput(), per display frame. Pushes every touch
+//                           event into the ring immediately (OnPressed /
+//                           OnMoved / OnReleased, extId = channel + 1) for ALL
+//                           16 channels. Both the DOWN and the UP of a fast
+//                           flick enter the ring; neither edge is cancelled.
+//   DispatchForSimTick() -- stepUpdate(), per sim tick. Touch::Update(0.0f)
+//                           pops the ENTIRE ring accumulated since the last
+//                           tick and advances the slot state machine.
 //
 // INVARIANTS PINNED HERE:
 //
-//  (A) DrainSDLEvent(FINGERDOWN) for ch 0-7: immediately pushes to Touch ring;
-//      fingerActive set; pendingEdge set for DOWN_EDGE flag on next dispatch.
-//      pendingDown is NOT set for ch 0-7 (ring-buffer model).
+//  (A) DrainSDLEvent(FINGERDOWN) pushes to the ring immediately; fingerActive
+//      is set; a subsequent drain shows the slot at phase -1 (just-pressed).
 //
-//  (B) DrainSDLEvent(FINGERMOTION) updates fingerX/Y AND pushes OnMoved to
-//      ring. Does NOT set pendingDown or pendingUp.
+//  (B) DrainSDLEvent(FINGERMOTION) updates fingerX/Y AND pushes OnMoved.
 //
-//  (C) Multiple FINGERMOTION drains before a flush: fingerX/Y = LATEST position.
-//      All moves pushed into ring in order.
+//  (C) Multiple FINGERMOTION drains before a tick: fingerX/Y = LATEST position.
 //
-//  (D) DrainSDLEvent(FINGERUP) pushes OnReleased to ring, clears fingerActive
-//      immediately (ReleaseFingerId). pendingDown NOT set.
+//  (D) DrainSDLEvent(FINGERUP) pushes OnReleased and clears fingerActive
+//      immediately (ReleaseFingerId).
 //
-//  (E) DOWN then UP in same drain window (the #175 core fix test):
-//      Both edges pushed to ring. fingerActive ends up false (UP clears it).
-//      A subsequent Touch::Update(0.0f) (from DispatchForSimTick) applies
-//      BOTH events in order -- phase reaches -1 then 1, so the press was seen.
-//      Neither edge is lost.
+//  (E) DOWN then UP in the same drain window (the #175 core fix): both edges
+//      reach the ring, and a single Touch::Update(0.0f) applies them in order,
+//      so the press was seen (a slot was claimed, nextTouchId advanced).
 //
-//  (F) ReleaseAllFingers (#162) clears ALL active channels atomically (fingerActive
-//      + pending state), without waiting for DispatchForSimTick. Pushes OnReleased
-//      for each active channel.
+//  (F) ReleaseAllFingers (#162) clears ALL active channels atomically and
+//      drains, without waiting for DispatchForSimTick.
 //
-//  (G) A held finger across N DrainSDLEvent calls but only ONE DispatchForSimTick:
-//      Only ONE drain of the ring occurs per DispatchForSimTick call. The ring
-//      holds all accumulated move events; Touch::Update(0.0f) applies them in
-//      order and the final state reflects the latest position.
-//      fingerX/Y holds the LATEST position after N motions.
-//      After dispatch: prevActive[ch]=true (held finger still active).
+//  (G) A held finger across N drains but only ONE DispatchForSimTick: the ring
+//      holds all N moves, one drain applies them in order, and fingerX/Y holds
+//      the LATEST position.
 //
-//  (H) Channel >= 8 (beyond Touch capacity): still uses pending-bool model.
-//      DrainSDLEvent(FINGERDOWN) for ch >= 8 sets pendingDown; UP clears it and
-//      sets pendingUp (same as old model for overflow channels).
-//
-// NOTE: DispatchForSimTick() calls Touch::Update(0.0f) unconditionally even when
-// Mortar::InputManager::GetInstance() returns null (headless mode). The InputManager
-// hash dispatch is skipped when mgr is null, but Touch state advances normally.
+//  (H) Mortar::Touch has 8 slots. A 9th concurrent pointer finds none free and
+//      is dropped -- binary-faithful (Touch::FindTouch @0x002429a8 loops i<8;
+//      GlesForm::OnTouch* gate GetPointId()<8).
 //
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
@@ -148,9 +136,8 @@ static void ResetTouch() {
     }
 }
 
-// Invariant (A): DrainSDLEvent(FINGERDOWN) for ch 0-7 pushes to Touch ring
-// immediately. fingerActive set; pendingEdge set for DOWN_EDGE.
-// pendingDown is NOT set for ch 0-7 (ring-buffer model -- no cancellation).
+// Invariant (A): DrainSDLEvent(FINGERDOWN) pushes to the Touch ring
+// immediately and marks the channel active.
 static void test_drain_fingerdown_pushes_to_ring() {
     printf("  test_drain_fingerdown_pushes_to_ring...\n");
     ResetTouch();
@@ -167,12 +154,6 @@ static void test_drain_fingerdown_pushes_to_ring() {
 
     // fingerActive must be set.
     CHECK(tr.TestGetFingerActive(0));
-    // pendingEdge must be set (DOWN_EDGE flag for InputManager dispatch).
-    CHECK(tr.TestGetPendingEdge(0));
-    // pendingDown must NOT be set for ch 0-7 (ring-buffer model).
-    CHECK(!tr.TestGetPendingDown(0));
-    // pendingUp must NOT be set.
-    CHECK(!tr.TestGetPendingUp(0));
 
     // Position must be transformed.
     // (0.5, 0.5) -> gx = 0.5*480 - 240 = 0.0, gy = 160 - 0.5*320 = 0.0.
@@ -199,7 +180,7 @@ static void test_drain_fingerdown_pushes_to_ring() {
 }
 
 // Invariant (B): DrainSDLEvent(FINGERMOTION) updates fingerX/Y AND pushes
-// OnMoved to Touch ring. Does NOT set pendingDown or pendingUp.
+// OnMoved to the Touch ring.
 static void test_drain_fingermotion_only_updates_position() {
     printf("  test_drain_fingermotion_only_updates_position...\n");
     ResetTouch();
@@ -211,16 +192,10 @@ static void test_drain_fingermotion_only_updates_position() {
     SDL_Event down = MakeFingerDown((SDL_FingerID)1, 0.2f, 0.3f);
     tr.DrainSDLEvent(down, NULL);
     CHECK(tr.TestGetFingerActive(0));
-    // ch 0-7: pendingDown NOT set.
-    CHECK(!tr.TestGetPendingDown(0));
 
-    // Drain FINGERMOTION: must NOT set pendingDown or pendingUp.
     SDL_Event motion = MakeFingerMotion((SDL_FingerID)1, 0.6f, 0.7f);
     tr.DrainSDLEvent(motion, NULL);
 
-    // Motion must NOT set pendingDown or pendingUp.
-    CHECK(!tr.TestGetPendingDown(0));
-    CHECK(!tr.TestGetPendingUp(0));
     CHECK(tr.TestGetFingerActive(0));
 
     // Position must have updated to the motion target.
@@ -254,8 +229,6 @@ static void test_multiple_motions_latest_position_wins() {
     tr.DrainSDLEvent(m2, NULL);
     tr.DrainSDLEvent(m3, NULL);
 
-    // pendingUp must NOT be set (motions never set it).
-    CHECK(!tr.TestGetPendingUp(0));
     CHECK(tr.TestGetFingerActive(0));
 
     // fingerX/Y must equal the LAST motion (0.6, 0.6):
@@ -269,8 +242,8 @@ static void test_multiple_motions_latest_position_wins() {
     printf("  PASS\n");
 }
 
-// Invariant (D): DrainSDLEvent(FINGERUP) pushes OnReleased to ring and
-// clears fingerActive immediately (ReleaseFingerId). pendingDown NOT set.
+// Invariant (D): DrainSDLEvent(FINGERUP) pushes OnReleased to the ring and
+// clears fingerActive immediately (ReleaseFingerId).
 static void test_drain_fingerup_releases_immediately() {
     printf("  test_drain_fingerup_releases_immediately...\n");
     ResetTouch();
@@ -289,10 +262,6 @@ static void test_drain_fingerup_releases_immediately() {
 
     // fingerActive is cleared immediately on UP drain (ReleaseFingerId).
     CHECK(!tr.TestGetFingerActive(0));
-    // pendingDown NOT set for ch 0-7.
-    CHECK(!tr.TestGetPendingDown(0));
-    // pendingUp NOT set for ch 0-7 (ring-buffer model).
-    CHECK(!tr.TestGetPendingUp(0));
 
     printf("  PASS\n");
 }
@@ -379,21 +348,16 @@ static void test_release_all_fingers_clears_all_state() {
 
     CHECK(tr.TestGetFingerActive(0));
     CHECK(tr.TestGetFingerActive(1));
-    // ch 0-7: pendingDown NOT set (ring-buffer model).
-    CHECK(!tr.TestGetPendingDown(0));
-    CHECK(!tr.TestGetPendingDown(1));
 
-    // ReleaseAllFingers (#162): must clear ALL channels immediately.
-    // InputManager is null in headless so the actual TouchUp dispatch is skipped,
-    // but fingerActive must be cleared.
+    // ReleaseAllFingers (#162): must clear ALL channels immediately and drain,
+    // so no slot is left active afterwards.
     tr.ReleaseAllFingers();
 
     CHECK(!tr.TestGetFingerActive(0));
     CHECK(!tr.TestGetFingerActive(1));
-    CHECK(!tr.TestGetPendingDown(0));
-    CHECK(!tr.TestGetPendingDown(1));
-    CHECK(!tr.TestGetPendingUp(0));
-    CHECK(!tr.TestGetPendingUp(1));
+    for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
+        CHECK(Mortar::Touch::GetInstance().states1[s].phase >= 1);
+    }
 
     printf("  PASS\n");
 }
@@ -435,8 +399,8 @@ static void test_two_fingers_independent_channels() {
 }
 
 // Invariant (G): held finger across N drain calls but only ONE DispatchForSimTick.
-// Touch::Update(0.0f) drains the entire ring (all N move events applied in order).
-// After dispatch: prevActive[ch]=true (held finger still active).
+// Touch::Update(0.0f) drains the entire ring (all N move events applied in order)
+// and the slot ends up at the latest position, still active.
 static void test_held_finger_single_dispatch_per_tick() {
     printf("  test_held_finger_single_dispatch_per_tick...\n");
     ResetTouch();
@@ -448,7 +412,6 @@ static void test_held_finger_single_dispatch_per_tick() {
     SDL_Event down = MakeFingerDown((SDL_FingerID)1, 0.1f, 0.5f);
     tr.DrainSDLEvent(down, NULL);
     CHECK(tr.TestGetFingerActive(0));
-    CHECK(tr.TestGetPendingEdge(0));
 
     // Drain 5 FINGERMOTION events; latest position is at (0.9, 0.5).
     int motionCount = 5;
@@ -462,77 +425,73 @@ static void test_held_finger_single_dispatch_per_tick() {
     // gx = 0.9*480 - 240 = 192.0, gy = 160 - 0.5*320 = 0.0.
     CHECK_NEAR(tr.TestGetFingerX(0), 192.0f, 1.0f);
     CHECK_NEAR(tr.TestGetFingerY(0),   0.0f, 1.0f);
-    // pendingUp not set.
-    CHECK(!tr.TestGetPendingUp(0));
     // fingerActive still set.
     CHECK(tr.TestGetFingerActive(0));
 
-    printf("    before dispatch: pendingEdge=%s fingerActive=%s pos=(%.1f,%.1f)\n",
-           tr.TestGetPendingEdge(0) ? "true" : "false",
+    printf("    before dispatch: fingerActive=%s pos=(%.1f,%.1f)\n",
            tr.TestGetFingerActive(0) ? "true" : "false",
            tr.TestGetFingerX(0), tr.TestGetFingerY(0));
 
-    // Call DispatchForSimTick() once. InputManager is null (headless) so the
-    // actual hash dispatch is a no-op, but Touch::Update(0.0f) runs and drains
-    // the ring. After drain: states1 reflects the held finger (phase 0 after
-    // the just-pressed -> held promotion, or phase -1 if this is the first tick).
+    // One DispatchForSimTick drains the whole ring: the slot ends up at the
+    // LAST motion position (192, 0), phase -1 (just-pressed this tick).
     tr.DispatchForSimTick();
 
-    // pendingEdge consumed.
-    CHECK(!tr.TestGetPendingEdge(0));
-    // fingerActive still set (finger not released).
     CHECK(tr.TestGetFingerActive(0));
-    // prevActive should be true (finger was active after drain).
-    CHECK(tr.TestGetPrevActive(0));
+    int slot = -1;
+    for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
+        if (Mortar::Touch::GetInstance().states1[s].extId == 1) { slot = s; break; }
+    }
+    CHECK(slot >= 0);
+    CHECK(Mortar::Touch::GetInstance().states1[slot].phase == -1);
+    CHECK_NEAR(Mortar::Touch::GetInstance().states1[slot].currX, 192.0f, 1.0f);
 
-    printf("    after 1 DispatchForSimTick: fingerActive=%s prevActive=%s\n",
-           tr.TestGetFingerActive(0) ? "true" : "false",
-           tr.TestGetPrevActive(0)   ? "true" : "false");
-
-    // Second DispatchForSimTick (catch-up step at 120Hz): Touch::Update(0.0f)
-    // is called again with empty ring (no new events). States1 still shows the
-    // held finger (phase promoted to 0). No crash, fingerActive unaffected.
+    // Second DispatchForSimTick (catch-up step at 120Hz): empty ring, the slot
+    // is promoted -1 -> 0 (held) and stays active.
     tr.DispatchForSimTick();
-    CHECK(!tr.TestGetPendingUp(0));
     CHECK(tr.TestGetFingerActive(0));
-    CHECK(tr.TestGetPrevActive(0));
+    CHECK(Mortar::Touch::GetInstance().states1[slot].phase == 0);
 
-    printf("    after 2nd DispatchForSimTick (catch-up): fingerActive=%s (expect: still active)\n",
-           tr.TestGetFingerActive(0) ? "true" : "false");
+    printf("    after 2 DispatchForSimTick: slot=%d phase=%d (expect: still held)\n",
+           slot, Mortar::Touch::GetInstance().states1[slot].phase);
 
     printf("  PASS\n");
 }
 
-// Invariant (H): channels 8-15 still use the pending-bool model.
-// FINGERDOWN for a 9th finger (ch 8) sets pendingDown[8]; FINGERUP sets pendingUp[8].
-static void test_overflow_channel_uses_pending_bools() {
-    printf("  test_overflow_channel_uses_pending_bools...\n");
+// Invariant (H): Mortar::Touch has 8 slots. Eight concurrent fingers fill them;
+// a 9th finds none free and is silently dropped -- binary-faithful (the Bada
+// touchscreen caps point ids at 8, GlesForm::OnTouch* @0x0018334c).
+static void test_ninth_finger_is_dropped() {
+    printf("  test_ninth_finger_is_dropped...\n");
     ResetTouch();
 
     InputTranslatorSDL tr;
     tr.Init();
 
-    // Register 8 fingers to fill channels 0-7.
+    // Register 8 fingers.
     for (int i = 0; i < Mortar::Touch::MAX_SLOTS; ++i) {
         SDL_Event d = MakeFingerDown((SDL_FingerID)(i + 1), 0.1f * (float)(i + 1), 0.5f);
         tr.DrainSDLEvent(d, NULL);
     }
+    tr.DispatchForSimTick();
 
-    // 9th finger should land on channel 8 (overflow).
+    Mortar::Touch& touch = Mortar::Touch::GetInstance();
+    int active = 0;
+    for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
+        if (touch.states1[s].phase < 1) ++active;
+    }
+    printf("    8 fingers -> %d active slots\n", active);
+    CHECK(active == Mortar::Touch::MAX_SLOTS);
+
+    // A 9th finger still gets an SDL channel (the translator has 16) but finds
+    // no free Mortar::Touch slot.
     SDL_Event d8 = MakeFingerDown((SDL_FingerID)100, 0.5f, 0.5f);
     tr.DrainSDLEvent(d8, NULL);
-
     CHECK(tr.TestGetFingerActive(8));
-    // ch >= 8: pendingDown IS set (pending-bool model).
-    CHECK(tr.TestGetPendingDown(8));
-    CHECK(!tr.TestGetPendingUp(8));
+    tr.DispatchForSimTick();
 
-    // FINGERUP for ch 8: pendingUp set, pendingDown cleared.
-    SDL_Event u8 = MakeFingerUp((SDL_FingerID)100, 0.5f, 0.5f);
-    tr.DrainSDLEvent(u8, NULL);
-
-    CHECK(!tr.TestGetPendingDown(8));
-    CHECK(tr.TestGetPendingUp(8));
+    for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
+        CHECK(touch.states1[s].extId != 9);
+    }
 
     printf("  PASS\n");
 }
@@ -556,7 +515,7 @@ int main(int argc, char* argv[]) {
     test_release_all_fingers_clears_all_state();
     test_two_fingers_independent_channels();
     test_held_finger_single_dispatch_per_tick();
-    test_overflow_channel_uses_pending_bools();
+    test_ninth_finger_is_dropped();
 
     printf("test_input_tick_invariant: PASS\n");
 

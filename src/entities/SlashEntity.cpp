@@ -428,9 +428,8 @@ void SlashEntity::Reset() {
     // Currently unreachable in practice: TouchDown's call site gates Reset()
     // itself on `m_BombHitEdge == 0`, so once latched it can't self-clear via
     // this path (matches binary TouchDown @0x1ea420's identical gate) --
-    // ported for struct/behaviour fidelity, not as the fix for the game-over
-    // slash-bridging bug (that's InputTranslatorSDL::DispatchForSimTick no
-    // longer synthesizing a TouchMove on a stationary tap's press frame).
+    // ported for struct/behaviour fidelity. See the TODO on TouchDown for the
+    // still-open question of what stops the game-over tap-bridge on device.
     m_BombHitEdge = 0;
 
     // Binary @0x1e66c8: re-arm blade direction to the zero vector on every
@@ -2646,37 +2645,35 @@ void SlashEntity::SetModColours(
 
 // ASM-spec: SlashEntity::TouchDown @ 0x17D61C
 bool SlashEntity::TouchDown(InputEvent* event) {
-    // DIFFERS: binary SlashEntity::TouchDown @0x1ea420 gates Reset() only on
-    //   m_BladeActive==0 -- it relies on the once-per-10ms-tick poll guaranteeing
-    //   >=2 Update ticks (latch decay, now in Update not DrawSlice) between a
-    //   physical lift and the next press. The SDL/web port drains lift+repress in
-    //   one pollInput() with no Update between, so the latch is still armed and
-    //   Reset() is skipped -> the new slice bridges from the prior slice's tail.
-    //   Force the break on a genuine press-edge (INPUT_ACTION_DOWN_EDGE, set only
-    //   in SDL_FINGERDOWN, never in PollHeldFingers) to replicate the behaviour.
-    //   Multi-touch: g_pSlashEntities[ch] gives each finger its own SlashEntity,
-    //   so a press-edge on channel N resets only channel N's blade; channels M!=N
-    //   are separate instances and are unaffected.
-    bool pressEdge = (event && (event->m_Flags & INPUT_ACTION_DOWN_EDGE));
-    if (m_BombHitEdge == 0 && (m_BladeActive == 0 || pressEdge)) {
-#if !defined(__bada__)
-        // Port specific: seed the NEW stroke at this event's press position.
-        // The SDL layer emits no TouchMove on a motionless press frame (a tap
-        // must not move the blade), so m_RawTouchPos still holds the PREVIOUS
-        // stroke's last position here; without this sync the fresh stroke
-        // would seed there and the first real motion would draw a bridge from
-        // that stale point. The binary needs no equivalent: its input device
-        // updates the touch axes (-> Entity::pos) at press claim, before
-        // TouchDown runs. Deliberately INSIDE the stroke-reset gate: when the
-        // bomb-hit latch blocks Reset, the stale position keeps OnTouchActive
-        // in its below-threshold skip path, so a tap appends nothing.
-        // event->x/y are the port-side side channel (InputEvent.h): a faithful
-        // Touch<n> button event carries no position word.
-        if (event) {
-            m_RawTouchPos.x = event->x;
-            m_RawTouchPos.y = event->y;
-        }
-#endif
+    // Binary gate (v1.6.1 SlashEntity::TouchDown @0x1ea420): Reset() only when the
+    // blade latch has decayed to 0. That is self-clearing because the poll emits
+    // ButtonPressed(Touch<n>, 2) EVERY frame a finger is held and nothing on the
+    // frame it is released, so a lift always leaves >=1 Update tick without a
+    // TouchDown -- enough for Update()'s `(old << 1) & 2` shift to reach 0 before
+    // the next press. No press-edge flag is needed, and the port must not invent
+    // one: the mapper chain has no such concept.
+    //
+    // No position seed is needed here either. Touch::SendIndividualTouchCallbacks
+    // @0x00242bc4 emits the two TouchAxis events for a slot BEFORE its
+    // ButtonPressed, so PointerMoveCallback has already written m_RawTouchPos to
+    // the fresh press position by the time this runs.
+    //
+    // TODO: v1.6.1 0x001ea420 (SlashEntity::TouchDown) — what stops the
+    //   game-over tap-bridge? m_BombHitEdge is set on a bomb hit (Update
+    //   @0x001e8ce0) and cleared only by Init, so for the rest of the session
+    //   this gate blocks Reset. Every later tap then appends a segment from the
+    //   previous stroke's tail (UpdateTouchDown's non-seed branch) -- the
+    //   "slashes bridge on the game-over screen" symptom. The port used to hide
+    //   it in InputTranslatorSDL::DispatchForSimTick by refusing to synthesize a
+    //   TouchMove on a motionless press frame; that gate was port-invented and
+    //   went away with the mapper-chain port, which raises the axis events
+    //   unconditionally exactly as the binary does. RE what actually stops it on
+    //   device: candidates are game_work.m_pActiveTouchSink being installed by
+    //   the game-over screen (the sink gets first refusal in TouchDownCallback
+    //   @0x001cbf18), game_work.m_BombHitTimer staying > 0 (short-circuits
+    //   UpdateTouchDown), or a m_BombHitEdge clear this port is missing. Do NOT
+    //   re-add a port-side press-edge gate.
+    if (m_BombHitEdge == 0 && m_BladeActive == 0) {
         Reset();
         if (g_ColourType == 2) {
             UpdateModColour(&m_HighlightColour, 1.0f);

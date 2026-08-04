@@ -85,17 +85,21 @@ static const int WII_POINTER_CHANNEL_FIRST = 12;
 static const int WII_POINTER_CHANNEL_LAST  = 15;
 
 // Port specific: SlashEntity's motion-mode speed-gate range (see
-// SlashEntity::Update). On Wii, A is menu-click-only in motion mode -- both
-// the A-press channels (0-3) and the hover channels (12-15) must be
-// threshold-gated, so the range spans the whole [0, WII_POINTER_CHANNEL_LAST]
-// (4-11 are unused, gating them is harmless). SDL/host has only the single
-// mouse pointer channel, so min==max==POINTER_FINGER_CHANNEL.
+// SlashEntity::Update). SlashEntity::m_FingerId is the Mortar::Touch SLOT the
+// blade belongs to (0..7) -- the translator's channel number never reaches it,
+// because the binary's Touch::SendIndividualTouchCallbacks @0x00242bc4 derives
+// the action channel from the states1 slot it is standing on. The pointer
+// cursor claims whatever slot is free, so the whole slot range has to be gated.
+// That is the same conclusion the Wii already reached for its own reasons (A is
+// menu-click-only in motion mode, so its press channels are gated too).
+// Motion mode is OFF by default and, when ON, the cursor is normally the only
+// active pointer, so gating the whole range costs nothing.
 #if defined(FRUIT_PLATFORM_WII)
 static const int MOTION_GATE_CHANNEL_MIN = 0;
 static const int MOTION_GATE_CHANNEL_MAX = WII_POINTER_CHANNEL_LAST;
 #else
-static const int MOTION_GATE_CHANNEL_MIN = POINTER_FINGER_CHANNEL;
-static const int MOTION_GATE_CHANNEL_MAX = POINTER_FINGER_CHANNEL;
+static const int MOTION_GATE_CHANNEL_MIN = 0;
+static const int MOTION_GATE_CHANNEL_MAX = 7;
 #endif
 
 // Render every active Fruit / Bomb / SplatEntity collision sphere as

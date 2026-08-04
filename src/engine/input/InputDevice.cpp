@@ -19,7 +19,7 @@ InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
     , m_KeyMask(ev.m_KeyId)                                           // event word 2
     , m_Param4(0)                                                     // event word 3, set below
     , m_Param5(ev.m_Stamp)                                            // event word 4
-    , m_callback(cb)
+    , m_Callback(cb)
 {
     // Word 3 is a float in the event and an untyped word in the mapper; copy the
     // bits rather than converting.
@@ -75,15 +75,6 @@ InputActionMapper::InputActionMapper(InputEvent ev, InputDeviceCallback cb,
 // InputEvent.) The ASM-verified stamp above predates that offset fix and is due a
 // re-verify.
 //
-// TODO: v1.6.1 0x002442fc (Mortar::InputManager::LoadConfigFile) — still a stub,
-//   so nothing ever constructs an InputActionMapper and this whole path is dead
-//   in the port. The live dispatch is InputDeviceBada's InputDeviceBinding list
-//   (see InputDeviceBada.cpp DIFFERS), which appends handlers and STOPS the walk
-//   on a true return. The binary does neither: RegisterInputCallback @0x002759f4
-//   OVERWRITES the matching mapper's single callback (SetCallback), and
-//   CheckActions never short-circuits. Porting LoadConfigFile must drop the
-//   binding list, the consume, and the `return false` workaround it forces on
-//   PointerMoveCallback (src/game/GameTaskInput.cpp:169).
 bool InputActionMapper::ProcessEvent(InputEvent* event) {
     uint32_t eventWord = event->m_Flags;
     uint32_t typeBits  = eventWord & 0xffff0000u;
@@ -106,7 +97,7 @@ bool InputActionMapper::ProcessEvent(InputEvent* event) {
             if ((kc & evKc) == 0) {
                 return false;
             }
-            return m_callback(event);
+            return m_Callback(event);
         }
         // kc >= 0x89: falls through to the shared exact compare (binary 0x002757ac).
     } else if (typeBits == INPUT_ARM_UNKNOWN) {     // 0x80000
@@ -116,7 +107,7 @@ bool InputActionMapper::ProcessEvent(InputEvent* event) {
         if (event->m_KeyId != this->m_KeyMask) {
             return false;
         }
-        m_callback(event);
+        m_Callback(event);
         return false;   // binary discards the handler result on this arm
     } else {
         return false;
@@ -125,7 +116,7 @@ bool InputActionMapper::ProcessEvent(InputEvent* event) {
     if (evKc != kc) {
         return false;
     }
-    return m_callback(event);
+    return m_Callback(event);
 }
 
 // v1.6.1 InputDevice::InputDevice @0x002759a8 — set fns ptr, list ctor, list clear.
@@ -142,19 +133,76 @@ void InputDevice::Destroy() {
     m_ActionMappers.clear();
 }
 
-// v1.6.1 InputDevice::ClearActions @0x002758b0 — non-virtual in the binary (see
-// InputDevice.h DIFFERS for why the port declares it virtual). Body not ported.
-void InputDevice::ClearActions(unsigned long, bool) {}
+// v1.6.1 InputActionMapper::SetCallback @0x00275690:
+//   add r0,r0,#0x20 ; b StackAllocatedPointer<BaseDelegate,32>::operator=
+// A straight overwrite of the delegate at +0x20 — no append, no boundness test.
+void InputActionMapper::SetCallback(const InputDeviceCallback& cb) {
+    m_Callback = cb;
+}
 
-// v1.6.1 InputDevice::RegisterInputCallback @0x002759f4 — non-virtual in the binary
-// (see InputDevice.h DIFFERS). Body not ported.
-void InputDevice::RegisterInputCallback(unsigned long, InputDeviceCallback) {}
+// v1.6.1 InputDevice::ClearActions @0x002758b0 — non-virtual base method.
+// Removes every mapper matching `configSourceHash` (0 = match all). The iterator
+// is advanced BEFORE the erase because the node is freed by it. Only the last
+// device in InputManager's broadcast deletes the mapper objects: AddActionMapper
+// @0x00243894 pushed the SAME pointer onto every device's list, so an earlier
+// device freeing them would leave the rest dangling.
+void InputDevice::ClearActions(unsigned long configSourceHash, bool last) {
+    std::list<InputActionMapper*>::iterator it = m_ActionMappers.begin();
+    while (it != m_ActionMappers.end()) {
+        InputActionMapper* mapper = *it;
+        std::list<InputActionMapper*>::iterator cur = it;
+        ++it;
+        if (configSourceHash == 0 || mapper->m_ConfigSourceHash == configSourceHash) {
+            m_ActionMappers.erase(cur);
+            if (last) {
+                delete mapper;
+            }
+        }
+    }
+}
 
-// v1.6.1 InputDevice::AxisEvent @0x0027582c — stub.
-void InputDevice::AxisEvent(long, unsigned long, float, float, unsigned long, long) {}
+// v1.6.1 InputDevice::RegisterInputCallback @0x002759f4 — non-virtual base method.
+// Walk the mapper list, overwrite the callback on every hash match. NO INSERT ON
+// MISS: an action name absent from Input/Input.txt binds nothing at all.
+void InputDevice::RegisterInputCallback(unsigned long actionHash,
+                                        InputDeviceCallback cb) {
+    for (std::list<InputActionMapper*>::iterator it = m_ActionMappers.begin();
+         it != m_ActionMappers.end(); ++it) {
+        if ((*it)->m_ActionHash == actionHash) {
+            (*it)->SetCallback(cb);
+        }
+    }
+}
 
-// v1.6.1 InputDevice::ButtonPressed @0x00275864 — stub.
-void InputDevice::ButtonPressed(unsigned long, unsigned long, float, unsigned long, long) {}
+// v1.6.1 InputDevice::AxisEvent @0x0027582c — build the axis event on the stack
+// and run it past every mapper. Param numbering is the binary's: 1-based
+// EXCLUDING `this`, so the stamp is param 5 and the tag is param 6.
+void InputDevice::AxisEvent(long axisId, unsigned long mask, float value,
+                            float delta, unsigned long stamp, long tag) {
+    InputEvent ev;
+    ev.m_Flags   = (uint32_t)mask | INPUT_ARM_AXIS;
+    ev.m_Tag     = (uint16_t)tag;
+    ev.m_KeyCode = (uint16_t)(uint8_t)axisId;   // uxtb
+    ev.m_Value   = value;
+    ev.m_Delta   = delta;
+    ev.m_Stamp   = (uint32_t)stamp;
+    CheckActions(&ev);
+}
+
+// v1.6.1 InputDevice::ButtonPressed @0x00275864 — same shape as AxisEvent, but
+// the key id goes in the value word and event word 1 is written whole from the
+// last param (so the stamp is param 4 here, not param 5).
+void InputDevice::ButtonPressed(unsigned long key, unsigned long mask, float value,
+                                unsigned long stamp, long tagWord) {
+    InputEvent ev;
+    ev.m_Flags   = (uint32_t)mask | INPUT_ARM_BUTTON;
+    ev.m_Tag     = (uint16_t)((uint32_t)tagWord & 0xffffu);
+    ev.m_KeyCode = (uint16_t)((uint32_t)tagWord >> 16);
+    ev.m_KeyId   = (uint32_t)key;
+    ev.m_Delta   = value;
+    ev.m_Stamp   = (uint32_t)stamp;
+    CheckActions(&ev);
+}
 
 // v1.6.1 InputDevice::CheckActions @0x002757fc. Iterate m_ActionMappers list, call ProcessEvent.
 // The walk is UNCONDITIONAL: the binary discards ProcessEvent's return value

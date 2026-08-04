@@ -19,7 +19,7 @@
 // concurrently. InputTranslatorSDL::DrainSDLEvent explicitly suppresses the
 // synthesized SDL_TOUCH_MOUSEID finger (FINGERDOWN/MOTION/UP) whenever
 // FN::g_MotionMode is ON, so in that mode ONLY the raw mouse path
-// (MOUSE_CHANNEL / POINTER_FINGER_CHANNEL 15, the pending-bool model) is
+// (MOUSE_CHANNEL / POINTER_FINGER_CHANNEL 15) is
 // live for the mouse: a button press LIFTS the blade, release RE-PRESSES it,
 // and hover-drag cuts are gated by SlashEntity's speed threshold. The
 // synthesized channel-0-style finger only drives anything when motion mode
@@ -32,10 +32,11 @@
 //
 //  Role 1 -- "press finger" (SDL: the synthesized/real mouse-finger, live
 //    when motion mode is OFF). Feeds the Mortar::Touch ring/slots -- the
-//    ONLY input path MenuButton / CheckBox / SliderControl / etc. consume
-//    (free IsTouchDown / TouchInRegion + game_work.m_FingerSpawnPos;
-//    InputManager hash events on channels >= 8 never reach them), so this
-//    role is what makes menu/widget clicks work in EITHER mode.
+//    ONLY input path there is, for widgets (free IsTouchDown / TouchInRegion
+//    + game_work.m_FingerSpawnPos) and for the blade alike (the binary's
+//    Touch::SendIndividualTouchCallbacks poll turns each slot into Touch<n>
+//    actions), so this role is what makes menu/widget clicks work in EITHER
+//    mode.
 //    Wii mirror: remote N presses channel N (0-3) with extId N+1 while A is
 //    held AND the IR read is valid; IR movement while held is the
 //    FINGERMOTION. Provides, in both modes: menu/widget clicks on the A
@@ -52,8 +53,9 @@
 //    while FN::g_MotionMode is ON). The blade tracks the pointer continuously
 //    with no button; cuts are gated by SlashEntity's speed threshold
 //    (FN::g_MotionSpeedThreshold); the button is INVERTED: pressing lifts the
-//    blade, releasing re-presses it. Uses the pending-bool model because
-//    channels >= 8 have no Mortar::Touch slot.
+//    blade, releasing re-presses it. Like Role 1 it feeds the Mortar::Touch
+//    ring (extId = channel+1); the channel number is only this class's own
+//    bookkeeping, the SLOT the press lands in is what the game acts on.
 //    Wii mirror: remote N drives channel 12+N (FN::WII_POINTER_CHANNEL_FIRST
 //    + N, see src/debug/DebugFlags.h) -- the analogue of the mouse's
 //    POINTER_FINGER_CHANNEL (15):
@@ -82,8 +84,9 @@
 //
 // 4 Wiimotes = 4 simultaneous player pointers, the Wii analogue of the
 // binary's "multiplayer IS multi-finger slicing" model (see CLAUDE.md); the
-// press fingers use channels 0-3 and the hover blades channels 12-15, so up
-// to 8 SlashEntity blades can be live at once (g_pSlashEntities covers 16).
+// press fingers use channels 0-3 and the hover blades channels 12-15. Roles
+// are mutually exclusive per remote, so at most 4 of Mortar::Touch's 8 slots
+// are claimed at once and every blade gets one.
 //
 // Only compiled when FRUIT_PLATFORM_WII is set (see
 // src/platform/wii/CMakeLists.txt). No wiiuse/gccore headers are included
@@ -102,9 +105,9 @@ public:
 
     InputTranslatorWii();
 
-    // Initialize action hashes for all 16 channels ("TouchDown_N",
-    // "TouchMove_XN", "TouchMove_YN", "TouchUp_N", "TouchScreen"), mirroring
-    // InputTranslatorSDL::Init(). Call once after StringHash is available.
+    // No-op. Kept as a call site because mainWii calls it during boot; the
+    // action names now come from Input/Input.txt via
+    // InputManager::LoadConfigFile @0x002442fc.
     void Init();
 
     // Drain one WPAD channel's polled state into both roles (see header
@@ -120,17 +123,15 @@ public:
     //             meaningful while irValid.
     void DrainWiimoteIR(int chan, bool irValid, bool aPressed, float x, float y);
 
-    // Drain the Mortar::Touch ring buffer and dispatch InputManager hash
-    // events for one sim tick -- a mirror of
-    // InputTranslatorSDL::DispatchForSimTick(): HUD input-modal gate,
-    // Touch::Update(0.0f) full-ring drain, slot-derived dispatch (+
-    // game_work.m_FingerSpawnPos refresh) for channels 0-7, pending-bool
-    // dispatch for channels 8-15. Called once per sim tick from the main
-    // loop, BEFORE Game::stepUpdate().
+    // Drain the whole Mortar::Touch ring for one sim tick and advance the
+    // Wii-only hand-pointer speed EMA -- a mirror of
+    // InputTranslatorSDL::DispatchForSimTick(). The action events themselves
+    // are raised later in the same tick by GameUpdate -> InputManager::Update,
+    // so this must run BEFORE Game::stepUpdate().
     void DispatchForSimTick();
 
-    // Synthesize a release for every held channel (both roles). Called on
-    // suspend (Wii Home-menu return) -- analogous to
+    // Queue a Touch release for every held channel (both roles) and drain the
+    // ring. Called on suspend (Wii Home-menu return) -- analogous to
     // InputTranslatorSDL::ReleaseAllFingers() on SDL focus-loss.
     void ReleaseAllFingers();
 
@@ -145,33 +146,12 @@ public:
     bool GetPointer(int remote, float* gx, float* gy, bool* aHeld, float* speed) const;
 
 private:
-    // Pre-computed action hashes, indexed by CHANNEL (0-15) like the SDL
-    // translator (Role 1 uses 0-3, Role 2 uses 12-15).
-    uint32_t hashTouchDown[CHANNEL_COUNT];
-    uint32_t hashTouchMoveX[CHANNEL_COUNT];
-    uint32_t hashTouchMoveY[CHANNEL_COUNT];
-    uint32_t hashTouchUp[CHANNEL_COUNT];
-    uint32_t hashTouchScreen;
-
-    // Per-channel state, same model as InputTranslatorSDL: position, active
-    // flag, previous-dispatch active snapshot, pending bools (channels >= 8
-    // only), press-vs-motion gate.
+    // Per-channel state, same model as InputTranslatorSDL: latest position
+    // plus an active flag. Bookkeeping only -- the position and phase the game
+    // acts on live in the Mortar::Touch slot this channel pushed into.
     float fingerX[CHANNEL_COUNT];
     float fingerY[CHANNEL_COUNT];
     bool  fingerActive[CHANNEL_COUNT];
-    bool  prevActive[CHANNEL_COUNT];
-    bool  pendingDown[CHANNEL_COUNT];
-    bool  pendingUp[CHANNEL_COUNT];
-    bool  pendingEdge[CHANNEL_COUNT];
-    // Port specific: press-vs-motion gate, same semantics as
-    // InputTranslatorSDL::motionSinceDown -- false on a fresh press, true
-    // once the pointer position actually changes while pressed (the WPAD
-    // poll-model equivalent of "an SDL_FINGERMOTION / SDL_MOUSEMOTION event
-    // arrived": SDL only delivers those when the pointer moved). TouchMove_XN
-    // /YN are only dispatched while true, so a press-and-release without
-    // movement is a TAP (TouchScreen + TouchDown_N + TouchUp_N, no TouchMove)
-    // -- v1.6.1 semantics, matching the SDL translator.
-    bool  motionSinceDown[CHANNEL_COUNT];
 
     // Per-remote previous-frame raw signals for edge detection (Role 2's
     // inverted-button model needs the A edges; IR-loss release needs the IR
@@ -199,7 +179,7 @@ private:
 
     // Role 2 press/release helpers for the hover-blade channels (12-15) --
     // mirrors InputTranslatorSDL::PointerPressMouseChannel /
-    // PointerReleaseMouseChannel (the ch >= 8 pending-bool model).
+    // PointerReleaseMouseChannel.
     // PointerPressChannel is a no-op if the channel is already active;
     // PointerReleaseChannel is a no-op if it is not.
     void PointerPressChannel(int ch, float gx, float gy);

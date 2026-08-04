@@ -1170,6 +1170,12 @@ void GameDraw(float dt, bool active) {
     }
 
     // @0x001cddcc: clearInput drain -- flush the gameplay action set, then clear the flag.
+    // NB: ClearActions is LIVE now that InputManager::LoadConfigFile is ported --
+    // its argument is the CONFIG-SOURCE hash, so this really does destroy all 67
+    // Input/Input.txt mappers and every callback bound to them. Nothing reloads
+    // them short of GameExit's InputManager Destroy/Init + the next
+    // GameTaskInitInput, so firing this mid-session would kill input outright.
+    // Harmless today only because nothing in the port ever sets g_clearInput to 1.
     if (g_clearInput != 0) {
         Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/Input.txt"));
         g_clearInput = 0;

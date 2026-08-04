@@ -1,15 +1,17 @@
 //
-// InputTranslatorSDL -- converts SDL events to Mortar::Touch ring buffer
-// entries AND InputManager hash events.
+// InputTranslatorSDL -- feeds SDL touch/mouse events into the Mortar::Touch
+// ring buffer. It raises NO action events of its own: the mapper chain
+// (InputManager::LoadConfigFile -> InputActionMapper -> the registered
+// callbacks) does that, driven by the binary's own per-frame poll. See the
+// header for the full edge-latch / poll-replay model.
 //
 // Refresh-rate-independent fix for #175 (120Hz slashing bug):
-// DrainSDLEvent pushes each touch event IMMEDIATELY into Mortar::Touch's
-// ring buffer (OnPressed/OnMoved/OnReleased) for channels 0-7. This means
-// a FINGERDOWN followed by a FINGERUP arriving in two consecutive drains
-// before the next sim tick both land in the ring -- neither edge is lost.
-// DispatchForSimTick calls Touch::Update(0.0f) (v1.6.1 Mortar::Touch::Update
-// @0x00242d14: dt==0 skips the timestamp guard, drains the ENTIRE ring),
-// then reads the drained states1 to drive InputManager hash events.
+// DrainSDLEvent pushes each touch event IMMEDIATELY into the ring
+// (OnPressed/OnMoved/OnReleased). A FINGERDOWN followed by a FINGERUP arriving
+// in two consecutive drains before the next sim tick both land in the ring --
+// neither edge is lost. DispatchForSimTick calls Touch::Update(0.0f) (v1.6.1
+// Mortar::Touch::Update @0x00242d14: dt==0 skips the timestamp guard and drains
+// the ENTIRE ring).
 //
 // At 120Hz: two drains per tick -> two events in ring -> both applied in
 // one DispatchForSimTick call. At 60Hz: one drain per tick -> same as
@@ -18,10 +20,7 @@
 
 #include "platform/InputTranslatorSDL.h"
 #include "input/Touch.h"
-#include "util/StringHash.h"
 #include "debug/DebugFlags.h"
-#include "game/GameWork.h"
-#include "hud/HUD.h"
 #include "render/Layout.h"
 #include <cstring>
 
@@ -32,21 +31,11 @@
 #  define TLOG(...) ((void)0)
 #endif
 
-// StringHash is provided by src/engine/util/StringHash.h (the binary-faithful
-// Jenkins lookup3 with case-folding). Earlier this file had a local DJB2-like
-// definition that produced different hashes for the same string -- causing
-// SlashEntity event-driven dispatch to silently fail. Single source of truth now.
-
-InputTranslatorSDL::InputTranslatorSDL() : hashTouchScreen(0) {
+InputTranslatorSDL::InputTranslatorSDL() {
     memset(fingerX, 0, sizeof(fingerX));
     memset(fingerY, 0, sizeof(fingerY));
     memset(fingerActive, 0, sizeof(fingerActive));
-    memset(prevActive, 0, sizeof(prevActive));
     memset(fingerMap, 0xFF, sizeof(fingerMap));
-    memset(pendingDown, 0, sizeof(pendingDown));
-    memset(pendingUp, 0, sizeof(pendingUp));
-    memset(pendingEdge, 0, sizeof(pendingEdge));
-    memset(motionSinceDown, 0, sizeof(motionSinceDown));
     memset(fingerSuspended, 0, sizeof(fingerSuspended));
 }
 
@@ -59,37 +48,11 @@ bool InputTranslatorSDL::IsOutOfWindow(float nx, float ny) {
 }
 
 void InputTranslatorSDL::Init() {
-    char buf[32];
-
-    // Pre-compute hashes matching original action names from game_input.txt
-    for (int i = 0; i < 16; i++) {
-        sprintf(buf, "TouchDown_%d", i);
-        hashTouchDown[i] = StringHash(buf);
-
-        sprintf(buf, "TouchMove_X%d", i);
-        hashTouchMoveX[i] = StringHash(buf);
-
-        sprintf(buf, "TouchMove_Y%d", i);
-        hashTouchMoveY[i] = StringHash(buf);
-
-        // DIFFERS: original = "TouchReleased_%d" (Data/input/input.txt lines 49-64,
-        //   bound to Touch<i+1> action "up"). The name "TouchUp_%d" appears NOWHERE
-        //   in the binary or its data. Nothing in the game binds it any more -- the
-        //   blade has no release handler (v1.6.1 registers no per-finger release
-        //   callback at all), so these events are emitted and dropped. Kept only
-        //   because tests still pin the release edge on this hash. Rename to
-        //   "TouchReleased_%d" when InputManager::LoadConfigFile @0x002442fc lands.
-        sprintf(buf, "TouchUp_%d", i);
-        hashTouchUp[i] = StringHash(buf);
-    }
-
-    hashTouchScreen = StringHash("TouchScreen");
-
 #ifdef FN_DEBUG_TOUCH
     // SDL suppresses DEBUG-priority logs by default; lower the cutoff so the
-    // TLOG drain/dispatch trace reaches stdout / the browser console.
+    // TLOG drain trace reaches stdout / the browser console.
     SDL_LogSetAllPriority(SDL_LOG_PRIORITY_DEBUG);
-    TLOG("FN_DEBUG_TOUCH active -- touch drain/dispatch trace enabled\n");
+    TLOG("FN_DEBUG_TOUCH active -- touch drain trace enabled\n");
 #endif
 }
 
@@ -175,11 +138,11 @@ void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
 }
 
 // Port specific: MOTION MODE -- FINGERDOWN-equivalent for MOUSE_CHANNEL.
-// MOUSE_CHANNEL (15) is in the 8-15 overflow range (no Mortar::Touch slot),
-// so this mirrors the SDL_FINGERDOWN "ch >= 8" branch exactly: mark the
-// channel active, re-arm the press-vs-motion gate, and set pendingDown/Edge
-// for DispatchForSimTick to pick up on the next sim tick. No-op if the
-// channel is already pressed (repeated hover moves just update position).
+// Mirrors the SDL_FINGERDOWN branch: mark the channel active and push the press
+// into the Mortar::Touch ring so the cursor claims a real slot (without one it
+// would raise no Touch<n> action at all, and the pointer blade would be dead).
+// No-op if the channel is already pressed (repeated hover moves just update
+// position).
 void InputTranslatorSDL::PointerPressMouseChannel(float gx, float gy) {
     if (fingerActive[MOUSE_CHANNEL]) return;
 
@@ -187,37 +150,30 @@ void InputTranslatorSDL::PointerPressMouseChannel(float gx, float gy) {
     fingerActive[MOUSE_CHANNEL] = true;
     fingerX[MOUSE_CHANNEL]      = gx;
     fingerY[MOUSE_CHANNEL]      = gy;
-    motionSinceDown[MOUSE_CHANNEL] = false;
     // MOTION MODE has its own inside-the-window gate (SDL_MOUSEMOTION's
     // `inside` check + SDL_WINDOWEVENT_LEAVE) -- it never uses the
     // out-of-window suspend/resume path, so keep it clear here.
     fingerSuspended[MOUSE_CHANNEL] = false;
 
-    pendingDown[MOUSE_CHANNEL] = true;
-    pendingEdge[MOUSE_CHANNEL] = true;
-    pendingUp[MOUSE_CHANNEL]   = false;
+    Mortar::Touch::GetInstance().OnPressed(MOUSE_CHANNEL + 1, gx, gy);
     TLOG("MOTION press ch=%d game=(%g,%g)\n", MOUSE_CHANNEL, gx, gy);
 }
 
 // Port specific: MOTION MODE -- FINGERUP-equivalent for MOUSE_CHANNEL.
-// Mirrors the SDL_FINGERUP "ch >= 8" branch. No-op if the channel is not
-// currently active.
+// Mirrors the SDL_FINGERUP branch. No-op if the channel is not currently active.
 void InputTranslatorSDL::PointerReleaseMouseChannel() {
     if (!fingerActive[MOUSE_CHANNEL]) return;
 
     fingerActive[MOUSE_CHANNEL] = false;
     ReleaseFingerId((SDL_FingerID)SDL_TOUCH_MOUSEID);
 
-    pendingUp[MOUSE_CHANNEL]   = true;
-    pendingDown[MOUSE_CHANNEL] = false;
-    pendingEdge[MOUSE_CHANNEL] = false;
+    Mortar::Touch::GetInstance().OnReleased(MOUSE_CHANNEL + 1);
     TLOG("MOTION release ch=%d\n", MOUSE_CHANNEL);
 }
 
-// legacy wrapper -- no-op. Dispatch is now via DispatchForSimTick().
+// legacy wrapper -- no-op. The ring drain is DispatchForSimTick().
 // Retained so any callers that invoke BeginFrame() are not broken.
 void InputTranslatorSDL::BeginFrame() {
-    // No-op: the drain/flush split moves all dispatch to DispatchForSimTick().
 }
 
 // legacy wrapper -- calls DrainSDLEvent internally.
@@ -228,13 +184,11 @@ void InputTranslatorSDL::ProcessSDLEvent(const SDL_Event& ev, SDL_Window* window
     DrainSDLEvent(ev, window);
 }
 
-// synthesize TouchUp for every held finger and clear all channels.
-// Flushes the Mortar::Touch ring buffer (Touch::Update(0.0f) drains it)
-// then releases all states. Called when the SDL window loses focus or is
-// minimized so no blade stays armed across a background/restore cycle (#162).
+// Release every held finger and clear all channels. Queues a Touch release per
+// active channel then drains the ring (Touch::Update(0.0f)) so the state is
+// settled immediately. Called when the SDL window loses focus or is minimized
+// so no blade stays armed across a background/restore cycle (#162).
 void InputTranslatorSDL::ReleaseAllFingers() {
-    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
-
     for (int ch = 0; ch < 16; ++ch) {
         if (!fingerActive[ch]) continue;
 
@@ -242,50 +196,35 @@ void InputTranslatorSDL::ReleaseAllFingers() {
         // its release to the engine on the IN->OUT crossing -- don't
         // double-release it here.
         if (!fingerSuspended[ch]) {
-            if (ch < Mortar::Touch::MAX_SLOTS) {
-                Mortar::Touch::GetInstance().OnReleased(ch + 1);
-            }
-
-            if (mgr) {
-                InputEvent ie;
-                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch,
-                                        fingerX[ch], fingerY[ch]);
-                mgr->DispatchEvent(&ie);
-            }
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);
         }
 
         fingerActive[ch]    = false;
         fingerSuspended[ch] = false;
-        prevActive[ch]      = false;
     }
 
-    // Drain any ring-buffered events that accumulated before the release,
-    // so the next DispatchForSimTick starts with a clean Touch state.
-    if (mgr) {
-        Mortar::Touch::GetInstance().Update(0.0f);
-    }
-
-    // Clear pending bools for ch >= 8 (the non-Touch fallback channels).
-    memset(pendingDown, 0, sizeof(pendingDown));
-    memset(pendingUp, 0, sizeof(pendingUp));
-    memset(pendingEdge, 0, sizeof(pendingEdge));
-    memset(motionSinceDown, 0, sizeof(motionSinceDown));
+    // Drain the releases we just queued so the next sim tick starts clean.
+    Mortar::Touch::GetInstance().Update(0.0f);
 }
 
-// drain one SDL event into Mortar::Touch ring buffer (channels 0-7) and
-// into per-channel position state (all 16 channels).
+// Drain one SDL event into the Mortar::Touch ring buffer and into per-channel
+// SDL bookkeeping (all 16 channels).
 //
-// For channels 0-7: each FINGERDOWN/MOTION/UP is IMMEDIATELY pushed into
-// the Mortar::Touch ring buffer (OnPressed/OnMoved/OnReleased). This is the
-// core fix for the 120Hz slashing bug (#175): both the DOWN and UP from a
-// fast flick within one tick interval enter the ring and are applied in
-// order by DispatchForSimTick's Touch::Update(0.0f) drain -- no edge lost.
+// Every FINGERDOWN/MOTION/UP is pushed into the ring IMMEDIATELY
+// (OnPressed/OnMoved/OnReleased) with extId = channel + 1. This is the core fix
+// for the 120Hz slashing bug (#175): both the DOWN and UP from a fast flick
+// within one tick interval enter the ring and are applied in order by
+// DispatchForSimTick's Touch::Update(0.0f) drain -- no edge lost.
 //
-// For channels 8-15: falls back to the old pending-bool model since these
-// channels have no Mortar::Touch slot.
+// All 16 channels go through the ring, including the reserved MOUSE_CHANNEL.
+// Mortar::Touch has 8 slots and claims them by rotation, so the channel number
+// is only an SDL-side identity: the SLOT a finger lands in is what the game
+// sees, and it is that slot index that becomes the Touch<n> action channel.
+// A 9th concurrent pointer finds no free slot and is dropped -- binary-faithful
+// (Bada caps point ids at 8, GlesForm::OnTouch* @0x0018334c).
 //
-// fingerX/Y always tracks the latest position for InputManager hash events.
-// fingerActive tracks whether the SDL layer considers the finger down.
+// fingerX/Y tracks the latest position for the out-of-window logic and motion
+// mode. fingerActive tracks whether the SDL layer considers the finger down.
 //
 // Non-touch events (WINDOW/FOCUS/keyboard) are handled inline as before.
 // Called from pollInput() for every SDL_PollEvent result.
@@ -316,28 +255,15 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         fingerX[ch] = gx;
         fingerY[ch] = gy;
-        // Port specific: re-arm the press-vs-motion gate. Until a real
-        // FINGERMOTION drains for this finger, no TouchMove is dispatched
-        // (a tap alone never moves the blade -- v1.6.1 semantics).
-        motionSinceDown[ch] = false;
         // Port specific: a fresh press always starts in-bounds (SDL only
         // ever raises FINGERDOWN for a coordinate inside the window/canvas).
         fingerSuspended[ch] = false;
         TLOG("FINGERDOWN (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
              ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            // Push into Touch ring buffer immediately -- preserves the DOWN
-            // edge even if a UP arrives before the next DispatchForSimTick.
-            Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
-            // Mark first-press edge for the InputManager DOWN_EDGE flag.
-            pendingEdge[ch] = true;
-        } else {
-            // ch >= 8: no Touch slot; use pending-bool model.
-            pendingDown[ch] = true;
-            pendingEdge[ch] = true;
-            pendingUp[ch]   = false;
-        }
+        // Push into the Touch ring buffer immediately -- preserves the DOWN
+        // edge even if an UP arrives before the next DispatchForSimTick.
+        Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
         break;
     }
 
@@ -375,14 +301,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
             TLOG("OUT-OF-WINDOW ch=%d raw=(%g,%g) -- synthesizing release at last in-bounds (%g,%g)\n",
                  ch, ev.tfinger.x, ev.tfinger.y, fingerX[ch], fingerY[ch]);
 
-            if (ch < Mortar::Touch::MAX_SLOTS) {
-                Mortar::Touch::GetInstance().OnReleased(ch + 1);
-                pendingEdge[ch] = false;
-            } else {
-                pendingUp[ch]   = true;
-                pendingDown[ch] = false;
-                pendingEdge[ch] = false;
-            }
+            Mortar::Touch::GetInstance().OnReleased(ch + 1);
             fingerSuspended[ch] = true;
             break;  // do not update fingerX/Y to the out-of-bounds coord
         }
@@ -394,26 +313,18 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
             TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
             fingerX[ch] = gx;
             fingerY[ch] = gy;
-            motionSinceDown[ch] = false;
             fingerSuspended[ch] = false;
 
             TLOG("RE-ENTER-WINDOW ch=%d raw=(%g,%g) game=(%g,%g) -- synthesizing fresh press\n",
                  ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
-            if (ch < Mortar::Touch::MAX_SLOTS) {
-                Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
-                pendingEdge[ch] = true;
-            } else {
-                pendingDown[ch] = true;
-                pendingEdge[ch] = true;
-                pendingUp[ch]   = false;
-            }
+            Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
             break;
         }
 
         if (wasOut) {
             // Still OUT: keep tracking the physical position (for when it
-            // re-enters) but do NOT feed Touch/pending -- the channel is
+            // re-enters) but do NOT feed the Touch ring -- the channel is
             // suspended from the engine's POV.
             TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, fingerX[ch], fingerY[ch]);
             TLOG("MOVE (suspended, still out) ch=%d raw=(%g,%g)\n", ch, ev.tfinger.x, ev.tfinger.y);
@@ -425,18 +336,10 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TransformTouchNormalized(ev.tfinger.x, ev.tfinger.y, gx, gy);
         fingerX[ch] = gx;
         fingerY[ch] = gy;
-        // Port specific: a real motion event arrived -- open the TouchMove
-        // gate for this finger (sticky until the next FINGERDOWN).
-        motionSinceDown[ch] = true;
         TLOG("MOVE (drain) ch=%d raw=(%g,%g) game=(%g,%g)\n",
              ch, ev.tfinger.x, ev.tfinger.y, gx, gy);
 
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            // Push move into Touch ring buffer immediately.
-            Mortar::Touch::GetInstance().OnMoved(ch + 1, gx, gy);
-        }
-        // Do NOT touch pendingDown/pendingUp for ch < 8.
-        // Do NOT modify pending state for ch >= 8 (motion only updates position).
+        Mortar::Touch::GetInstance().OnMoved(ch + 1, gx, gy);
         break;
     }
 
@@ -460,7 +363,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         // Port specific: if this channel is currently suspended (out of the
         // window -- see SDL_FINGERMOTION above), the engine already saw a
         // release on the IN->OUT crossing. Just clear the SDL-side mapping
-        // here; do NOT fire a second Touch::OnReleased/pendingUp (double
+        // here; do NOT fire a second Touch::OnReleased (double
         // release).
         bool wasSuspended = fingerSuspended[ch];
 
@@ -481,18 +384,10 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
             break;  // already released to the engine on the OUT crossing
         }
 
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            // Push release into Touch ring buffer immediately.
-            // The DOWN (if any) is already in the ring ahead of this UP,
-            // so Touch::Update(0.0f) will apply them in order. No edge lost.
-            Mortar::Touch::GetInstance().OnReleased(ch + 1);
-            pendingEdge[ch] = false;
-        } else {
-            // ch >= 8: pending-bool model.
-            pendingUp[ch]   = true;
-            pendingDown[ch] = false;
-            pendingEdge[ch] = false;
-        }
+        // Push release into the Touch ring buffer immediately. The DOWN (if
+        // any) is already in the ring ahead of this UP, so Touch::Update(0.0f)
+        // applies them in order. No edge lost.
+        Mortar::Touch::GetInstance().OnReleased(ch + 1);
         break;
     }
 
@@ -537,7 +432,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         PointerPressMouseChannel(gx, gy);
         fingerX[MOUSE_CHANNEL] = gx;
         fingerY[MOUSE_CHANNEL] = gy;
-        motionSinceDown[MOUSE_CHANNEL] = true;
+        Mortar::Touch::GetInstance().OnMoved(MOUSE_CHANNEL + 1, gx, gy);
         TLOG("MOTION MOUSEMOTION ch=%d game=(%g,%g)\n", MOUSE_CHANNEL, gx, gy);
         break;
     }
@@ -583,14 +478,7 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         fingerActive[ch] = false;
         ReleaseFingerId(mouseId);
 
-        if (ch < Mortar::Touch::MAX_SLOTS) {
-            Mortar::Touch::GetInstance().OnReleased(ch + 1);
-            pendingEdge[ch] = false;
-        } else {
-            pendingUp[ch]   = true;
-            pendingDown[ch] = false;
-            pendingEdge[ch] = false;
-        }
+        Mortar::Touch::GetInstance().OnReleased(ch + 1);
         break;
     }
 
@@ -610,248 +498,29 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     (void)window;
 }
 
-// Drain the Mortar::Touch ring buffer and dispatch InputManager hash events
-// for one sim tick.
+// Drain the Mortar::Touch ring buffer for one sim tick.
 //
-// Binary cadence (v1.6.1 Mortar::Touch::Update @0x00242d14): each game tick calls
-// Touch::Update(0.0) which, because dt==0, skips the timestamp guard and
-// pops the ENTIRE ring buffer in order via ___UpdateInternal into states2,
-// then _Update() snapshots states2->states1 and advances phase state
-// (-1 just-pressed -> 0 held; phase==1 -> free slot).
+// This is the whole of the port's per-tick input work now. Everything past the
+// drain is the binary's own path and runs later in the same tick:
+//   GameUpdate @0x001cf644 -> InputManager::Update @0x00243838
+//     -> InputDeviceBada::Update @0x00242f40   (global pointer, keys 0x6c/0x74/0x75)
+//        -> Touch::SendIndividualTouchCallbacks @0x00242bc4  (per-slot 0x89..0x90)
+//           -> InputDevice::AxisEvent / ButtonPressed -> CheckActions
+//              -> InputActionMapper::ProcessEvent -> the registered callback.
+// The mappers come from InputManager::LoadConfigFile parsing Input/Input.txt at
+// GameTaskInitInput time. The SDL side no longer synthesises action events at
+// all -- it only feeds Mortar::Touch, and the poll model replays them.
 //
-// This function mirrors that cadence:
-//   1. Touch::Update(0.0f) -- drain all queued events, advance state machine.
-//   2. For each channel 0-7: read drained states1[slot] (extId == ch+1) to
-//      determine phase, then emit InputManager hash events accordingly.
-//   3. For channels 8-15: read pending-bool model (unchanged from before).
+// Ordering is load-bearing: Game::stepUpdate calls this BEFORE GameTaskUpdate,
+// so states1 is fresh by the time InputDeviceBada::Update polls it.
 //
-// Phase -> InputManager hash mapping:
-//   phase == -1 (just-pressed, one tick): emit TouchScreen + TouchMove + TouchDown
-//      with INPUT_ACTION_DOWN | INPUT_ACTION_DOWN_EDGE.
-//   phase == 0 (held): emit TouchMove + TouchDown (held, no DOWN_EDGE).
-//   phase == 1 (released/free) and prevActive[ch]: emit TouchUp.
-//
-// prevActive[ch] tracks whether the channel was active (phase < 1) on the
-// previous DispatchForSimTick so that a release can be detected exactly once.
+// Binary cadence (v1.6.1 Mortar::Touch::Update @0x00242d14): dt == 0 skips the
+// timestamp guard and pops the ENTIRE ring in order via ___UpdateInternal into
+// states2, then _Update() snapshots states2 -> states1 and advances the phase
+// state machine (-1 just-pressed -> 0 held; phase 1 frees the slot). Because
+// _Update copies BEFORE it runs State::Update on states2, a released slot keeps
+// a non-zero extId/touchId in states1 for exactly one tick -- that one tick is
+// what makes SendIndividualTouchCallbacks' mask-4 release a true edge.
 void InputTranslatorSDL::DispatchForSimTick() {
-    Mortar::InputManager* mgr = Mortar::InputManager::GetInstance();
-
-    // Port specific: settings modal captures input -- don't feed the slice
-    // blade (TouchDown_N / TouchMove_XN / TouchMove_YN) while it's open. See
-    // HUD::SetInputModal (src/hud/HUD.h). This is the per-finger dispatch site
-    // to InputManager; GameTaskInput.cpp's TouchDownCallback @0x001cbf18 and
-    // PointerMoveCallback @0x001cbfcc are the handlers on the far side and they
-    // are what forward each event to g_pSlashEntities[n]. Null out mgr rather than early-
-    // returning so the Touch ring buffer still drains this tick (below) and
-    // prevActive/pending bookkeeping stays correct -- otherwise events queue
-    // up while the modal is open and burst-apply once it closes.
-    if (game_work.mHud && game_work.mHud->GetInputModal()) mgr = nullptr;
-
-    // Drain the entire Touch ring buffer for this tick. Binary-faithful:
-    // v1.6.1 Mortar::Touch::Update(dt=0.0) @0x00242d14 with dt==0 skips the
-    // timestamp guard and pops every queued TEvnt in order.
-    // This is safe to call even when mgr is null (headless): Touch state
-    // still advances correctly; InputManager dispatch below is gated on mgr.
-    Mortar::Touch& touch = Mortar::Touch::GetInstance();
-    touch.Update(0.0f);
-
-    // --- Channels 0-7: derive state from drained states1 ---
-    for (int ch = 0; ch < Mortar::Touch::MAX_SLOTS; ++ch) {
-        // Find the states1 slot whose extId matches this channel.
-        // extId = ch+1 (1-based) was assigned by ___UpdateInternal on press.
-        int slot = -1;
-        for (int s = 0; s < Mortar::Touch::MAX_SLOTS; ++s) {
-            if (touch.states1[s].extId == (uint32_t)(ch + 1)) {
-                slot = s;
-                break;
-            }
-        }
-
-        bool nowActive = (slot >= 0 && touch.states1[slot].phase < 1);
-        bool wasActive = prevActive[ch];
-        int  phase     = (slot >= 0) ? touch.states1[slot].phase : 1;
-
-        // DIFFERS: original writes game_work.m_FingerSpawnPos from the touch
-        //   callbacks themselves -- TouchDownCallback @0x001cbf18 stamps .z and
-        //   PointerMoveCallback @0x001cbfcc stores .x/.y, both indexed by the
-        //   ACTION CHANNEL. Those two are ported now and do exactly that. This
-        //   write stays anyway, because the port's action channel is extId-1
-        //   while the binary's is the Mortar::Touch::states1 SLOT index (see
-        //   Touch::SendIndividualTouchCallbacks @0x00242bc4), and every UI widget
-        //   (UiCheckbox/UiSlider/UiDropdown, CheckBox/SliderControl/ComboBox/
-        //   VerticalScroller) reads m_FingerSpawnPos at the slot TouchInRegion
-        //   handed it. Drop this block once DispatchForSimTick dispatches per
-        //   states1 slot -- then channel == slot and the callbacks cover it.
-        // .z is the spawn-anim age counter, independently owned and decremented
-        // by GameInit.cpp's per-frame loop (2 -> 0 -> -1); only stamp it on the
-        // press edge (mirroring the binary's fresh-spawn write) and leave it
-        // alone while held so the aging isn't clobbered every tick.
-        if (slot >= 0 && phase < 1) {
-            _Vector3<float>& spawnPos = game_work.m_FingerSpawnPos[slot];
-            spawnPos.x = touch.states1[slot].currX;
-            spawnPos.y = touch.states1[slot].currY;
-            if (phase == -1) {
-                spawnPos.z = 2.0f;
-            }
-        }
-
-        if (phase == -1) {
-            // Just-pressed this tick.
-            float gx = fingerX[ch];
-            float gy = fingerY[ch];
-            bool  isEdge = pendingEdge[ch];
-            pendingEdge[ch] = false;
-
-            // Port specific: a tap emits no blade move; only real finger
-            // motion moves the blade (v1.6.1 semantics; the SDL synth
-            // previously moved the blade on press). motionSinceDown[ch] is
-            // set ONLY when an SDL_FINGERMOTION drains for this finger --
-            // never by the press itself -- so a stationary TAP (DOWN..UP,
-            // no MOTION) emits TouchScreen + TouchDown and NO TouchMove:
-            // the blade never receives a tap's position and consecutive
-            // taps cannot bridge into a slash (including when SlashEntity's
-            // bomb-hit latch blocks Reset). A fast swipe whose DOWN and
-            // first MOTION drain within the same tick still emits the move
-            // here (the flag is already true by dispatch time).
-            // NB: do NOT gate this on a curr-vs-prev position compare of
-            // touch.states1 -- prevX/Y holds the PREVIOUS stroke's position
-            // on a fresh press, so every tap at a new location compares
-            // unequal and the gate never closes (the old broken heuristic).
-
-            TLOG("DispatchForSimTick FINGERDOWN ch=%d slot=%d edge=%d moved=%d game=(%g,%g)\n",
-                 ch, slot, (int)isEdge, (int)motionSinceDown[ch], gx, gy);
-
-            if (mgr) {
-                InputEvent ie;
-
-                FN_MakeTouchButtonEvent(ie, hashTouchScreen, INPUT_ACTION_DOWN, ch, gx, gy);
-                mgr->DispatchEvent(&ie);
-
-                if (motionSinceDown[ch]) {
-                    FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false, gx, gy);
-                    mgr->DispatchEvent(&ie);
-                    FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true, gx, gy);
-                    mgr->DispatchEvent(&ie);
-                }
-
-                FN_MakeTouchButtonEvent(ie, hashTouchDown[ch],
-                                        INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
-                                        ch, gx, gy);
-                mgr->DispatchEvent(&ie);
-            }
-        } else if (phase == 0) {
-            // Held finger: emit move + held-down.
-            float gx = fingerX[ch];
-            float gy = fingerY[ch];
-
-            TLOG("DispatchForSimTick HELD ch=%d slot=%d game=(%g,%g)\n",
-                 ch, slot, gx, gy);
-
-            if (mgr) {
-                InputEvent ie;
-
-                // Port specific: same press-vs-motion gate as the press
-                // frame -- a held-but-never-moved finger (long-press tap)
-                // emits TouchDown only (re-arms the blade latch at the
-                // stroke's existing position) and no TouchMove.
-                if (motionSinceDown[ch]) {
-                    FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false, gx, gy);
-                    mgr->DispatchEvent(&ie);
-
-                    FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true, gx, gy);
-                    mgr->DispatchEvent(&ie);
-                }
-
-                FN_MakeTouchButtonEvent(ie, hashTouchDown[ch], INPUT_ACTION_DOWN, ch, gx, gy);
-                mgr->DispatchEvent(&ie);
-            }
-        } else if (wasActive && !nowActive) {
-            // Released this tick: emit TouchUp once.
-            float gx = fingerX[ch];
-            float gy = fingerY[ch];
-
-            TLOG("DispatchForSimTick FINGERUP ch=%d game=(%g,%g)\n", ch, gx, gy);
-
-            if (mgr) {
-                InputEvent ie;
-                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch, gx, gy);
-                mgr->DispatchEvent(&ie);
-            }
-        }
-
-        prevActive[ch] = nowActive;
-    }
-
-    // --- Channels 8-15: pending-bool model (no Mortar::Touch slot) ---
-    for (int ch = Mortar::Touch::MAX_SLOTS; ch < 16; ++ch) {
-        if (pendingDown[ch]) {
-            bool isEdge = pendingEdge[ch];
-            pendingDown[ch] = false;
-            pendingEdge[ch] = false;
-
-            if (!mgr) continue;
-
-            TLOG("DispatchForSimTick FINGERDOWN ch=%d (overflow) edge=%d game=(%g,%g)\n",
-                 ch, (int)isEdge, fingerX[ch], fingerY[ch]);
-
-            InputEvent ie;
-
-            FN_MakeTouchButtonEvent(ie, hashTouchScreen, INPUT_ACTION_DOWN, ch,
-                                    fingerX[ch], fingerY[ch]);
-            mgr->DispatchEvent(&ie);
-
-            // Port specific: press-vs-motion gate (see channels 0-7).
-            if (motionSinceDown[ch]) {
-                FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false,
-                                      fingerX[ch], fingerY[ch]);
-                mgr->DispatchEvent(&ie);
-                FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true,
-                                      fingerX[ch], fingerY[ch]);
-                mgr->DispatchEvent(&ie);
-            }
-
-            FN_MakeTouchButtonEvent(ie, hashTouchDown[ch],
-                                    INPUT_ACTION_DOWN | (isEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
-                                    ch, fingerX[ch], fingerY[ch]);
-            mgr->DispatchEvent(&ie);
-
-        } else if (pendingUp[ch]) {
-            pendingUp[ch] = false;
-            fingerActive[ch] = false;
-
-            TLOG("DispatchForSimTick FINGERUP ch=%d (overflow) game=(%g,%g)\n",
-                 ch, fingerX[ch], fingerY[ch]);
-
-            if (mgr) {
-                InputEvent ie;
-                FN_MakeTouchButtonEvent(ie, hashTouchUp[ch], INPUT_ACTION_UP, ch,
-                                        fingerX[ch], fingerY[ch]);
-                mgr->DispatchEvent(&ie);
-            }
-
-        } else if (fingerActive[ch]) {
-            // Held overflow finger: emit one TouchMove at current pos.
-            if (!mgr) continue;
-
-            TLOG("DispatchForSimTick HELD ch=%d (overflow) game=(%g,%g)\n",
-                 ch, fingerX[ch], fingerY[ch]);
-
-            InputEvent ie;
-
-            // Port specific: press-vs-motion gate (see channels 0-7).
-            if (motionSinceDown[ch]) {
-                FN_MakeTouchAxisEvent(ie, hashTouchMoveX[ch], ch, false,
-                                      fingerX[ch], fingerY[ch]);
-                mgr->DispatchEvent(&ie);
-
-                FN_MakeTouchAxisEvent(ie, hashTouchMoveY[ch], ch, true,
-                                      fingerX[ch], fingerY[ch]);
-                mgr->DispatchEvent(&ie);
-            }
-
-            FN_MakeTouchButtonEvent(ie, hashTouchDown[ch], INPUT_ACTION_DOWN, ch,
-                                    fingerX[ch], fingerY[ch]);
-            mgr->DispatchEvent(&ie);
-        }
-    }
+    Mortar::Touch::GetInstance().Update(0.0f);
 }

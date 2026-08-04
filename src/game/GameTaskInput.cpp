@@ -11,6 +11,22 @@
 #include "game/GameWork.h"
 #include "entities/SlashEntity.h"
 #include "input/InputSink.h"
+#include "hud/HUD.h"
+
+// Port specific: the settings modal captures input -- while it is open the
+// per-finger blade must not be fed (see HUD::SetInputModal, src/hud/HUD.h).
+// The gate used to sit in InputTranslatorSDL::DispatchForSimTick, back when the
+// translator was the port's own dispatch site. Now that the binary mapper chain
+// (LoadConfigFile -> InputActionMapper -> these callbacks) is live, the per-finger
+// events arrive here instead, so the gate moved with them. UI widgets are
+// unaffected: they read Mortar::Touch::states1 directly, not these events.
+static bool BladeInputSuppressed() {
+#if defined(__bada__)
+    return false;   // no settings modal on device; folds the gate away entirely
+#else
+    return game_work.mHud && game_work.mHud->GetInputModal() != nullptr;
+#endif
+}
 
 // ASM-spec v1.6.1 GameTaskInitInput @ 0x001cae0c (thunk @ 0x0011512c): pending re-verification
 
@@ -43,15 +59,15 @@ bool TouchDownCallback(InputEvent* ev);
 // Initialises per-session input bindings: config load, 16 touch zones,
 // and 6 global action callbacks.
 void GameTaskInitInput() {
-    // --- Section A: Config load @ 0x16967e ---
-    // TODO: implement Mortar::InputManager::LoadConfigFile (binary @ 0x1969d8)
-    // Binary: InputManager::GetInstance()->LoadConfigFile("Input/Input.txt");
-    // Port specific: LoadConfigFile not ported; SDL2 input does not use
-    // an action-mapper config file. Call site preserved as comment so
-    // call-graph shape matches binary.
-
     Mortar::InputManager* im = Mortar::InputManager::GetInstance();
     if (!im) return;
+
+    // --- Section A: Config load, v1.6.1 GameTaskInitInput @ 0x001cae0c ---
+    // MUST come first. LoadConfigFile @0x002442fc is the only thing that creates
+    // InputActionMappers, and every RegisterInputCallback below binds by walking
+    // that mapper list -- it never inserts on a miss, so a callback registered
+    // before the parse would bind to nothing.
+    im->LoadConfigFile("Input/Input.txt");
 
     // --- Section B: 16-zone loop, v1.6.1 GameTaskInitInput @ 0x001cae0c ---
     //
@@ -156,23 +172,15 @@ void GameTaskInitInput() {
 //   before the value ever reaches Mortar::Touch. Exactly one side does the
 //   centring -- applying it here as well would double-transform every touch.
 //
-// KNOWN PORT DIVERGENCE (affects this function and TouchDownCallback below):
-//   `n` here is the ACTION CHANNEL. In the binary that is also the
-//   Mortar::Touch::states1 SLOT index, because Touch::SendIndividualTouchCallbacks
-//   @0x00242bc4 walks states1 and derives 0x89+slot / 0x99+slot / 0xa9+slot from
-//   the slot it is standing on. The port's InputTranslatorSDL::DispatchForSimTick
-//   instead derives the channel from extId-1, and ___UpdateInternal's rotating
-//   free-slot claim means slot != extId-1 in general. So m_FingerSpawnPos ends up
-//   with two writers at two indices for the same finger: the translator writes
-//   [slot] (which every UI widget reads, via the slot TouchInRegion returns) and
-//   these callbacks write [channel]. Fixing this properly means making the
-//   translator dispatch per states1 slot, as the binary does -- then the
-//   translator's own m_FingerSpawnPos write becomes redundant and can go.
+// `n` is the ACTION CHANNEL, which IS the Mortar::Touch::states1 slot index:
+// Touch::SendIndividualTouchCallbacks @0x00242bc4 walks states1 and derives
+// 0x89+slot / 0x99+slot / 0xa9+slot from the slot it is standing on. So
+// m_FingerSpawnPos[n] here and the slot every UI widget gets back from
+// TouchInRegion are the same index. (Before the mapper chain landed, the port's
+// translator derived the channel from extId-1 instead, and the two disagreed.)
 //
-// Returns true (binary returns 1). Safe now that GameTaskInitInput is the only
-// registrar for these hashes: SlashEntity no longer binds itself to
-// TouchMove_X<i>/Y<i>, so InputDeviceBada::DispatchEvent's stop-on-true has no
-// second handler left to starve.
+// Returns true (binary returns 1). CheckActions @0x002757fc discards the return,
+// so it consumes nothing.
 bool PointerMoveCallback(InputEvent* ev) {
     if (!ev) return false;
 
@@ -196,7 +204,7 @@ bool PointerMoveCallback(InputEvent* ev) {
     if (n < 16) {
         if (sink) {
             sink->TouchMoveX(ev, &game_work.m_FingerSpawnPos[n]);
-        } else {
+        } else if (!BladeInputSuppressed()) {
             g_pSlashEntities[n]->TouchMoveX(ev);
         }
         game_work.m_FingerSpawnPos[kc - INPUT_KEY_TOUCHAXISX1].x = px;
@@ -212,7 +220,9 @@ bool PointerMoveCallback(InputEvent* ev) {
             game_work.m_FingerSpawnPos[n].y = py;
             sink->TouchMoveY(ev, &game_work.m_FingerSpawnPos[n]);
         } else {
-            g_pSlashEntities[n]->TouchMoveY(ev);
+            if (!BladeInputSuppressed()) {
+                g_pSlashEntities[n]->TouchMoveY(ev);
+            }
             game_work.m_FingerSpawnPos[kc - INPUT_KEY_TOUCHAXISY1].y = py;
         }
     }
@@ -358,7 +368,9 @@ bool TouchDownCallback(InputEvent* ev) {
     if (n < 16) {
         Mortar::InputSink* sink = game_work.m_pActiveTouchSink;
         if (!sink || !sink->TouchDown(ev, &game_work.m_FingerSpawnPos[n])) {
-            g_pSlashEntities[ev->m_KeyId - INPUT_KEY_TOUCH1]->TouchDown(ev);
+            if (!BladeInputSuppressed()) {
+                g_pSlashEntities[ev->m_KeyId - INPUT_KEY_TOUCH1]->TouchDown(ev);
+            }
         }
         float& z = game_work.m_FingerSpawnPos[n].z;
         z = (z < 0.0f) ? 2.0f : 1.0f;

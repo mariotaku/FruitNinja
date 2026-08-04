@@ -512,13 +512,12 @@ public:
                               const char* contactParticle, const char* particle2);
 
     // ASM-spec v1.6.1 SlashEntity::TouchDown @0x001ea420
-    // Port note: on the stroke-reset branch the port first syncs
-    // m_RawTouchPos from the event so a NEW stroke seeds at the press
-    // position -- the SDL layer emits no TouchMove on a motionless press
-    // (a tap never moves the blade; see InputTranslatorSDL.h). When the
-    // bomb-hit latch blocks Reset, no sync happens either: the stale
-    // position keeps OnTouchActive in its skip path, so taps append
-    // nothing (no post-bomb tap-bridge).
+    // Fires EVERY tick a finger is held, not just on the press edge --
+    // Touch::SendIndividualTouchCallbacks @0x00242bc4 emits ButtonPressed(Touch<n>,
+    // mask 2) per poll. Starts a new stroke (Reset) only when m_BladeActive has
+    // decayed to 0, which the one-tick gap on release guarantees. The event
+    // carries no position; m_RawTouchPos is already fresh because the slot's two
+    // TouchAxis events are emitted just before its ButtonPressed.
     bool TouchDown(InputEvent* event);
 
     // ASM-spec v1.6.1 SlashEntity::TouchMoveX @0x001e785c -- writes pos.x.

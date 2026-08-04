@@ -24,6 +24,7 @@
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
 #include "platform/InputTranslatorSDL.h"
+#include "input/InputManager.h"
 #include "render/gl_funcs.h"
 #include "Game.h"
 #include <cstdio>
@@ -103,6 +104,16 @@ static bool SceneFrameTick(SceneSlashData* d, Game& game, SDL_Window* window) {
     }
     // Dispatch accumulated touch state to InputManager for this sim tick (#173).
     if (game.inputTranslator) game.inputTranslator->DispatchForSimTick();
+
+    // DispatchForSimTick only drains the SDL edges into Mortar::Touch's ring.
+    // The action events that reach the blades are raised one layer up, by
+    // InputManager::Update @0x00243838 -> InputDeviceBada::Update @0x00242f40
+    // -> Touch::SendIndividualTouchCallbacks @0x00242bc4 -> the per-finger
+    // callbacks in GameTaskInput.cpp. GameUpdate @0x001cf5f4 makes that call
+    // once per frame; this scene hand-rolls its frame loop, so it must too.
+    if (Mortar::InputManager::GetInstance()) {
+        Mortar::InputManager::GetInstance()->Update(0.0f);
+    }
 
     float dt = 0.0f;
     SystemManager::GetInstance().Update(&dt);

@@ -49,15 +49,22 @@ public:
     //   broadcast Update(dt) via device vtable slot +0x0c, m_inUpdate=false.
     void Update(float dt);
 
-    // Defunct: input config file — no-op stub; v1.6.1 Mortar::InputManager::LoadConfigFile @ 0x002442fc
+    // v1.6.1 Mortar::InputManager::LoadConfigFile @0x002442fc.
+    // Parses an input config file (Input/Input.txt) into InputActionMappers and
+    // broadcasts them to every device. THE only producer of mappers -- call it
+    // before any RegisterInputCallback, which binds by walking that list and
+    // never inserts on a miss. Returns 1 on success, 0 if the file is missing or
+    // fails to load. See the .cpp for the line grammar.
     int LoadConfigFile(const char* path);
 
     // v1.6.1 Mortar::InputManager::AddActionMapper @0x00243894 — AddActionMapper: broadcast to devices.
     void AddActionMapper(InputActionMapper* mapper);
 
     // v1.6.1 Mortar::InputManager::ClearActions @0x002441e0 — broadcast
-    // Mortar::InputDevice::ClearActions(hash, last=true on final).
-    void ClearActions(unsigned long actionHash);
+    // Mortar::InputDevice::ClearActions(configSourceHash, last=true on final).
+    // The hash is the CONFIG SOURCE (StringHash of the file path LoadConfigFile
+    // was given), not an action name; 0 clears every mapper.
+    void ClearActions(unsigned long configSourceHash);
 
     // v1.6.1 Mortar::InputManager::HasInputDevice @0x00244298 — search the device
     // list for the first device whose GetDeviceType() matches `type`.
@@ -98,13 +105,6 @@ public:
     // Non-static const instance method to match binary mangled ABI (_ZNK...ValidCharacterEh);
     // no callers currently invoke it, so the shape change is call-site-free.
     bool ValidCharacter(unsigned char c) const;
-
-    // Port-side: dispatch an InputEvent through all devices.
-    // Not a binary method — InputTranslatorSDL drives dispatch here.
-    void DispatchEvent(InputEvent* event);
-
-    // Port-side: dispatch to all devices (global event, no hash filter).
-    void DispatchGlobal(InputEvent* event);
 
     // Struct fields matching binary layout (vptr occupies +0x00..+0x03):
     bool m_loadingConfig;                    // +0x04

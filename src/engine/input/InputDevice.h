@@ -39,12 +39,21 @@ namespace Mortar {
 //   +0x14  uint32_t  m_KeyMask
 //   +0x18  uint32_t  m_Param4
 //   +0x1c  uint32_t  m_Param5
-//   +0x20  36-byte   m_callback          (binary: Delegate1 = StackAllocatedPointer<BaseDelegate,32ul>
+//   +0x20  36-byte   m_Callback          (binary: Delegate1 = StackAllocatedPointer<BaseDelegate,32ul>
 //                                         32-byte inline payload +0x20..+0x3f, then the
 //                                         delegate's OWN m_bInline byte at delegate+0x20 = +0x40)
 // The byte at +0x40 is NOT a separate InputActionMapper field: it is the
 // Delegate1's m_bInline (see Delegate.h m_bEmpty @ +0x20 of the delegate). Port
 // Delegate1 is byte-exact with the binary's, so the whole class matches at 0x44.
+//
+// UNBOUND MAPPERS ARE NORMAL, NOT AN ERROR. InputManager::LoadConfigFile builds
+// one mapper per Input/Input.txt action line (67 of them) with an EMPTY delegate,
+// and only ~54 ever get a callback bound -- the 16 TouchReleased_<i> mappers never
+// do. CheckActions @0x002757fc walks ALL of them with no boundness filter, so
+// invoking an empty delegate is a designed, once-per-frame path. The no-op lives
+// inside the delegate itself (v1.6.1 Delegate1<bool,InputEvent*>::Call @0x002757d4
+// null-checks the resolved pointer and returns 0). Never add a port-side
+// "skip unbound mappers" guard on top of it.
 // ActionMappers are held by pointer in InputDevice::m_ActionMappers
 // (std::list<InputActionMapper*>). CheckActions iterates the list and calls
 // ProcessEvent per element.
@@ -67,6 +76,13 @@ public:
     // the return exists for shape fidelity, NOT to drive a chain-consume.
     bool ProcessEvent(InputEvent* event);
 
+    // v1.6.1 InputActionMapper::SetCallback @0x00275690 — two instructions:
+    //   add r0,r0,#0x20 ; b StackAllocatedPointer<BaseDelegate,32>::operator=
+    // i.e. a plain OVERWRITE of the single 36-byte delegate at +0x20. There is no
+    // append: one mapper holds exactly ONE callback, so binding a second handler to
+    // the same action name silently replaces the first.
+    void SetCallback(const InputDeviceCallback& cb);
+
     bool      m_Enabled;           // +0x00  strb #1 in ctor
     uint32_t  m_ActionHash;        // +0x04  OR'd action+flag word (ctor param)
     uint32_t  m_ConfigSourceHash;  // +0x08
@@ -79,7 +95,12 @@ public:
     uint32_t  m_KeyMask;           // +0x14  event word 2 = m_Value / m_KeyId
     uint32_t  m_Param4;            // +0x18  event word 3 = m_Delta (float bits)
     uint32_t  m_Param5;            // +0x1c  event word 4 = m_Stamp
-    InputDeviceCallback m_callback; // +0x20  36 bytes (0x24) both sides; its m_bInline lands at +0x40
+    // +0x20  StackAllocatedPointer<BaseDelegate,32> — 32-byte inline buffer
+    //        (+0x20..+0x3f) plus its own mode flag at +0x40. Empty = flag set /
+    //        resolved pointer NULL; bound = object placement-constructed IN the
+    //        buffer. Mortar::Delegate1 is that layout, so this is NOT a
+    //        BaseDelegate* and must not be modelled as one.
+    InputDeviceCallback m_Callback; // +0x20  36 bytes (0x24) both sides; its m_bInline lands at +0x40
 };
 
 class InputDevice {
@@ -112,40 +133,51 @@ public:
     virtual void              Destroy();
     virtual void              Update(float dt) = 0;
     virtual void              AddActionMapper(InputActionMapper* mapper) = 0;
-    // DIFFERS: ClearActions/RegisterInputCallback are NON-VIRTUAL base methods in the
-    //   binary (see the slot list above). The port declares them virtual and overrides
-    //   them in InputDeviceBada purely to host the m_bindings dispatch substitute that
-    //   stands in for InputManager::LoadConfigFile (a Defunct stub here, and the binary's
-    //   only creator of InputActionMappers). Drop the `virtual` together with m_bindings
-    //   when LoadConfigFile is ported — not before, or every registration is lost.
-    virtual void              ClearActions(unsigned long actionHash, bool last);
-    virtual void              RegisterInputCallback(unsigned long actionHash,
-                                                    InputDeviceCallback cb);
     virtual void              Reset() = 0;
     virtual void              SetQueueEventsUntilUpdate(bool v) = 0;
     virtual void              SetSendDownCallbacksEachUpdate(bool v) = 0;
     virtual void              OnAxisExtentsChanged() = 0;
     virtual InputDeviceTypes  GetDeviceType() = 0;
 
-    // DIFFERS: PORT-INVENTED — no binary counterpart, in the vtable or otherwise.
-    //   The binary dispatches via the non-virtual CheckActions -> InputActionMapper::
-    //   ProcessEvent. This slot exists only for the m_bindings substitute path
-    //   (InputTranslatorSDL -> InputManager::DispatchEvent -> here) and is removed
-    //   with it once LoadConfigFile is ported.
-    virtual void              DispatchEvent(InputEvent* event) = 0;
-
-    // ---- STUBS (binary) ----
     // v1.6.1 InputDevice::InputDevice @0x002759a8.
     InputDevice();
+
+    // ---- NON-VIRTUAL base methods (no vtable slot in the binary) ----
+
     // v1.6.1 InputDevice::AxisEvent @0x0027582c.
-    void AxisEvent(long, unsigned long, float, float, unsigned long, long);
+    // Packs a 0x14-byte axis InputEvent and runs it through CheckActions:
+    //   m_Flags = mask | 0x20000, m_Tag = tag, m_KeyCode = (uint8)axisId,
+    //   m_Value = value, m_Delta = delta, m_Stamp = stamp.
+    // Params are the binary's, 1-based EXCLUDING `this` — only that reading makes
+    // the axis stamp/tag pair agree with ButtonPressed's (see InputEvent.h).
+    void AxisEvent(long axisId, unsigned long mask, float value, float delta,
+                   unsigned long stamp, long tag);
+
     // v1.6.1 InputDevice::ButtonPressed @0x00275864.
-    void ButtonPressed(unsigned long, unsigned long, float, unsigned long, long);
+    // Packs a 0x14-byte button InputEvent and runs it through CheckActions:
+    //   m_Flags = mask | 0x10000, event word 1 (m_Tag|m_KeyCode<<16) = tagWord,
+    //   m_KeyId = key, m_Delta = value, m_Stamp = stamp.
+    void ButtonPressed(unsigned long key, unsigned long mask, float value,
+                       unsigned long stamp, long tagWord);
 
     // v1.6.1 InputDevice::CheckActions @0x002757fc.
-    // Iterates m_ActionMappers, calls ProcessEvent per element.
+    // Iterates m_ActionMappers, calls ProcessEvent per element. UNCONDITIONAL:
+    // no boundness filter, no short-circuit on a true return.
     void CheckActions(InputEvent* event);
-    // ---- end STUBS ----
+
+    // v1.6.1 InputDevice::ClearActions @0x002758b0.
+    // Removes every mapper whose m_ConfigSourceHash matches `configSourceHash`
+    // (or all of them when the argument is 0). `last` is true on the final device
+    // of the InputManager broadcast; only that device deletes the mappers, because
+    // InputManager::AddActionMapper @0x00243894 handed the SAME pointer to each
+    // device. NOT the same symbol as InputManager::ClearActions @0x002441e0.
+    void ClearActions(unsigned long configSourceHash, bool last);
+
+    // v1.6.1 InputDevice::RegisterInputCallback @0x002759f4.
+    // Walks m_ActionMappers and calls SetCallback on EVERY mapper whose
+    // m_ActionHash equals `actionHash`. There is no insert-on-miss: an action name
+    // that Input/Input.txt does not declare binds nothing and is silently dropped.
+    void RegisterInputCallback(unsigned long actionHash, InputDeviceCallback cb);
 
     // +0x00: implicit vptr (port) / explicit fns* (binary) — layout equivalent
     // +0x04: std::list<InputActionMapper*> m_ActionMappers (8 bytes, Sourcery 2010q1)
@@ -155,6 +187,17 @@ public:
 } // namespace Mortar
 
 #if defined(__bada__)
+static_assert(offsetof(Mortar::InputActionMapper, m_Enabled)          == 0x00, "InputActionMapper::m_Enabled offset");
+static_assert(offsetof(Mortar::InputActionMapper, m_ActionHash)       == 0x04, "InputActionMapper::m_ActionHash offset");
+static_assert(offsetof(Mortar::InputActionMapper, m_ConfigSourceHash) == 0x08, "InputActionMapper::m_ConfigSourceHash offset");
+static_assert(offsetof(Mortar::InputActionMapper, m_ActionMask)       == 0x0c, "InputActionMapper::m_ActionMask offset");
+static_assert(offsetof(Mortar::InputActionMapper, m_MatchValue)       == 0x10, "InputActionMapper::m_MatchValue offset");
+static_assert(offsetof(Mortar::InputActionMapper, m_KeyMask)          == 0x14, "InputActionMapper::m_KeyMask offset");
+static_assert(offsetof(Mortar::InputActionMapper, m_Param4)           == 0x18, "InputActionMapper::m_Param4 offset");
+static_assert(offsetof(Mortar::InputActionMapper, m_Param5)           == 0x1c, "InputActionMapper::m_Param5 offset");
+// +0x20 is the StackAllocatedPointer<BaseDelegate,32> itself; its own mode flag
+// lands at +0x40, which the 0x44 total below pins (0x20 + 0x24 == 0x44).
+static_assert(offsetof(Mortar::InputActionMapper, m_Callback)         == 0x20, "InputActionMapper::m_Callback offset");
 static_assert(sizeof(Mortar::InputActionMapper) == 0x44, "InputActionMapper size mismatch");
 static_assert(sizeof(Mortar::InputDevice) == 12, "InputDevice size mismatch");
 #endif

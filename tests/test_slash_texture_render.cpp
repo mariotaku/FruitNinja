@@ -76,26 +76,26 @@
 // ---------------------------------------------------------------------------
 static void SimulateTouchDown(SlashEntity* s, float x, float y) {
     InputEvent evX;
-    FN_MakeTouchAxisEvent(evX, 0, 0, false, x, y);
+    FN_MakeTouchAxisEvent(evX, 0, false, x);
     s->TouchMoveX(&evX);
     InputEvent evY;
-    FN_MakeTouchAxisEvent(evY, 0, 0, true, x, y);
+    FN_MakeTouchAxisEvent(evY, 0, true, y);
     s->TouchMoveY(&evY);
 
-    // The press event deliberately carries position (0,0): TouchDown's
-    // press-edge arm re-seeds the stroke from it, which is what this test's
-    // golden was captured against.
+    // The button event carries no position -- the two axis events above already
+    // put (x,y) in the blade, exactly as Touch::SendIndividualTouchCallbacks
+    // @0x00242bc4 orders them. A fresh blade Resets here and seeds at (x,y).
     InputEvent evDown;
-    FN_MakeTouchButtonEvent(evDown, 0, INPUT_ACTION_DOWN_EDGE, 0, 0.0f, 0.0f);
+    FN_MakeTouchButtonEvent(evDown, INPUT_ACTION_DOWN, 0);
     s->TouchDown(&evDown);
 }
 
 static void SimulateTouchMove(SlashEntity* s, float x, float y) {
     InputEvent evX;
-    FN_MakeTouchAxisEvent(evX, 0, 0, false, x, y);
+    FN_MakeTouchAxisEvent(evX, 0, false, x);
     s->TouchMoveX(&evX);
     InputEvent evY;
-    FN_MakeTouchAxisEvent(evY, 0, 0, true, x, y);
+    FN_MakeTouchAxisEvent(evY, 0, true, y);
     s->TouchMoveY(&evY);
     s->UpdateTouchDown(&evY);
 }

@@ -39,6 +39,7 @@
 #include "render/DisplayManager.h"
 #include "core/SystemManager.h"
 #include "platform/InputTranslatorSDL.h"
+#include "input/InputManager.h"
 #include "render/gl_funcs.h"
 #include "asset/TextureManager.h"
 #include "Game.h"
@@ -188,6 +189,14 @@ static void RenderBladeFrame(SDL_Window* window) {
 // Tick the slash entity: drain SDL events, dispatch, then Update.
 // Port specific: drain events (no dispatch), then DispatchForSimTick
 // to match the #173 drain/dispatch split invariant.
+//
+// InputManager::Update is what actually raises the action events: it broadcasts
+// to InputDeviceBada::Update @0x00242f40 -> Touch::SendIndividualTouchCallbacks
+// @0x00242bc4 -> the per-finger callbacks in GameTaskInput.cpp. GameUpdate
+// @0x001cf5f4 calls it once per frame; this scene hand-rolls its frame loop
+// instead of going through GameUpdate, so it has to make the same call. Without
+// it the translator only latches SDL edges into Mortar::Touch's ring and no
+// blade ever sees a TouchDown -- m_PointCount stays 0 and nothing draws.
 // ---------------------------------------------------------------------------
 static void TickSlash(Game& game, SDL_Window* window) {
     SDL_Event ev;
@@ -198,6 +207,9 @@ static void TickSlash(Game& game, SDL_Window* window) {
         }
     }
     if (game.inputTranslator) game.inputTranslator->DispatchForSimTick();
+    if (Mortar::InputManager::GetInstance()) {
+        Mortar::InputManager::GetInstance()->Update(0.0f);
+    }
     float dt = 0.0f;
     SystemManager::GetInstance().Update(&dt);
 
@@ -462,6 +474,11 @@ static bool InteractiveTick(fn::TestHarness& h, InteractiveData* d) {
         }
     }
     if (h.game.inputTranslator) h.game.inputTranslator->DispatchForSimTick();
+    // See TickSlash: the action events come from InputManager::Update, which
+    // GameUpdate normally drives.
+    if (Mortar::InputManager::GetInstance()) {
+        Mortar::InputManager::GetInstance()->Update(0.0f);
+    }
 
     float dt = 0.0f;
     SystemManager::GetInstance().Update(&dt);

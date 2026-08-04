@@ -130,35 +130,36 @@
 //
 // For step 3 to work without Reset firing, m_BladeActive must be non-zero.
 // TouchDown sets m_BladeActive |= 1 via OnTouchActive -> AddPoint epilogue.
-// So after step 2, m_BladeActive=1. Step 3 calls TouchDown which checks
-// (m_BladeActive==0 || pressEdge). m_BladeActive=1, and we don't set
-// INPUT_ACTION_DOWN_EDGE, so Reset does NOT fire. Good.
+// So after step 2, m_BladeActive=1 and step 3's TouchDown skips Reset. Only
+// SlashEntity::Update decays that latch, and this fixture never calls Update --
+// which is exactly the "no Reset in between" the canary needs.
 
 // TouchAxisX0 / TouchAxisY0 axis events -- one axis value per event
 // (InputEvent +0x08), matching InputDevice::AxisEvent @0x0027582c.
 static InputEvent MakeMove(int channel, bool yAxis, float x, float y) {
     InputEvent ev;
-    FN_MakeTouchAxisEvent(ev, 0, channel, yAxis, x, y);
+    FN_MakeTouchAxisEvent(ev, channel, yAxis, yAxis ? y : x);
     return ev;
 }
 
-// Touch<channel+1> button event.
-static InputEvent MakeDown(int channel, float x, float y, bool pressEdge) {
+// Touch<channel+1> button event, as ButtonPressed(0x89 + channel, 2, ...) packs
+// it -- the "held" event Touch::SendIndividualTouchCallbacks raises every tick a
+// finger is down. It carries no position: the two axis events above deliver that.
+static InputEvent MakeDown(int channel) {
     InputEvent ev;
-    FN_MakeTouchButtonEvent(ev, 0,
-                            INPUT_ACTION_DOWN | (pressEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
-                            channel, x, y);
+    FN_MakeTouchButtonEvent(ev, INPUT_ACTION_DOWN, channel);
     return ev;
 }
 
-// Drive SlashEntity to accept one touch position: set raw pos then fire TouchDown.
-// pressEdge=true forces Reset (first point of a new slice).
-static void Touch(SlashEntity& se, float x, float y, bool pressEdge) {
+// Drive SlashEntity to accept one touch position, in the order the binary's poll
+// raises the three events for one slot. TouchDown starts a new stroke only when
+// m_BladeActive == 0 (fresh blade); otherwise it extends the current one.
+static void Touch(SlashEntity& se, float x, float y) {
     InputEvent moveX = MakeMove(0, false, x, y);
     se.TouchMoveX(&moveX);
     InputEvent moveY = MakeMove(0, true, x, y);
     se.TouchMoveY(&moveY);
-    InputEvent down = MakeDown(0, x, y, pressEdge);
+    InputEvent down = MakeDown(0);
     se.TouchDown(&down);
 }
 
@@ -173,9 +174,9 @@ static void test_reset_zeroes_head_cap_slot() {
     // Immediately after Init: buffer[2] must be 0 (InitPoints zeroes all).
     CHECK_NEAR(se.GetVertexY(2), 0.0f, 0.01f);
 
-    // Step 2: Slice A, first touch at y=+100 with pressEdge=true (forces Reset +
+    // Step 2: Slice A, first touch at y=+100 on a fresh blade (m_BladeActive == 0 forces Reset +
     // AddPoint). After this: m_PointCount=2, buffer[0,1] hold y~=+100.
-    Touch(se, 0.0f, 100.0f, true);
+    Touch(se, 0.0f, 100.0f);
     CHECK(se.GetPointCount() == 2);
 
     // buffer[2] must still be 0 -- it has not been written by AddPoint yet.
@@ -183,8 +184,8 @@ static void test_reset_zeroes_head_cap_slot() {
 
     // Step 3: Slice A continues -- second touch far enough away to trigger AddPoint.
     // Move 200 units (> POINT_SPACING=64) so OnTouchActive hits the non-seed branch
-    // and adds more points. pressEdge=false so Reset does NOT fire.
-    Touch(se, 0.0f, 300.0f, false);
+    // and adds more points. m_BladeActive is 1, so Reset does NOT fire.
+    Touch(se, 0.0f, 300.0f);
     // m_PointCount should have grown past 2.
     int countAfterSliceA = se.GetPointCount();
     printf("    countAfterSliceA=%d\n", countAfterSliceA);
@@ -204,10 +205,10 @@ static void test_reset_zeroes_head_cap_slot() {
     printf("    buffer[2].y after Reset() = %.2f (expect 0.0)\n", yAfterReset);
     CHECK_NEAR(yAfterReset, 0.0f, 0.01f);
 
-    // Step 5: Slice B at y=-100 with pressEdge=true.
-    // TouchDown sees m_BladeActive==0 (Reset clears it) so Reset fires again
-    // (idempotent), then AddPoint writes buffer[0,1] at y=-100.
-    Touch(se, 0.0f, -100.0f, true);
+    // Step 5: Slice B at y=-100. The manual Reset above left the anchor sentinel
+    // armed, so OnTouchActive takes its SEED branch and AddPoint writes
+    // buffer[0,1] at y=-100 whether or not TouchDown re-Resets.
+    Touch(se, 0.0f, -100.0f);
     CHECK(se.GetPointCount() == 2);
 
     // Step 6: head-cap slot is at index m_PointCount (==2). It must be 0.0f
@@ -228,8 +229,8 @@ static void test_reset_zeroes_both_buffers() {
     se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
     // Drive slice A and populate buffer[2] with non-zero data.
-    Touch(se, 0.0f, 100.0f, true);
-    Touch(se, 0.0f, 300.0f, false);
+    Touch(se, 0.0f, 100.0f);
+    Touch(se, 0.0f, 300.0f);
     CHECK(se.GetPointCount() >= 4);
 
     // Confirm buffer[2] is non-zero.

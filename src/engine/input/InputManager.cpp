@@ -2,8 +2,11 @@
 
 #include "input/InputManager.h"
 #include "input/InputDeviceBada.h"
+#include "asset/File.h"
+#include "system/PowerManager.h"
 #include "util/StringHash.h"
 #include <cstddef>
+#include <cstring>
 
 namespace Mortar {
 
@@ -71,37 +74,168 @@ void InputManager::Update(float dt) {
     m_inUpdate = false;
 }
 
-// This stub BLOCKS removing the port's m_bindings substitute (InputDeviceBada).
-// In the binary this function is the ONLY producer of InputActionMappers: it parses
-// Input/Input.txt and, per action line, does operator new(0x44) + InputActionMapper
-// ctor + InputManager::AddActionMapper (which broadcasts to every device's
-// AddActionMapper, filling InputDevice::m_ActionMappers). With it stubbed,
-// m_ActionMappers stays permanently empty, so the binary-faithful non-virtual
-// RegisterInputCallback/ClearActions/CheckActions bodies would register and dispatch
-// nothing — hence the port's InputDeviceBinding list stands in. Porting this also
-// needs InputManager::ParseAction and InputManager::ParseKey.
+namespace {
+
+// The per-action-line mapper emit that v1.6.1 InputManager::LoadConfigFile
+// @0x002442fc inlines twice (once in the '\n' case, once in the post-loop
+// section==2 tail). Kept as one static helper so both sites stay identical.
 //
-// One-callback-per-hash constraint (satisfied as of the blade-input rework):
-// InputDevice::RegisterInputCallback @0x002759f4 walks m_ActionMappers and calls
-// InputActionMapper::SetCallback on every mapper whose m_ActionHash matches.
-// SetCallback OVERWRITES the mapper's single 36-byte Delegate1 -- one mapper holds
-// exactly ONE callback, there is no append, so a hash with two port-side handlers
-// would silently lose one under the mapper path. The blade used to be such a case
-// (GameTaskInitInput and SlashEntity::Init both bound TouchDown_<i> /
-// TouchMove_X<i> / TouchMove_Y<i>). It no longer is: GameTaskInitInput is the sole
-// registrar, and its TouchDownCallback @0x001cbf18 / PointerMoveCallback
-// @0x001cbfcc dispatch into g_pSlashEntities[n] the way the binary does.
+// `tmpl` is the caller's single InputEvent, zero-initialised ONCE before the
+// parse loop and never reset between lines -- a field written by one line is
+// still there for the next, which is why the mapper ctor copies whatever is in
+// it. Do not "clean" that up.
+void EmitConfigMapper(InputManager* mgr, InputEvent& tmpl,
+                      unsigned long cfgHash, unsigned long nameHash,
+                      unsigned long key, unsigned long action) {
+    unsigned long flags;
+    if (key - 0xd0u < 3u) {
+        // UNREACHABLE in v1.6.1: the highest key code ParseKey @0x002438c8 can
+        // return is AccelAxisZ = 0xbb, so nothing lands in 0xd0..0xd2. Ported
+        // anyway because the binary branch is there (stub-don't-skip).
+        flags = action | 0x80000;
+        tmpl.m_KeyCode = (uint16_t)key;          // event word 1, high half
+    } else if (action <= 0xf) {
+        // Button actions (pressed/down/released/up): the key code is compared
+        // against the event's key-id word.
+        flags = action | 0x10000;
+        tmpl.m_KeyId = (uint32_t)key;            // event word 2
+        tmpl.m_Delta = 0.0f;                     // event word 3
+    } else {
+        // Axis actions (active/move/dead): the key code goes in word 1's high
+        // half. ProcessEvent treats codes < 0x89 there as a BITMASK, which is
+        // what makes `MouseAxisX,MouseAxisY` (OR'd by the ',' case) match both.
+        flags = action | 0x20000;
+        tmpl.m_KeyCode = (uint16_t)key;          // event word 1, high half
+    }
+
+    // The guard is AFTER the field writes, exactly as the binary orders it.
+    // key == 0 is the normal outcome for every keyboard/X360 line in
+    // Input/Input.txt -- ParseKey knows 61 names and none of them is a key or
+    // gamepad button, so those lines create no mapper at all.
+    if (key != 0 && nameHash != 0 && action != 0) {
+        InputDeviceCallback cb;   // EMPTY -- bound later by RegisterInputCallback, or never
+        tmpl.m_Flags = (uint32_t)flags;
+        InputActionMapper* mapper = new InputActionMapper(tmpl, cb, nameHash, cfgHash);
+        mgr->AddActionMapper(mapper);   // broadcasts to EVERY device
+    }
+}
+
+}  // namespace
+
+// v1.6.1 Mortar::InputManager::LoadConfigFile @0x002442fc.
 //
-// What still blocks the swap:
-//   * The action names. The port's translators emit "TouchUp_<i>", which
-//     input.txt does not declare (it is "TouchReleased_<i>", and v1.6.1 binds no
-//     callback to it at all). Rename translator-side when this lands.
-//   * InputEvent's port-only side channel (actionHash, x, y) and the m_bindings
-//     list itself -- see the DIFFERS in InputEvent.h and InputDevice.h.
-//   * InputManager::ParseAction and InputManager::ParseKey must be live.
+// THE only producer of InputActionMappers in the whole engine. Parses
+// Input/Input.txt into one mapper per action line and broadcasts each to every
+// registered device, filling InputDevice::m_ActionMappers. Everything downstream
+// depends on it: InputDevice::RegisterInputCallback @0x002759f4 binds a callback
+// by walking that list, and it never inserts on a miss -- so an action name this
+// function did not create is unbindable. Call it BEFORE any RegisterInputCallback
+// (GameTaskInitInput @0x001cae0c does exactly that, as its first statement).
+//
+// Line grammar: `Name: Key1,Key2; action1,action2` terminated by a newline.
+//   ':'  ends the action NAME      -> nameHash, section 1
+//   ','  ORs another key (section 1) or another action flag (section 2)
+//   ';'  ends the key list         -> key ASSIGNED (not OR'd), action reset to 0,
+//                                     section 2
+//   '\n' ends the action list      -> emit the mapper, section back to 0
+//   ' ' / '\t' are skipped WITHOUT resetting the token cursor.
+//
+// The v1.6.1 Input/Input.txt yields 67 mappers: 32 TouchMove_X/Y<i>, 16
+// TouchDown_<i>, 16 TouchReleased_<i>, plus PointerMove / PointerPressed /
+// PointerReleased. The other lines name keyboard or X360 inputs that ParseKey
+// does not know, so they are dropped. Of the 67, the 16 TouchReleased_<i>
+// mappers never get a callback -- v1.6.1 registers no per-finger release handler.
+// That is expected; see the "unbound mappers are normal" note in InputDevice.h.
+//
+// Returns 1 on success, 0 if the file is missing or fails to load.
 int InputManager::LoadConfigFile(const char* path) {
-    (void)path;
-    // Defunct: input config file — no-op stub; v1.6.1 Mortar::InputManager::LoadConfigFile @ 0x002442fc
+    m_loadingConfig = true;
+    // Spin until any in-flight InputManager::Update broadcast has finished --
+    // the parse mutates every device's mapper list.
+    while (m_inUpdate) {
+        PowerManager::GetInstance()->Update();
+    }
+
+    if (!File::Exists(path, 0)) {
+        m_loadingConfig = false;
+        return 0;
+    }
+
+    const unsigned long cfgHash = StringHash(path);   // m_ConfigSourceHash on every mapper
+
+    File* f = new File(path, 0, 0);
+    if (!f->Load(0, 0)) {
+        PowerManager::GetInstance()->Update();
+        delete f;
+        m_loadingConfig = false;
+        return 0;
+    }
+
+    char tok[256];
+    int  t = 0;
+    int  section = 0;                 // 0 = name, 1 = keys, 2 = actions
+    unsigned long nameHash = 0;
+    unsigned long key      = 0;
+    unsigned long action   = 0;
+
+    InputEvent tmpl;
+    memset(&tmpl, 0, sizeof(tmpl));   // zero-init ONCE, never reset per line
+
+    const unsigned char* data = static_cast<const unsigned char*>(f->Data());
+    const unsigned long  size = f->Size();
+
+    for (unsigned long i = 0; i < size; ++i) {
+        const unsigned char c = data[i];
+        switch (c) {
+        case ',':
+            tok[t] = 0;
+            if (section == 1) {
+                key |= ParseKey(StringHash(tok));
+            } else {
+                action |= ParseAction(StringHash(tok));
+            }
+            t = 0;
+            break;
+        case ':':
+            tok[t] = 0;
+            nameHash = StringHash(tok);
+            ++section;
+            t = 0;
+            break;
+        case ';':
+            tok[t] = 0;
+            action = 0;
+            key    = ParseKey(StringHash(tok));   // ASSIGNS, does not OR
+            ++section;
+            t = 0;
+            break;
+        case '\n':
+            tok[t] = 0;
+            action |= ParseAction(StringHash(tok));
+            EmitConfigMapper(this, tmpl, cfgHash, nameHash, key, action);
+            section = 0;
+            t = 0;
+            break;
+        case ' ':
+        case '\t':
+            break;                                 // skipped; t is NOT reset
+        default:
+            if (ValidCharacter(c)) {
+                tok[t++] = (char)c;
+            }
+            break;
+        }
+    }
+
+    // Trailing line with no newline terminator.
+    if (section == 2) {
+        tok[t] = 0;
+        action |= ParseAction(StringHash(tok));
+        EmitConfigMapper(this, tmpl, cfgHash, nameHash, key, action);
+    }
+
+    delete f;
+    m_loadingConfig = false;
     return 1;
 }
 
@@ -114,15 +248,16 @@ void InputManager::AddActionMapper(InputActionMapper* mapper) {
 }
 
 // v1.6.1 Mortar::InputManager::ClearActions @0x002441e0 — broadcast
-// ClearActions(hash, last=true on final).
-void InputManager::ClearActions(unsigned long actionHash) {
+// ClearActions(configSourceHash, last=true on final). Only the final device
+// frees the mapper objects; see InputDevice::ClearActions.
+void InputManager::ClearActions(unsigned long configSourceHash) {
     std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
     std::vector<InputDevice*>::iterator end = m_inputDevices.end();
     while (it != end) {
         std::vector<InputDevice*>::iterator next = it;
         ++next;
         bool last = (next == end);
-        (*it)->ClearActions(actionHash, last);
+        (*it)->ClearActions(configSourceHash, last);
         it = next;
     }
 }
@@ -283,23 +418,6 @@ void InputManager::SetSendDownCallbacksEachUpdate(bool v) {
 // Binary @ 0x00195fd8 — return (c - 0x20) < 0x90.
 bool InputManager::ValidCharacter(unsigned char c) const {
     return (unsigned char)(c - 0x20u) < 0x90u;
-}
-
-// Port-side: dispatch through all devices.
-void InputManager::DispatchEvent(InputEvent* event) {
-    for (std::vector<InputDevice*>::iterator it = m_inputDevices.begin();
-         it != m_inputDevices.end(); ++it) {
-        (*it)->DispatchEvent(event);
-    }
-}
-
-// Port-side: global dispatch (no hash filter — all bindings on all devices).
-void InputManager::DispatchGlobal(InputEvent* event) {
-    // Route same as DispatchEvent; device-side DispatchEvent filters by hash.
-    // For global events (no specific hash), callers should set event->actionHash = 0
-    // or use a dedicated broadcast path.
-    // TODO: refine global dispatch semantics when full binary dispatch path is ported.
-    DispatchEvent(event);
 }
 
 } // namespace Mortar

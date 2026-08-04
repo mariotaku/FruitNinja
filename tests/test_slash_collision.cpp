@@ -75,28 +75,29 @@ struct TestEntity : public Mortar::Entity {
 // (InputEvent +0x08), matching InputDevice::AxisEvent @0x0027582c.
 static InputEvent MakeMove(int channel, bool yAxis, float x, float y) {
     InputEvent ev;
-    FN_MakeTouchAxisEvent(ev, 0, channel, yAxis, x, y);
+    FN_MakeTouchAxisEvent(ev, channel, yAxis, yAxis ? y : x);
     return ev;
 }
 
-// Touch<channel+1> button event.
-static InputEvent MakeDown(int channel, float x, float y, bool pressEdge) {
+// Touch<channel+1> button event, as ButtonPressed(0x89 + channel, 2, ...) packs
+// it -- the "held" event Touch::SendIndividualTouchCallbacks raises every tick a
+// finger is down. It carries no position: the two axis events above deliver that.
+static InputEvent MakeDown(int channel) {
     InputEvent ev;
-    FN_MakeTouchButtonEvent(ev, 0,
-                            INPUT_ACTION_DOWN | (pressEdge ? INPUT_ACTION_DOWN_EDGE : 0u),
-                            channel, x, y);
+    FN_MakeTouchButtonEvent(ev, INPUT_ACTION_DOWN, channel);
     return ev;
 }
 
-// Feed one (x,y) touch point into the SlashEntity.
-// pressEdge=true: fires Reset() + seeds a new stroke.
-// pressEdge=false: extends the current stroke.
-static void Touch(SlashEntity& se, float x, float y, bool pressEdge) {
+// Feed one (x,y) touch point into the SlashEntity, in the order the binary's
+// poll raises them for one slot: TouchAxisX, TouchAxisY, then Touch<n> down.
+// A fresh (or just-Reset) blade has m_BladeActive == 0, so the FIRST call after
+// construction starts a new stroke; later calls extend it.
+static void Touch(SlashEntity& se, float x, float y) {
     InputEvent moveX = MakeMove(0, false, x, y);
     se.TouchMoveX(&moveX);
     InputEvent moveY = MakeMove(0, true, x, y);
     se.TouchMoveY(&moveY);
-    InputEvent down = MakeDown(0, x, y, pressEdge);
+    InputEvent down = MakeDown(0);
     se.TouchDown(&down);
 }
 
@@ -117,9 +118,9 @@ static void test_crossing_hit() {
     SlashEntity se;
     se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
-    Touch(se, -60.0f, 0.0f, true);   // seed; m_PointCount=2
-    Touch(se, 0.0f,   0.0f, false);  // extend; m_PointCount=4
-    Touch(se, 60.0f,  0.0f, false);  // extend; m_PointCount=6
+    Touch(se, -60.0f, 0.0f);   // seed; m_PointCount=2
+    Touch(se, 0.0f,   0.0f);  // extend; m_PointCount=4
+    Touch(se, 60.0f,  0.0f);  // extend; m_PointCount=6
 
     int pc = se.GetPointCount();
     std::printf("    m_PointCount=%d (expect >= 4)\n", pc);
@@ -155,8 +156,8 @@ static void test_blank_miss() {
     SlashEntity se;
     se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
-    Touch(se, -220.0f, 150.0f, true);   // seed at far corner
-    Touch(se, -200.0f, 150.0f, false);  // 20-unit step; m_PointCount=4
+    Touch(se, -220.0f, 150.0f);   // seed at far corner
+    Touch(se, -200.0f, 150.0f);  // 20-unit step; m_PointCount=4
 
     int pc = se.GetPointCount();
     std::printf("    m_PointCount=%d (expect >= 4)\n", pc);
@@ -201,8 +202,8 @@ static void test_near_boundary() {
         SlashEntity se;
         se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
-        Touch(se, 30.0f, 0.0f, true);
-        Touch(se, 60.0f, 0.0f, false);
+        Touch(se, 30.0f, 0.0f);
+        Touch(se, 60.0f, 0.0f);
 
         CHECK(se.GetPointCount() >= 4);
         CHECK(se.IsBladeActive());
@@ -224,8 +225,8 @@ static void test_near_boundary() {
         SlashEntity se;
         se.Init(static_cast<void*>(0), 0L, static_cast<_Vector3<float>*>(0));
 
-        Touch(se, 10.0f, 0.0f, true);
-        Touch(se, 60.0f, 0.0f, false);
+        Touch(se, 10.0f, 0.0f);
+        Touch(se, 60.0f, 0.0f);
 
         CHECK(se.GetPointCount() >= 4);
         CHECK(se.IsBladeActive());
