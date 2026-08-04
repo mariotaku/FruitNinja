@@ -51,6 +51,13 @@
 // SDL music shares the same full-scale load path, so MASTER_MUSIC_GAIN = 1.0
 // too, symmetric to MASTER_SFX_GAIN.
 //
+// Tab-hidden fade/suspend: browsers do not pause a running AudioContext when
+// the tab backgrounds (only requestAnimationFrame is throttled), so a
+// visibilitychange listener in mainEmscripten.cpp's main() fades masterSfx +
+// music to 0 and calls ctx.suspend()/ctx.resume() on hide/show. Lives there,
+// not here, because it is a platform lifecycle concern, not an audio-mixing
+// one -- see that listener's comment block for the fade/suspend/restore design.
+//
 // Case-folding: game code passes Title-Case names ("Clean-Slice-1", "Pause",
 // "Bomb-Fuse"); on-disk assets are lowercase. The desktop path resolves this
 // via Mortar::ResolvePathCI; here the JS backend lowercases every name before

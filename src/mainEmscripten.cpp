@@ -864,6 +864,77 @@ int main(int argc, char* argv[]) {
         window.addEventListener('beforeunload', fnFlushSave);
     });
 
+    // Port specific: web-tab-hidden audio suspend/resume. requestAnimationFrame
+    // is throttled/paused by the browser when a tab backgrounds (which freezes
+    // EmscriptenFrame -- pollInput/stepUpdate/renderFrame all stop), but the
+    // WebAudio graph runs on its own audio thread and is NOT paused by the
+    // browser on its own -- so music/SFX kept playing into a hidden tab until
+    // this was added. Uses the same visibilitychange signal as the save-flush
+    // listener above but is its own closure/listener -- unrelated concern
+    // (audio bus vs. save persistence), no reason to couple them.
+    //
+    // Hide: ramp masterSfx+music gain to 0 over FN_AUDIO_FADE_SEC (a hard cut
+    // to silence is jarring), then ctx.suspend() once the fade finishes --
+    // suspend is the only thing that actually stops a backgrounded
+    // AudioContext; fading gain alone leaves the graph running (silently)
+    // until then. Show: ctx.resume(), then ramp back up.
+    //
+    // Restore targets are read from window.FNAudio.sfxMuted / musicMuted /
+    // musicVol -- the live state the user's own mute toggle already pushed
+    // into FNAudio via SoundManager::SyncMutes -> fnaudio_set_sfx_muted /
+    // fnaudio_set_music_muted (SoundManagerWebAudio.cpp). If SFX/music were
+    // already off before the tab hid, the restore target is 0 -- coming back
+    // to the tab never resumes audio the user had silenced themselves.
+    //
+    // cancelScheduledValues + setValueAtTime(current) before every ramp so a
+    // hide/show flip mid-fade retargets from wherever the gain currently sits
+    // instead of stacking queued ramps. fnAudioTabHidden dedupes a double
+    // 'hidden'->'hidden' visibilitychange fire (some browsers do this); the
+    // pending suspend timer is tracked and cleared on any flip so a
+    // hide-then-quick-show cancels the scheduled ctx.suspend() rather than
+    // suspending a context that was just resumed.
+    //
+    // Both SFX and music are faded/suspended -- nothing should be audible
+    // from a hidden tab.
+    EM_ASM({
+        var FN_AUDIO_FADE_SEC = 0.25;
+        var fnAudioTabHidden = false;
+        var fnAudioSuspendTimer = null;
+        var fnAudioRampTo = function(ctx, param, target) {
+            try {
+                var now = ctx.currentTime;
+                param.cancelScheduledValues(now);
+                param.setValueAtTime(param.value, now);
+                param.linearRampToValueAtTime(target, now + FN_AUDIO_FADE_SEC);
+            } catch (e) {}
+        };
+        document.addEventListener('visibilitychange', function() {
+            var FN = window.FNAudio;
+            if (!FN || !FN.ctx) return;
+            var hidden = (document.visibilityState === 'hidden');
+            if (hidden === fnAudioTabHidden) return;   // duplicate fire, ignore
+            fnAudioTabHidden = hidden;
+            if (fnAudioSuspendTimer !== null) {
+                clearTimeout(fnAudioSuspendTimer);
+                fnAudioSuspendTimer = null;
+            }
+            if (hidden) {
+                fnAudioRampTo(FN.ctx, FN.masterSfx.gain, 0);
+                fnAudioRampTo(FN.ctx, FN.music.gain, 0);
+                fnAudioSuspendTimer = setTimeout(function() {
+                    fnAudioSuspendTimer = null;
+                    try { if (FN.ctx.state === 'running') FN.ctx.suspend(); } catch (e) {}
+                }, FN_AUDIO_FADE_SEC * 1000 + 50);
+            } else {
+                try { if (FN.ctx.state === 'suspended') FN.ctx.resume(); } catch (e) {}
+                var sfxTarget = FN.sfxMuted ? 0 : FN.MASTER_SFX_GAIN;
+                var musicTarget = FN.musicMuted ? 0 : (FN.musicVol * FN.MASTER_MUSIC_GAIN);
+                fnAudioRampTo(FN.ctx, FN.masterSfx.gain, sfxTarget);
+                fnAudioRampTo(FN.ctx, FN.music.gain, musicTarget);
+            }
+        });
+    });
+
     // Port specific: stash window+gl for the boot-wait callback, then spin
     // waiting for the IDBFS load before calling g_game.init().
     // simulate_infinite_loop=1 here so main() does not return until the game

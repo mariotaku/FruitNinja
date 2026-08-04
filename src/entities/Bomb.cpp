@@ -318,6 +318,16 @@ void Bomb::Update(float dt) {
         // v1.6.1 @0x1d6654 (ALIVE arm, m_bHit==0): PLAIN wrapping int16 add, no dt
         // scaling (ldrh/add/strh). The dt-scaled variant belongs to the menu-hit arm
         // (@0x1d624c), not here.
+        //
+        // ASM-spec v1.6.1 Bomb::Update @0x001d6644-0x001d6670: scaledDt is a SIGN
+        // GATE only (vcmpe.f32 s15,#0 ; ble 0x001d6674), never a multiplier. The
+        // alive bomb's spin is therefore a fixed per-FRAME increment: slow-mo and
+        // freeze scale dt but leave it positive, so the increment is unchanged.
+        // Only a hard dt == 0 stops it. Fruit's quaternion spin @0x001e0114 IS
+        // dtNorm-scaled (rv * dtNorm * 182.0f), so in the ORIGINAL game slow-mo
+        // slows fruit tumble but not bomb tumble. That looks detached and is
+        // faithful -- do NOT "fix" it by scaling this add.
+        // Reported as a suspected bug 2026-08-04 and settled as correct.
         if (scaledDt > 0.0f && !freezeMenuSpin) {
             m_RotX = (int16_t)(m_RotX + m_RotVelX);
             m_RotY = (int16_t)(m_RotY + m_RotVelY);
