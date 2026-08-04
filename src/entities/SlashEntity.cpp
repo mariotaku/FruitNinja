@@ -795,8 +795,8 @@ void SlashEntity::OnTouchActive(float x, float y) {
         // Binary UpdateTouchDown @0x1e9f08: when below the move threshold but the
         // stroke already has points, the binary does `else if (0 < m_PointCount)
         // goto LAB_001ea3d0` -- it skips AddPoint but STILL re-arms m_BladeActive.
-        // Re-arming here is load-bearing: DrawSlice shifts the latch every frame,
-        // so two consecutive frames without a re-arm decay it 1->2->0; the next
+        // Re-arming here is load-bearing: UpdateBladeLatch shifts the latch every
+        // tick, so two consecutive ticks without a re-arm decay it 1->2->0; the next
         // per-tick TouchDown then sees m_BladeActive==0, calls Reset() (wiping the
         // trail -> a visibly disconnected segment) AND re-advances the disco mod
         // colour -- splitting one swipe into multiple differently-coloured pieces.
@@ -887,8 +887,8 @@ void SlashEntity::OnTouchActive(float x, float y) {
     // ASM-spec v1.6.1 @0x1ea3bc: m_TrailShiftB = m_PointCount-2 (post-AddPoint).
     m_TrailShiftB = m_PointCount - 2;
 
-    // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every frame a
-    // TouchDown event arrives so DrawSlice's latch sees an active fuse.
+    // Binary LAB_001ea3d0 (UpdateTouchDown epilogue): re-arm bit0 every tick a
+    // TouchDown event arrives so the latch shift sees an active fuse.
     // ASM-verified: 2026-06-16 v1.6.1 binary @ 0x1ea3d0 (asm-inspector)
     m_BladeActive |= 1;
 }
@@ -2216,42 +2216,61 @@ void SlashEntity::Draw(Renderer& /*r*/) {
 }
 
 // ---------------------------------------------------------------------------
+// UpdateBladeLatch -- the sim-tick half of v1.6.1 SlashEntity::DrawSlice
+// @0x001e83d4. Body is the binary's latch block verbatim:
+//   old = (uchar)m_BladeActive; if (old!=0) { nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) burst; }
+//
+// DIFFERS: original = m_BladeActive shift lives in SlashEntity::DrawSlice
+// @0x001e83d4 (v1.6.1), which is correct because Bada ran render 1:1 with the sim
+// tick; the port has interpolated frames, so the shift is sim-tick-gated to
+// preserve the binary's ONE-shift-per-tick semantic.
+//
+// This diverges in STRUCTURE to preserve binary BEHAVIOUR -- the opposite of the
+// deleted `#ifndef __bada__` variant, which changed the semantic to suit a
+// headless test.
+//
+// Why the split is needed: a held finger re-arms the latch once per SIM tick
+// (TouchDown -> UpdateTouchDown -> OnTouchActive -> `m_BladeActive |= 1`), while
+// DrawSlice runs once per DISPLAY frame. At 120Hz the shift ran twice per re-arm,
+// so the latch was 0 at every TouchDown, TouchDown took its Reset() arm on every
+// tick, and no stroke ever accumulated. Bada never hit this because render and
+// sim were 1:1 there.
+//
+// Call site is GameUpdate's common tail (unconditional 16-slot loop, after both
+// branches' SlashEntity::Update), so the per-tick order stays the binary's
+// re-arm -> Update -> shift.
+// ---------------------------------------------------------------------------
+void SlashEntity::UpdateBladeLatch() {
+    unsigned char old = (unsigned char)m_BladeActive;
+    if (old != 0) {
+        int nv = (old << 1) & 2;
+        m_BladeActive = nv;
+        if (nv == 0) {
+            // old==2 -> release edge: fire burst ONCE.
+            if (g_ScaleFlag1) CreateGhost();
+            // ModParticlesReleaseHash = g_SecondHash (particle2 slot in SetModColours).
+            if (g_SecondHash != 0) {
+                // ASM-spec v1.6.1 SlashEntity::DrawSlice @0x001e841c: r2=NULL, r3=1.
+                PSPParticleEmitter* eBurst =
+                    PSPParticleManager::GetInstance().AddEmitter(
+                        g_SecondHash, nullptr, /*updateWhenPaused=*/true);
+                if (eBurst) eBurst->m_Pos = pos;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // DrawSlice -- v1.6.1 @ 0x1e83b0
 // Called from GameDraw's 16-slot loop, NOT from ActorManager::Draw.
 //
-// ASM-spec v1.6.1 SlashEntity::DrawSlice @0x001e83b0: DrawSlice -- and ONLY
-// DrawSlice -- decays the m_BladeActive shift register:
-//   old = (uchar)m_BladeActive; if (old!=0) { nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) burst; }
-//   s_slashes=0; // unconditional after the latch block
-// The decay must not be hoisted into Update: Update and DrawSlice do not run at
-// the same cadence on every screen (the game-over/menu path ticks one without
-// the other), and a latch that never reaches 0 leaves TouchDown's
-// `m_BladeActive == 0` gate shut, so every later tap appends to the previous
-// stroke's tail instead of starting a new one.
+// The binary opens this function with the m_BladeActive shift register. The port
+// runs that block once per SIM TICK from UpdateBladeLatch() instead -- see its
+// DIFFERS note above. Everything from `s_slashes` down is the binary's body.
 // Draw if m_PointCount > 3: reset+upload modelview, bind blade.tex, DrawTriStrip
 // both buffers with count = m_PointCount + 1 (includes head-cap vertex).
 // ---------------------------------------------------------------------------
 void SlashEntity::DrawSlice() {
-    {
-        unsigned char old = (unsigned char)m_BladeActive;
-        if (old != 0) {
-            int nv = (old << 1) & 2;
-            m_BladeActive = nv;
-            if (nv == 0) {
-                // old==2 -> release edge: fire burst ONCE.
-                if (g_ScaleFlag1) CreateGhost();
-                // ModParticlesReleaseHash = g_SecondHash (particle2 slot in SetModColours).
-                if (g_SecondHash != 0) {
-                    // ASM-spec v1.6.1 SlashEntity::DrawSlice @0x001e841c: r2=NULL, r3=1.
-                    PSPParticleEmitter* eBurst =
-                        PSPParticleManager::GetInstance().AddEmitter(
-                            g_SecondHash, nullptr, /*updateWhenPaused=*/true);
-                    if (eBurst) eBurst->m_Pos = pos;
-                }
-            }
-        }
-    }
-
     // ASM-spec v1.6.1 SlashEntity::DrawSlice @0x001e83b0: the `> 0` test is genuine,
     // not an unconditional clamp. @0x001e843c is
     // `ldr r2,[r3,#0xbc] / cmp r2,#0 / movgt r2,#0 / strgt r2,[r3,#0xbc]` -- the
@@ -2623,9 +2642,9 @@ void SlashEntity::SetModColours(
 bool SlashEntity::TouchDown(InputEvent* event) {
     // Binary gate (v1.6.1 SlashEntity::TouchDown @0x1ea420): Reset() only when the
     // blade latch has decayed to 0. That is self-clearing because the poll emits
-    // ButtonPressed(Touch<n>, 2) EVERY frame a finger is held and nothing on the
-    // frame it is released, so a lift always leaves >=1 frame without a
-    // TouchDown -- enough for DrawSlice's `(old << 1) & 2` shift to reach 0
+    // ButtonPressed(Touch<n>, 2) EVERY tick a finger is held and nothing on the
+    // tick it is released, so a lift always leaves >=1 tick without a
+    // TouchDown -- enough for UpdateBladeLatch's `(old << 1) & 2` shift to reach 0
     // before the next press. No press-edge flag is needed, and the port must not
     // invent one: the mapper chain has no such concept.
     //
@@ -2705,7 +2724,7 @@ void SlashEntity::UpdateTouchDown(InputEvent* /*event*/) {
 // The binary has NO per-finger release handler: v1.6.1 registers no
 // "TouchReleased_<i>" callback at all (GameTaskInitInput @0x001cae0c builds the
 // name and drops it). A stroke ends purely because TouchDown stops arriving --
-// the m_BladeActive shift register in DrawSlice then decays 1 -> 2 -> 0 and
+// UpdateBladeLatch then decays the m_BladeActive shift register 1 -> 2 -> 0 and
 // Update's !bladeActive branch tears the trail emitter down.
 
 // v1.6.1 SlashEntity::PreDraw @0x001e8514 -- `for (i = 0; i < 8; ++i)

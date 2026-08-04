@@ -280,8 +280,9 @@ private:
     int m_TrailShiftB;
 
     // +0x140  uint8_t  m_BladeActive  binary uchar shift-register for swipe ghost/SFX burst.
-    //         DrawSlice latch: old=m_BladeActive; if(old){ nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) fire; }
-    //         OnTouchActive re-arms |= 1 each active frame.
+    //         Latch: old=m_BladeActive; if(old){ nv=(old<<1)&2; m_BladeActive=nv; if(nv==0) fire; }
+    //         OnTouchActive re-arms |= 1 each sim tick a finger is held; the shift
+    //         runs once per sim tick from UpdateBladeLatch() (see its DIFFERS note).
     //         DISTINCT from m_BombHitEdge (+0x4c, bomb one-shot).
     uint8_t m_BladeActive;
     uint8_t _pad141[3];
@@ -380,6 +381,12 @@ public:
     // UpdateBombHit -> ResetGameEntities -> Reset clears it again. Test targets only.
     void    TestSetBombHitEdge(uint8_t v) { m_BombHitEdge = v; }
     uint8_t TestGetBombHitEdge() const    { return m_BombHitEdge; }
+
+    // Test-seam: raw blade latch (m_BladeActive, +0x140). IsBladeActive() folds
+    // in m_PointCount, so it cannot tell "latch shifted twice" from "stroke too
+    // short". test_slash_input pins the one-shift-per-sim-tick invariant on this.
+    // Test targets only.
+    uint8_t TestGetBladeActive() const    { return m_BladeActive; }
 #endif
 #endif // !defined(__bada__)
 
@@ -497,7 +504,25 @@ public:
 
     // DrawSlice -- binary @ 0x1e83b0. Main blade render (two mirrored tri-strips).
     // Called from GameDraw's 16-slot loop, NOT from ActorManager::Draw.
+    // Runs once per DISPLAY frame. It does NOT touch m_BladeActive -- that shift
+    // is sim-tick work and lives in UpdateBladeLatch() below.
     void DrawSlice();
+
+    // Sim-tick half of v1.6.1 SlashEntity::DrawSlice @0x001e83d4: advance the
+    // m_BladeActive shift register by exactly ONE step and fire the release burst
+    // (ghost + particle2 emitter) on the 2 -> 0 edge.
+    //
+    // Call ONCE PER SIM TICK per blade, after SlashEntity::Update and before the
+    // tick's draw. GameUpdate's common tail does this for all 16 slots,
+    // unconditionally, mirroring GameDraw's DrawSlice loop. A unit-test fixture
+    // that steps ticks by hand must call it too, or the latch never decays and
+    // every press after the first extends the previous stroke.
+    //
+    // DIFFERS: original = m_BladeActive shift lives in SlashEntity::DrawSlice
+    // @0x001e83d4 (v1.6.1), which is correct because Bada ran render 1:1 with the
+    // sim tick; the port has interpolated frames, so the shift is sim-tick-gated
+    // to preserve the binary's ONE-shift-per-tick semantic.
+    void UpdateBladeLatch();
 
     // Init (3-arg binary form) -- v1.6.1 @ 0x1e7a34. Vtable slot 2.
     // Allocates ColLine (new(0x20)), calls InitPoints(160),
@@ -539,7 +564,7 @@ public:
 
     // NB: there is deliberately no TouchUp / release handler. v1.6.1 registers
     // no per-finger release callback at all; the stroke ends when TouchDown
-    // stops arriving and DrawSlice decays m_BladeActive.
+    // stops arriving and UpdateBladeLatch decays m_BladeActive.
 
     // Accessor for the file-scope global g_OnComboCancel event (binary GOT 0x332bd8).
     // Binary subscribe sites load [GOT,0x77f8] to get the event address; port uses this

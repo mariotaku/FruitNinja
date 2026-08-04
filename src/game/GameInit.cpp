@@ -691,6 +691,18 @@ void GameUpdate(float dt, bool active) {
     // COMMON TAIL (0x001cfb8c)
     // ================================================================
 
+    // DIFFERS: original = m_BladeActive shift lives in SlashEntity::DrawSlice
+    // @0x001e83d4 (v1.6.1), which is correct because Bada ran render 1:1 with the
+    // sim tick; the port has interpolated frames, so the shift is sim-tick-gated
+    // to preserve the binary's ONE-shift-per-tick semantic.
+    // Unconditional 16-slot loop mirroring GameDraw's DrawSlice loop, placed after
+    // BOTH branches' SlashEntity::Update (the inactive branch's explicit loop and
+    // the active branch's ActorManager::Update) so the per-tick order stays the
+    // binary's re-arm -> Update -> shift.
+    for (int i = 0; i < 16; ++i) {
+        if (g_pSlashEntities[i]) g_pSlashEntities[i]->UpdateBladeLatch();
+    }
+
     // --- PSPParticleManager ---
     {
         // ASM-spec v1.6.1 GameUpdate @0x001cfb8c..0x001cfbd8: the divisor is computed

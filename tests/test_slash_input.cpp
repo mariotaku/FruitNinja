@@ -11,7 +11,8 @@
 //                 -> GameTaskInput.cpp's PointerMoveCallback / TouchDownCallback
 //                    -> g_pSlashEntities[n]
 //   SlashEntity::Update + PostUpdate                  (GameUpdate's pair)
-//   SlashEntity::DrawSlice                            (decays m_BladeActive)
+//   SlashEntity::UpdateBladeLatch                     (decays m_BladeActive)
+//   SlashEntity::DrawSlice                            (draws only)
 //
 // The mappers come from Input/Input.txt via InputManager::LoadConfigFile
 // @0x002442fc, so the fixture registers a FileSystem_Direct first.
@@ -22,10 +23,12 @@
 //     current finger position BEFORE TouchDown runs, which is what makes a new
 //     stroke seed at the press point without any position on the button event.
 //   * A held finger re-arms m_BladeActive every tick. A released finger raises
-//     no mask-2 event, so one frame without a TouchDown is enough for
-//     SlashEntity::DrawSlice's `(old << 1) & 2` shift to decay the latch to 0 --
-//     and the NEXT press then Resets. That decay is the binary's only
+//     no mask-2 event, so one tick without a TouchDown is enough for
+//     SlashEntity::UpdateBladeLatch's `(old << 1) & 2` shift to decay the latch
+//     to 0 -- and the NEXT press then Resets. That decay is the binary's only
 //     new-stroke trigger; there is no press-edge flag.
+//   * That shift runs exactly ONCE PER SIM TICK, never per display frame. See
+//     test_blade_latch_shifts_once_per_sim_tick.
 //   * Consecutive taps therefore never bridge: each tap Resets and re-seeds a
 //     degenerate stroke at its own position. This holds after a bomb hit too --
 //     UpdateBombHit -> ResetGameEntities clears the m_BombHitEdge latch that
@@ -151,9 +154,11 @@ static void ResetTouch() {
 // poll (which raises every action event), then GameUpdate's Update+PostUpdate
 // pair, then GameDraw's DrawSlice.
 //
-// DrawSlice is not optional here. v1.6.1 SlashEntity::DrawSlice @0x001e83b0 owns
-// the m_BladeActive shift register, so a fixture that skips it never decays the
-// latch and every tap after the first extends the previous stroke.
+// UpdateBladeLatch is not optional here. It owns the m_BladeActive shift
+// register (the sim-tick half of v1.6.1 SlashEntity::DrawSlice @0x001e83d4), so
+// a fixture that skips it never decays the latch and every tap after the first
+// extends the previous stroke. In game it is GameUpdate's common-tail 16-slot
+// loop; here it has to be driven by hand, once per tick, after Update.
 // PostUpdate (v1.6.1 SlashEntity::DrawUpdate @0x001e613c) arms the touch-ingest
 // latch that UpdateTouchDown @0x001ea0a0 gates on.
 //
@@ -164,6 +169,7 @@ static void SimTick(InputTranslatorSDL& tr, Mortar::InputManager& im, SlashEntit
     im.Update(0.0f);
     se.Update(SIM_DT);
     se.PostUpdate(SIM_DT);
+    se.UpdateBladeLatch();
     se.DrawSlice();
 }
 
@@ -559,7 +565,7 @@ static void test_bomb_latch_cleared_on_timer_crossing() {
 // test_taps_do_not_bridge, but run AFTER a full bomb-hit cycle so a blade whose
 // m_BombHitEdge got stuck would append tap B onto tap A's tail instead of
 // starting a new stroke. The decay that opens TouchDown's gate between the two
-// taps comes from DrawSlice, which SimTick now drives.
+// taps comes from UpdateBladeLatch, which SimTick drives once per tick.
 // ---------------------------------------------------------------------------
 static void test_taps_do_not_bridge_after_bomb_hit() {
     printf("  test_taps_do_not_bridge_after_bomb_hit...\n");
@@ -593,8 +599,8 @@ static void test_taps_do_not_bridge_after_bomb_hit() {
     CHECK_NEAR(se.GetTailPos().x, ax, 1.0f);
     CHECK_NEAR(se.GetTailPos().y, ay, 1.0f);
 
-    // The release tick's DrawSlice decayed the latch to 0, which is the ONLY
-    // thing that lets the next TouchDown take its Reset path.
+    // The release tick's UpdateBladeLatch decayed the latch to 0, which is the
+    // ONLY thing that lets the next TouchDown take its Reset path.
     CHECK(!se.IsBladeActive());
 
     // Tap B, bottom-right -- ~277 units away. A bridge would interpolate one
@@ -624,6 +630,100 @@ static void test_taps_do_not_bridge_after_bomb_hit() {
     printf("  PASS\n");
 }
 
+// ---------------------------------------------------------------------------
+// >60Hz regression (the bug 2c1ff7ad shipped): the m_BladeActive shift must run
+// exactly ONCE PER SIM TICK, never once per display frame.
+//
+// A held finger re-arms the latch once per sim tick (fixed 60Hz). While the
+// shift lived in DrawSlice -- which runs at DISPLAY rate -- a 120Hz display
+// shifted twice per re-arm, so the latch was 0 at every TouchDown, TouchDown
+// took its Reset() arm on every tick, and no stroke ever accumulated. On device
+// the blade simply never appeared.
+//
+// This drives the 120Hz shape directly: one sim tick, TWO DrawSlice calls. The
+// latch must read 2 after each tick regardless of how many frames were drawn,
+// and the stroke must keep growing.
+// ---------------------------------------------------------------------------
+static void test_blade_latch_shifts_once_per_sim_tick() {
+    printf("  test_blade_latch_shifts_once_per_sim_tick...\n");
+    ResetTouch();
+
+    Mortar::InputManager im;
+    im.Init(0);
+    LoadMappers(im);
+    InputTranslatorSDL tr;
+    tr.Init();
+    SlashEntity se;
+    WireBlade(im, se, 0);
+
+    // Press, then drag right by 0.1 normalised (48 game units) per tick -- well
+    // over the 5-unit active move threshold, well under the 64-unit interpolation
+    // spacing, so each held tick appends exactly one point.
+    SDL_Event d = MakeFingerDown((SDL_FingerID)31, 0.15f, 0.5f);
+    tr.DrainSDLEvent(d, NULL);
+
+    int prevCount = 0;
+    for (int t = 0; t < 6; ++t) {
+        if (t > 0) {
+            SDL_Event m = MakeFingerMotion((SDL_FingerID)31, 0.15f + 0.1f * t, 0.5f);
+            tr.DrainSDLEvent(m, NULL);
+        }
+
+        // --- one sim tick ---
+        tr.DispatchForSimTick();
+        im.Update(0.0f);                 // TouchDown re-arms the latch (|= 1)
+        se.Update(SIM_DT);
+        se.PostUpdate(SIM_DT);
+        se.UpdateBladeLatch();           // the ONE shift this tick gets
+
+        // Tick 0: 0 -> Reset -> re-arm 1 -> shift 2.
+        // Tick N: 2 -> re-arm 3 -> shift 2. Either way the latch parks at 2.
+        CHECK(se.TestGetBladeActive() == 2);
+
+        // --- two display frames on that one tick (120Hz) ---
+        se.DrawSlice();
+        const uint8_t afterFrame1 = se.TestGetBladeActive();
+        se.DrawSlice();
+        const uint8_t afterFrame2 = se.TestGetBladeActive();
+
+        printf("    tick %d: latch=2 -> frame1=%d frame2=%d pointCount=%d\n",
+               t, (int)afterFrame1, (int)afterFrame2, se.GetPointCount());
+
+        // Drawing must not shift. A second shift here would give 0 and the next
+        // tick's TouchDown would Reset mid-stroke.
+        CHECK(afterFrame1 == 2);
+        CHECK(afterFrame2 == 2);
+
+        // The stroke keeps growing -- no mid-hold Reset.
+        CHECK(se.GetPointCount() >= prevCount);
+        prevCount = se.GetPointCount();
+    }
+
+    printf("    held stroke: pointCount=%d tail=(%.1f,%.1f)\n",
+           se.GetPointCount(), se.GetTailPos().x, se.GetTailPos().y);
+    CHECK(se.GetPointCount() > 2);
+    // Tail rode the drag out to nx = 0.65 -> (0.65 - 0.5) * 480 = 72.
+    CHECK_NEAR(se.GetTailPos().x, 72.0f, 1.0f);
+
+    // Release: no re-arm, so the next tick's single shift takes 2 -> 0 and the
+    // blade is armed for a fresh stroke. Two more draws must still not shift.
+    SDL_Event u = MakeFingerUp((SDL_FingerID)31, 0.65f, 0.5f);
+    tr.DrainSDLEvent(u, NULL);
+    tr.DispatchForSimTick();
+    im.Update(0.0f);
+    se.Update(SIM_DT);
+    se.PostUpdate(SIM_DT);
+    se.UpdateBladeLatch();
+    CHECK(se.TestGetBladeActive() == 0);
+    se.DrawSlice();
+    se.DrawSlice();
+    CHECK(se.TestGetBladeActive() == 0);
+    printf("    release tick: latch=%d\n", (int)se.TestGetBladeActive());
+
+    UnwireBlade(0);
+    printf("  PASS\n");
+}
+
 int main(int argc, char* argv[]) {
     (void)argc; (void)argv;
     // SDL event types only -- no video, no audio, no GL context.
@@ -642,6 +742,7 @@ int main(int argc, char* argv[]) {
     test_fast_flick_same_tick_registers();
     test_bomb_latch_cleared_on_timer_crossing();
     test_taps_do_not_bridge_after_bomb_hit();
+    test_blade_latch_shifts_once_per_sim_tick();
 
     printf("test_slash_input: PASS\n");
 
