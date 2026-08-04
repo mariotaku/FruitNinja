@@ -120,6 +120,20 @@ public:
     // +0xAC: binary writes 0.0f in Init/ctor and never reads it (pads sizeof to 0xB0).
     float m_Field_0xAC;                      // +0xAC
 
+#if !defined(__bada__)
+    // Port specific: fractional-rotation carry for the F7 debug time-scale slow-mo
+    // path only (FN::g_DebugTimeScale, src/debug/DebugFlags.h). At low scale a
+    // single frame's dtNorm-scaled rotation step (m_RotVelX * dtNorm, m_RotVelX in
+    // [0,7]) truncates to 0 under the (int) cast in Bomb::Update, freezing the
+    // bomb instead of slowing it. These accumulate the truncated remainder per
+    // axis so sub-unit steps still advance over successive frames. No binary
+    // counterpart and no slot in the binary Bomb layout -- guarded out entirely
+    // under __bada__ so the cross-build struct and the offsetof/sizeof asserts
+    // below are completely untouched.
+    float m_DebugRotAccumX;
+    float m_DebugRotAccumY;
+#endif
+
     Bomb();
     ~Bomb();
 

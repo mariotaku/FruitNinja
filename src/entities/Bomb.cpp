@@ -121,6 +121,9 @@ Bomb::Bomb()
       m_Countdown(0.0f),
       m_SpeedMult(1.0f),
       m_Field_0xAC(0.0f)
+#if !defined(__bada__)
+      , m_DebugRotAccumX(0.0f), m_DebugRotAccumY(0.0f)
+#endif
 {
     entityType = 1;  // Bomb
 }
@@ -184,6 +187,11 @@ void Bomb::Init(void* /*p1*/, long /*p2*/, _Vector3<float>* scaleOrNull) {
     m_RotX    = (int16_t)rng.Rand32(0x167);
     m_RotVelY = (int16_t)(rng.Rand32(7) + 1);
     m_RotY    = (int16_t)rng.Rand32(0x167);
+#if !defined(__bada__)
+    // Port specific: fresh spin state on (re)spawn -- don't carry a debug-only
+    // fractional remainder from a previous life of this pooled entity.
+    m_DebugRotAccumX = m_DebugRotAccumY = 0.0f;
+#endif
 
     m_bMenuBombHit = 0;
     m_pEmitter = nullptr;
@@ -222,6 +230,11 @@ void Bomb::SetCallback(Mortar::Delegate0<void> cb, MenuButton* button) {
     m_RotVelX = 2;      // slow spin on X
     m_RotX    = 0;
     m_RotVelY = 0;      // Y axis locked
+#if !defined(__bada__)
+    // Port specific: fresh spin state for the new callback-driven spin -- see
+    // Bomb::Init's reset for why.
+    m_DebugRotAccumX = m_DebugRotAccumY = 0.0f;
+#endif
 }
 
 // Helper: accel-growth block shared by alive-branch and menu-hit-branch in Update.
@@ -339,12 +352,29 @@ void Bomb::Update(float dt) {
         // real gameplay slow-mo -- the freeze power-up scales dt via the
         // separate slowTime/quickener globals (GameInit.cpp), not this flag,
         // so gameplay bomb spin stays on the faithful unscaled path.
+        //
+        // Port specific: at low debug scale, m_RotVelX/Y * dtNorm (velocities
+        // are 0-7 sixteenths-of-a-unit) truncates to 0 under a plain (int) cast,
+        // freezing the bomb instead of slowing it. m_DebugRotAccumX/Y (host-only,
+        // see Bomb.h) carry the truncated remainder per axis so sub-unit steps
+        // still advance over successive frames -- this expression only runs when
+        // the flag is off its faithful 1.0f default, so the default path below
+        // stays a plain wrapping add with no accumulator involved.
         if (scaledDt > 0.0f && !freezeMenuSpin) {
             int16_t rotStepX = m_RotVelX;
             int16_t rotStepY = m_RotVelY;
             if (FN::g_DebugTimeScale != 1.0f) {
+#if !defined(__bada__)
+                m_DebugRotAccumX += (float)m_RotVelX * dtNorm;
+                m_DebugRotAccumY += (float)m_RotVelY * dtNorm;
+                rotStepX = (int16_t)(int)m_DebugRotAccumX;
+                rotStepY = (int16_t)(int)m_DebugRotAccumY;
+                m_DebugRotAccumX -= (float)rotStepX;
+                m_DebugRotAccumY -= (float)rotStepY;
+#else
                 rotStepX = (int16_t)(int)((float)m_RotVelX * dtNorm);
                 rotStepY = (int16_t)(int)((float)m_RotVelY * dtNorm);
+#endif
             }
             m_RotX = (int16_t)(m_RotX + rotStepX);
             m_RotY = (int16_t)(m_RotY + rotStepY);
