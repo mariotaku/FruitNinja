@@ -1392,15 +1392,21 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
     // v1.6.1 Fruit::CollisionResponse @0x001dd500. Binary builds sliceInfo as:
     //   x = m_SliceArcAngle / -182.0 + 90.0   (degrees-offset)
     //   y = bladeSpeed * 0.4                   (impulse length)
-    // v1.6.1 Fruit::CollisionResponse @0x001de53c: AddSlice with 6 args.
-    //   modelIdx = 0 (normal) or 1 (crit), fruit = this, rateMul = 1.0
+    // v1.6.1 Fruit::CollisionResponse @0x001de53c: AddSlice with 6 args, rateMul = 1.0.
+    // v1.6.1 @0x001ddabc: `mov r2,#0x0` -- the fruit link argument is NULL, not
+    // `this`. Passing `this` made every fruit slice "linked" and so subject to the
+    // DrawSlices 3.0 cap, freezing the line at keyframe 3.
     // v1.6.1 @0x001ddac4: the binary reads the halfword UNSIGNED (ldrh +
     // vcvt.f32.u32), so arc >= 0x8000 must stay positive here. Casting through
     // int16_t makes those angles 360.09 deg low.
+    // TODO: v1.6.1 0x001ddabc (Fruit::CollisionResponse) -- modelIdx is
+    // m_bCritical(+0x165) ? 1 : *(int*)(this+0x6c), and +0x6c can hold 2;
+    // s_sliceModel[2] is never loaded and Fruit +0x6C is still an un-RE'd pad, so
+    // the port uses the crit-only form (m_bCritical ? 1 : 0).
     const float sliceAngleDeg = (float)(uint16_t)m_SliceArcAngle / -182.0f + 90.0f;
     const float sliceLength   = bladeSpeed * 0.4f;
     AddSlice(_Vector3<float>(sliceAngleDeg, sliceLength, 1.0f), pos.x, pos.y,
-             isCritical ? 1 : 0, this, pos.z);
+             isCritical ? 1 : 0, (Fruit*)0, pos.z);
 
     // Score, save totals, powerup, combo and achievements are gated exactly as
     // the binary does (v1.6.1 Fruit::CollisionResponse @0x001dd500):
@@ -1722,15 +1728,18 @@ void Fruit::Slice() {
         //   infoB.x = m_SliceArcAngle / -182.0 - 60.0
         //   infoA/B.y = impulse * 0.4 * 0.7
         // v1.6.1 Fruit::Slice @0x001dcba0: two crit slice lines at +/-60 deg.
-        //   rateMul=1.0, modelIdx=0, fruit=(Fruit*)1 (sentinel, not real ptr)
+        //   rateMul=1.0
+        // v1.6.1 @0x001dcd84: `mov r1,#0x1` (modelIdx = 1, the slice_fx_crit model)
+        // and `mov r2,#0x0` (fruit link = NULL). The port had these two transposed
+        // (modelIdx 0 / fruit (Fruit*)1), so slice_fx_crit.mmd never drew.
         // v1.6.1 @0x001dcd98: unsigned halfword read (ldrh + vcvt.f32.u32) -- see
         // the note at the sliceAngleDeg site above.
         const float critBase = (float)(uint16_t)m_SliceArcAngle / -182.0f;
         const float critLen  = impulse * 0.4f * 0.7f;
         AddSlice(_Vector3<float>(critBase + 60.0f, critLen, 1.0f), pos.x, pos.y,
-                 0, (Fruit*)1, pos.z);
+                 1, (Fruit*)0, pos.z);
         AddSlice(_Vector3<float>(critBase - 60.0f, critLen, 1.0f), pos.x, pos.y,
-                 0, (Fruit*)1, pos.z);
+                 1, (Fruit*)0, pos.z);
         // v1.6.1 Fruit::Slice @0x001dce14: splatCount = CRITICAL_SPLATS
         // (@0x002d8d38), the XML-configured juice-burst count -- NOT
         // splatCount += 2. impulse *= 1.5.
@@ -2198,7 +2207,7 @@ static FruitGlobalData g_fruitData;
 //   v.x = angleDeg, v.y = impulse, v.z = rateMul
 //   posX/posY/posZ: world position components (split across arg slots)
 //   modelIdx: 0=slice_fx, 1=slice_fx_crit, 3=slice_fx (super-fruit pass)
-//   fruit: dedup/clamp sentinel (real Fruit* or 0/1/3)
+//   fruit: dedup key + DrawSlices timer-cap link (a real Fruit* or NULL)
 void AddSlice(_Vector3<float> v, float posX, float posY, int modelIdx, Fruit* fruit, float posZ)
 {
     // ASM-spec v1.6.1 AddSlice @0x001dc990: crit-slice SFX (impulse.y>2.5, 1-in-3),
@@ -2217,15 +2226,22 @@ void AddSlice(_Vector3<float> v, float posX, float posY, int modelIdx, Fruit* fr
         return;
     }
 
-    // Dedup: walk s_slices via Iterator; expire (set m_Timer=6.0) any earlier node
-    // whose m_pFruit key matches this fruit/ident.
-    // v1.6.1 @0x001dc990: +0x1c (m_pFruit) is the dedup key; action = expire.
-    {
+    // Dedup: walk s_slices via Iterator; +0x1c (m_pFruit) is the key.
+    // ASM-spec v1.6.1 AddSlice @0x001dc990:
+    //   if (fruit != 0 && node->m_pFruit == fruit && ++count != 1) {
+    //       node->m_pFruit = 0; node->m_Timer = 6.0f;
+    //   }
+    // Three parts the port lacked: the null-fruit guard, the ++count != 1 test
+    // (the FIRST match survives -- only the second and later ones expire), and
+    // clearing the link so the expired node escapes the DrawSlices 3.0 cap.
+    if (fruit) {
+        int count = 0;
         Mortar::List<SliceEffect>::Iterator it = g_fruitData.s_slices->Begin();
         while (it.Okay()) {
             Mortar::List<SliceEffect>::Iterator nextIt = it.Next();
-            if (it.Get()->value.m_pFruit == fruit) {
-                it.Get()->value.m_Timer = 6.0f;
+            if (it.Get()->value.m_pFruit == fruit && ++count != 1) {
+                it.Get()->value.m_pFruit = 0;
+                it.Get()->value.m_Timer  = 6.0f;
             }
             it = nextIt;
         }
@@ -2265,17 +2281,25 @@ void DrawSlices(float dt, bool pass)
         n->value.m_Timer += dt * n->value.m_RateMul * 40.0f * rate;
 
         // Fruit-link clamp: if the linked fruit has been sliced, clear the link;
-        // clamp timer to minimum 3.0 while the link was active.
+        // while the link is active the timer is CAPPED at 3.0, so a linked slice
+        // holds at keyframe 3 instead of ageing out.
+        // ASM-spec v1.6.1 DrawSlices @0x001daee0: `vcmpe.f32 s14,s15` (s15 = 3.0,
+        // s14 = m_Timer) then `vstrgt.32 s15,[r4]` -- the store fires only on
+        // greater-than, so this is a cap, not a floor. The port had it inverted
+        // (`< 3.0 -> 3.0`), which snapped every linked slice straight to keyframe
+        // 3 -- the widest quad in SLICE_KEYFRAMES -- and skipped keyframes 0..2.
         if (n->value.m_pFruit) {
-            // Sentinel check: only real Fruit* instances have m_bSliced.
-            // Sentinels 0/1/3 must not be dereferenced -- check size_t > 3.
+            // Vestigial sentinel guard: the port used to pass (Fruit*)1 here, so
+            // small integer "pointers" had to be kept out of the deref. Every
+            // AddSlice call site now passes a real Fruit* or NULL, so this test
+            // is always true -- the binary derefs unconditionally.
             uintptr_t fp = (uintptr_t)n->value.m_pFruit;
             if (fp > 3) {
                 if (n->value.m_pFruit->m_bSliced) {
                     n->value.m_pFruit = 0;
                 }
             }
-            if (n->value.m_Timer < 3.0f) {
+            if (n->value.m_Timer > 3.0f) {
                 n->value.m_Timer = 3.0f;
             }
         }
