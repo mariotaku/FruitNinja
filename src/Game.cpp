@@ -19,6 +19,7 @@
 #include "screens/PauseScreen.h"
 #include "engine/core/SystemManager.h"
 #include "asset/TextureManager.h"
+#include "debug/DebugFlags.h"
 #include <cstdio>
 #include <cstring>
 // SDL-bound bits (init / run / runFrames) live in GameSDL.cpp.
@@ -250,6 +251,21 @@ void Game::tickRealtimeUi(float dtSeconds) {
     // DispatchForSimTick) -- this only refreshes the separate liveX/liveY
     // shadow fields, read-only against the ring buffer.
     Mortar::Touch::GetInstance().RefreshLivePos();
+
+    // Port specific: debug-only -- apply the F7 slow-motion scale to the
+    // per-present UI dt as well. stepUpdate() already multiplies the fixed
+    // 1/60 sim dt by FN::g_DebugTimeScale, so without this the gameplay slows
+    // but every animation that was split out to UpdateRealtime (screen
+    // transition fades, the NEW-badge bounce, the sparkle ring, list scroll
+    // physics) keeps running at full speed -- the halves of one animation
+    // would even disagree. Scaling here is the single source: every
+    // HUDControl::UpdateRealtime override inherits it, no per-animation
+    // opt-in. Each override clamps dtSeconds itself, and scaling only ever
+    // shrinks it, so the clamps still hold. FN::g_DebugTimeScale is
+    // `static const float = 1.0f` under __bada__ (and this whole method is
+    // #ifndef __bada__ anyway), so the cross-build is untouched.
+    dtSeconds *= FN::g_DebugTimeScale;
+
     if (game_work.mHud) {
         game_work.mHud->UpdateRealtime(dtSeconds);
     }

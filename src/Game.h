@@ -185,7 +185,9 @@ struct Game : public Mortar::MortarGame {
     // the fixed 60Hz sim step (stepUpdate()). dtSeconds is real elapsed
     // wall-clock time since the last call, so motion tracks the display's
     // actual present rate (looks identical at 60 and 120+ fps) instead of
-    // the sim tick rate.
+    // the sim tick rate. Multiplied by FN::g_DebugTimeScale before dispatch
+    // (see Game.cpp) so F7 slow-motion covers the realtime-UI animations too,
+    // matching stepUpdate()'s scaling of the sim dt.
     void tickRealtimeUi(float dtSeconds);
 };
 
