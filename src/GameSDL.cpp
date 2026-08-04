@@ -348,6 +348,15 @@ void Game::pollInput() {
                 snprintf(osd, sizeof(osd), "Slow-mo: ON (x%.1f)", FN::g_DebugTimeScale);
                 OSD_AddMessage(osd);
             }
+        } else if (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_F9) {
+            // DIFFERS: opt-in time-scaled alive-bomb spin (see DebugFlags.h /
+            // Bomb::Update). Default OFF = the binary's unscaled per-frame add.
+            FN::g_BombSpinTimeScaled = !FN::g_BombSpinTimeScaled;
+            LOG_DEBUG("Debug", "Bomb spin time-scaled %s",
+                      FN::g_BombSpinTimeScaled ? "ON" : "OFF");
+            // Port specific: OSD toast confirmation (binary OSD is a dead stub).
+            OSD_AddMessage(FN::g_BombSpinTimeScaled ? "Bomb spin time-scaled: ON (deviation)"
+                                                    : "Bomb spin time-scaled: OFF (faithful)");
         } else if (ev.type == SDL_KEYDOWN &&
                    ev.key.keysym.scancode == SDL_SCANCODE_F12) {
             // Port specific: screenshot on F12.

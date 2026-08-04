@@ -55,6 +55,16 @@ namespace Mortar { class FontCacheObjectTTF; }
 // g_MotionSpeedThreshold: px-per-sim-tick cut threshold for g_MotionMode.
 //                   Tune live with F6 (down) / F8 (up), --motion-threshold=<f>
 //                   (desktop) or web ?motionthreshold=<f>.
+// g_BombSpinTimeScaled: DIFFERS: opt-in time-scaled bomb spin; faithful
+//                   unscaled add under __bada__ and by default. The alive
+//                   bomb's tumble (Bomb::Update's m_bHit==0 arm, v1.6.1
+//                   @0x001d6644) is a fixed per-FRAME int16 add in the binary
+//                   -- dt is only a sign gate there -- so slow-mo/freeze slow
+//                   the fruit tumble (@0x001e0114, dt-scaled) but NOT the
+//                   bomb. Turn this on to scale the bomb add by the same
+//                   dtNorm the fruit uses, so both slow together. Default
+//                   false = faithful. Toggle F9, or launch with
+//                   --bomb-spin-timescaled.
 //
 
 namespace FN {
@@ -68,6 +78,7 @@ extern bool  g_SuppressTextOverlay;    // Port specific: suppresses DebugText_Ov
 extern bool  g_bOsdSfx;                // Port specific: OSD toast per SFX played (toggle F4, --osd-sfx, ?osdsfx=1)
 extern bool  g_MotionMode;             // Port specific: velocity-gated pointer slash (toggle F5, --motion), default OFF
 extern float g_MotionSpeedThreshold;   // Port specific: g_MotionMode cut speed threshold, px/sim-tick (tune F6/F8, --motion-threshold=<f>)
+extern bool  g_BombSpinTimeScaled;     // DIFFERS: opt-in time-scaled alive-bomb spin (toggle F9, --bomb-spin-timescaled), default OFF = faithful
 
 // Port specific: shared pointer/mouse finger channel constant -- single
 // source of truth for InputTranslatorSDL::MOUSE_CHANNEL and SlashEntity's
@@ -171,6 +182,9 @@ static const bool  g_FpsCap60            = false;
 static const bool  g_SuppressTextOverlay = false;
 static const bool  g_bOsdSfx             = false;
 static const bool  g_MotionMode          = false;
+// DIFFERS: opt-in time-scaled alive-bomb spin -- always false here, so the
+// cross-build folds the deviation away and compiles the faithful unscaled add.
+static const bool  g_BombSpinTimeScaled  = false;
 inline void DebugHitbox_Draw()  {}
 inline void DebugHUDBounds_Draw() {}
 inline void DebugFps_Draw(float) {}

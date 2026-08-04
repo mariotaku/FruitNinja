@@ -26,6 +26,7 @@
 #include "math/MathUtil.h"
 #include "particle/PSPParticleManager.h"
 #include "util/StringHash.h"
+#include "debug/DebugFlags.h"
 #include "debug/Logger.h"
 #include <cstdlib>
 #include <cmath>
@@ -325,12 +326,27 @@ void Bomb::Update(float dt) {
         // freeze scale dt but leave it positive, so the increment is unchanged.
         // Only a hard dt == 0 stops it. Fruit's quaternion spin @0x001e0114 IS
         // dtNorm-scaled (rv * dtNorm * 182.0f), so in the ORIGINAL game slow-mo
-        // slows fruit tumble but not bomb tumble. That looks detached and is
-        // faithful -- do NOT "fix" it by scaling this add.
-        // Reported as a suspected bug 2026-08-04 and settled as correct.
+        // slows fruit tumble but not bomb tumble. That looks detached, but it is
+        // what the binary does -- the unscaled add is the FAITHFUL path and the
+        // DEFAULT. It was reported as a suspected bug 2026-08-04 and settled as
+        // correct.
+        //
+        // DIFFERS: opt-in time-scaled alive-bomb spin (FN::g_BombSpinTimeScaled);
+        // faithful unscaled add under __bada__ and whenever the flag is off. With
+        // the flag ON the increment is scaled by the SAME dtNorm the fruit spin
+        // uses, so slow-mo slows bomb and fruit together. Never make that path
+        // unconditional -- it is a deliberate deviation, not a fix.
         if (scaledDt > 0.0f && !freezeMenuSpin) {
-            m_RotX = (int16_t)(m_RotX + m_RotVelX);
-            m_RotY = (int16_t)(m_RotY + m_RotVelY);
+            int16_t rotStepX = m_RotVelX;
+            int16_t rotStepY = m_RotVelY;
+#if !defined(__bada__)
+            if (FN::g_BombSpinTimeScaled) {
+                rotStepX = (int16_t)(int)((float)m_RotVelX * dtNorm);
+                rotStepY = (int16_t)(int)((float)m_RotVelY * dtNorm);
+            }
+#endif
+            m_RotX = (int16_t)(m_RotX + rotStepX);
+            m_RotY = (int16_t)(m_RotY + rotStepY);
         }
 
         if (m_Col) static_cast<ColSphere*>(m_Col)->center() = _Vector3<float>(pos.x, pos.y, 0.0f);
