@@ -1175,6 +1175,12 @@ void GameDraw(float dt, bool active) {
     // UnpauseGame) so the gameplay tick cannot restart mid-fade.
     // v1.6.1 also does debugMenu(0x00316798) = 0 here; that global is write-only dead in
     // v1.6.1 (no reader) -- deliberately not ported.
+    // This ClearActions IS reachable and fires on every unpause (g_unpause_game is
+    // armed at PauseScreen.cpp:152). It is safe because ClearActions matches by
+    // CONFIG-SOURCE hash and the port only ever loads Input/Input.txt
+    // (GameTaskInput.cpp:70 is the sole LoadConfigFile call site) -- no mapper
+    // carries the PauseMenu.txt source hash, so this erases nothing. It would stop
+    // being safe the moment a PauseMenu.txt config is loaded. Verified 2026-08-06.
     if (g_unpause_game != 0 && game_work.bM_Mode != 0) {
         g_unpause_game = 0;
         Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/PauseMenu.txt"));
@@ -1188,6 +1194,19 @@ void GameDraw(float dt, bool active) {
     // them short of GameExit's InputManager Destroy/Init + the next
     // GameTaskInitInput, so firing this mid-session would kill input outright.
     // Harmless today only because nothing in the port ever sets g_clearInput to 1.
+    //
+    // VERIFIED 2026-08-06, exhaustive: g_clearInput's lifetime value set is {0}.
+    // Its only three writes all store 0 -- the static init and GameInit Step 6
+    // (GameInit.cpp:174, unconditional and un-#ifdef'd, so identical on every
+    // platform) and the self-clear below. Nothing takes its address (no
+    // &g_clearInput, no pointer/reference bind, no debug/cheat var table), and in
+    // the port it is a standalone namespace-scope int rather than a GameWork
+    // member, so the binary's [r5,#0x99] offset-addressing has no port equivalent
+    // and no struct-relative write can reach it. Zero occurrences in tests/ or in
+    // any platform entry point. So this branch is unreachable here exactly as it
+    // is in v1.6.1 -- do NOT "wire up" an armer without adding a reload first.
+    // (Contrast g_unpause_game, which DOES have a real armer at
+    // PauseScreen.cpp:152 -- that is what an arming path looks like.)
     if (g_clearInput != 0) {
         Mortar::InputManager::GetInstance()->ClearActions(StringHash("Input/Input.txt"));
         g_clearInput = 0;
