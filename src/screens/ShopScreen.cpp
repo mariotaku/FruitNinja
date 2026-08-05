@@ -949,9 +949,9 @@ void ShopScreen::EquipCallback() {
 // ASM diff cannot have been clean. Guards removed; re-stamp only after a fresh asm-inspector run.
 // ---------------------------------------------------------------------------
 void ShopScreen::Update(float dt) {
+#ifdef __bada__
     float prevAlpha = m_TransitionAlpha;
-
-#ifndef __bada__
+#else
     // Port specific: DIFFERS: v1.6.1 ShopScreen::Update @0x001b321c eases
     // m_TransitionAlpha per 60Hz sim tick; port eases it per rendered frame
     // (dt-scaled) so the transition tracks display refresh. __bada__ keeps
@@ -959,6 +959,11 @@ void ShopScreen::Update(float dt) {
     // UpdateRealtime() (called once per presented frame via HUD::UpdateRealtime);
     // this 60Hz Update only reads the current m_TransitionAlpha value to fire
     // the (rate-independent, threshold-based) state transitions below.
+    //
+    // Port specific: the splat-drift delta capture (prevAlpha vs. m_TransitionAlpha)
+    // moved to UpdateRealtime() alongside the ease -- see the block at the end of
+    // that function below. Capturing prevAlpha here would always yield delta==0
+    // since this 60Hz Update no longer mutates m_TransitionAlpha for states 0/2/3/7.
 #endif
 
     // Binary (v1.6.1 ShopScreen::Update @0x001b321c): demote the panel to 0x40 ONLY when no splats are alive.
@@ -1393,6 +1398,7 @@ void ShopScreen::Update(float dt) {
     //   DAT_001b3d70 =  50.0f   (split threshold on x)
     // Note: the binary "x" axis is the screen-vertical per project coord
     // convention (X=+160 top, -160 bottom) — semantically a y-shift.
+#ifdef __bada__
     if (m_TransitionAlpha < prevAlpha) {
         const float delta = prevAlpha - m_TransitionAlpha;
         SplatShiftCtx ctx = {
@@ -1401,6 +1407,10 @@ void ShopScreen::Update(float dt) {
         };
         SplatEntity::ForEachInPool(SplatShiftVisitor, &ctx);
     }
+#endif
+    // Port specific: under the port this drift is applied in UpdateRealtime()
+    // instead -- see the comment there. __bada__ keeps it here, bracketing the
+    // inline ease above (byte-identical to the binary).
 }
 
 #ifndef __bada__
@@ -1420,11 +1430,23 @@ void ShopScreen::Update(float dt) {
 // DIFFERS: v1.6.1 ShopScreen::Update @0x001b321c eases m_TransitionAlpha per
 // 60Hz sim tick; port eases it per rendered frame (dt-scaled) so the
 // transition tracks display refresh. __bada__ keeps the faithful 60Hz path.
+//
+// Port specific: v1.6.1 ShopScreen::Update @0x001b321c also captures
+// prevAlpha at function entry and, at the tail (@0x001b3ed8..0x001b3f6c),
+// diffs it against the post-ease m_TransitionAlpha to drift SplatEntity
+// instances. Since this port moved the ease itself out of Update() and into
+// this function, the prevAlpha capture and the delta computation/drift-apply
+// have to move here too, bracketing the actual mutation below -- capturing
+// in Update() would always see delta==0 (task #185). This runs once per
+// presented frame (matching where the ease now happens), so the drift is
+// applied exactly once per real alpha change -- never stale, never doubled.
 // ---------------------------------------------------------------------------
 void ShopScreen::UpdateRealtime(float dtSeconds) {
     if (dtSeconds < 0.0f) dtSeconds = 0.0f;
     if (dtSeconds > 0.1f) dtSeconds = 0.1f;   // clamp across stalls/tab-switches
     const float f = dtSeconds * 60.0f;
+
+    const float prevAlpha = m_TransitionAlpha;
 
     switch (m_State) {
     case 0:
@@ -1443,6 +1465,19 @@ void ShopScreen::UpdateRealtime(float dtSeconds) {
     default:
         // States 1/4/5/6: no alpha easing in the binary's Update either.
         break;
+    }
+
+    // v1.6.1 ShopScreen::Update @0x001b3ed8..0x001b3f6c: alpha-decrease
+    // X-shift on the SplatEntity pool. See the (now __bada__-only) block at
+    // the end of Update() for the constants/semantics; ported here verbatim
+    // since this is where the ease -- and therefore the delta -- now lives.
+    if (m_TransitionAlpha < prevAlpha) {
+        const float delta = prevAlpha - m_TransitionAlpha;
+        SplatShiftCtx ctx = {
+            delta * 190.0f * 1.5f,
+            delta * 290.0f * 1.5f
+        };
+        SplatEntity::ForEachInPool(SplatShiftVisitor, &ctx);
     }
 }
 #endif
