@@ -43,12 +43,22 @@ static Mortar::SmartPtr<Mortar::Texture> g_BuyBg;
 static Mortar::SmartPtr<Mortar::Texture> g_Arrow;
 static Mortar::SmartPtr<Mortar::Texture> g_FruitIcons[3];
 
-// Zero-vector and unit-vector constants (from _GLOBAL__I_PowerUpShop_cpp).
-// Binary initialises these as file-static Vec3 (confirmed by GOT references in Update/Release).
-static const _Vector3<float> g_Origin(0.0f, 0.0f, 0.0f);
-static const _Vector3<float> g_OneVec(1.0f, 1.0f, 1.0f);
+// `global.constructors.keyed.to.PowerUpShop.cpp` @0x001a9678 builds NO file-static vectors for
+// this class -- it only constructs the COMDAT template statics of the Mortar math types, because
+// this TU happens to be their first referencer: _Matrix44<float>::Identity @0x002d9248,
+// _Vector3<float>::Zero @0x002d9288 / ::One @0x002d9294 / ::UnitY @0x002d9ed8,
+// _Vector2<float>::Zero @0x002d92a0, DefaultBackgroundColour = Colour(0,0,0) (NOT white), and the
+// null SmartPtrs above. GOT proof (base 0x002d1130): GOT[0x002d8248]->Zero, GOT[0x002d8704]->One,
+// GOT[0x002d7fec]->UnitY. So every "origin" here is `_Vector3<float>::Zero()`, not a local global.
+//
+// TODO: the engine has no canonical `_Vector3<float>::UnitY` static (only Zero()/One() in
+// src/engine/math/_Vector3.h). This file-local stand-in is temporary; fold it into _Vector3 when
+// the engine constant lands.
+static const _Vector3<float> s_UnitY(0.0f, 1.0f, 0.0f);
 
-// White Colour (4-byte RGBA packed; used by Draw for text and quad tint).
+// TODO: tint source unverified -- the ctor block above builds only DefaultBackgroundColour = (0,0,0)
+// and no white Colour, so this static has no traced counterpart. PowerUpShop::Draw @0x001a8364
+// needs its own RE pass to establish where the quad/text tint really comes from.
 static const Colour g_White(255, 255, 255, 255);
 
 // ============================================================
@@ -192,15 +202,25 @@ void PowerUpShop::Release() {
     if (m_BuyButton != NULL) {
         Fruit* fruit = m_BuyButton->m_pTrackedFruit;
         if (fruit != NULL) {
-            // Binary: sets Fruit::m_bSliced=1 and zeroes velocity/spin vectors.
-            LOG_INFO("FRUIT", "m_bSliced=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in PowerUpShop teardown)",
+            // ASM-spec v1.6.1 PowerUpShop::Release @0x001a9124, fruit block @0x001a9154-0x001a9204:
+            //   fruit->m_bBallisticEnable (+0x70) = 1      // strb @0x001a915c -- NOT m_bSliced (+0xB8)
+            //   k = -_Vector3<float>::UnitY = (0,-1,0)     // thunk @0x001a90e0, GOT->0x002d9ed8
+            //   s16 = 320.0f                               // literal @0x001a92a8 = 0x43a00000
+            //   fruit->vel        (+0x1C) = k
+            //   fruit->m_SecondVel(+0xD4) = k
+            //   fruit->pos        (+0x10) = k * 320.0f     // operator* @0x0011139c
+            //   fruit->m_SecondPos(+0xC8) = k * 320.0f
+            // Binary calls the negate thunk 4x and reloads m_pTrackedFruit before each write.
+            // m_RotVel1/m_RotVel2 (+0x100/+0x10C) are NEVER written here.
+            LOG_INFO("FRUIT", "m_bBallisticEnable=1 set on entity=%p pos=(%.1f,%.1f) type=%d (in PowerUpShop teardown)",
                      static_cast<void*>(fruit), fruit->pos.x, fruit->pos.y, (int)fruit->m_FruitType);
-            fruit->m_bSliced = true;
-            fruit->vel    = g_Origin;
-            // m_AngularVel is not in Mortar::Entity base; Fruit stores RotVel in m_RotVel1/m_RotVel2.
-            // Binary zeroes multiple vel-like fields. Port zeroes what's accessible.
-            fruit->m_RotVel1 = g_Origin;
-            fruit->m_RotVel2 = g_Origin;
+            fruit->m_bBallisticEnable = 1;
+
+            const _Vector3<float> k = -s_UnitY;
+            fruit->vel         = k;
+            fruit->m_SecondVel = k;
+            fruit->pos         = k * 320.0f;
+            fruit->m_SecondPos = k * 320.0f;
         }
 
         // Binary: MenuButton.m_bNoDestructor = 1; replace m_RemoveCallback with empty delegate.
@@ -489,8 +509,10 @@ void PowerUpShop::Update(float dt) {
         // Pick fruit type based on m_BuyButtonState (0/1/2).
         int fruitType = s_fruitTypeCache[m_BuyButtonState];
 
-        // Spawn position: origin + Vector3(160.8, -6.0, 0.0).
-        _Vector3<float> spawnPos = g_Origin + _Vector3<float>(160.8f, -6.0f, 0.0f);
+        // Spawn position: this->pos + Vector3(160.8, -6.0, 0.0).
+        // v1.6.1 PowerUpShop::Update @0x001a8dfc-0x001a8e10 passes r2 = this+0x8 (HUDControl::pos),
+        // NOT a global origin -- a zero-vector base is only accidentally right while pos == 0.
+        _Vector3<float> spawnPos = pos + _Vector3<float>(160.8f, -6.0f, 0.0f);
 
         // Build slicedCb: v1.6.1 PowerUpShop::Update @0x001a8b04 binds PowerUpShop::ButtonSliced as
         // Delegate0<void> via QCallee.
@@ -519,7 +541,7 @@ void PowerUpShop::Update(float dt) {
         //   Rand32(524287); Rand32(2)
         //   Fruit scale *= 0.85 on x, y and z
         //   Fruit::RotateFacingUp(fruit, false, Vec3(0,1,0))
-        _Vector3<float> restPos = g_Origin;
+        _Vector3<float> restPos = _Vector3<float>::Zero();
         m_BuyButton = new MenuButton(Mortar::SmartPtr<Mortar::Texture>(), spawnPos, slicedCb,
                                      fruitType, restPos,
                                      Mortar::Delegate0<void>::MakeFree(&MenuCallbackClicked));
@@ -555,8 +577,9 @@ void PowerUpShop::Update(float dt) {
     } else if (m_BuyButton != NULL) {
         // Step 4: update existing buy button.
 
-        // Binary: move button to fixed position.
-        m_BuyButton->pos = g_Origin + _Vector3<float>(160.8f, -6.0f, 0.0f);
+        // Binary: move button to this->pos + (160.8, -6, 0).
+        // v1.6.1 PowerUpShop::Update @0x001a8ca8-0x001a8cb4 passes r2 = this+0x8 (HUDControl::pos).
+        m_BuyButton->pos = pos + _Vector3<float>(160.8f, -6.0f, 0.0f);
         // TODO: v1.6.1 0x001a8cc8 (PowerUpShop::Update) — the write below has NO counterpart in
         // the binary's else-branch: @0x001a8cc8 the binary stores 0.0f to m_BuyButton+0x10 (the
         // z component of the pos vec3 it just stmia'd), never touching the tracked fruit's vel.
@@ -572,11 +595,14 @@ void PowerUpShop::Update(float dt) {
             (m_BuyButton->m_pTrackedFruit != NULL) &&
             !m_BuyButton->m_pTrackedFruit->Sliced()) {
 
-            // v1.6.1 PowerUpShop::Update @0x001a8d18: strb r0,[r2,#0x13a] with r0 = 0 --
-            // m_bClearsMenuItems, alongside strb 1,[fruit+0xb8] and m_BuyTriggered = 1.
-            // (field_0x123 in the old v1.0 note is the clears-menu-items byte, not
-            // m_bAcceptsTouch.)
-            m_BuyButton->m_pTrackedFruit->vel = g_Origin;
+            // v1.6.1 PowerUpShop::Update @0x001a8d10-0x001a8d28:
+            //   strb r12,[r3,#0xb8]          -- fruit->m_bSliced = 1
+            //   add  r3,r3,#0xd4 ; stmia r3  -- fruit->m_SecondVel = _Vector3<float>::One
+            //                                   (GOT[0x1a8f00] -> One; NOT vel (+0x1C), NOT Zero)
+            //   strb r0,[r2,#0x13a] with r0 = 0 -- m_bClearsMenuItems, not m_bAcceptsTouch
+            //   (field_0x123 in the old v1.0 note is the clears-menu-items byte).
+            m_BuyButton->m_pTrackedFruit->m_bSliced = 1;
+            m_BuyButton->m_pTrackedFruit->m_SecondVel = _Vector3<float>::One();
             m_BuyButton->m_bClearsMenuItems = 0;
             m_BuyTriggered = 1;
         }
@@ -617,18 +643,18 @@ void PowerUpShop::SetBuyButtonState() {
 // ButtonSliced @ 0x001a7fe8 (non-virtual; bound as Mortar::Delegate0<void>)
 // ============================================================
 void PowerUpShop::ButtonSliced() {
-    // Binary @ 0x00155b70: split predicate (avoids GCC 16-bit load-fuse on
+    // Binary @ 0x001a7fe8: split predicate (avoids GCC 16-bit load-fuse on
     // combined &&; binary emits two ldrb.w, one per field).
     if (m_BuyTriggered != 0) {
-        // Already-purchased "spit fruit out" branch (binary @ 0x00155b80)
+        // Already-purchased "spit fruit out" branch
         if (m_BuyButton == NULL) return;
         Fruit* fruit = m_BuyButton->m_pTrackedFruit;
         if (fruit == NULL) return;
         // 3-float ldmia/stmia copy block: freeze both halves at current position.
-        fruit->m_SecondPos = fruit->pos;       // +0xC8 <- +0x10
-        fruit->vel         = g_Origin;         // +0x1C
-        fruit->m_SecondVel = g_Origin;         // +0xD4
-        fruit->m_Gravity   = g_Origin;         // +0xA0
+        fruit->m_SecondPos = fruit->pos;                   // +0xC8 <- +0x10
+        fruit->vel         = _Vector3<float>::Zero();      // +0x1C
+        fruit->m_SecondVel = _Vector3<float>::Zero();      // +0xD4
+        fruit->m_Gravity   = _Vector3<float>::Zero();      // +0xA0
         return;
     }
     if (m_BuyButtonState != 0) return;
@@ -636,11 +662,13 @@ void PowerUpShop::ButtonSliced() {
     PowerUp* p = m_PurchasablePowerUps[m_SelectedIndex];
     uint32_t hash = p->m_NameHash;
 
-    // Binary: copy g_Origin to stack-local, then ActivatePower(hash, &local, &local.x).
-    // r2 AND r3 both point to the same Vec3 -- ActivatePower treats the float* as Vec3*.
-    _Vector3<float> localOrigin = g_Origin;
+    // Binary: copy _Vector3<float>::Zero to a stack-local, then ActivatePower(hash, &local, NULL).
+    // The 4th argument is NULL: @0x001a80a8 `cpy r3,r8` where r8 holds the just-tested
+    // m_BuyButtonState, proven 0 on this path. (An older note claiming r2 and r3 both point at
+    // the same Vec3 was wrong.)
+    _Vector3<float> localOrigin = _Vector3<float>::Zero();
     PowerUpManager* pum = PowerUpManager::GetInstance();
-    pum->ActivatePower(hash, localOrigin, reinterpret_cast<float*>(&localOrigin));
+    pum->ActivatePower(hash, localOrigin, NULL);
 
     PowerUp* singleActive = PowerUpManager::GetInstance()->GetActiveSingle(hash);
     if (singleActive != NULL) {
