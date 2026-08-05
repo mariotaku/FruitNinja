@@ -103,7 +103,41 @@ SKIPPED (coverage counter, task #139) -- any '//' comment line that contains
     unrelated hex-looking data in format strings) and is intentionally not
     attempted in this pass.
 
-Cross-cutting audit class (orthogonal to 'verdict', reported separately):
+Cross-cutting audit classes (orthogonal to 'verdict', reported separately):
+
+  CONTRADICTED-SYMBOL -- roll-up of every verdict in which the cited symbol
+      NAME contradicts the symbol that actually lives at (or contains) the
+      cited address: MID-SYMBOL-MISMATCH / STALE-MISMATCH / STALE-AMBIGUOUS /
+      STALE / NO-VERSION+STALE. The count is printed on EVERY run, zero or
+      not, so a clean tree states "CONTRADICTED: 0" instead of leaving the
+      reader to infer it from an absent section -- that is what makes it
+      usable as a gate. Denominator ('contradicted_checked') is the number of
+      markers that cite a symbol AND whose address resolved to something to
+      compare against; symbol-less and unresolvable markers have nothing to
+      contradict and belong to the NO-SYMBOL / UNRESOLVED buckets instead.
+      report.json['contradicted_markers'] carries the full list, and
+      report.json['contradicted_checked'] the denominator.
+
+      Gating is UNCHANGED by this roll-up: MID-SYMBOL-MISMATCH /
+      STALE-MISMATCH / STALE already fail --check, NO-VERSION+STALE fails
+      only under --strict, and STALE-AMBIGUOUS still fails neither. So a
+      non-zero roll-up does not necessarily mean --check exits 1.
+
+      Trustworthiness of this count depends entirely on the name matcher, so
+      three SPELLING equivalences (see _spelling_equivalent) are recognised
+      explicitly rather than being caught by accident by a loose substring
+      rule. A marker writes a name the way a human reads it; the symbol table
+      writes the fully-qualified itanium form:
+        R1 template abbreviation -- 'Read<SmartPtr<Effect>,allocator>' vs
+           'void Mortar::Read<Mortar::SmartPtr<Mortar::Effect>,
+            std::allocator<Mortar::SmartPtr<Mortar::Effect>>>(...)'.
+        R2 namespace-prefixed ctor/dtor -- 'Texture::~Texture' vs
+           'Mortar::Texture::{base dtor}()', 'HUD::HUD' vs 'HUD::{ctor}()'.
+        R3 thunk token -- 'T_2044' vs Ghidra/GCC's 'T.2044'.
+      Each requires BOTH sides to be of the same shape (both templates of the
+      same arity, both the ctor/dtor of the same unqualified class, both the
+      same temp number), so none of them can make a genuinely wrong symbol
+      pass; they widen which SPELLINGS resolve, not which FUNCTIONS match.
 
   NO-SYMBOL -- the marker names NO symbol at all (bare '// ... binary @ 0x...' /
       '// ASM-spec for binary @ 0x...'). There is nothing to cross-check, so
@@ -564,6 +598,271 @@ def _strip_template_args(s: str) -> str:
     return ''.join(out)
 
 
+# ---------------------------------------------------------------------------
+# Spelling equivalences (task #135)
+#
+# A marker writes a name the way a human reads it; the symbol table writes the
+# fully-qualified itanium form. Three spelling classes differ so much that a
+# plain identifier comparison calls them a contradiction even though both sides
+# name the SAME function. Each is implemented below as its own narrow
+# predicate, and each REQUIRES BOTH SIDES TO BE OF THE SAME SHAPE, so none of
+# them can make a genuinely wrong symbol pass:
+#
+#   R1 _template_spec_matches -- both sides must be template specialisations,
+#      the base names must agree, the argument LISTS must have the same length,
+#      and every argument must agree pairwise. Only namespace prefixes inside
+#      the arguments are ignored (and `allocator` == `std::allocator<...>`).
+#      A different function, a different arity, or a different argument type
+#      still contradicts.
+#   R2 _ctor_dtor_matches -- both sides must be a ctor (or both a dtor) OF THE
+#      SAME UNQUALIFIED CLASS NAME. `A::~A` never matches `B::{dtor}`; a dtor
+#      never matches a ctor; a normal method never matches either.
+#   R3 _thunk_matches -- both sides must be a compiler temp token `T<sep>N`
+#      with the SAME N. `T_865` never matches `T_866`.
+#
+# Everything else (return type, outer namespaces, parameter list) is stripped
+# identically from both sides before comparison, which is lossless: those parts
+# are not part of the identity a marker cites.
+# ---------------------------------------------------------------------------
+
+def _split_balanced(s: str, seps: str) -> list:
+    """Split s on any char in seps that sits at bracket depth 0.
+
+    Depth counts '<' '{' '(' up and '>' '}' ')' down, so the '{base dtor}'
+    itanium spelling and nested template argument lists survive intact.
+    """
+    out, buf, depth = [], [], 0
+    for ch in s:
+        if ch in '<{(':
+            depth += 1
+        elif ch in '>})':
+            if depth > 0:
+                depth -= 1
+        if depth == 0 and ch in seps:
+            out.append(''.join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    out.append(''.join(buf))
+    return out
+
+
+def _split_scope(s: str) -> list:
+    """Split s on depth-0 '::' (so 'A<B::C>::D' -> ['A<B::C>', 'D'])."""
+    out, buf, depth, i, n = [], [], 0, 0, len(s)
+    while i < n:
+        ch = s[i]
+        if ch in '<{(':
+            depth += 1
+        elif ch in '>})':
+            if depth > 0:
+                depth -= 1
+        if depth == 0 and ch == ':' and i + 1 < n and s[i + 1] == ':':
+            out.append(''.join(buf))
+            buf = []
+            i += 2
+            continue
+        buf.append(ch)
+        i += 1
+    out.append(''.join(buf))
+    return out
+
+
+def _cut_params(s: str) -> str:
+    """Drop the parameter list -- everything from the first depth-0 '('."""
+    depth = 0
+    for i, ch in enumerate(s):
+        if ch == '(' and depth == 0:
+            return s[:i]
+        if ch in '<{':
+            depth += 1
+        elif ch in '>}':
+            if depth > 0:
+                depth -= 1
+    return s
+
+
+def _drop_return_type(s: str) -> str:
+    """Keep the last depth-0 whitespace-separated token.
+
+    The demangler prints 'void Mortar::Read<...>(...)' while a marker writes
+    'Mortar::Read<...>'. Splitting at depth 0 leaves template arguments (which
+    contain spaces after commas) and '{base dtor}' untouched.
+    """
+    toks = [t for t in _split_balanced(s, ' \t') if t.strip()]
+    return toks[-1].strip() if toks else s.strip()
+
+
+_THUNK_TOKEN_RE = re.compile(r'^T[._](\d+)$')
+_ITANIUM_CTOR_RE = re.compile(r'^\{.*\bctor\}$')
+_ITANIUM_DTOR_RE = re.compile(r'^\{.*\bdtor\}$')
+
+_PARSE_CACHE = {}
+
+
+def _parse_qualified(name: str) -> tuple:
+    """Parse a name into a tuple of (ident, args) segments.
+
+    args is None for a plain identifier, or a tuple of parsed names for a
+    template specialisation. The return type and parameter list are dropped
+    first; 'T.2044' and 'T_2044' both normalise to the ident 'T_2044'.
+    """
+    key = name
+    cached = _PARSE_CACHE.get(key)
+    if cached is not None:
+        return cached
+    s = _drop_return_type(_cut_params(str(name or '')).strip()).strip()
+    segs = []
+    for raw in _split_scope(s):
+        raw = raw.strip()
+        if not raw:
+            continue
+        lt = raw.find('<')
+        if lt != -1 and raw.endswith('>'):
+            ident = raw[:lt].strip()
+            inner = raw[lt + 1:raw.rfind('>')]
+            args = tuple(_parse_qualified(a)
+                         for a in _split_balanced(inner, ',') if a.strip())
+        else:
+            ident, args = raw, None
+        m = _THUNK_TOKEN_RE.match(ident)
+        if m:
+            ident = 'T_' + m.group(1)
+        segs.append((ident, args))
+    result = tuple(segs)
+    if len(_PARSE_CACHE) < 200000:
+        _PARSE_CACHE[key] = result
+    return result
+
+
+def _segments_equivalent(a: tuple, b: tuple) -> bool:
+    """One (ident, args) segment pair. Idents must be EQUAL."""
+    (ident_a, args_a), (ident_b, args_b) = a, b
+    if ident_a != ident_b:
+        return False
+    if args_a is None and args_b is None:
+        return True
+    if args_a is None or args_b is None:
+        # The ONLY tolerated asymmetry: a marker writes the defaulted allocator
+        # as the bare word 'allocator', the symbol table spells it
+        # 'std::allocator<T>'. Any other bare-vs-specialised pair contradicts.
+        return ident_a == 'allocator'
+    if len(args_a) != len(args_b):
+        return False
+    return all(_paths_equivalent(x, y) for x, y in zip(args_a, args_b))
+
+
+def _paths_equivalent(pa: tuple, pb: tuple) -> bool:
+    """Right-anchored segment comparison: the shorter path may omit OUTER
+    namespace segments ('Effect::DebugInfo' == 'Mortar::Effect::DebugInfo'),
+    but every segment they do share must be equal."""
+    if not pa or not pb:
+        return False
+    n = min(len(pa), len(pb))
+    return all(_segments_equivalent(pa[-i], pb[-i]) for i in range(1, n + 1))
+
+
+def _template_spec_matches(cited_sym: str, demangled: str) -> bool:
+    """R1: both sides are template specialisations naming the same function.
+
+    'Read<SmartPtr<Effect>,allocator>' ==
+    'void Mortar::Read<Mortar::SmartPtr<Mortar::Effect>,
+                       std::allocator<Mortar::SmartPtr<Mortar::Effect>>>(...)'
+    """
+    if '<' not in cited_sym or '<' not in demangled:
+        return False
+    pa, pb = _parse_qualified(cited_sym), _parse_qualified(demangled)
+    if not pa or not pb:
+        return False
+    # The TAIL segment must itself be the specialisation on both sides --
+    # otherwise a template CLASS's method would match a free template function.
+    if pa[-1][1] is None or pb[-1][1] is None:
+        return False
+    return _paths_equivalent(pa, pb)
+
+
+def _ctor_dtor_kind(path: tuple):
+    """(unqualified_class, 'CTOR'|'DTOR') for a parsed ctor/dtor name, else None.
+
+    Recognises both the itanium spellings the demangler emits ('{ctor}',
+    '{base ctor}', '{dtor}', '{base dtor}', '{deleting dtor}', '{complete
+    dtor}') and the source spellings a marker uses ('X::~X', '~X', 'X::X').
+    """
+    if not path:
+        return None
+    ident = path[-1][0]
+    owner = _strip_template_args(path[-2][0]).strip() if len(path) >= 2 else None
+    if _ITANIUM_CTOR_RE.match(ident):
+        return (owner, 'CTOR') if owner else None
+    if _ITANIUM_DTOR_RE.match(ident):
+        return (owner, 'DTOR') if owner else None
+    if ident.startswith('~'):
+        cls = _strip_template_args(ident[1:]).strip()
+        if not cls:
+            return None
+        # 'X::~X' -- the owner, when spelled, must be the same class.
+        if owner is not None and owner != cls:
+            return None
+        return (cls, 'DTOR')
+    if owner is not None and _strip_template_args(ident).strip() == owner:
+        return (owner, 'CTOR')
+    return None
+
+
+def _ctor_dtor_matches(cited_sym: str, demangled: str) -> bool:
+    """R2: both sides are the ctor (or both the dtor) of the same class.
+
+    The namespace one side omits is irrelevant -- only the UNQUALIFIED class
+    name is compared -- but the class name itself must be identical and the
+    kinds must agree, so 'A::~A' can never match 'B::{dtor}' or 'A::{ctor}'.
+    """
+    if 'ctor' not in demangled and 'dtor' not in demangled and '~' not in demangled:
+        return False
+    ka = _ctor_dtor_kind(_parse_qualified(cited_sym))
+    if ka is None:
+        return False
+    kb = _ctor_dtor_kind(_parse_qualified(demangled))
+    return kb is not None and ka == kb
+
+
+def _thunk_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
+    """R3: 'T_2044' (source spelling) == 'T.2044' (Ghidra/GCC spelling).
+
+    GCC emits a '.' in compiler-temp names, which cannot appear in a C++
+    identifier, so a marker writes '_'. The NUMBER must be identical.
+    """
+    m = _THUNK_TOKEN_RE.match(cited_sym.strip())
+    if not m:
+        return False
+    want = 'T_' + m.group(1)
+    for side in (binary_sym, demangled):
+        if not side:
+            continue
+        side = side.strip()
+        m2 = _THUNK_TOKEN_RE.match(side)
+        if m2 and 'T_' + m2.group(1) == want:
+            return True
+    return False
+
+
+def _spelling_equivalent(cited_sym: str, binary_sym: str, demangled: str) -> bool:
+    """Union of R1/R2/R3 -- the three ways a marker and the symbol table spell
+    the SAME function differently. Cheap shape tests first: the common case
+    (an ordinary method name that simply does not match) costs three substring
+    tests and returns False."""
+    if not cited_sym:
+        return False
+    dem = demangled or ''
+    man = binary_sym or ''
+    if _template_spec_matches(cited_sym, dem):
+        return True
+    if _ctor_dtor_matches(cited_sym, dem):
+        return True
+    if _thunk_matches(cited_sym, man, dem):
+        return True
+    return False
+
+
 def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
     """Return True if the cited symbol is a reasonable match for binary_sym.
 
@@ -634,6 +933,11 @@ def _symbol_matches(cited_sym: str, binary_sym: str, demangled: str) -> bool:
         if dot_form == binary_sym or dot_form == demangled:
             return True
 
+    # 7. Spelling equivalences R1/R2/R3 (task #135): template abbreviation,
+    #    namespace-prefixed ctor/dtor, thunk token. See _spelling_equivalent.
+    if _spelling_equivalent(cited_sym, binary_sym, demangled):
+        return True
+
     return False
 
 
@@ -650,6 +954,16 @@ def _symbol_matches_strict(cited_sym: str, binary_sym: str, demangled: str) -> b
       - last-segment EXACT equality (only when cited is unqualified)
       - dtor:  '~Foo' vs '{dtor}/{base dtor}/...' of class Foo
       - compiler temp:  'T_NNNN' vs 'T.NNNN'
+      - spelling equivalences R1/R2/R3 (_spelling_equivalent, task #135):
+        template abbreviation, namespace-prefixed ctor/dtor, thunk token.
+        Each requires both sides to be of the same shape, so they widen WHICH
+        SPELLINGS resolve without widening WHICH FUNCTIONS match -- the
+        "exactly 1 candidate" guarantee the --fix rewriter depends on holds.
+        Before this, a marker spelling a ctor 'HUD::HUD', a dtor without its
+        namespace 'Texture::~Texture', or an abbreviated
+        'Mortar::Read<EffectPropertyDefinition,allocator>' resolved to ZERO
+        strict candidates, so a genuinely stale one of those shapes reported
+        "cited symbol ABSENT in binary" instead of its real address.
     """
     cited_clean = cited_sym.strip()
     dem_clean   = demangled
@@ -685,6 +999,9 @@ def _symbol_matches_strict(cited_sym: str, binary_sym: str, demangled: str) -> b
         dot_form = cited_last.replace('_', '.', 1)
         if dot_form == binary_sym or dot_form == demangled:
             return True
+    # 5. Spelling equivalences R1/R2/R3 (task #135).
+    if _spelling_equivalent(cited_sym, binary_sym, demangled):
+        return True
     return False
 
 
@@ -1341,6 +1658,56 @@ _CHECK_FAIL_VERDICTS = {'MID-SYMBOL-MISMATCH', 'STALE-MISMATCH', 'STALE',
                         'PLT-THUNK', 'PLT-RANGE-UNMAPPED'}
 # Additionally failed under --strict.
 _CHECK_STRICT_EXTRA = {'NO-VERSION', 'NO-VERSION+STALE'}
+
+# ---------------------------------------------------------------------------
+# CONTRADICTED-SYMBOL roll-up (task #135)
+# ---------------------------------------------------------------------------
+# The verdicts in which the cited symbol NAME contradicts the symbol that
+# actually lives at (or contains) the cited address. These are already
+# classified individually; the roll-up exists so the count is a number that is
+# ALWAYS printed -- a clean tree states "0 contradicted" rather than leaving
+# the reader to infer it from an absent section, which is what makes the check
+# usable as a gate instead of something to eyeball.
+_CONTRADICTED_VERDICTS = ('MID-SYMBOL-MISMATCH', 'STALE-MISMATCH',
+                          'STALE-AMBIGUOUS', 'STALE', 'NO-VERSION+STALE')
+
+
+def check_contradicted_markers(markers: list) -> dict:
+    """Roll up every marker whose cited symbol contradicts the binary symbol at
+    its address.
+
+    'checked' is the denominator: markers that cite a symbol AND whose address
+    resolved to something to compare against. A marker with no cited symbol
+    (the NO-SYMBOL audit class) or with an unresolvable address (UNRESOLVED /
+    PLT-RANGE-UNMAPPED) has nothing to contradict and is not counted either way
+    -- those are separate concerns with their own buckets.
+
+    Returns {'rows': [...], 'checked': int}.
+    """
+    rows, checked = [], 0
+    for m in markers:
+        if not m.get('cited_sym'):
+            continue
+        resolved = (m.get('binary_demangled') or m.get('binary_sym')
+                    or m.get('containing_dem') or m.get('containing_sym')
+                    or m.get('plt_target_dem') or m.get('plt_target_sym'))
+        if not resolved:
+            continue
+        checked += 1
+        if m['verdict'] not in _CONTRADICTED_VERDICTS:
+            continue
+        rows.append({
+            'file':        m['file'],
+            'line':        m['line'],
+            'kind':        m['kind'],
+            'verdict':     m['verdict'],
+            'cited_sym':   m['cited_sym'],
+            'addr_str':    m['addr_str'],
+            'addr_is':     resolved,
+            'correct_addr': m.get('correct_addr'),
+        })
+    rows.sort(key=lambda r: (r['file'], r['line']))
+    return {'rows': rows, 'checked': checked}
 
 
 def _is_stl_internal(mangled: str, demangled: str) -> bool:
@@ -2062,6 +2429,13 @@ def main():
           f"({_nosym_high} HIGH priority).")
 
     # -----------------------------------------------------------------------
+    # CONTRADICTED-SYMBOL roll-up: cited symbol vs the symbol at its address.
+    # -----------------------------------------------------------------------
+    contradicted = check_contradicted_markers(markers)
+    print(f"  {len(contradicted['rows'])} contradicted marker(s) of "
+          f"{contradicted['checked']} checked (cited symbol vs symbol at addr).")
+
+    # -----------------------------------------------------------------------
     # Check A: HOLLOW-MARKER -- ASM-verified/ASM-spec marker on a trivial
     # port body while the cited binary function is non-trivial in size.
     # -----------------------------------------------------------------------
@@ -2141,6 +2515,8 @@ def main():
         json.dump({
             'markers':             markers,
             'skipped_markers':     skipped_lines,
+            'contradicted_markers': contradicted['rows'],
+            'contradicted_checked': contradicted['checked'],
             'hollow_markers':      hollow_markers,
             'symbol_less_markers': symbol_less_markers,
             'deferred_no_blocker': deferred_no_blocker,
@@ -2164,6 +2540,9 @@ def main():
         if c:
             print(f"  {v:<32}: {c}")
     print(f"  {'SKIPPED (unrecognised)':<32}: {len(skipped_lines)}")
+    # Always printed, zero or not -- see _CONTRADICTED_VERDICTS.
+    print(f"  {'CONTRADICTED-SYMBOL':<32}: {len(contradicted['rows'])}"
+          f"  (of {contradicted['checked']} checked)")
     print(f"  {'HOLLOW-MARKER':<32}: {len(hollow_markers)}")
     print(f"  {'NO-SYMBOL (audit class)':<32}: {len(symbol_less_markers)} "
           f"({_nosym_high} HIGH)")
@@ -2174,6 +2553,36 @@ def main():
         print(f"  {'NAME-NOT-IN-BINARY':<32}: {len(sweep['name_not_in_binary'])}")
         print(f"  {'SWEEP-CANNOT-VERIFY':<32}: {len(sweep['cannot_verify'])}")
     print()
+
+    # --- CONTRADICTED-SYMBOL verdict line. Always printed: a clean run has to
+    # SAY zero, not leave the reader inferring it from an absent section.
+    print("=" * 70)
+    if contradicted['rows']:
+        print(f"  CONTRADICTED-SYMBOL: {len(contradicted['rows'])} of "
+              f"{contradicted['checked']} symbol-citing markers name a symbol")
+        print(f"  that is NOT the one at their cited address. Listed below; "
+              f"each is a marker bug.")
+    else:
+        print(f"  CONTRADICTED-SYMBOL: 0 -- all {contradicted['checked']} "
+              f"symbol-citing markers name")
+        print(f"  the symbol that really lives at (or contains) their cited "
+              f"address.")
+    print("=" * 70)
+    print()
+
+    if contradicted['rows']:
+        print(f"--- CONTRADICTED-SYMBOL ({len(contradicted['rows'])}) -- cited symbol "
+              f"is not the symbol at the cited address ---")
+        for r in contradicted['rows']:
+            addr_is = _ascii_safe(r['addr_is'])
+            if len(addr_is) > 62:
+                addr_is = addr_is[:59] + '...'
+            print(f"  [{r['verdict']}] {r['file']}:{r['line']}")
+            print(f"    cited:   {_ascii_safe(r['cited_sym'])} @ {r['addr_str']}")
+            print(f"    addr is: {addr_is}")
+            if r.get('correct_addr') is not None:
+                print(f"    correct: 0x{r['correct_addr']:08x}")
+        print()
 
     # --- Check D coverage line. The whole point: unverified is a NUMBER that
     # moves, not something to hunt for.
