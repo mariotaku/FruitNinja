@@ -197,6 +197,17 @@ bool PointerMoveCallback(InputEvent* ev) {
         game_work.worldPos.y = py;
     }
 
+    // ASM-spec v1.6.1: this sink is ALWAYS NULL, in the binary as well as here, so
+    // the sink-first branches below are dead in both. That is faithful, not a gap.
+    // The only writer of game_work.m_pActiveTouchSink (+0x1AC) in the whole image
+    // is FruitNinjaNewsControl::StartNewsRender @0x001a2074, and that is an
+    // UNREACHABLE RELIC: its sole caller is the GOT veneer @0x00102a80, whose sole
+    // caller is NetworkManager::StartNewsDisplay @0x0023132c, which has no real
+    // caller anywhere. The second route is closed too -- NetworkManager::Update
+    // @0x002310c8 only reaches the news renderer when m_NewsRenderWanted is true,
+    // and that flag is set in exactly one place: inside StartNewsDisplay itself.
+    // Verified 2026-08-06; do NOT "fix" the dead branches by deleting them
+    // (stub-don't-skip) or by inventing a sink installer.
     Mortar::InputSink* sink = game_work.m_pActiveTouchSink;
 
     // TouchAxisX1..16 (0x99..0xa8).
