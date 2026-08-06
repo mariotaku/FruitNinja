@@ -1,0 +1,102 @@
+name: Build Wii
+
+# Manual trigger, plus automatic on pushes that touch Wii-relevant paths
+# (mirrors webos.yml's dispatch + path-filter shape).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/**'
+      - 'tools/wii/**'
+      - 'tools/assets/**'
+      - 'tools/lib/**'          # bake-fonts.py imports from here
+      - 'cmake/wii.toolchain.cmake'
+      - 'cmake/assert-nonempty-dir.cmake'
+      - 'CMakeLists.txt'
+      - '.github/workflows/wii.yml'
+      # The job uses the local fetch-game-assets composite action, so changes
+      # to it must retrigger this build -- otherwise action fixes ship untested.
+      - '.github/actions/**'
+
+env:
+  # freetype-py lives in a venv: Ubuntu's python3 is externally-managed
+  # (PEP 668), so a bare `pip install` into it is refused.
+  FN_WII_VENV: /opt/fn-wii-venv
+
+jobs:
+  build-wii:
+    name: Build (Wii)
+    runs-on: ubuntu-latest
+    # Ships devkitPPC + libogc + general-tools (elf2dol) and exports
+    # DEVKITPRO=/opt/devkitpro, which cmake/wii.toolchain.cmake requires.
+    container: devkitpro/devkitppc
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      # Most of these are already in the image; apt is a no-op then. cmake +
+      # ninja build the tree, git + curl let FetchContent pull tinyxml2 from
+      # GitHub at configure time, unzip is used by fetch-game-assets, and
+      # python3-venv backs the freetype-py venv below.
+      - name: Install Build Tools
+        shell: bash
+        run: |
+          apt-get -yq update
+          apt-get -y -qq install cmake ninja-build git curl unzip \
+                                 python3 python3-venv libfreetype6
+          cmake --version
+          ninja --version
+
+      # The Wii font bake (fn_wii_fonts) rasterizes every shipped glyph with
+      # FreeType. Wii links no runtime TTF backend, so without this the package
+      # renders NO TEXT -- the configure step hard-fails if freetype-py is
+      # missing rather than silently skipping.
+      - name: Create Python venv (font bake deps)
+        shell: bash
+        run: |
+          python3 -m venv --system-site-packages "$FN_WII_VENV"
+          "$FN_WII_VENV/bin/pip" install --upgrade pip
+          "$FN_WII_VENV/bin/pip" install freetype-py
+          "$FN_WII_VENV/bin/python3" -c "import freetype; print('freetype-py import OK')"
+
+      # Asset staging AND the font-bake plan generators read the original game
+      # asset dump from FruitNinjaBada/Data -- the action's default destination.
+      - name: Fetch game assets
+        uses: ./.github/actions/fetch-game-assets
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -B build/wii -G Ninja \
+                -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake \
+                -DFRUIT_PLATFORM_WII=ON \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DFN_WII_BAKE_PYTHON="$FN_WII_VENV/bin/python3"
+
+      # build -> install -> cpack. The script's own env guard accepts the Linux
+      # powerpc-eabi-g++ (no .exe) as well as the Windows/MSYS2 one.
+      - name: Build + Package
+        shell: bash
+        run: bash tools/wii/build.sh
+
+      # Belt and braces on top of the CMake-side assert inside fn_wii_fonts:
+      # that assert never runs if the bake was skipped at configure time, and
+      # this checks what actually landed in the installed package.
+      - name: Verify prebaked fonts shipped
+        shell: bash
+        run: |
+          PREBAKED=build/wii/dist/apps/fruitninja/Data/fonts/prebaked
+          COUNT=$(find "$PREBAKED" -type f 2>/dev/null | wc -l)
+          echo "prebaked font files: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then
+            echo "ERROR: $PREBAKED is empty -- this package would render no text." >&2
+            exit 1
+          fi
+
+      - name: Upload homebrew ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: wii-homebrew
+          path: build/wii/fruit-ninja-wii.zip
+          if-no-files-found: error

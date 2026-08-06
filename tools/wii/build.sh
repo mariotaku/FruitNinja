@@ -22,15 +22,19 @@ PROJ="$(cd "$(dirname "$0")/../.." && pwd)"
 BUILD_DIR="$PROJ/build/wii"
 DIST_DIR="$BUILD_DIR/dist"
 
-# Env guard: this build only works inside the devkitPro MSYS2 shell, where the
-# toolchain is mounted at /opt/devkitpro (the CMake cache hardcodes those paths).
-# Running it from Git Bash / plain MSYS2 gives cryptic "elf2dol: not found" +
+# Env guard: this build needs devkitPPC mounted at /opt/devkitpro (the CMake
+# cache hardcodes those paths). On Windows that means the devkitPro MSYS2
+# shell; running it from Git Bash gives cryptic "elf2dol: not found" +
 # CMakeCache path-mismatch errors -- fail fast with a clear pointer instead.
-if [ ! -x /opt/devkitpro/devkitPPC/bin/powerpc-eabi-g++.exe ]; then
+# The compiler is powerpc-eabi-g++.exe on the Windows toolchain and
+# powerpc-eabi-g++ on Linux (devkitpro/devkitppc container, CI) -- accept both.
+if [ ! -x /opt/devkitpro/devkitPPC/bin/powerpc-eabi-g++.exe ] &&
+   [ ! -x /opt/devkitpro/devkitPPC/bin/powerpc-eabi-g++ ]; then
     echo "ERROR: devkitPPC not found at /opt/devkitpro." >&2
-    echo "Run this from the devkitPro MSYS2 shell, NOT Git Bash:" >&2
+    echo "On Windows, run this from the devkitPro MSYS2 shell, NOT Git Bash:" >&2
     echo "  Start Menu -> 'devkitPro' -> 'MSYS2' (or C:\\devkitPro\\msys2\\msys2_shell.cmd)" >&2
     echo "  then: bash tools/wii/build.sh" >&2
+    echo "On Linux, install devkitPPC + libogc (or use the devkitpro/devkitppc image)." >&2
     exit 1
 fi
 

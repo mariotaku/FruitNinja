@@ -1209,52 +1209,92 @@ elseif (FRUIT_PLATFORM_WII)
 
     # --- Prebaked font bake (task #51/#52) ---
     # Bakes FreeType-rendered glyph atlases (see tools/wii/bake-fonts.py) into
-    # staging/Data/fonts/prebaked, from tmp/prebake/bake_plan.json (a gitignored
-    # dev artifact -- NOT every checkout has one). stage-assets.py's own
-    # font-bake hook uses Python3_EXECUTABLE (usually MSYS2 /usr/bin/python3),
-    # which has no freetype-py; the working interpreter is the MinGW toolchain
-    # python (has freetype-py + libfreetype-6.dll reachable via ctypes once
-    # /mingw64/bin is on PATH). FN_WII_BAKE_PYTHON lets a dev override the
-    # interpreter path if they keep freetype-py elsewhere.
+    # staging/Data/fonts/prebaked. The Wii build links NO runtime TTF backend,
+    # so a skipped bake ships a package that renders no text at all -- this
+    # step is therefore load-bearing, not optional.
     #
-    # Graceful skip (not a build failure) when either prerequisite is missing,
-    # so a checkout without tmp/prebake/ or without the mingw64 freetype-py
-    # package still configures and builds -- just without prebaked fonts
-    # (BakedFontWii falls back to whatever the runtime does with no atlas).
-    set(FN_WII_BAKE_PYTHON "/mingw64/bin/python.exe" CACHE FILEPATH
+    # The bake plan is GENERATED at build time into ${CMAKE_BINARY_DIR}/prebake
+    # by tools/wii/prebake/*.py (pure stdlib, derived from
+    # FruitNinjaBada/Data/{stringtables,xml} alone). It used to be read from
+    # tmp/prebake/, which is gitignored -- so a fresh checkout (CI) silently
+    # skipped the bake and shipped a textless build. Generating into the build
+    # tree makes a fresh checkout and a dev machine behave identically.
+    #
+    # Two interpreters are involved:
+    #   Python3_EXECUTABLE  -- the plan generators (pure stdlib, any python3).
+    #   FN_WII_BAKE_PYTHON  -- the baker; needs freetype-py plus a libfreetype
+    #                          loadable via ctypes. On a Windows/MSYS2 host that
+    #                          is the MinGW python (freetype-py +
+    #                          libfreetype-6.dll once /mingw64/bin is on PATH);
+    #                          elsewhere the discovered python3. Override it if
+    #                          freetype-py lives in a venv (CI does this).
+    if (CMAKE_HOST_WIN32)
+        set(_fn_wii_bake_python_default "/mingw64/bin/python.exe")
+    else()
+        set(_fn_wii_bake_python_default "${Python3_EXECUTABLE}")
+    endif()
+    set(FN_WII_BAKE_PYTHON "${_fn_wii_bake_python_default}" CACHE FILEPATH
         "Python interpreter (with freetype-py) used to bake Wii prebaked fonts")
 
-    set(_fn_wii_bake_plan "${CMAKE_SOURCE_DIR}/tmp/prebake/bake_plan.json")
-    set(_fn_wii_bake_ok FALSE)
-    if (EXISTS "${_fn_wii_bake_plan}")
+    # The /mingw64/bin PATH prefix only exists (and is only a valid PATH form)
+    # on the MSYS2 host; on Linux it is noise, so invoke the baker directly.
+    if (CMAKE_HOST_WIN32)
+        set(_fn_wii_bake_cmd ${CMAKE_COMMAND} -E env "PATH=/mingw64/bin:$ENV{PATH}"
+                             "${FN_WII_BAKE_PYTHON}")
+    else()
+        set(_fn_wii_bake_cmd "${FN_WII_BAKE_PYTHON}")
+    endif()
+
+    set(_fn_wii_prebake_dir "${CMAKE_BINARY_DIR}/prebake")
+    set(_fn_wii_prebake_src "${CMAKE_SOURCE_DIR}/tools/wii/prebake")
+    set(_fn_wii_prebaked_out "${FN_STAGING_DATA_DIR}/fonts/prebaked")
+
+    # The only remaining graceful skip: the raw asset dump is genuinely absent,
+    # so there is nothing to derive a plan from (and staging has no fonts to
+    # bake from either). Everything else is a hard error -- see below.
+    if (NOT EXISTS "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data/stringtables/translations_header.str")
+        message(STATUS
+            "Wii: prebaked font bake SKIPPED -- FruitNinjaBada/Data is not present. "
+            "The resulting build renders NO TEXT; extract the game asset dump first.")
+    else()
         execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env "PATH=/mingw64/bin:$ENV{PATH}"
-                    "${FN_WII_BAKE_PYTHON}" -c "import freetype"
+            COMMAND ${_fn_wii_bake_cmd} -c "import freetype"
             RESULT_VARIABLE _fn_wii_bake_python_rc
             OUTPUT_QUIET ERROR_QUIET
         )
-        if (_fn_wii_bake_python_rc EQUAL 0)
-            set(_fn_wii_bake_ok TRUE)
+        if (NOT _fn_wii_bake_python_rc EQUAL 0)
+            message(FATAL_ERROR
+                "Wii: ${FN_WII_BAKE_PYTHON} cannot import freetype-py, so the "
+                "prebaked font atlases cannot be baked -- the build would render "
+                "no text (no runtime TTF backend links on Wii).\n"
+                "Install it (pip install freetype-py, or pacman -S "
+                "mingw-w64-x86_64-python-freetype-py on MSYS2) or point "
+                "-DFN_WII_BAKE_PYTHON=<python> at an interpreter that has it.")
         endif()
-    endif()
 
-    if (_fn_wii_bake_ok)
         message(STATUS "Wii: prebaked font bake enabled (${FN_WII_BAKE_PYTHON})")
         add_custom_target(fn_wii_fonts
-            COMMAND ${CMAKE_COMMAND} -E env "PATH=/mingw64/bin:$ENV{PATH}"
-                    "${FN_WII_BAKE_PYTHON}" "${CMAKE_SOURCE_DIR}/tools/wii/bake-fonts.py"
-                    "${CMAKE_SOURCE_DIR}/tmp/prebake"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_fn_wii_prebake_dir}"
+            COMMAND "${Python3_EXECUTABLE}" "${_fn_wii_prebake_src}/extract_chars.py"
+                    --root "${CMAKE_SOURCE_DIR}" --out "${_fn_wii_prebake_dir}"
+            COMMAND "${Python3_EXECUTABLE}" "${_fn_wii_prebake_src}/collect_used.py"
+                    --root "${CMAKE_SOURCE_DIR}" --out "${_fn_wii_prebake_dir}"
+            COMMAND "${Python3_EXECUTABLE}" "${_fn_wii_prebake_src}/build_plan.py"
+                    --root "${CMAKE_SOURCE_DIR}" --out "${_fn_wii_prebake_dir}"
+            COMMAND ${_fn_wii_bake_cmd} "${CMAKE_SOURCE_DIR}/tools/wii/bake-fonts.py"
+                    "${_fn_wii_prebake_dir}"
                     "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data/fontstruetype"
-                    "${FN_STAGING_DATA_DIR}/fonts/prebaked"
+                    "${_fn_wii_prebaked_out}"
+            # Fail the BUILD (not just warn) if the bake produced nothing --
+            # install/CPack would otherwise happily ship a textless package.
+            COMMAND ${CMAKE_COMMAND} "-DFN_ASSERT_DIR=${_fn_wii_prebaked_out}"
+                    "-DFN_ASSERT_WHAT=Wii prebaked font atlases"
+                    -P "${CMAKE_SOURCE_DIR}/cmake/assert-nonempty-dir.cmake"
             COMMENT "Baking Wii prebaked font atlases (freetype-py)"
             VERBATIM
         )
         add_dependencies(fn_wii_fonts fn_asset_staging)
         add_dependencies(fruit-ninja fn_wii_fonts)
-    else()
-        message(STATUS
-            "Wii: prebaked font bake SKIPPED (no tmp/prebake/bake_plan.json, "
-            "or ${FN_WII_BAKE_PYTHON} lacks freetype-py) -- fonts/prebaked will be empty")
     endif()
 
     # --- Shippable homebrew package (install + CPack) ---
