@@ -52,7 +52,11 @@ void ScoreModifier::ApplyModifier(bool isPurchased, float* extra) {
     ++m_ApplyCount;
 }
 
-// ASM-verified: 2026-06-20T00:00Z v1.6.1 ScoreModifier::RemoveModifier @ 0x00147b8c (re-analyst)
+// ASM-spec v1.6.1 ScoreModifier::RemoveModifier @0x00147b8c
+// The port body is a genuine 4-instruction tail call into SetDefaultScoreDelegate()
+// (ScoreDelegate.cpp), which has no symbol in the binary's .symtab -- so nothing pairs and
+// asm-verify can never match this. Semantically equal: the binary constructs an empty
+// Delegate1<int,int> in place and SetScoreDelegate substitutes DefaultScoreDelegate on null.
 void ScoreModifier::RemoveModifier() {
     if (m_bDeferPoints) {
         SetDefaultScoreDelegate();       // Global<int,int>(&DefaultScoreDelegate) (SetDefaultScoreDelegate addr unresolved in v1.6.1 .symtab)

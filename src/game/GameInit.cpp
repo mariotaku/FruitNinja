@@ -173,6 +173,12 @@ void GameInit(unsigned long) {
         g_unpause_game = 0;
         g_clearInput = 0;
         game_work.bM_Mode = false;
+        // TODO: v1.6.1 0x001ce1c0 (GameInit) -- the binary also zeroes two globals here that
+        //   the port has no counterpart for: `debugMenu = 0` and `challengeOver = 0`. Add
+        //   them when the owning subsystems are ported.
+        // DIFFERS: original never writes game_work.gameMode in GameInit
+        //   (v1.6.1 GameInit @0x001ce1c0); the port zeroes it so the menu pump has a valid
+        //   m_WaveInfo[] index before a mode is picked.
         game_work.gameMode = 0;
     }
 
@@ -217,7 +223,10 @@ void GameInit(unsigned long) {
         ts->pPauseScreen = pauseScreen;
         pauseScreen->Init();   // vtable slot 2 (forwards to Reset)
         // Binary GameInit @0x1ce1c0 tail: bM_Mode[+0x02]=0, bM_bPaused[+0x05]=1, flM_PauseAmount[+0x0C]=-1.0.
-        // ASM-verified: 2026-06-20T00:00Z v1.6.1 GameInit @ 0x001ce1c0 (asm-inspector)
+        // ASM-spec v1.6.1 GameInit @0x001ce1c0
+        // NOTE: bM_Mode is written EARLY in the binary, alongside unpause_game/clearInput
+        // (see step 6), not in this PauseScreen block. The port writes it in both places;
+        // the second write is a redundant no-op.
         game_work.bM_Mode   = false;      // +0x02: gameplay-mode gate = inactive (menu)
         game_work.bM_bPaused = 1;         // +0x05: pause/inactive gate = suppressed
         game_work.m_PauseAmount  = -1.0f;     // +0x0C: flM_PauseAmount
@@ -807,6 +816,18 @@ void GameUpdate(float dt, bool active) {
     }
 
     // --- Per-frame dirty flag clear ---
+    // DIFFERS: original clears game_work.m_bFrameDirty (+0x610) at the TOP of
+    // GameTaskUpdate (`strb r3,[r7,#0x610]` v1.6.1 GameTaskUpdate @0x0011a328), before the
+    // state dispatch -- that is the binary's only 0-store to +0x610 program-wide, and
+    // v1.6.1 GameUpdate @0x001cf534 has no clear at all. The port clears here instead
+    // because +0x610 is a back/pause input latch (set by RegressMenuCallback /
+    // ShowPauseMenuCallback) read by MenuButton::Update @0x0019ad1c, which runs inside
+    // mHud->Update above -- i.e. inside the dispatch. The port pumps input synchronously
+    // right before GameTaskUpdate (Game::stepUpdate -> DispatchForSimTick), so clearing at
+    // the binary's site would zero the latch between the set and the read every frame and
+    // the back-key forced slice would never fire. Bada dispatched those callbacks outside
+    // the frame tick. Restoring the binary's placement needs the input-dispatch ordering
+    // RE'd first.
     game_work.m_bFrameDirty = false;
 }
 

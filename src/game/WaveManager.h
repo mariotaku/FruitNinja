@@ -327,6 +327,12 @@ public:
     // --- Per-frame update ---------------------------------------------
 
     // v1.6.1 WaveManager::Update @0x001267a0 (89 lines): fixed-timestep pump + multiplier resets.
+    // Order matters -- dt is scaled by m_ComboSpeedDivisor once at the top and every consumer
+    // below uses the scaled value. The spawn-pump gate
+    // (bM_bPaused != 0 && m_WaveCount[0] > 0 -> UpdateComboSpeed + return) sits BEFORE the
+    // m_SpeedAccum integrator, the game_work.m_ElapsedGameTime accumulator, the upside-down
+    // release and the fixed-step UpdateWave loop, so none of those advance while the menu
+    // pump is suppressed. This is the only writer of game_work.m_ElapsedGameTime during play.
     void Update(float dt);
 
     // v1.6.1 WaveManager::UpdateWave @0x00125d7c (298 lines): one tick of wave spawning.

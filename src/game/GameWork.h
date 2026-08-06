@@ -64,7 +64,9 @@ struct GameWork {
     uint8_t _pad_0x36[2];          // +0x36..+0x37
     float   dt;                    // +0x38
 
-    // +0x3C: NEW in v1.6.1 -- raw (unscaled) frame delta-time.
+    // +0x3C: NEW in v1.6.1 -- raw (unscaled) frame delta-time. Written at the top of every
+    //        GameTaskUpdate loop iteration (@0x0011a2b0), before the clamp. No reader is
+    //        ported yet, and none was found in the binary either.
     float   rawDt;                 // +0x3C (v1.6.1 insert; shifts all following fields by +4)
 
     // All fields below here are shifted +4 relative to v1.5.1.
@@ -184,7 +186,12 @@ struct GameWork {
     //        "upside_down_points" save total; WaveManager::Update@0x126908 clears it after >5s upright.
     uint8_t m_bUpsideDownActive;   // +0x1B4
     uint8_t _pad_0x1b5[3];         // +0x1B5..+0x1B7
-    float   m_ElapsedGameTime;     // +0x1B8: elapsed game-time accumulator in seconds (Ghidra: dwField_0x1b8 undefined4)
+    // +0x1B8 elapsed game-time accumulator in seconds. Advanced ONLY by WaveManager::Update
+    //        @0x001268b4 (`+= dt` on the spawn-pump path, so it does not run while the menu
+    //        pump is suppressed). Read by GlobalProbabilityOveride (time-gated override),
+    //        PauseScreen::Retry (the <10.5s retry-streak credit) and the >5s upside-down
+    //        release. Persisted by FruitSaveData as the "gameTime" attribute.
+    float   m_ElapsedGameTime;     // +0x1B8
     uint8_t m_reserved1bc;         // +0x1BC: purpose unknown -- written-never-read (SetupGameWork@0x11c0f0 zeroes it; no reader found via xref)
 
     // +0x1BD..+0x5BC: four contiguous 256-byte state blocks (1024 bytes total).

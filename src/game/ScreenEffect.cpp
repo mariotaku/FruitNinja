@@ -578,7 +578,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
         // teardown, unlike Deactivate @0x00148510 which does and needs one.
         if (!img.m_pHudCtrl) continue;
 
-        // ASM-verified: 2026-07-26T00:00Z v1.6.1 ScreenEffect::Update @ 0x001488a8..0x001488d4 (asm-inspector)
+        // ASM-spec v1.6.1 ScreenEffect::Update @0x00148844 (lazy-add block 0x001488a8..0x001488d4)
         // Lazy HUD add. m_bAddedToHUD (+0x0c) is an inverted "add pending" latch,
         // not an "is added" flag: the ctor defaults it to 1, and Activate zeroes
         // it ONLY on its HUD-was-null arm (strbeq @0x00149184). So 0 means "the
@@ -674,7 +674,7 @@ void ScreenEffect::Update(float dt, float currentLongest, float maxTotal) {
 #endif
 
         // Pulse oscillation on size
-        // ASM-verified: 2026-06-24T00:00Z v1.6.1 ScreenEffect::Update @ 0x00148adc (asm-inspector)
+        // ASM-spec v1.6.1 ScreenEffect::Update @0x00148844 (pulse block 0x00148adc)
         //   m_SinIdx += dt*32760.0f*m_Freq; DAT_00148ca4 = 0x46fff000 = 32760.0f
         img.m_SinIdx += (uint16_t)(img.m_Freq * 32760.0f * dt);
         float sinVal = SinIdx(img.m_SinIdx);

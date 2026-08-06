@@ -243,7 +243,7 @@ void WaveManager::Init() {
         TiXmlElement root = doc.RootElement();
         if (!root) continue;
 
-        // ASM-verified: 2026-05-27 v1.6.1 WaveManager::Init @ 0x00129934 (asm-inspector)
+        // ASM-spec v1.6.1 WaveManager::Init @0x00129934
         // -- pre-loop Reset + single-pass dispatch + per-defaults re-Reset +
         //    coin_chances/WaveInfo/defaults/OverideProbability strings all match.
         // Binary resets DEFAULT_WAVE_INFO before the loop so an XML missing
@@ -1216,38 +1216,37 @@ void WaveManager::Update(float dt) {
     m_BombChance     = 1.0f;
     m_FruitChance    = 1.0f;
     m_CritChanceMult = 1.0f;
-    // v1.6.1 WaveManager::Update @0x001267a0: drive m_SpeedScale from PowerUpManager's
-    // m_DtMod (modifier dt mult). PUM::Update IS ported (the old "not ported" note was stale).
+
+    // Defunct: online P2P -- no-op stub; v1.6.1 WaveManager::Update @ 0x001267dc.
+    // `bl IsOnlineMultiplayer ; cmp r0,#0 ; beq` then `ldrb r3,[gw,#0x1a1] ; cmp r3,#0 ;
+    // vmoveq.f32 s16,s15` -- while the P2P opponent is not ready the whole update is frozen
+    // by substituting dt = 0. IsOnlineMultiplayer() is a hard false in v1.6.1, so inert.
+    if (IsOnlineMultiplayer() && !game_work.m_bP2POpponentReady) {
+        dt = 0.0f;
+    }
+
+    // v1.6.1 WaveManager::Update @0x001267f8: `vldr.32 s15,[r4,#0x80] ; vmul.f32 s16,s16,s15`
+    // -- dt is scaled by m_ComboSpeedDivisor ONCE here, and every consumer below (pum->Update,
+    // the m_SpeedAccum integrator, m_ElapsedGameTime, the step accumulator, UpdateComboSpeed)
+    // uses the scaled value. m_ComboSpeedDivisor is 1.0 on all shipped data.
+    dt *= m_ComboSpeedDivisor;                      // +0x80
+
+    // v1.6.1 WaveManager::Update @0x00126818: drive m_SpeedScale (+0x7c) from PowerUpManager's
+    // m_DtMod (modifier dt mult).
     // NOTE: UpdateWave @0x00125d7c clamps m_SpeedScale<1.0 back up to 1.0 before the spawn-timer
     // tick (see the `if (dtMod < 1.0f) dtMod = 1.0f;` clamp below), so freeze (m_DtMod<1) does
     // NOT slow spawn cadence -- only frenzy (m_DtMod>1) speeds it up. Freeze's visible slow-mo
     // is actor dt via GameUpdate/GetWavedt, not spawn cadence.
     {
-        float comboDt = dt * m_ComboSpeedDivisor;   // +0x80, always 1.0
         PowerUpManager* pum = PowerUpManager::GetInstance();
         if (game_work.m_PauseAmount >= 1.0f || !PowersEnabled()) {   // flM_PauseAmount @+0x0C
             pum->SetDefaults();
             m_SpeedScale = 1.0f;
         } else {
-            pum->Update(comboDt);
+            pum->Update(dt);
             m_SpeedScale = pum->m_DtMod;            // +0x64
         }
     }
-
-    // Wave speed accumulator: per-mode inc=0 in all shipped modes (globalDtInc absent),
-    // so m_SpeedAccum stays at m_SpeedClampStart (1.0) and the clamp is a no-op.
-    {
-        int mode = game_work.gameMode;
-        // Binary @ 0x001267a0: accumulator is at +0x78 (m_SpeedAccum), NOT +0x74.
-        // binary @ 0x00125ac4: speed = m_SpeedAccum + dt * *(float*)(&this->m_DtIncPerMode + gameMode*4)
-        float s = m_SpeedAccum + dt * m_DtIncPerMode[mode];
-        float lo = m_SpeedClampStart[mode];
-        float hi = m_SpeedClampMax[mode];
-        m_SpeedAccum = (s < lo) ? lo : (s < hi) ? s : hi;
-    }
-
-    // Time accumulator — game->field_0x1ac not mapped in port Game struct.
-    // TODO: skip stat tracking (game->field_0x1ac += dt).
 
     // Spawn-pump gate. v1.6.1 WaveManager::Update @0x00126848:
     //   ldrb r3,[r3,#0x5]     ; game_work.bM_bPaused
@@ -1255,12 +1254,8 @@ void WaveManager::Update(float dt) {
     //   ldr  r3,[r4,#0x238]   ; m_WaveCount[0]
     //   cmp  r3,#0x0 ; ble    ; -> spawn pump
     //   b    UpdateComboSpeed ; tail call, combo tick only
-    // i.e.
-    //   if (bM_bPaused == 0 || m_WaveCount[0] <= 0) {
-    //       <fixed-step UpdateWave loop>
-    //   } else {
-    //       UpdateComboSpeed(dt);
-    //   }
+    // The tail call RETURNS, so everything after this gate (speed accumulator, elapsed-time
+    // accumulator, upside-down clear, fixed-step loop) is skipped on the combo-only path.
     // The counter slot is +0x238, not +0x230 as an earlier note claimed.
     //
     // Menu suppression flow (cold boot / menu state):
@@ -1274,11 +1269,67 @@ void WaveManager::Update(float dt) {
     //   - PrepareForLevelStart -> Reset sets m_WaveCount[0]=-1 then GetNextWave
     //     bumps to 0; bM_bPaused cleared to 0 -> gate always FALSE -> spawn pump runs
     //     for real gameplay.
-    // ASM-verified: 2026-05-20 v1.6.1 binary @ 0x00125a62 (re-analyst).
-    if (game_work.bM_bPaused == 0 || m_WaveCount[0] <= 0) {
+    // ASM-spec v1.6.1 WaveManager::Update @0x00126848
+    if (game_work.bM_bPaused != 0 && m_WaveCount[0] > 0) {
+        UpdateComboSpeed(dt);
+        return;
+    }
+
+    // Defunct: online P2P -- no-op stub; v1.6.1 WaveManager::Update @ 0x00126890.
+    // Second `IsOnlineMultiplayer() && !m_bP2POpponentReady` gate, this one an early return
+    // (`beq 0x001269e8`, the epilogue) that skips the whole spawn pump. Inert offline.
+    if (IsOnlineMultiplayer() && !game_work.m_bP2POpponentReady) {
+        return;
+    }
+
+    // Wave speed accumulator: per-mode inc=0 in all shipped modes (globalDtInc absent),
+    // so m_SpeedAccum stays at m_SpeedClampStart (1.0) and the clamp is a no-op.
+    // v1.6.1 WaveManager::Update @0x001269b8: this block sits AFTER the spawn-pump gate,
+    // so the combo-only path never integrates it.
+    {
+        int mode = game_work.gameMode;
+        // Binary @ 0x001267a0: accumulator is at +0x78 (m_SpeedAccum), NOT +0x74.
+        // 0x001269cc: speed = m_SpeedAccum + dt * m_DtIncPerMode[gameMode]
+        float s = m_SpeedAccum + dt * m_DtIncPerMode[mode];
+        float lo = m_SpeedClampStart[mode];
+        float hi = m_SpeedClampMax[mode];
+        m_SpeedAccum = (s < lo) ? lo : (s < hi) ? s : hi;
+    }
+
+    // Elapsed game-time accumulator + retry-streak reset.
+    // ASM-spec v1.6.1 WaveManager::Update @0x001268b4:
+    //   s15 = game_work.m_ElapsedGameTime (+0x1b8); s15 += dt; store back;
+    //   if (new > 10.5f && (new - dt) <= 10.5f) m_SaveData->ClearTotal(StringHash("retries_in_a_row"));
+    // The threshold is 10.5f (0x41280000), the same constant PauseScreen::Retry tests before
+    // it credits a retry. This is the ONLY writer of m_ElapsedGameTime outside the save
+    // loader / SetupGameWork, so without it the time-gated GlobalProbabilityOveride never
+    // fires and the retry-streak gate stays permanently open. m_SaveData (+0x50) is loaded
+    // untested (`ldr r6,[r3,#0x50]` @0x001268e8).
+    {
+        const float oldElapsed = game_work.m_ElapsedGameTime;
+        const float newElapsed = dt + oldElapsed;
+        game_work.m_ElapsedGameTime = newElapsed;
+        if (newElapsed > 10.5f && oldElapsed <= 10.5f) {
+            game_work.m_SaveData->ClearTotal(StringHash("retries_in_a_row"));
+        }
+    }
+
+    // Upside-down hold release.
+    // ASM-spec v1.6.1 WaveManager::Update @0x00126900:
+    //   if (game_work.m_bUpsideDownActive (+0x1b4) && m_ElapsedGameTime > 5.0f && dt > 0.0f
+    //       && !IsDeviceUpsideDown()) m_bUpsideDownActive = 0;
+    // Nothing else clears the flag, so GameOver's upside-down branch would latch forever.
+    if (game_work.m_bUpsideDownActive
+            && game_work.m_ElapsedGameTime > 5.0f
+            && dt > 0.0f
+            && !IsDeviceUpsideDown()) {
+        game_work.m_bUpsideDownActive = 0;
+    }
+
+    {
         float accumDt = m_StepAccumulator + dt;
         while (accumDt > WAVE_STEP) {
-            // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 WaveManager::Update @0x001267a0 (re-analyst):
+            // ASM-spec v1.6.1 WaveManager::Update @0x001267a0:
             //   call UpdateWave only when m_WaveInfo[gameMode] is non-empty; otherwise the
             //   menu pump would deref a stale m_pCurrentWave[mode] (dangling from the prior
             //   game) -> ACCESS_VIOLATION, and spawn fruit with that wave's garbage
@@ -1289,9 +1340,6 @@ void WaveManager::Update(float dt) {
             accumDt -= WAVE_STEP;
         }
         m_StepAccumulator = accumDt;
-    } else {
-        // v1.6.1 WaveManager::Update @0x001267a0: passes dt * m_ComboSpeedDivisor to UpdateComboSpeed.
-        UpdateComboSpeed(dt * m_ComboSpeedDivisor);
     }
     // Removed per-frame Update spam; spawn events themselves print via [Spawn].
 
@@ -1615,8 +1663,8 @@ void WaveManager::UpdateWave(float dt, int playerIdx, int /*unk*/) {
                     m_WaveActive = 1;
                     spawner.m_RemainingCount--;
 
-                    // ASM-verified: 2026-07-06 v1.6.1 WaveManager::UpdateWave @0x0012630c
-                    // (LAB_00126568, re-analyst): re-arm delay = Max(0, m_Delay + m_DelayInc*revisit).
+                    // ASM-spec v1.6.1 WaveManager::UpdateWave @0x00125d7c
+                    // (LAB_00126568 @0x0012630c): re-arm delay = Max(0, m_Delay + m_DelayInc*revisit).
                     // The revisit term is ADDED (vmla), same as ResetDelay @0x0012dfa0; was subtracted.
                     float spawnDt = spawner.m_Delay + spawner.m_DelayInc * pCurrentWave->m_RevisitCounter;
                     if (spawnDt < 0.0f) spawnDt = 0.0f;
@@ -1787,7 +1835,8 @@ void WaveManager::GetNextWave(int playerIdx) {
     // compares each candidate's tag against this, not against the freshly-picked wave.
     ExclusiveTag* currentWaveTag = pCurrentWave ? pCurrentWave->m_ExclusiveTag : nullptr;
 
-    // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 WaveManager::GetNextWave @0x00125884 (re-analyst):
+    // ASM-spec v1.6.1 WaveManager::GetNextWave @0x0012573c -- covers this seed (@0x00125884),
+    // the regrowth rate in the match loop and the m_CurrentChance=0 write (both @0x00125790):
     //   seed m_pCurrentWave[mode] = m_WaveInfo[mode].front() UNCONDITIONALLY before the
     //   match loop, so a no-match (e.g. waveCount==0 right after Reset) never leaves it
     //   stale. The per-match assignment below only refines this.
@@ -1797,8 +1846,7 @@ void WaveManager::GetNextWave(int playerIdx) {
          wit != m_WaveInfo[gm].end(); ++wit) {
         WAVE_INFO* wi = *wit;
         // Regrowth: grow m_CurrentChance toward m_Chance.
-        // ASM-verified: 2026-07-06 v1.6.1 WaveManager::GetNextWave @0x00125790 (re-analyst):
-        // the growth rate reads the RUNNING regrowth m_CurrentRegrowth (+0x48), NOT m_ChanceRegrowth (+0x44).
+        // The growth rate reads the RUNNING regrowth m_CurrentRegrowth (+0x48), NOT m_ChanceRegrowth (+0x44).
         if (wi->m_CurrentRegrowth > 0.0f && wi->m_CurrentChance < wi->m_Chance) {
             float growth = (float)wi->m_Chance * wi->m_CurrentRegrowth;
             if (growth < 1.0f) growth = 1.0f;
@@ -1844,8 +1892,7 @@ void WaveManager::GetNextWave(int playerIdx) {
     if (!wave) return;
 
     // Zero the selected wave's running chance (regrowth restores it over later picks).
-    // ASM-verified: 2026-07-06 v1.6.1 WaveManager::GetNextWave @0x00125790 (re-analyst):
-    // the binary writes +0x40 (m_CurrentChance) = 0 outright, not a decrement -- decrementing
+    // The binary writes +0x40 (m_CurrentChance) = 0 outright, not a decrement -- decrementing
     // let the same wave keep winning and starved the others.
     wave->m_CurrentChance = 0;
 
@@ -2402,7 +2449,7 @@ void WaveManager::ResetSpeed(int playerIdx) {
     m_BlitzLevel = 0;   // +0x60
     m_ColdTimer  = 0.0f;  // +0x64
 
-    // ASM-verified: 2026-05-03 v1.6.1 binary @ 0x001237f4 (re-analyst)
+    // ASM-spec v1.6.1 WaveManager::ResetSpeed @0x001237f4
     // Binary @ 0x001237f4: ldr from [r0, #0x4] -> slot [1] (+0x04), the SpeedControl widget.
     HUDControl3d* sc = m_SpeedControl[1];
     if (sc) {
@@ -2471,7 +2518,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
             int newCount = sd->AddToTotal("blitz_bonus", s_blitzBonusHash, 1, false, false); // 0x001251d8
             m_BlitzLevel = newCount;
             AddToCurrentScore(5, playerIdx, false, false);
-            // ASM-verified: 2026-08-03 v1.6.1 WaveManager::AddSpeed @ 0x0012526c (re-analyst).
+            // ASM-spec v1.6.1 WaveManager::AddSpeed @0x00124f48 (cold-start tier @0x0012526c).
             // Cold-start branch hashes the literal "blitz_1" (rodata @ 0x001ba773).
             static uint32_t s_blitz1Hash = 0;
             if (!s_blitz1Hash) s_blitz1Hash = StringHash("blitz_1");
@@ -2495,7 +2542,7 @@ void WaveManager::AddSpeed(float amount, int playerIdx) {
             m_BlitzLevel = newCount;
 
             {
-                // ASM-verified: 2026-08-03 v1.6.1 WaveManager::AddSpeed @ 0x001250b4 (re-analyst).
+                // ASM-spec v1.6.1 WaveManager::AddSpeed @0x00124f48 (continuation tier @0x001250b4).
                 // Continuation tier uses format "blitz_%i" (snprintf @0x00125098).
                 char buf[16];
                 std::snprintf(buf, sizeof(buf), "blitz_%i", level);

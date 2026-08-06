@@ -430,7 +430,15 @@ void RetryLevel() {
         Mortar::Delegate1<bool, Mortar::MortarSound*>());
 }
 
-// ASM-verified: 2026-05-20 v1.6.1 RetryUpdate @ 0x001cb4fc (re-analyst)
+// ASM-spec v1.6.1 RetryUpdate @0x001cb4fc
+// TODO: v1.6.1 0x001cb4fc (RetryUpdate) -- two unresolved divergences; the old 2026-05-20
+//   ASM-verified stamp could not have been right.
+//   1. Entity walk: the binary iterates ActorManager::GetEntityFirst / GetEntityNext; the
+//      port walks GetTypeList(N) + IsActive() (below).
+//   2. Scale: per entity the binary derives the new scale from an EXISTING vector
+//      (_Vector3::operator- -> operator* -> operator-); the port builds Vec3(-t,-t,-t) from
+//      a scalar. The exact formula, and which subobject setters (+152 / +172 / +212) take
+//      part, were never settled.
 void RetryUpdate(float dt) {
     static const float TARGET_TIME = 0.1f;  // matches retryTimer initial value
     const float t_raw = (TARGET_TIME - game_work.retryTimer) / TARGET_TIME;

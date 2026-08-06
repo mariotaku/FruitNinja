@@ -237,7 +237,14 @@ typedef void (*StateUpdateFn)(float dt, bool active);
 typedef void (*StateDrawFn)(float dt, bool active);
 typedef void (*StateExitFn)(void);
 
-// The 3-state dispatcher — matches GameTaskUpdate (0x10a5d4, 87 lines)
+// The 3-state dispatcher — v1.6.1 GameTaskUpdate @0x0011a290 (87 lines).
+// Per call it: stores rawDt into game_work.rawDt, clamps it into game_work.dt, ticks
+// m_FrameTimer and the draw-dt accumulator, then dispatches ONE of
+//   - init   (state not yet initialised; loops once more if the init requested a change)
+//   - update (same state as last frame)
+//   - exit   (state index changed).
+// FruitSaveData::Update runs only on the same-state update path, gated on
+// m_BombHitTimer <= 0 -- not on init or state-change frames.
 void GameTaskUpdate(float rawDt);
 void GameTaskDraw(float dt);
 void GameTaskExit();

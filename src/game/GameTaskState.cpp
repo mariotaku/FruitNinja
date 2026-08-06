@@ -55,11 +55,22 @@ void FlashTexture_UnloadStatics() {
 
 // Matches GameTaskUpdate (v1.6.1 @ 0x0011a290, 87 lines)
 void GameTaskUpdate(float rawDt) {
-    // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: entry is
-    // `ldr r3,[r4,r3]; vstr.32 s16,[r3,#0x3c]` -- game_work from the GOT, written
-    // before anything else. No Game::GetInstance, no null test.
+    // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: the state-change retry branches back to
+    // 0x0011a2a4 (the dt sign test), so the whole loop body below -- including the rawDt
+    // store -- runs again on the retry frame.
     while (true) {
+        // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: `ldr r3,[r4,r3] ;
+        // vstr.32 s16,[r3,#0x3c]` @0x0011a2b0 -- game_work from the GOT, stored BEFORE the
+        // clamp and before anything else. No Game::GetInstance, no null test. Nothing in
+        // the port reads +0x3c yet; the store is here so it holds the binary's value when
+        // a future consumer is ported.
+        game_work.rawDt = rawDt;
+
         // Clamp dt (matches original logic)
+        // DIFFERS: v1.6.1 GameTaskUpdate @0x0011a290 keeps dt in s16 across the retry and
+        // re-clamps the ALREADY-scaled value (loop head 0x0011a2a4), so the second pass
+        // scales by 0.94 again. The port re-derives dt from the untouched rawDt param, so
+        // the retry frame's dt is 1/0.94 larger. State-change frames only; not chased.
         float dt;
         if (rawDt > 0.0f && rawDt < TASK_MAX_RAW_DT) {
             dt = rawDt * TASK_DT_SCALE;
@@ -74,15 +85,21 @@ void GameTaskUpdate(float rawDt) {
         game_work.m_FrameTimer += (int)frameMs;
         s_drawDt += dt;
 
-        // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: per-frame FruitSaveData::Update
-        // (gated bomb-hit-timer<=0) before state dispatch. Runs every frame, all modes
-        // incl arcade -- drives achievement/combo save progression.
-        // v1.6.1 GameTaskUpdate @0x0011a290: the only gate is the bomb-hit timer
-        // (`vcmpe.f32 s15,#0` on [r7,#0x10], `bhi` skip @0x0011a388). Both +0x50 and
-        // +0x40 are loaded straight into the call at 0x0011a38c/0x0011a394, untested.
-        if (game_work.m_BombHitTimer <= 0.0f) {
-            game_work.m_SaveData->Update(dt, game_work.mHud);
-        }
+        // DIFFERS: v1.6.1 GameTaskUpdate @0x0011a290 clears game_work.m_bFrameDirty (+0x610)
+        // unconditionally here (`strb r3,[r7,#0x610]` @0x0011a328) -- the binary's ONLY store
+        // of 0 to that field program-wide. The port clears it at the tail of GameUpdate
+        // instead (GameInit.cpp). Reason: +0x610 is a back/pause input latch set by
+        // RegressMenuCallback / ShowPauseMenuCallback and read by MenuButton::Update
+        // (@0x0019ad1c), which the port reaches from mHud->Update INSIDE the state dispatch
+        // below. The port pumps input synchronously immediately before GameTaskUpdate
+        // (Game::stepUpdate -> DispatchForSimTick), so clearing here would zero the latch
+        // between the set and the read every frame and kill the back-key forced slice.
+        // Bada delivered those callbacks outside the frame tick, so the binary's placement
+        // works there. Moving the clear needs the input-dispatch ordering RE'd first.
+
+        // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: FruitSaveData::Update runs ONLY on the
+        // same-state active path (0x0011a38c), after PowerManager::Update/GetState -- not
+        // before the init/state-change dispatch. See the same-state branch below.
 
         if (!s_taskState.initialized) {
             // First frame of new state: call init handler
@@ -96,13 +113,27 @@ void GameTaskUpdate(float rawDt) {
         }
 
         if (stateIdx == s_taskState.prevState) {
-            // ASM-verified: 2026-06-20T00:00Z v1.6.1 GameTaskUpdate @ 0x0011a290 (asm-inspector)
+            // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290
             // gate: param_2(active) = (PowerManager::GetState()==0 && game_work.bM_Mode[+0x02]==0)
             // bM_Mode[+0x02]=0 means gameplay-active; non-zero means paused/inactive.
             Mortar::PowerManager::GetInstance()->Update();
             uint32_t pmState = Mortar::PowerManager::GetInstance()->GetState();
-            bool canUpdate = (!game_work.bM_Mode) && (pmState == 0);
+            // bM_Mode is latched at 0x0011a36c, BEFORE the FruitSaveData::Update call below.
+            bool modeGate = game_work.bM_Mode;
             s_updated = true;
+            // 0x0011a380: prevState is re-written from game_work.taskStateIndex here even
+            // though the branch was taken because they already match.
+            s_taskState.prevState = game_work.taskStateIndex;
+
+            // ASM-spec v1.6.1 GameTaskUpdate @0x0011a290: per-frame FruitSaveData::Update
+            // drives achievement/combo save progression. The only gate is the bomb-hit timer
+            // (`vcmpe.f32 s15,#0` on [r7,#0x10], `bhi` skip @0x0011a388). Both +0x50 and
+            // +0x40 are loaded straight into the call at 0x0011a38c/0x0011a394, untested.
+            if (game_work.m_BombHitTimer <= 0.0f) {
+                game_work.m_SaveData->Update(dt, game_work.mHud);
+            }
+
+            bool canUpdate = (!modeGate) && (pmState == 0);
             s_updateFuncs[stateIdx](dt, canUpdate);
         } else {
             // State changed: exit old, loop will init new
