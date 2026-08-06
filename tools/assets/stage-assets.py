@@ -294,12 +294,6 @@ WIDGET_TEX_RELDIR = os.path.join("assets", "ui-widgets", "generated")
 # --web, --wii, --ogg-audio/webOS) -- never shipped in any package.
 EXCLUDED_SAVE_FILES = {"fruitysave.xml", "itemsave.xml", "settingssave.xml"}
 
-# Wii prebaked-font plan inputs (task #51): repo-relative, gitignored scratch
-# dir -- see tools/wii/prebaked-font-format.md. Not committed, so this step
-# is best-effort (see stage_wii_prebaked_fonts).
-WII_PREBAKE_PLAN_RELDIR = os.path.join("tmp", "prebake")
-WII_PREBAKED_FONTS_RELDIR = os.path.join("fonts", "prebaked")
-
 # --- Texture transcoding (host + web): Tex1 .tex -> WebP-in-.tex -------------
 # WEBP_QUALITY is the lossy quality 0..100 (higher = better/larger). If UI/text
 # looks soft or shows compression artifacts, flip WEBP_LOSSLESS to True for
@@ -709,58 +703,6 @@ def merge_widget_textures(repo_root, dst_root, stats, is_wii=False):
         stats["widget_tex_copied"] += 1
 
 
-def stage_wii_prebaked_fonts(repo_root, dst_root, stats):
-    """Invoke tools/wii/bake-fonts.py to produce the prebaked TTF glyph
-    atlases (task #51 -- see tools/wii/prebaked-font-format.md). Non-fatal:
-    prints a warning and returns if either input is missing (freetype-py not
-    installed, or the tmp/prebake/ plan hasn't been generated yet) -- same
-    contract as merge_widget_textures' missing-node case."""
-    stats["prebaked_fonts_baked"] = 0
-    stats["prebaked_fonts_skipped_reason"] = None
-
-    plan_dir = os.path.join(repo_root, WII_PREBAKE_PLAN_RELDIR)
-    plan_path = os.path.join(plan_dir, "bake_plan.json")
-    if not os.path.isfile(plan_path):
-        reason = "{} not found (run the #51 offline planning pass first)".format(plan_path)
-        stats["prebaked_fonts_skipped_reason"] = reason
-        print("[stage-assets] WARNING: prebaked fonts skipped -- {} -- Wii will "
-              "fall back to runtime rasterization for this build".format(reason))
-        return
-
-    try:
-        import freetype  # noqa: F401
-    except ImportError:
-        reason = "freetype-py not installed (pip install freetype-py)"
-        stats["prebaked_fonts_skipped_reason"] = reason
-        print("[stage-assets] WARNING: prebaked fonts skipped -- {} -- Wii will "
-              "fall back to runtime rasterization for this build".format(reason))
-        return
-
-    font_dir = os.path.join(repo_root, "FruitNinjaBada", "Data", FONT_RELPATH)
-    out_dir = os.path.join(dst_root, WII_PREBAKED_FONTS_RELDIR)
-
-    # bake-fonts.py's filename has a dash (not a valid module identifier), so
-    # import it by file path rather than by module name.
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "wii_bake_fonts", os.path.join(repo_root, "tools", "wii", "bake-fonts.py"))
-    bake_fonts = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(bake_fonts)
-
-    plan = bake_fonts.load_bake_plan(plan_dir)
-    os.makedirs(out_dir, exist_ok=True)
-    report = {}
-    for lang in sorted(plan["plan"].keys()):
-        for size in plan["canonical_sizes"]:
-            bake_fonts.bake_one(plan, plan_dir, font_dir, out_dir, lang, size, report)
-            stats["prebaked_fonts_baked"] += 1
-
-    total_bytes = sum(e["bytes"] for lang_r in report.values() for e in lang_r.values())
-    total_missing = sum(e["missing"] for lang_r in report.values() for e in lang_r.values())
-    stats["prebaked_fonts_bytes"] = total_bytes
-    stats["prebaked_fonts_missing"] = total_missing
-
-
 # --- Font subsetting (web only): CJK/shared TTF subset by used code points --
 FONT_RELPATH = "fontstruetype"
 CJK_FONT_FILENAME = "gangofchinese.ttf"
@@ -937,8 +879,8 @@ def stage_tree_raw(src_root, dst_root):
     XML, non-Tex1 .tex) copies verbatim, EXCEPT the runtime TTF sources
     under fontstruetype/ (task #54): the Wii build no longer opens a .ttf
     at runtime at all (FontCacheObjectTTF is FRUIT_PLATFORM_WII-guarded to
-    read the offline-baked FNT3 atlas, stage_wii_prebaked_fonts below,
-    instead -- see src/engine/render/FontCacheObjectTTF.cpp). Shipping
+    read the offline-baked FNT3 atlas produced by the CMake fn_wii_fonts
+    target instead -- see src/engine/render/FontCacheObjectTTF.cpp). Shipping
     gangofchinese.ttf (~5MB) + arabic.ttf to the SD card would be dead
     weight; the .ttf files stay in the repo as BAKE-TIME-ONLY inputs to
     tools/wii/bake-fonts.py. Pure stdlib -- no Pillow/ffmpeg/fontTools
@@ -1221,13 +1163,8 @@ def main():
             print("[stage-assets] removed {} stale staged save file(s) from an "
                   "earlier run".format(removed_saves))
 
-        stage_wii_prebaked_fonts(repo_root, dst_root, stats)
-        if stats["prebaked_fonts_baked"]:
-            print("[stage-assets] prebaked fonts: {} (lang,size) atlases baked, "
-                  "{:.1f} MB, {} missing-glyph codepoints -> {}".format(
-                      stats["prebaked_fonts_baked"],
-                      stats.get("prebaked_fonts_bytes", 0) / (1024.0 * 1024.0),
-                      stats.get("prebaked_fonts_missing", 0), WII_PREBAKED_FONTS_RELDIR))
+        # The prebaked glyph atlases are baked by the CMake fn_wii_fonts target
+        # (which runs after this staging pass), not from here.
         return
 
     # Self-provision the external tools (install-where-used). ffmpeg is

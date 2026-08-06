@@ -9,12 +9,16 @@ gitignored and not distributed (Halfbrick copyright; see docs/gallery/README.md)
 and this script's own output (icon.png) is likewise gitignored, so nothing
 copyrighted is ever committed. Bring your own dump to regenerate the icon.
 
-    python tools/wii/hbc/make-icon.py
+    python tools/wii/hbc/make-icon.py                 # -> tools/wii/hbc/icon.png
+    python tools/wii/hbc/make-icon.py --out <path>    # -> anywhere (CMake uses
+                                                      #    ${CMAKE_BINARY_DIR}/hbc)
 
-Output: tools/wii/hbc/icon.png (gitignored, generated -- deployed to
-sd:/apps/fruitninja/icon.png by the Wii build/deploy so the Homebrew Channel
-shows a proper entry).
+Output: a 128x48 PNG, deployed to sd:/apps/fruitninja/icon.png by the Wii
+build/deploy so the Homebrew Channel shows a proper entry. The default path
+(tools/wii/hbc/icon.png) is gitignored; the Wii CMake build passes --out so the
+icon lands in the build tree and a fresh checkout needs no committed .png.
 """
+import argparse
 import os
 import sys
 
@@ -68,6 +72,11 @@ def wood_bg():
 
 
 def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("-o", "--out", default=os.path.join(HERE, "icon.png"),
+                    help="output PNG path (default: tools/wii/hbc/icon.png)")
+    args = ap.parse_args()
+
     fruit, ninja = load("hd_fruit_text"), load("hd_ninja_text")
     icon = wood_bg()
     # diagonal cascade: FRUIT upper-left, NINJA lower-right
@@ -80,7 +89,10 @@ def main():
     icon.alpha_composite(f, (gx, gy))
     icon.alpha_composite(n, (gx + gw - n.width, gy + f.height - OVERLAP))
     out = icon.resize((128, 48), Image.LANCZOS).convert("RGB")
-    dst = os.path.join(HERE, "icon.png")
+    dst = os.path.abspath(args.out)
+    out_dir = os.path.dirname(dst)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     out.save(dst)
     print("wrote", dst, out.size)
 

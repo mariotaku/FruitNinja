@@ -19,7 +19,7 @@ on:
       - '.github/actions/**'
 
 env:
-  # freetype-py lives in a venv: Ubuntu's python3 is externally-managed
+  # freetype-py + Pillow live in a venv: Ubuntu's python3 is externally-managed
   # (PEP 668), so a bare `pip install` into it is refused.
   FN_WII_VENV: /opt/fn-wii-venv
 
@@ -48,17 +48,21 @@ jobs:
           cmake --version
           ninja --version
 
-      # The Wii font bake (fn_wii_fonts) rasterizes every shipped glyph with
-      # FreeType. Wii links no runtime TTF backend, so without this the package
-      # renders NO TEXT -- the configure step hard-fails if freetype-py is
-      # missing rather than silently skipping.
-      - name: Create Python venv (font bake deps)
+      # freetype-py: the Wii font bake (fn_wii_fonts) rasterizes every shipped
+      # glyph with FreeType. Wii links no runtime TTF backend, so without this
+      # the package renders NO TEXT.
+      # Pillow: the HBC icon (fn_wii_icon) is composed from the game dump at
+      # build time, never committed (copyrighted artwork).
+      # Both configure steps hard-fail on a missing module rather than silently
+      # skipping, so one venv serves both.
+      - name: Create Python venv (font bake + icon deps)
         shell: bash
         run: |
           python3 -m venv --system-site-packages "$FN_WII_VENV"
           "$FN_WII_VENV/bin/pip" install --upgrade pip
-          "$FN_WII_VENV/bin/pip" install freetype-py
+          "$FN_WII_VENV/bin/pip" install freetype-py Pillow
           "$FN_WII_VENV/bin/python3" -c "import freetype; print('freetype-py import OK')"
+          "$FN_WII_VENV/bin/python3" -c "import PIL; print('Pillow import OK')"
 
       # Asset staging AND the font-bake plan generators read the original game
       # asset dump from FruitNinjaBada/Data -- the action's default destination.
@@ -72,7 +76,8 @@ jobs:
                 -DCMAKE_TOOLCHAIN_FILE=cmake/wii.toolchain.cmake \
                 -DFRUIT_PLATFORM_WII=ON \
                 -DCMAKE_BUILD_TYPE=Release \
-                -DFN_WII_BAKE_PYTHON="$FN_WII_VENV/bin/python3"
+                -DFN_WII_BAKE_PYTHON="$FN_WII_VENV/bin/python3" \
+                -DFN_WII_ICON_PYTHON="$FN_WII_VENV/bin/python3"
 
       # build -> install -> cpack. The script's own env guard accepts the Linux
       # powerpc-eabi-g++ (no .exe) as well as the Windows/MSYS2 one.
@@ -93,6 +98,19 @@ jobs:
             echo "ERROR: $PREBAKED is empty -- this package would render no text." >&2
             exit 1
           fi
+
+      # The icon install is conditional on FN_WII_HAVE_ICON, so a configure that
+      # decided the dump was absent ships an iconless package without failing.
+      # CI always fetches the dump, so here that condition means something broke.
+      - name: Verify HBC icon shipped
+        shell: bash
+        run: |
+          ICON=build/wii/dist/apps/fruitninja/icon.png
+          if [ ! -s "$ICON" ]; then
+            echo "ERROR: $ICON missing or empty -- the Homebrew Channel entry would have no icon." >&2
+            exit 1
+          fi
+          echo "icon.png: $(stat -c%s "$ICON") bytes"
 
       - name: Upload homebrew ZIP
         uses: actions/upload-artifact@v4

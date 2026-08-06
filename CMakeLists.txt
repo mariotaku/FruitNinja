@@ -1297,6 +1297,60 @@ elseif (FRUIT_PLATFORM_WII)
         add_dependencies(fruit-ninja fn_wii_fonts)
     endif()
 
+    # --- Homebrew Channel icon (generated at build time, never committed) ---
+    # tools/wii/hbc/icon.png is composed from copyrighted Halfbrick artwork in
+    # the game dump (see tools/wii/hbc/make-icon.py), so it is gitignored and
+    # must not be committed. Generate it into the build tree instead and install
+    # from there -- same fix shape as the bake plan moving out of tmp/prebake.
+    #
+    #   FN_WII_ICON_PYTHON -- needs Pillow. Unlike the font baker it does NOT
+    #                         need a ctypes-loadable libfreetype, so any python3
+    #                         with Pillow works; defaults to the discovered
+    #                         python3. Override when Pillow lives in a venv
+    #                         (CI does this).
+    set(FN_WII_ICON_PYTHON "${Python3_EXECUTABLE}" CACHE FILEPATH
+        "Python interpreter (with Pillow) used to compose the Wii HBC icon")
+
+    set(_fn_wii_icon "${CMAKE_BINARY_DIR}/hbc/icon.png")
+    # Graceful skip only when the dump is absent (nothing to compose from) --
+    # a dump-less configure must still work. The package then ships without an
+    # icon and the Homebrew Channel draws its generic entry.
+    if (NOT EXISTS "${CMAKE_SOURCE_DIR}/FruitNinjaBada/Data/textures/gb_game.tex")
+        set(FN_WII_HAVE_ICON OFF)
+        message(STATUS
+            "Wii: HBC icon SKIPPED -- FruitNinjaBada/Data is not present. "
+            "The package ships without apps/fruitninja/icon.png.")
+    else()
+        execute_process(
+            COMMAND "${FN_WII_ICON_PYTHON}" -c "import PIL"
+            RESULT_VARIABLE _fn_wii_icon_python_rc
+            OUTPUT_QUIET ERROR_QUIET
+        )
+        if (NOT _fn_wii_icon_python_rc EQUAL 0)
+            message(FATAL_ERROR
+                "Wii: ${FN_WII_ICON_PYTHON} cannot import Pillow, so the Homebrew "
+                "Channel icon cannot be composed (it is generated from the game "
+                "dump, never committed).\n"
+                "Install it (pip install pillow, or pacman -S "
+                "mingw-w64-x86_64-python-pillow on MSYS2) or point "
+                "-DFN_WII_ICON_PYTHON=<python> at an interpreter that has it.")
+        endif()
+
+        set(FN_WII_HAVE_ICON ON)
+        message(STATUS "Wii: HBC icon generation enabled (${FN_WII_ICON_PYTHON})")
+        add_custom_command(OUTPUT "${_fn_wii_icon}"
+            COMMAND "${FN_WII_ICON_PYTHON}"
+                    "${CMAKE_SOURCE_DIR}/tools/wii/hbc/make-icon.py"
+                    --out "${_fn_wii_icon}"
+            DEPENDS "${CMAKE_SOURCE_DIR}/tools/wii/hbc/make-icon.py"
+                    "${CMAKE_SOURCE_DIR}/tools/lib/tex_decoder.py"
+            COMMENT "Composing Wii HBC icon (Pillow)"
+            VERBATIM
+        )
+        add_custom_target(fn_wii_icon DEPENDS "${_fn_wii_icon}")
+        add_dependencies(fruit-ninja fn_wii_icon)
+    endif()
+
     # --- Shippable homebrew package (install + CPack) ---
     # `cmake --install build/wii --prefix <dir>` assembles the standard HBC
     # apps/<name>/ layout; `cpack -G ZIP` from build/wii wraps that same layout
@@ -1312,10 +1366,14 @@ elseif (FRUIT_PLATFORM_WII)
     install(DIRECTORY ${FN_STAGING_DATA_DIR}/
         DESTINATION apps/fruitninja/Data
         PATTERN "*.bak" EXCLUDE)   # don't ship editor/backup cruft from source Data
-    install(FILES
-            ${CMAKE_SOURCE_DIR}/tools/wii/hbc/icon.png
-            ${CMAKE_SOURCE_DIR}/tools/wii/hbc/meta.xml
+    install(FILES ${CMAKE_SOURCE_DIR}/tools/wii/hbc/meta.xml
         DESTINATION apps/fruitninja)
+    # icon.png is generated (above), not committed -- install it from the build
+    # tree, and only when it was actually generated.
+    if (FN_WII_HAVE_ICON)
+        install(FILES ${_fn_wii_icon}
+            DESTINATION apps/fruitninja)
+    endif()
 
     set(CPACK_GENERATOR "ZIP")
     set(CPACK_PACKAGE_FILE_NAME "fruit-ninja-wii")
