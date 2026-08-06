@@ -306,7 +306,12 @@ void FruitInfo_Load(const char* xmlPath)
             }
         }
 
-        // ASM-verified: 2026-05-03 v1.6.1 Fruit::LoadInfo @ 0x001e1084 (asm-inspector / re-analyst)
+        // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084
+        // asm-verify reports ~31.8% LCS on this symbol. That is a PAIRING ARTIFACT,
+        // not a divergence signal: the tool fuzzy-paired the binary's
+        // `_ZN5Fruit8LoadInfoEv` (member, no args) against the port's
+        // `_Z14FruitInfo_LoadPKc` (free function, const char*). Different signature
+        // and allocation shape, so the two instruction streams cannot align.
         // The three QueryFloatAttribute calls below are @0x001e19c8 (collision),
         // 0x001e19dc (scale), 0x001e19f0 (hitInfluence); the int-attr run starts
         // at 0x001e1a04.
@@ -327,22 +332,30 @@ void FruitInfo_Load(const char* xmlPath)
         const char* hasSplat = elem.Attribute("hasSplatSeeds");
         fi.m_bHasSplatSeeds = (hasSplat && strcmp(hasSplat, "true") == 0) ? 1 : 0;
 
+        // Crit-eligibility score gate. The binary runs this straight after the
+        // hasSplatSeeds read and BEFORE the onSide / onlySprinkle / noCritical
+        // block: a fruit worth CRITICAL_SCORE or more can never crit. With
+        // <critical score="10">, `dragon` (score 50) is crit-ineligible.
+        if (Fruit::CRITICAL_SCORE <= fi.m_Score) fi.m_bScorable = 0;
+
         const char* onSide = elem.Attribute("onSide");
         if (!onSide) onSide = elem.Attribute("onside");
         fi.m_bOnSide = (onSide && strcmp(onSide, "true") == 0) ? 1 : 0;
 
+        // "onlySprinkle" -> +0x319. The XML value is the string "true", so
+        // QueryIntAttribute returns TIXML_WRONG_TYPE and writes nothing --
+        // the binary reads the raw attribute and strcmp's it, same as onSide.
+        const char* onlySprinkle = elem.Attribute("onlySprinkle");
+        fi.m_bSpecial = (onlySprinkle && strcmp(onlySprinkle, "true") == 0) ? 1 : 0;
+
         // m_bScorable: 1 = fruit can receive a critical hit, 0 = cannot.
         // XML "noCritical"="true" means NO critical, so m_bScorable=0 when attr is "true".
-        // v1.6.1 Fruit::LoadInfo @0x001e1084: store sequence sets field to 1 unless "noCritical"=="true",
-        // then clears it if colour alpha == 0.
+        // The binary writes this field ONLY when the attribute exists; its else arm
+        // keeps the prior value (ctor default 1, or 0 from the CRITICAL_SCORE gate
+        // above). An unconditional `? 0 : 1` would wipe that gate.
         const char* noCrit = elem.Attribute("noCritical");
-        fi.m_bScorable = (noCrit && strcmp(noCrit, "true") == 0) ? 0 : 1;
+        if (noCrit) fi.m_bScorable = (strcmp(noCrit, "true") == 0) ? 0 : 1;
         if (fi.m_FruitColour[3] == 0) fi.m_bScorable = 0;
-
-        // "onlySprinkle" -> +0x319 (QueryIntAttribute == 1)
-        int sprinkle = 0;
-        elem.QueryIntAttribute("onlySprinkle", &sprinkle);
-        fi.m_bSpecial = (sprinkle == 1) ? 1 : 0;
 
         // m_bIsSuperFruit set iff m_Score==0 (super_pomegranate has no score attr).
         // ASM-spec v1.6.1 Fruit::LoadInfo @0x001e1084

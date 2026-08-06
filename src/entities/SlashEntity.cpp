@@ -1552,9 +1552,12 @@ void SlashEntity::UpdatePoints(float dt) {
 }
 
 // ---------------------------------------------------------------------------
-// Update -- v1.6.1 SlashEntity::Update @ 0x1e867c
+// ASM-spec v1.6.1 SlashEntity::Update @0x001e867c
 // Binary-faithful port with dt branching, blade velocity volume, ghost spawn
 // timing, combo timer, velocity repulsion/attraction, and swipe-SFX logic.
+// The sub-block notes below cite their own addresses inside this symbol; the
+// combo-resolve tail is specced separately at @0x001e90d8. No compile+diff has
+// been run on this body, so nothing here carries an ASM-verified stamp.
 // ---------------------------------------------------------------------------
 void SlashEntity::Update(float dt) {
     // =====================================================================
@@ -1673,7 +1676,7 @@ void SlashEntity::Update(float dt) {
     // PSPParticleManager / WaveManager / BonusManager / AchievementManager. The
     // port-added `game != nullptr` term on this gate had no binary counterpart and
     // is removed; the binary's gate is the bomb-hit timer alone.
-    // ASM-verified: 2026-08-03T00:00:00Z v1.6.1 SlashEntity::Update @ 0x001e87d4 (re-analyst):
+    // Bomb-timer gate @0x001e87d4:
     //   vldr.32 s15,[r3,#0x10] / vcmpe.f32 s15,#0 / vmrs apsr,fpscr / bhi 0x001e8f4c.
     //   BHI is "ordered and greater than", so the slice pass runs on
     //   m_BombHitTimer <= 0.0f. The port had ==, which drops the pass on the one
@@ -1758,15 +1761,19 @@ void SlashEntity::Update(float dt) {
                                 m_ComboTimer = 0.0f;
                                 m_ComboFruitTypes[m_ComboCounter] = (int)fruit->m_FruitType;
                                 m_ComboOnlineMode = 0;
-                                // m_ComboScoreScale was m_ComboScoreScale -= m_ComboCounter * (random+0.75)
-                                {
-                                    float r = Math::g_Random.RandF(0.5f);
-                                    m_ComboScoreScale = m_ComboScoreScale
-                                        - (float)m_ComboCounter * (r + 0.75f);
-                                }
+                                // Binary order: stash the old scale, bump the counter, run the
+                                // >9 timer check, THEN subtract using the INCREMENTED counter.
+                                // The port used to compute the scale from the pre-increment
+                                // counter, which shifted every combo step by one.
+                                const float oldComboScoreScale = m_ComboScoreScale;
                                 m_ComboCounter++;
                                 if (m_ComboCounter > 9) {
                                     m_ComboTimer = 0.095f;
+                                }
+                                {
+                                    float r = Math::g_Random.RandF(0.5f);
+                                    m_ComboScoreScale = oldComboScoreScale
+                                        - (float)m_ComboCounter * (r + 0.75f);
                                 }
                                 // MissControl popup: binary gate order is
                                 // `count>2 -> CombosEnabled() -> (online && mode==2 -> skip) ->
@@ -1817,7 +1824,12 @@ void SlashEntity::Update(float dt) {
 
                         // Critical fruit: adjust fruit type and scale
                         if (fruit->m_bCritical) {
-                            m_SliceFruitType += 0x100;
+                            // Binary adds Fruit::MAX_FRUIT_TYPES -- the RUNTIME fruit count
+                            // written by Fruit::LoadInfo (g_FruitInfoCount, ~22), not a fixed
+                            // 0x100. SplatEntity::MakeSplat recovers the colour with
+                            // `fruitType % count`, so a 0x100 sentinel wrapped to the wrong
+                            // fruit's splat colour on every critical slice.
+                            m_SliceFruitType += g_FruitInfoCount;
                             float r = Math::g_Random.RandF(0.5f);
                             m_ComboScoreScale = m_ComboScoreScale + (r + 0.75f) * -3.0f;
                         }
@@ -1976,7 +1988,7 @@ void SlashEntity::Update(float dt) {
     //     m_ComboCount tracks the current combo swing length.
     // =====================================================================
     {
-        // ASM-verified v1.6.1 SlashEntity::Update combo-resolve @0x001e90d8: gate/save on m_ComboCounter (+0x17c), not m_ComboCount (+0x178, always -1). Restores combos/achievements/coins in all modes.
+        // ASM-spec v1.6.1 SlashEntity::Update combo-resolve @0x001e90d8: gate/save on m_ComboCounter (+0x17c), not m_ComboCount (+0x178, always -1). Restores combos/achievements/coins in all modes.
         static const float kComboFireThresh = 0.095f;   // DAT_001e9224
         static const float kComboIdleValue  = 0.1f;     // DAT_001e9220
         if (m_ComboTimer >= kComboIdleValue) {
@@ -2011,8 +2023,7 @@ void SlashEntity::Update(float dt) {
                             WaveManager::GetInstance()->AddSpeed(
                                 (float)m_ComboCounter / 3.0f, 0);
                             AddToCurrentScore(m_ComboCounter, m_ComboOnlineMode, true, true);
-                            // ASM-verified: 2026-08-03T00:00Z v1.6.1 SlashEntity::Update @ 0x001e9160 (re-analyst)
-                            // AddCombo lives INSIDE the arcade arm (bl 0x0010dbd0 GetInstance,
+                            // @0x001e9160: AddCombo lives INSIDE the arcade arm (bl 0x0010dbd0 GetInstance,
                             // bl 0x0010a150 AddCombo, then b 0x001e919c to the join). The classic/zen
                             // arm at 0x001e9170 has no AddCombo -- bonuses are an arcade-only feature.
                             BonusManager::GetInstance()->AddCombo(m_ComboCounter);
@@ -2058,8 +2069,7 @@ void SlashEntity::Update(float dt) {
                     // -----------------------------------------------------------------
                     // OUTER combo level -- still inside `m_ComboCounter > 1 &&
                     // m_ComboFruitTypes[0] >= 0`, but OUTSIDE the `> 2` block above.
-                    // ASM-verified: 2026-08-03T00:00Z v1.6.1 SlashEntity::Update @ 0x001e93a4 (re-analyst)
-                    // The `> 2` gate at 0x001e9110 (`cmp r2,#2 / ble 0x001e93a4`) and the
+                    // @0x001e93a4: the `> 2` gate at 0x001e9110 (`cmp r2,#2 / ble 0x001e93a4`) and the
                     // m_ComboFruitTypes[1] gate at 0x001e9118 (`ldr r2,[r4,#0x154] / blt
                     // 0x001e93a4`) both branch TO 0x001e93a4, which is where r7 = this+0x150
                     // (m_ComboFruitTypes) is formed for the three blocks below. So a 2-fruit

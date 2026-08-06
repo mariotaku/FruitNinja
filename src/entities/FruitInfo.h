@@ -122,11 +122,17 @@ struct FruitInfo {
     int m_Score;                  // +0x314: "score" attr
 
     // Scoring flags
-    // m_bScorable: cleared if score >= global threshold (semantics: 1 = can score a critical hit)
+    // m_bScorable: 1 = this fruit can receive a critical hit, 0 = cannot.
     // Binary field name was "m_bNoCritical" in Ghidra but polarity is inverted relative to
-    // the "noCritical" XML attr. See LoadInfo @ 0x0017987c for the store sequence.
+    // the "noCritical" XML attr. Fruit::LoadInfo @0x001e1084 writes it in three steps:
+    //   ctor default 1 -> cleared when Fruit::CRITICAL_SCORE <= m_Score
+    //   -> overwritten from "noCritical" ONLY when that attribute exists
+    //   -> cleared when m_FruitColour alpha == 0.
     uint8_t m_bScorable;          // +0x318
-    uint8_t m_bSpecial;           // +0x319: from "noCritical" attr (QueryIntAttribute == 1)
+    // m_bSpecial: 1 when the XML carries onlySprinkle="true" (string compare, not an
+    // int attr). Restricts the fruit to sprinkle/critical waves, and selects the right
+    // half of the splat texture in SplatEntity::SetupUVs.
+    uint8_t m_bSpecial;           // +0x319: from "onlySprinkle" attr (strcmp "true")
     uint8_t _pad_31A[2];
 
     // Impact sounds
