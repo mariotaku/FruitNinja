@@ -586,30 +586,47 @@ void AboutScreen::UpdateRealtime(float dtSeconds) {
 // position internally from m_Texture->GetWidth() and m_TransitionAlpha.
 //
 // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: SetTranslation flag 0, credit y-deltas.
+//   Call order (binary): DrawMarquee, TitleBox, CreditLine0..5, VersionBox.
+//   DrawMarquee runs FIRST so the marquee sits UNDER the credit text.
 //   base coords: x0 = (int)(BG_X - 160) = -210, y0 = (int)(yDrawn + 64)
+//   panelBaseY reads m_Texture +0x28 = GetHeight (vldr [r,#40]), NOT GetWidth (+0x24).
+//   Draw() derives its own yStart from the same GetHeight, so both curves match.
+//   TitleBox:     SetTranslation(x0+0x50,  y0+0x1a,    0), flag=0  (x0+80, y0+26)
 //   CreditLine0:  SetTranslation(x0,       y0,         0), flag=0
 //   CreditLine1:  SetTranslation(x0,       y0-0x14,    0), flag=0  (y0-20)
 //   CreditLine2:  SetTranslation(x0,       y0-0x28,    0), flag=0  (y0-40)
 //   CreditLine3:  SetTranslation(x0,       y0-0x4b,    0), flag=0  (y0-75)
 //   CreditLine4:  SetTranslation(x0,       y0-0x5f,    0), flag=0  (y0-95)
 //   CreditLine5:  SetTranslation(x0,       y0-0x73,    0), flag=0  (y0-115)
-//   TitleBox:     SetTranslation(x0+0x50,  y0+0x1a,    0), flag=0  (x0+80, y0+26)
 //   HeadingBox:   positioned by DrawMarquee (binary uses m_HeadingBox in DrawMarquee only)
 //   VersionBox:   SetTranslation(x0+5,     y0+0x15,    0), flag=0  (x0+5, y0+21)
 //   Each box is drawn with Draw(0, Vec2(1,1), 1).
 //   DrawMarquee gate: if (m_TransitionAlpha > 0.6f) DrawMarquee();
+//   The binary carries no null tests on m_Texture / m_TitleBox / m_CreditLineN /
+//   m_VersionBox. The port keeps them because it builds every box behind a
+//   port-side `if (font)` gate in the ctor (the TTF face can be absent), so the
+//   pointers really can be null here. Port-side guard, not a missed instruction.
 // -----------------------------------------------------------------------
 void AboutScreen::NewDraw()
 {
-    // Binary reads m_Texture->GetWidth() (+0x28 = texture width) to compute panelBaseY.
-    // panelBaseY = texWidth * 0.5 + BG_Y_CACHE(160); panelY lerps toward BG_Y_REST(63).
+    if (m_TransitionAlpha > 0.6f) {
+        DrawMarquee();
+    }
+
+    // panelBaseY = texHeight * 0.5 + BG_Y_CACHE(160); panelY lerps toward BG_Y_REST(63).
     const int x0 = (int)(BG_X - 160.0f);    // -210
     float panelY = 0.0f;
     if (m_Texture.IsValid()) {
-        const float panelBaseY = (float)m_Texture->GetWidth() * 0.5f + BG_Y_CACHE;
+        const float panelBaseY = (float)m_Texture->GetHeight() * 0.5f + BG_Y_CACHE;
         panelY = panelBaseY - (panelBaseY - BG_Y_REST) * m_TransitionAlpha;
     }
     const int y0 = (int)(panelY + 64.0f);
+
+    // Title box
+    if (m_TitleBox) {
+        m_TitleBox->SetTranslation(_Vector3<float>((float)(x0 + 0x50), (float)(y0 + 0x1a), 0.0f), 0);
+        m_TitleBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
+    }
 
     // Credit lines
     if (m_CreditLine0) {
@@ -637,22 +654,10 @@ void AboutScreen::NewDraw()
         m_CreditLine5->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
     }
 
-    // Title box
-    if (m_TitleBox) {
-        m_TitleBox->SetTranslation(_Vector3<float>((float)(x0 + 0x50), (float)(y0 + 0x1a), 0.0f), 0);
-        m_TitleBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
-    }
-
     // Version box
     if (m_VersionBox) {
         m_VersionBox->SetTranslation(_Vector3<float>((float)(x0 + 5), (float)(y0 + 0x15), 0.0f), 0);
         m_VersionBox->Draw(_Vector2<float>(1.0f, 1.0f), 0.0f, 1);
-    }
-
-    // ASM-verified: 2026-06-21T00:00:00Z v1.6.1 AboutScreen::NewDraw @0x0015a264 (re-analyst):
-    //   vcmpe alpha,0.6f ; ble skip => DrawMarquee runs when alpha > 0.6 (idle/settled state).
-    if (m_TransitionAlpha > 0.6f) {
-        DrawMarquee();
     }
 }
 
@@ -875,8 +880,12 @@ void AboutScreen::CreateCreditsMarquee()
 // AboutScreen::DrawMarquee  @ 0x0015a138
 // Draws each m_Marquees item translated by the transition offset,
 // plus the heading box rotated 90 degrees.
-// ASM-verified: 2026-06-21T00:00Z v1.6.1 AboutScreen::DrawMarquee @0x0015a138 (re-analyst):
+// ASM-spec v1.6.1 AboutScreen::DrawMarquee @0x0015a138:
 //   transOffset = Vec3(0, -416 + 320*alpha, 0)
+//   The binary spells this `-416.0f - alpha * (-320.0f)` (its literal pool holds
+//   -320.0f and the FMA is vmls/vnmls instead of vmla). The sign flip in the pool
+//   and the vmls/vnmls swap cancel exactly, so the port's `-416 + 320*alpha` is
+//   algebraically identical -- same result bit-for-bit, different instruction pair.
 //   per item: m_pBox->SetTranslation(pos + transOffset, 0); m_pBox->Draw(Vec2(1,1), 0, 1)
 //   heading: m_HeadingBox->SetTranslation(Vec3(-191, transOffset.y - 67, 0), 1)
 //            T_1164(90.0, m_HeadingBox) @0x0015a0e8 = Draw(box, Vec2(1,1), 90.0f, center=1).

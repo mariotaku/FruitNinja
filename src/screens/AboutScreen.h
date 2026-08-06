@@ -179,11 +179,13 @@ private:
     void CreateBackButton();
 
     // v1.6.1: NewDraw -- BakedStringBox credit text pass
-    // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: draws m_TitleBox,
-    // m_HeadingBox (via DrawMarquee), m_VersionBox, m_CreditLine0..5 at
-    // positions derived from panelPos. Also gates DrawMarquee on alpha > 0.6.
-    // Binary reads m_Texture->GetWidth() (+0x28) to compute panelBaseY internally
-    // (no param -- corrected from port's erroneous float yDrawn param).
+    // ASM-spec v1.6.1 AboutScreen::NewDraw @0x0015a264: draws, in this order,
+    // DrawMarquee (gated on alpha > 0.6, so the marquee lands UNDER the credits),
+    // m_TitleBox, m_CreditLine0..5, m_VersionBox -- all at positions derived from
+    // panelPos. m_HeadingBox is positioned inside DrawMarquee only.
+    // Binary reads m_Texture->GetHeight() (+0x28) to compute panelBaseY internally
+    // (no param -- corrected from port's erroneous float yDrawn param). Draw()
+    // derives its yStart from the same GetHeight, so both track one Y curve.
     void NewDraw();
 
     // v1.6.1: CreateCreditsMarquee @0x0015ac0c

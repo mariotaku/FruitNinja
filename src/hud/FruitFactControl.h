@@ -123,6 +123,12 @@ public:
     // Shared paging-arrow texture (loaded by LoadContent @ 0x00170b1c).
     static Mortar::SmartPtr<Mortar::Texture> s_TexArrow;
 
+    // Cached "sensei_head.tex" slot -- binary global @ base+0x724C, filled by
+    // LoadContent @0x00170b1c and released by UnLoadContent @0x00171a4c.
+    // FruitFactPage::CreateSenseisHead @0x0017c3b4 reads this slot directly and
+    // performs NO load of its own, so an empty slot means no sensei head is drawn.
+    static Mortar::SmartPtr<Mortar::Texture> s_senseiHead;
+
     // Binary struct fields -- public to allow offsetof() in layout static_asserts
     // (GCC 4.4 __bada__ cross-build: offsetof on private members is an error).
     // +0x7C: current fact string (result of Fruit::GetFact; ctor inits NULL)

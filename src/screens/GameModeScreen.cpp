@@ -837,12 +837,17 @@ void GameModeScreen::DrawConnectTexture(_Vector3<float> pos) {
 // 2. Borders via BaseScreen::DrawBorders (mode_select.tex)
 // 3. Connect animation (zen_sign.tex pulsating)
 // 4. Logo panel (zen_sign.tex) lerped by m_SecondaryAlpha
-// ASM-verified: 2026-07-26T05:43Z v1.6.1 GameModeScreen::Draw @ 0x00183ac8 (general-purpose)
+// ASM-spec v1.6.1 GameModeScreen::Draw @0x00183ac8
 //   0x00183b8c vldr s15,[r5,#0x8c] -> sensei-panel slide reads +0x8c = m_TransitionAlpha
 //   0x00183df8 add r2,r5,#0xb4     -> zen-plate lerp scalar reads +0xb4 = m_SecondaryAlpha
 //   (m_SecondaryAlpha starts -2.5 and lags: the wooden plate flies in late/springy
 //   from far right while the sensei backdrop tracks the fast transition.)
 //   No early-return on m_TransitionAlpha in the binary.
+//   The lerp endpoints come from a Defunct-P2P src/dst pick; the false arm --
+//   src (314,14,10) / dst (194,29,10) -- is the one v1.6.1 always takes, and it
+//   matches the port's POS_LOGO_SRC / POS_LOGO_DST constants.
+//   m_pTitleBox is drawn UNCONDITIONALLY -- it is not nested inside the
+//   zen_sign texture-validity test.
 // ===================================================================
 void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     MatrixManager& mm = MatrixManager::GetInstance();
@@ -909,10 +914,11 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
     // proportionally). m_pTitleBox (the rules text) draws relative to
     // logoPos below, so it tracks the plate automatically. Identity when
     // disabled/__bada__.
+    _Vector3<float> src(MapX(POS_LOGO_SRC.x, "modeselect.plate"), POS_LOGO_SRC.y, POS_LOGO_SRC.z);
+    _Vector3<float> dst(MapX(POS_LOGO_DST.x, "modeselect.plate"), POS_LOGO_DST.y, POS_LOGO_DST.z);
+    _Vector3<float> logoPos = src + (dst - src) * m_SecondaryAlpha;
+
     if (s_TexZenSign.IsValid()) {
-        _Vector3<float> src(MapX(POS_LOGO_SRC.x, "modeselect.plate"), POS_LOGO_SRC.y, POS_LOGO_SRC.z);
-        _Vector3<float> dst(MapX(POS_LOGO_DST.x, "modeselect.plate"), POS_LOGO_DST.y, POS_LOGO_DST.z);
-        _Vector3<float> logoPos = src + (dst - src) * m_SecondaryAlpha;
         mm.GetWorldStack().Reset();
         Matrix44 mat = Matrix44::MakeScale(
             (float)s_TexZenSign->GetWidth() + 1.0f,
@@ -925,14 +931,15 @@ void GameModeScreen::Draw(float* /*hudScaleRaw*/) {
         s_TexZenSign->Set();
         Mortar::Mesh::DrawQuadUnCached(Colour(255, 255, 255, 255), NULL);
         s_TexZenSign->UnSet();
+    }
 
-        // Draw the feature-bullet text over the zen board quad.
-        // Binary @0x00183c34 (GameModeScreen::Draw): m_pTitleBox drawn at
-        // logoPos + (8, 3, 0), rotation -9 degrees, scale (1,1), centered.
-        if (m_pTitleBox) {
-            m_pTitleBox->SetTranslation(logoPos + _Vector3<float>(8.0f, 3.0f, 0.0f), 1);
-            m_pTitleBox->Draw(_Vector2<float>(1.0f, 1.0f), -9.0f, 1);
-        }
+    // Draw the feature-bullet text over the zen board quad.
+    // Binary @0x00183c34 (GameModeScreen::Draw): m_pTitleBox drawn at
+    // logoPos + (8, 3, 0), rotation -9 degrees, scale (1,1), centered.
+    // Not gated on the zen_sign texture -- the binary draws it either way.
+    if (m_pTitleBox) {
+        m_pTitleBox->SetTranslation(logoPos + _Vector3<float>(8.0f, 3.0f, 0.0f), 1);
+        m_pTitleBox->Draw(_Vector2<float>(1.0f, 1.0f), -9.0f, 1);
     }
 
     // TODO: confirm m_pInfoBox draw site (MP/challenge path?)

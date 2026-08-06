@@ -35,17 +35,6 @@ static Mortar::FontCacheObjectTTF* GetPageTTFFont() {
     return Mortar::FontTTFRegistry::GetInstance().Lookup(s_Font.Get());
 }
 
-// Cached sensei head texture (GOT-relative global in binary; one per process).
-// Binary @ 0x0017c3b4 reads from GOT+DAT_0017c4b0 -> the global SmartPtr<Texture>.
-// LoadContent for FruitFactControl populates it; here we load on demand.
-static Mortar::SmartPtr<Mortar::Texture> g_SenseisHeadTex;
-
-// See FruitFactPage.h for why this port-only hook exists (the binary's
-// FruitFactControl::UnLoadContent @0x00171a4c does not cover this fourth slot).
-void FruitFactPage_UnloadStatics() {
-    g_SenseisHeadTex.SetNull();
-}
-
 // Binary @ 0x0017c214 / 0x0017c250
 FruitFactPage::FruitFactPage(FruitFactControl* pCtrl)
     : BaseScreen()
@@ -84,17 +73,17 @@ void FruitFactPage::ShowSubObjects() {
 void FruitFactPage::HideSubObjects() {
 }
 
-// Binary @ 0x0017c3b4
+// ASM-spec v1.6.1 FruitFactPage::CreateSenseisHead @0x0017c3b4
 // Creates a GenericHUDControl displaying the cached Sensei head texture.
 // Consts: X=140.0 (DAT_0017c4a4), fadeIn=fadeOut=0.0 (DAT_0017c4a8), flags=0x400.
 // NOTE: scale param feeds pos.Y (binary-faithful: Vec3(140, scale, 0)).
-// ASM-verified: 2026-06-13T03:40Z v1.6.1 binary @ 0x0017c3b4 (asm-inspector)
+// The texture comes straight from the cached FruitFactControl::s_senseiHead slot
+// (binary global @ base+0x724C, read via GOT+DAT_0017c4b0). The binary does NOT
+// load anything here -- an empty slot simply yields a control with no texture.
+// s_senseiHead is filled by FruitFactControl::LoadContent, called from the
+// FruitFactControl ctor (binary @ 0x00170c78).
 GenericHUDControl* FruitFactPage::CreateSenseisHead(float scale) {
-    if (!g_SenseisHeadTex.IsValid()) {
-        // TODO: v1.6.1 FruitFactPage::CreateSenseisHead @0x0017c3b4 -- resolve sensei head tex name from DAT_0017c4b0 string pool
-        g_SenseisHeadTex = Mortar::TextureManager::LoadLocalisedTexture("sensei_head.tex");
-    }
-    Mortar::SmartPtr<Mortar::Texture> tex(g_SenseisHeadTex);
+    Mortar::SmartPtr<Mortar::Texture> tex(FruitFactControl::s_senseiHead);
     _Vector3<float> pos(140.0f, scale, 0.0f);
     _Vector3<float> sc(0.0f, 0.0f, 0.0f);  // auto-size from texture dims (binary: callers pass zero scale)
     Colour col(255, 255, 255, 255);
@@ -122,7 +111,11 @@ void FruitFactPage::CreateHorizontalDivider() {
 // ctor flag=1 then field_0x34 (m_LayerFlags) overwritten to 0x400 (str r3,[r5,#0x34] @0x17c5d0).
 // BakedStringBox: fontSize=12, 270x14, align=0xf, wrap=1, ls=0.
 // SetShadow: scale=0.0 (DAT_0017c720).
-// ASM-verified: 2026-06-13T03:40Z v1.6.1 binary @ 0x0017c4cc (asm-inspector)
+// ASM-spec v1.6.1 FruitFactPage::CreateTitleTextControl @0x0017c4cc
+//   The binary loads game_work.m_pTTFFontMain DIRECTLY and builds the
+//   BakedStringBox with no null test. The port routes through GetPageTTFFont()
+//   and wraps the box in `if (font)` so a missing TTF face degrades instead of
+//   faulting -- a port-side guard, not a binary branch.
 GenericHUDControl* FruitFactPage::CreateTitleTextControl(const char* str) {
     _Vector3<float> size(270.0f, 14.0f, 0.0f);
     Mortar::SmartPtr<Mortar::Texture> tex;
@@ -193,7 +186,10 @@ GenericHUDControl* FruitFactPage::CreateSenseisFruitFactTitle() {
 // Creates a GenericHUDControl with a BakedStringBox displaying the fact body text.
 // pos=Vec3(-141,-24,0), scale=Vec3(1,1,1)*0.85.
 // Body text from controller+0x7c (m_FactText). Colour (116,93,59,255).
-// ASM-verified: 2026-06-13T03:40Z v1.6.1 binary @ 0x0017c99c (asm-inspector)
+// ASM-spec v1.6.1 FruitFactPage::CreateSenseisFruitFactText @0x0017c99c
+//   Same font path as CreateTitleTextControl: the binary reads
+//   game_work.m_pTTFFontMain directly with no null test; the port's
+//   GetPageTTFFont() + `if (font)` pair is a port-side guard.
 GenericHUDControl* FruitFactPage::CreateSenseisFruitFactText() {
     Mortar::SmartPtr<Mortar::Texture> tex;
     _Vector3<float> ppos(-141.0f, -24.0f, 0.0f);

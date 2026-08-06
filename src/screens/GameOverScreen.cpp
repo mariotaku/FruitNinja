@@ -1587,14 +1587,16 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
 
     // Layer 0x80 path -- highscore label + title-tex quad
-    // ASM-verified: 2026-06-26T16:02Z v1.6.1 GameOverScreen::PreDrawOrder @0x00186894..0x00186aac (asm-inspector)
+    // ASM-spec v1.6.1 GameOverScreen::PreDrawOrder @0x00186894
+    //   Layer dispatch is EQUALITY, not a bitmask test: `cmp r1,#128` / `cmp r1,#1`,
+    //   so the two arms are mutually exclusive (`if (layer == 0x80) ... else if (layer == 1)`).
     //   scale = m_pRetryBtn(+0xA4).size.x(+0x20) * 0.5 [vmul s0,s14,s15 @0x186980; s15=0.5];
     //   pos (-163,-96,0) [DAT @0x186aa0]; align 0xF; font pM_Fonts[2]; settled size.x=120 -> scale 60.
     //   The "5000-over-Retry" overlap is binary-faithful: Bada's 2-button layout (no Leaderboards)
     //   puts Retry at x=-80, next to the highscore at x=-163. iOS/Android center Retry (3 buttons) so
     //   they don't collide -- a real Bada-vs-mobile UI difference, NOT a port bug. Keep as-is.
     //   (+0xA4 holds the RETRY button; Ghidra's "m_pQuitBtn" label at +0xA4 is wrong.)
-    if ((layerMask & Mortar::HUD_LAYER_POST_ACTOR) != 0) {
+    if (layerMask == Mortar::HUD_LAYER_POST_ACTOR) {
         Game* game = Game::GetInstance();
         // Gate: m_pRetryBtn(+0xA4) != 0 && save->m_highscore > 0
         if (m_pRetryBtn != 0 && game && game_work.m_SaveData &&
@@ -1649,11 +1651,13 @@ void GameOverScreen::PreDrawOrder(float* hudScaleRaw, int layerMask) {
     //   the BakedStringBox TTF title (DrawOrder) shows. (The old `m_Texture = bgTex` made it draw
     //   the baked title over the TTF -> the visible duplicate; that line is removed in Initialise.)
     // Real binary layer-1 = ONLY this -- NO sensei/expression/bg-pattern overlay
-    if ((layerMask & Mortar::HUD_LAYER_DEFAULT) != 0) {
+    //   +0x5f = (uint8_t)(uint32_t)(mHud->m_DrawAlpha * 255.0f) via a single vcvt.u32.f32:
+    //   the conversion saturates at the LOW end only (negatives -> 0). There is no
+    //   upper clamp, so do not add one.
+    else if (layerMask == Mortar::HUD_LAYER_DEFAULT) {
         float v = game_work.mHud ? game_work.mHud->m_DrawAlpha * 255.0f : 0.0f;
         if (v < 0.0f)   v = 0.0f;
-        if (v > 255.0f) v = 255.0f;
-        m_DrawColour.a = (uint8_t)(int)v;
+        m_DrawColour.a = (uint8_t)(uint32_t)v;
         HUDControl3d::Draw(hudScaleRaw);
     }
 }

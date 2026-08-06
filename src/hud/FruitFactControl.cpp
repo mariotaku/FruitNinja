@@ -31,12 +31,15 @@
 namespace {
     bool g_factContentLoaded = false;                      // binary guard @ base+0x43408
     Mortar::SmartPtr<Mortar::Texture> g_factTex0;          // binary slot @ base+0x6C74
-    Mortar::SmartPtr<Mortar::Texture> g_factTex1;          // binary slot @ base+0x724C
     Mortar::SmartPtr<Mortar::Texture> g_factTex2;          // binary slot @ base+0x6C3C
 }
 
 // File-scope static definition for the shared paging-arrow texture.
 Mortar::SmartPtr<Mortar::Texture> FruitFactControl::s_TexArrow;
+
+// binary slot @ base+0x724C -- also read by FruitFactPage::CreateSenseisHead
+// @0x0017c3b4, hence a class static rather than a file-scope global.
+Mortar::SmartPtr<Mortar::Texture> FruitFactControl::s_senseiHead;
 
 // ---------------------------------------------------------------------------
 // LoadContent / UnLoadContent  (Binary @ 0x00170b1c / 0x00171a4c)
@@ -46,7 +49,7 @@ void FruitFactControl::LoadContent() {
     if (g_factContentLoaded) return;
     g_factContentLoaded = true;
     g_factTex0 = Mortar::TextureManager::LoadLocalisedTexture("fact_board.tex");
-    g_factTex1 = Mortar::TextureManager::LoadLocalisedTexture("sensei_head.tex");
+    s_senseiHead = Mortar::TextureManager::LoadLocalisedTexture("sensei_head.tex");
     g_factTex2 = Mortar::TextureManager::LoadLocalisedTexture("arcade_results_arrow.tex");
 }
 
@@ -55,7 +58,7 @@ void FruitFactControl::UnLoadContent() {
     // the same order LoadContent populated them (0x6C74, 0x724C, 0x6C3C).
     g_factContentLoaded = false;
     g_factTex0.SetNull();   // SmartPtr release -> binary @ 0x00171800
-    g_factTex1.SetNull();
+    s_senseiHead.SetNull();
     g_factTex2.SetNull();
 }
 
@@ -75,6 +78,9 @@ FruitFactControl::FruitFactControl()
     , m_GameStateSnapshot(0)
 {
     _pad_A9[0] = 0; _pad_A9[1] = 0; _pad_A9[2] = 0;
+    // Binary @ 0x00170c78: ctor calls LoadContent(this) after member construction,
+    // before m_bNoDestructor is set.
+    LoadContent();
     // Binary @ 0x00170c78: sets m_bNoDestructor = 1 after base construction.
     m_bNoDestructor = 1;
 }

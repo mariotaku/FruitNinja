@@ -36,18 +36,6 @@
 class FruitFactControl;
 class GenericHUDControl;
 
-// Port specific: releases FruitFactPage.cpp's file-scope g_SenseisHeadTex global
-// ("sensei_head.tex", loaded lazily by CreateSenseisHead @0x0017c3b4). The binary's
-// FruitFactControl::UnLoadContent @0x00171a4c nulls exactly three texture slots
-// (g_factTex0/1/2); this sensei-head global is an uncovered fourth, left to
-// __aeabi_atexit. The port cannot follow that -- its atexit runs after
-// SDL_GL_DeleteContext, so the GL texture name would leak. Called from GameDestroy,
-// before MeshManager::Destroy().
-//
-// No-op when no fruit-fact page was ever built. Idempotent; CreateSenseisHead
-// re-loads on demand.
-void FruitFactPage_UnloadStatics();
-
 class FruitFactPage : public BaseScreen {
 public:
     // Binary @ 0x0017c214 / 0x0017c250

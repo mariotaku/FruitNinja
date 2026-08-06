@@ -559,7 +559,7 @@ void PowerUpShop::Update(float dt) {
         Math::g_Random.Rand32(524287);
         Math::g_Random.Rand32(2);
 
-        // ASM-verified: 2026-07-28T00:00Z v1.6.1 PowerUpShop::Update @ 0x001a8b04 (re-analyst)
+        // ASM-spec v1.6.1 PowerUpShop::Update @0x001a8b04 (dead code in v1.6.1)
         // Block @0x001a9064: r3 = this->m_BuyButton(+0x12c)->m_pTrackedFruit(+0x14c), then
         //   [r3,#0x28] *= 0.85; [r3,#0x2c] *= 0.85; [r3,#0x30] *= 0.85  -- Entity::scale (+0x28),
         //   all THREE components. (A prior port read this as m_RotVel1.x/.y, which is Fruit+0x100.)

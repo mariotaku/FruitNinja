@@ -34,7 +34,6 @@
 #include "screens/MainScreen.h"          // MainScreen_UnloadStatics
 #include "screens/PauseScreen.h"
 #include "screens/BonusScreen.h"         // BonusScreen_UnloadStatics
-#include "screens/FruitFactPage.h"       // FruitFactPage_UnloadStatics
 #include "screens/FruitFactZenPage.h"    // FruitFactZenPage::UnloadContent
 #include "engine/MenuBackground.h"       // UnloadBackground
 #include "hud/ComboBox.h"
@@ -724,8 +723,6 @@ void GameDestroy() {
                                      // because GameExit only runs when a task state was
                                      // live (quitting on the splash runs SplashExit).
     FlashTexture_UnloadStatics();    // g_FlashTexture (shared flash.tex; task #141)
-    FruitFactPage_UnloadStatics();   // g_SenseisHeadTex -- the 4th slot that
-                                     // FruitFactControl::UnLoadContent @0x00171a4c misses
     BonusScreen_UnloadStatics();     // s_bonusScreenBacking (BonusScreen::UnLoadContent
                                      // @0x0016200c is `bx lr`)
 
