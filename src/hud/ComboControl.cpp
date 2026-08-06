@@ -46,9 +46,14 @@ void ComboControl::Skip() {}
 // ASM-verified: 2026-05-20 v1.6.1 ComboControl::PreDraw @ 0x001693ac (re-analyst) -- extra vtable slot, no-op
 void ComboControl::PreDraw() {}
 
-// ASM-verified: 2026-08-03T00:00Z v1.6.1 ComboControl::Draw @ 0x001695b0 (re-analyst)
-// font=pFontNumbers, white, center, scale=30, no z/maxWH/rot/clip. Binary's Draw is the
-// extra-vtable slot +0x40 no-args form; port wires the body inside the base
+// ASM-spec v1.6.1 ComboControl::Draw @0x001695b0 (re-analyst, no compile+diff)
+// font = game_work.pM_Fonts[2] (+0x5c); colour = the Colour::White GLOBAL,
+// byte-copied to a stack temp (port hardcodes 0xFFFFFFFF -- same value);
+// align=1 (CENTER), scale=30.0f; z/maxWHx/maxWHy/rotZ are all PRESENT and
+// 0.0f (one pool literal @0x00169658 replicated s2->s4/s5/s6); clip=NULL.
+// Binary calls the by-VALUE-iterator DrawString wrapper @0x0024d6b8
+// (ldmia r5,{r1,r2,r3}); the port calls the by-reference inner overload.
+// Binary's Draw is the extra-vtable slot +0x40 no-args form; port wires the body inside the base
 // Draw(hudScale,layerMask) override since no port-side caller hits the +0x40 slot.
 // @0x001695d8 loads pFontNumbers (ldr r7,[r3,#0x5c]) straight into DrawString
 // @0x00169644 -- no null test anywhere in the 41-insn body.

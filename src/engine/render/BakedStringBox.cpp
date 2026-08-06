@@ -755,12 +755,16 @@ void BakedStringBox::SetShadow(float scale, Colour col, _Vector3<float> offset, 
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z v1.6.1 Mortar::BakedStringBox::SetStroke @ 0x00245314 (asm-inspector)
-// Colour by value (binary mangling Ef6Colour). Residual codegen delta: the binary
-// compares the stored vs incoming Colour as ONE 32-bit word (ldr +92 / ldr [r] / cmp);
-// the port compares the four bytes separately. Same semantics -- Mortar::Colour has no
-// out-of-line operator== in the binary, so the word compare is inlined from a form the
-// port's plain 4-byte struct cannot express without a union.
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetStroke @0x00245314 (also
+// @0x0024536c 2-col, @0x002453f0 3-col). Fields: m_Dirty +0x00,
+// m_StrokeWidth +0x54, m_StrokeCount +0x58, m_StrokeCol0/1/2 +0x5c/+0x60/+0x64.
+// Codegen delta (semantics identical, 12 insns per Colour, whole delta
+// accounted for): the binary compares each Colour as ONE 32-bit word
+// (ldr [this,#0x5c] / ldr [c0] / cmp) and assigns via
+// Colour::operator=(Colour const&) @0x001119ac; the port compares 4 bytes
+// and memcpy's. Root cause is the unported packed union in Colour --
+// see the TODO at v1.6.1 0x0021e7e4 in engine/math/Colour.h. Closing that
+// TODO closes this delta.
 void BakedStringBox::SetStroke(float width, Colour c0) {
     if (m_StrokeCount != 1 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
@@ -772,7 +776,8 @@ void BakedStringBox::SetStroke(float width, Colour c0) {
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z v1.6.1 Mortar::BakedStringBox::SetStroke @ 0x0024536c (asm-inspector)
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetStroke @0x0024536c
+// Same word-vs-byte Colour compare delta as the 1-colour overload above.
 void BakedStringBox::SetStroke(float width, Colour c0, Colour c1) {
     if (m_StrokeCount != 2 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||
@@ -787,7 +792,8 @@ void BakedStringBox::SetStroke(float width, Colour c0, Colour c1) {
     }
 }
 
-// ASM-verified: 2026-06-13T04:05Z v1.6.1 Mortar::BakedStringBox::SetStroke @ 0x002453f0 (asm-inspector)
+// ASM-spec v1.6.1 Mortar::BakedStringBox::SetStroke @0x002453f0
+// Same word-vs-byte Colour compare delta as the 1-colour overload above.
 void BakedStringBox::SetStroke(float width, Colour c0, Colour c1, Colour c2) {
     if (m_StrokeCount != 3 || m_StrokeWidth != width ||
         m_StrokeCol0.r != c0.r || m_StrokeCol0.g != c0.g ||

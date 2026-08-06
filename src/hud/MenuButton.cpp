@@ -542,7 +542,7 @@ void MenuButton::Remove() {
 
 // v1.6.1 MenuButton::TouchReleased @0x0019a7f8
 bool MenuButton::TouchReleased() {
-    // ASM-verified: 2026-08-02T00:00Z v1.6.1 MenuButton::TouchReleased @ 0x0019a7f8 (disasm):
+    // ASM-spec v1.6.1 MenuButton::TouchReleased @0x0019a7f8 (disasm 0x0019a7f8..0x0019a854):
     //   ldr r2,[r0,#0x84]; cmp #0; bge .else       -- m_FruitType >= 0 skips the click
     //   ldrb r2,[r0,#0x138]; cmp #0; beq .else     -- m_bClickOnRelease gate
     //   add r0,r0,#0x88; bl Delegate0::operator()  -- m_ClickCallback

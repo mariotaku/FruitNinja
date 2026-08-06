@@ -588,7 +588,13 @@ void PauseScreen::PauseGameCallback() {
     }
 }
 
-// ASM-verified: 2026-07-26T00:00Z v1.6.1 PauseScreen::PauseGameCallback2 @0x001a5b38 (re-analyst)
+// ASM-spec v1.6.1 PauseScreen::PauseGameCallback2 @0x001a5b38: PauseGameCallback(),
+// then `if (wasIdle) m_PressIndex = 1`, then UNCONDITIONALLY (0x001a5b7c..0x001a5ba4):
+//   if (game_work.m_bResumeSnapshotPresent) Math::SeedGlobalRng(game_work.m_FrameTimer);
+//   game_work.m_bResumeSnapshotPresent = 0;
+// (PauseGameCallback @0x001a5978 runs that block only in its m_State==3 arm @0x001a5af0.)
+// TODO: v1.6.1 0x001a5b7c (PauseScreen::PauseGameCallback2) -- tail re-seed + flag-clear
+// block missing. Dead in v1.6.1 (sole xref 0x001a6538 is the IsSameScreenMultiplayer arm).
 void PauseScreen::PauseGameCallback2() {
     bool wasIdle = (m_ButtonFadeAlpha == 0.0f) && (m_State == PAUSE_STATE_HIDDEN);
     PauseGameCallback();   // drives state 0->2 or 3->4
@@ -598,7 +604,9 @@ void PauseScreen::PauseGameCallback2() {
     // state 5 is unreachable from this callback in single-player
 }
 
-// ASM-verified: 2026-05-08T00:00 v1.6.1 PauseScreen::QuitGameCallback @ 0x001a55e0 (re-analyst)
+// ASM-spec v1.6.1 PauseScreen::QuitGameCallback @0x001a55e0
+// DIFFERS: binary derefs game_work.m_SaveData (+0x50) unguarded; port adds two null
+//          guards (asm-verify 53.8% LCS, whole delta).
 // Binary body:
 //   if (m_State != 3) return;
 //   FruitSaveData::ClearTotals(); FruitSaveData::ClearCombo(saveData);
@@ -629,7 +637,9 @@ void PauseScreen::QuitGameCallback2() {
     game_work.m_bResumeSnapshotPresent = 0;
 }
 
-// ASM-verified: 2026-05-08T00:00 v1.6.1 PauseScreen::RetryGameCallback @ 0x001a5800 (re-analyst)
+// ASM-spec v1.6.1 PauseScreen::RetryGameCallback @0x001a5800
+// DIFFERS: binary derefs game_work.m_SaveData (+0x50) unguarded; port adds three null
+//          guards (asm-verify 47.1% LCS, whole delta).
 // Binary body:
 //   if (m_State != 3) return;
 //   if (game_work.m_ElapsedGameTime < 10.5f)

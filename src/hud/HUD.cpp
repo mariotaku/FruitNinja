@@ -8,16 +8,14 @@
 #include "render/MatrixStack.h"
 #include <list>
 
-// ASM-verified: 2026-08-02T00:00Z v1.6.1 HUD::HUD @ 0x0018c1a0 (asm-inspector)
-// C2 @0x0018c1a0 (C1 @0x0018c1d4, instruction-identical):
-//   bl std::list ctor(+0x00), then SEVEN vstr of 1.0f, in binary order:
-//   +0x14, +0x08, +0x0c, +0x10, +0x1c, +0x18, +0x24
+// ASM-spec v1.6.1 HUD::HUD @0x0018c1a0 (C2; C1 @0x0018c1d4 instruction-identical):
+//   bl std::list ctor @0x00113bcc, then SEVEN vstr of 1.0f, in binary order:
+//   +0x14, +0x08, +0x18, +0x0c, +0x1c, +0x10, +0x24
 //   = scales[0..5] (+0x08..+0x1f) and m_globalTimeScale (+0x24). Nothing else.
-// DIFFERS: m_DrawAlpha (+0x20) is left UNINITIALIZED by the binary ctor (no
-//          eighth store). Port zero-inits it -- an extra vstr vs the binary --
-//          so nothing reads an uninit float before the first Update tick.
-//          (Corrects an earlier triage rationale that claimed "6x vstr,
-//          identical": the binary has 7 stores, the port 8.)
+// DIFFERS: (1) m_DrawAlpha (+0x20) is left UNINITIALIZED by the binary ctor; the port
+//          zero-inits it (extra vldr 0.0f + vstr). (2) The port inlines the std::list
+//          ctor as two sentinel stores where the binary calls it out-of-line.
+//          Together these are the entire 15p-vs-13b asm-verify delta.
 HUD::HUD() : m_DrawAlpha(0.0f), m_globalTimeScale(1.0f)
 #if !defined(__bada__)
     , m_pInputModal(nullptr)
