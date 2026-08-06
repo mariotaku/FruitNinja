@@ -198,8 +198,9 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         // Banner quad
         // ASM-spec v1.6.1 NotificationControl::Draw @0x001a4860: banner quad is
         // screen-centered (translate.x = 0.0f, NOT pos.x -- pos.x=-95 is the
-        // icon/text anchor only), translate.y = pos.y - 16.0f, scale is the
-        // literal 257.0f x 65.0f (not bannerTex->GetWidth()/GetHeight()).
+        // icon/text anchor only), translate.y = pos.y - 16.0f, translate.z is the
+        // literal 1.0f (NOT pos.z), scale is the literal 257.0f x 65.0f (not
+        // bannerTex->GetWidth()/GetHeight()).
         // s_banner is a 2-row stacked texture: top half (v 0..0.46875) when no
         // points text is shown, bottom half (v 0.5..0.96875) when it is.
         if (s_banner.IsValid()) {
@@ -207,7 +208,7 @@ void NotificationControl::Draw(float* hudScaleRaw) {
             if (bannerTex) {
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(257.0f, 65.0f, 1.0f);
-                mat.GlobalTranslate44(_Vector3<float>(0.0f, pos.y - 16.0f, pos.z));
+                mat.GlobalTranslate44(_Vector3<float>(0.0f, pos.y - 16.0f, 1.0f));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
@@ -221,7 +222,11 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Icon quad
-        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
+        // ASM-spec v1.6.1 NotificationControl::Draw @0x001a4860 -- covers this whole
+        // function: both banner quads, both icon quads, the name/points text sites.
+        // Verified identical: 257x65 banner scale, 30/30/30 and 32/32/32 icon scales,
+        // the v-ranges (0..0.46875 / 0.5..0.96875 / 0..0.984375), the text anchors
+        // (+18+71 / +1 and +18+73 / +17) and Colour(50,50,50) for the points string.
         if (m_Texture.IsValid()) {
             Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {
@@ -245,7 +250,6 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Points text (right-aligned)
-        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (m_PointsText[0] != '\0' && game_work.pFontMain.IsValid()) {
             Colour col(50, 50, 50, 255);
             _Vector3<float> ptPos(pos.x + 186.0f, pos.y, pos.z);
@@ -260,14 +264,15 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         // ASM-spec v1.6.1 NotificationControl::Draw @0x001a4860: banner quad is
         // screen-centered (translate.x = 0.0f, NOT pos.x -- pos.x=-95 is the
         // icon/text anchor only), translate.y = pos.y (unchanged for Type_Named),
-        // scale is the literal 257.0f x 65.0f (not bannerTex->GetWidth()/GetHeight()).
+        // translate.z is the literal 1.0f (NOT pos.z), scale is the literal
+        // 257.0f x 65.0f (not bannerTex->GetWidth()/GetHeight()).
         // V range is 0.0 .. 0.984375, not the full 0..1.
         if (s_unlockBanner.IsValid()) {
             Mortar::Texture* bannerTex = s_unlockBanner.Get();
             if (bannerTex) {
                 mm.GetWorldStack().Reset();
                 Matrix44 mat = Matrix44::MakeScale(257.0f, 65.0f, 1.0f);
-                mat.GlobalTranslate44(_Vector3<float>(0.0f, pos.y, pos.z));
+                mat.GlobalTranslate44(_Vector3<float>(0.0f, pos.y, 1.0f));
                 mm.GetWorldStack().SetCurrentMatrix(mat);
                 mm.UploadModelViewOnly();
                 bannerTex->Set();
@@ -278,7 +283,6 @@ void NotificationControl::Draw(float* hudScaleRaw) {
         }
 
         // Larger icon quad
-        // ASM-verified: 2026-05-18 v1.6.1 NotificationControl::Draw @ 0x001a4860 (re-analyst)
         if (m_Texture.IsValid()) {
             Mortar::Texture* iconTex = m_Texture.Get();
             if (iconTex) {

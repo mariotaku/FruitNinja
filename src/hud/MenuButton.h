@@ -83,7 +83,7 @@ static_assert(sizeof(MenuButtonAddOn) == 0x20, "MenuButtonAddOn sizeof mismatch"
 // animation mirrors the main -> mode-select cascade.
 void ClearMenuItems();
 
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 MenuButton @ 0x0019bb08 (asm-inspector, layout verified)
+// ASM-spec v1.6.1 MenuButton @0x0019bb08 (layout verified; ctor tail was incomplete)
 class MenuButton : public HUDControl3d {
 public:
     // HUDControl3d base ends at +0x7B (size = 0x7C). Own fields follow.
@@ -165,6 +165,8 @@ public:
 
     // +0x114: label anchor offset added to GetAdjustedPos() in Draw.
     // v1.6.1 MenuButton::Draw @0x0019c764: anchor = GetWorldPos() + m_DrawOffset.
+    // Both binary value-ctors (@0x0019bcac / @0x0019bff8) zero it in their tail;
+    // Draw reads it unconditionally, so every ctor path must initialise it.
     _Vector3<float> m_DrawOffset;          // +0x114..+0x11F
 
     // +0x120: white FG label (gradient-tinted). BakedStringTTF alignSigned=-1, effectSize=0.

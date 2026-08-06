@@ -127,7 +127,7 @@ bool TimeControl::SetToMultiplayerState() {
     return HUDControl::SetToMultiplayerState();
 }
 
-// ASM-verified: 2026-08-03T12:00:00Z v1.6.1 TimeControl::Update @ 0x001c0a48..0x001c0fd7 (asm-inspector)
+// ASM-spec v1.6.1 TimeControl::Update @0x001c0a48
 //   Count-down branch: two independent PowersEnabled gates @0x001c0afc/@0x001c0b80 with
 //   IsInSuperFruitState between them overriding dt to 0.0 (DAT_001c0e54) @0x001c0b70 (true
 //   freeze); m_StopClockAccum +0x68, m_SlowClockMult +0x6c. Gate structure + field offsets
@@ -189,8 +189,12 @@ void TimeControl::Update(float dt) {
                              "+%i", (int)pum->m_StopClockAccum + 1);
                     goto LAB_001c0f00;
                 }
-                m_PowerupOverlay[0] = '\0';
             }
+            // v1.6.1 @0x001c0b68 -- the overlay clear sits on the JOIN both arms reach:
+            // PowersEnabled() false, and PowersEnabled() true with accumulator <= 0.
+            // Inside the gate it would strand a stale "+N" when powers turn off.
+            m_PowerupOverlay[0] = '\0';
+
             // v1.6.1 @0x001c0b70 -- super-fruit freezes the clock: override dt to 0.0
             // (asm @0x001c0b74 vldr s15 <- DAT_001c0e54 = 0.0f; vmovne s17). The decrement
             // below then subtracts 0 -> the timer is paused (true freeze) while a super fruit
@@ -221,17 +225,22 @@ void TimeControl::Update(float dt) {
                 // Colour tint bands as time runs low.
                 // Binary: boolean alternation ((int)(t*N)) & 1 ? red : white.
                 // Thresholds: 3/6/11 seconds.
+                // v1.6.1 @0x001c0d60: `bpl 0x001c0dac` skips the m_DrawColour write
+                // entirely at >= 11.0f, so a red left over from an expired stop-clock
+                // stays red above 11s instead of snapping back to white.
                 float t = m_TimeRemaining;
-                Colour tint(255, 255, 255, 255);
-                static const Colour RED_TINT(255, 100, 100, 255);
-                if (t < 3.0f) {
-                    tint = (((int)(t * 8.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-                } else if (t < 6.0f) {
-                    tint = (((int)(t * 4.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
-                } else if (t < 11.0f) {
-                    tint = (((int)(t * 2.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+                if (t < 11.0f) {
+                    Colour tint(255, 255, 255, 255);
+                    static const Colour RED_TINT(255, 100, 100, 255);
+                    if (t < 3.0f) {
+                        tint = (((int)(t * 8.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+                    } else if (t < 6.0f) {
+                        tint = (((int)(t * 4.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+                    } else {
+                        tint = (((int)(t * 2.0f)) & 1) ? RED_TINT : Colour(255, 255, 255, 255);
+                    }
+                    m_DrawColour = tint;
                 }
-                m_DrawColour = tint;
             }
 
             // Tick-tock SFX when colour band toggled this frame.
@@ -295,7 +304,7 @@ void TimeControl::Update(float dt) {
             (size.y * 2.0f + 320.0f) * 0.5f;
 }
 
-// ASM-verified: 2026-08-03T12:00:00Z v1.6.1 TimeControl::Draw @ 0x001c12d4..0x001c1577 (asm-inspector)
+// ASM-spec v1.6.1 TimeControl::Draw @0x001c12d4
 //   No formatting here -- the only +0x80 (m_TextBuffer) touch is `add r1,r4,#128`
 //   feeding Utf8StringIterator straight into DrawString. Clock-string formatting
 //   lives in Update (see there).
@@ -335,9 +344,11 @@ void TimeControl::Draw(float* hudScaleRaw) {
         // ASM-spec v1.6.1 TimeControl::Draw @0x001c12d4: tint at 0x001c1414 -- overlayTint * hudScale before DrawString.
         overlayTint = Colour::TintColour(overlayTint, tintRGB);
         // DAT_00162b0c = 24.0 -- powerup overlay font size. binary @ 0x00162a..
+        // Both DrawString calls take alignment 0xe (`mov r3,#0xe; str r3,[sp,#4]`
+        // @0x001c136c and @0x001c141c) -- right + vertically centred, same as the clock.
         font->DrawString(24.0f, 1.0f, 0.0f,
                          m_PowerupOverlay, overlayPos,
-                         overlayTint, 0);
+                         overlayTint, 0xe);
     }
 
     // Verified dead branch: v1.6.1 TimeControl::m_Texture (HUDControl3d +0x74) is never

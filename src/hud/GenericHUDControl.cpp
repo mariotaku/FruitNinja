@@ -18,7 +18,7 @@
 //      scale/col/flags spill to stack.
 // ---------------------------------------------------------------------------
 
-// ASM-verified: 2026-06-13T03:20Z v1.6.1 binary @ 0x00189f60 (asm-inspector)
+// ASM-spec v1.6.1 GenericHUDControl::GenericHUDControl @0x00189f60
 GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
                                      Mortar::SmartPtr<Mortar::Texture> tex,
                                      _Vector2<float>* parentRect,
@@ -73,10 +73,17 @@ GenericHUDControl::GenericHUDControl(float fadeIn, float fadeOut,
         }
     }
     m_BaseScale = resolvedScale;
+    // TODO: v1.6.1 0x0018a390 (GenericHUDControl::GenericHUDControl) -- the binary writes
+    // resolvedScale BACK through the caller's `scale` vector (`stmia r5`) and forces the
+    // caller's scale.z to 1.0. The port takes `scale` by value, so callers observe no
+    // mutation. No known caller re-reads its scale argument after constructing, so this
+    // is believed harmless -- recorded, not worked around, because fixing it means
+    // changing the signature away from the binary's by-value mangling.
 
-    // HUDControl base field: size (written via HUDControl3d's computed scale path)
-    // Binary seeds +0x20 (size/scale) from default Vec3 in ctor.
-    this->size = _Vector3<float>(1.0f, 1.0f, 1.0f);
+    // HUDControl base field: size (+0x20). The binary copies _Vector3<float>::Zero
+    // (GOT -> 0x002d9288) into +0x20, +0x198, +0x1a4 and +0x1bc -- the same global
+    // MenuButton::Init reads @0x0019ba58. It is NOT Vec3::One.
+    this->size = _Vector3<float>(0.0f, 0.0f, 0.0f);
 
     // +0xb4 = 1.0f (subfield of m_ScaleTrans block)
     m_ScaleTrans.f4 = 1.0f;

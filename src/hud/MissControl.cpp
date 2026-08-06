@@ -79,7 +79,14 @@ static constexpr float MISS_CLAMP_HALF_Y = 160.0f;
 static constexpr float MISS_DISAPPEAR_SIZE = 62.0f;
 
 // Pulse banding thresholds, from the literal pool of v1.6.1 MissControl::Draw @0x0019f54c.
-// ASM-verified: 2026-07-28T00:00Z v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst) — byte-exact IEEE-754.
+// ASM-spec v1.6.1 MissControl::Draw @0x0019f54c -- one marker for the whole Draw path
+// (this literal block, the jitter/lifetime ladder, the pulse clamp ladder, the UV table
+// and the alpha clamp all read byte-exact against the binary).
+//   - The binary out-of-lines Matrix44 Scale44 / RotZ44 / GlobalTranslate44; the port
+//     inlines them, so the instruction streams differ while the matrix does not.
+//   - The binary builds the matrix BEFORE the texture-validity check, not after.
+//   - m_FlashTimer (+0x7e) is a SIGNED short (ldrsh), not unsigned.
+// Literals below are byte-exact IEEE-754.
 static constexpr float MISS_PULSE_FLOOR       = 0.65f;     // pool @0x0019f924
 static constexpr float MISS_PULSE_PHASE_LO    = 16380.0f;  // pool @0x0019f914
 static constexpr float MISS_PULSE_PHASE_HI    = 376740.0f; // pool @0x0019f918
@@ -732,7 +739,6 @@ void MissControl::Update(float dt) {
 
 // --- Draw ------------------------------------------------------------------
 
-// ASM-verified: 2026-05-24 v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst)
 // TODO: v1.6.1 0x0019f54c (MissControl::Draw) — the interior offsets quoted below
 // (0x00151f94/0x00151fe0/0x00151fe4/0x00152186/0x00152294/0x001522a0) are stale v1.5.x; the
 // function itself is @0x0019f54c. Re-map the sub-block addresses on the next pass.
@@ -750,8 +756,7 @@ void MissControl::Update(float dt) {
 //         drawPos.y -= 3.0f * pos.y * fabs(m_PauseAmount)   // no else-branch
 void MissControl::Draw(float* hudScaleRaw) {
     const _Vector3<float>& hudScale = *reinterpret_cast<const _Vector3<float>*>(hudScaleRaw);
-    // ASM-verified: 2026-05-11 v1.6.1 MissControl::Draw @ 0x0019f54c first ~20 instructions
-    // (re-analyst). Binary's Draw has NO entry-gate on m_bComboActive or
+    // Binary's Draw has NO entry-gate on m_bComboActive or
     // m_bFlashing -- those are UV-pickers later in the function, not gates.
     // The disappear mechanism for finished combo popups is the m_Active=0
     // write in Update's slot-release tail (binary @ MissControl::Update);
@@ -761,7 +766,6 @@ void MissControl::Draw(float* hudScaleRaw) {
     // _Vector3<float>::Zero global @0x002d9288 -- lives in .bss and is FILLED BY A STATIC
     // CTOR pre-OspMain, so it is not a zero-in-the-image constant; the value happens to be
     // (0,0,0). Binary loads Zero.{x,y,z} into stack-local drawPos.
-    // ASM-verified: 2026-07-28T00:00Z v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst)
     _Vector3<float> drawPos(0.0f, 0.0f, 0.0f);
 
     // Jitter: binary REPLACES drawPos with jitter Vec3 (not an offset).
@@ -862,7 +866,6 @@ void MissControl::Draw(float* hudScaleRaw) {
         }
     }
     // UV crop based on m_bComboActive / m_bFlashing.
-    // ASM-verified: 2026-05-10 v1.6.1 MissControl::Draw @ 0x0019f54c (re-analyst)
     //   combo:    u0=0.0  u1=1.0  v0=0.0   v1=1.0   (full quad)
     //   inactive: u0=0.0  u1=0.5  v0=0.25  v1=0.75  (left half, vertical centre)
     //   active:   u0=0.5  u1=1.0  v0=0.25  v1=0.75  (right half, vertical centre)

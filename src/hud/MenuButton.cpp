@@ -174,10 +174,12 @@ MenuButton::MenuButton(Mortar::SmartPtr<Mortar::Texture> tex, _Vector3<float> sp
                        Mortar::Delegate0<void> clickCb,
                        int fruitType, _Vector3<float> hitBounds,
                        Mortar::Delegate0<void> deletedCb)
-    // Port specific: ARM32 heap may be zero-initialized by Bada's operator new;
-    // x64 heap is not. Initialize label pointers to null so MenuButton::Draw's
-    // m_pLabelFg != nullptr guard doesn't read garbage.
-    : m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr)
+    // ASM-spec v1.6.1 MenuButton::MenuButton C2 @0x0019bcac: the ctor tail zeroes
+    // m_DrawOffset (+0x114) and the three label pointers (+0x120/+0x124/+0x128),
+    // then copies the GOT Colour into m_PlayerColour (+0x12C -- the port's Colour
+    // default ctor already does that). Draw reads m_DrawOffset unconditionally.
+    : m_DrawOffset(0.0f, 0.0f, 0.0f),
+      m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr)
 {
     m_Texture = tex;
     Init(spawnPos, clickCb, fruitType, hitBounds, deletedCb);
@@ -191,9 +193,9 @@ MenuButton::MenuButton(const char* textureName, _Vector3<float> spawnPos,
                        Mortar::Delegate0<void> clickCb,
                        int fruitType, _Vector3<float> hitBounds,
                        Mortar::Delegate0<void> deletedCb)
-    // Port specific: see the SmartPtr<Texture> ctor above for why label
-    // pointers are explicitly nulled here.
-    : m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr)
+    // Same ctor tail as the SmartPtr<Texture> overload above.
+    : m_DrawOffset(0.0f, 0.0f, 0.0f),
+      m_pLabelFg(nullptr), m_pLabelShadow(nullptr), m_pLabelGlow(nullptr)
 {
     Mortar::SmartPtr<Mortar::Texture> tmp = Mortar::TextureManager::LoadLocalisedTexture(textureName);
     m_Texture = tmp;
@@ -284,7 +286,7 @@ void MenuButton::Init(_Vector3<float> buttonPos, Mortar::Delegate0<void> clickCb
 }
 
 // Creates fruit/bomb entity based on m_FruitType; sets m_pEntity/m_pTrackedFruit.
-// ASM-verified: 2026-07-14T22:20Z v1.6.1 MenuButton::CreateFruit @ 0x0019b608 (asm-inspector)
+// ASM-spec v1.6.1 MenuButton::CreateFruit @0x0019b608
 void MenuButton::CreateFruit() {
     // v1.6.1 MenuButton::CreateFruit @0x0019b608 -- guard branch @0x0019b910:
     //   if (m_FruitType < 0 || m_pTrackedFruit != nullptr): recompute m_RestScale only, set tracked, return.
@@ -348,7 +350,6 @@ void MenuButton::CreateFruit() {
         fruit->m_MenuGrowFade = 1.0f;
         fruit->m_SpawnDelay = 0.0f;
         fruit->m_ZPosition = FRUIT_ZPOS;
-        // ASM-verified: 2026-05-22 v1.6.1 MenuButton::CreateFruit @ 0x0019b608 (re-analyst).
         // Binary writes m_bMenuFling=1 (0x164) to mark this as a menu-context fruit.
         fruit->m_bMenuFling = 1;
         // Binary writes m_pOwner=this (0x160) so KillFruit can clear our m_pTrackedFruit.
@@ -358,7 +359,6 @@ void MenuButton::CreateFruit() {
         // Disables ballistic integration so the menu fruit stays pinned at the button
         // position; Fruit::Update gates pos/vel integration on this flag (binary 0x001df828).
         fruit->m_bBallisticEnable = 0;
-        // ASM-verified: 2026-06-26T16:02Z v1.6.1 MenuButton::CreateFruit @0x0019b608 (asm-inspector)
         //   m_RestScale(+0x13C) = entity->scale * 200.0f [0x43480000]; size(+0x20) settles to
         //   m_RestScale post grow-in. For scale-60 fruits -> 0.6*200 = 120 (drives the visible
         //   ring scale AND the gameover highscore text scale = size.x*0.5 = 60).
@@ -634,7 +634,7 @@ static void AdvanceSparkleAndBadge(float& sparkleTimer, float& newIndicatorTimer
 #endif
 
 // MenuButton::Update @ 0x0019a860 (v1.6.1 pseudocode)
-// ASM-verified: 2026-07-14T21:50Z v1.6.1 MenuButton::Update @ 0x0019a860 (asm-inspector)
+// ASM-spec v1.6.1 MenuButton::Update @0x0019a860
 void MenuButton::Update(float dt) {
     Fruit* fruit = m_pTrackedFruit;  // +0x14c
 
@@ -853,7 +853,6 @@ void MenuButton::Update(float dt) {
                 m_pEntity->CollisionResponse(nullptr, 0, 0, &blade);
             }
         }
-        // ASM-verified: 2026-06-21T09:00:00Z v1.6.1 MenuButton::Update @0x0019a860 (re-analyst):
         // hit rect centered on GetAdjustedPos() (HUDControl slot 15 @0x00136c2c) =
         // pos + Vec3(480,320,0)*m_HudScale -- the SAME anchor the held bomb entity model
         // is drawn at. Using raw pos offset the hit center from the model by that vector.
@@ -986,7 +985,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
     }
 
     // Layer 0 (backdrop): scratchs.tex at layer 0x40, then demote to 0x80
-    // ASM-verified: 2026-05-06T16:00 v1.6.1 MenuButton::Draw @ 0x0019c2e4 Phase A (asm-inspector).
+    // ASM-spec v1.6.1 MenuButton::Draw @0x0019c2e4
     if (m_LayerFlags == (int)Mortar::HUD_LAYER_MENU_BG) {
         m_LayerFlags = Mortar::HUD_LAYER_POST_ACTOR;
         if (s_TexScratchs.IsValid()) {
@@ -1193,7 +1192,7 @@ void MenuButton::Draw(float* hudScaleRaw) {
     }
 }
 
-// ASM-verified: 2026-05-06T00:00 v1.6.1 MenuButton::LoadContent @ 0x0019c1a0 (asm-inspector)
+// ASM-verified: 2026-08-06T00:00Z v1.6.1 MenuButton::LoadContent @0x0019c1a0 (re-analyst)
 void MenuButton::LoadContent() {
     s_TexScratchs      = Mortar::TextureManager::LoadLocalisedTexture("scratchs.tex");
     s_TexBlurryBacking = Mortar::TextureManager::LoadLocalisedTexture("blurry_backing.tex");

@@ -250,7 +250,7 @@ void ScoreControl::Update(float dt) {
     // ASM-verified gate v1.6.1 ScoreControl::Update @0x001ac5c0: gameMode == 1.
     // Non-gameMode-1: static-timer driven (0.25s gate) same rates.
     // Binary @ 0x00158580: digitsActive = comboCount - 1, then clamp [0, 15].
-    // g_ComboCount is from GOT[0x78f8] -> BSS @ 0x0024d764.
+    // g_ComboCount is v1.6.1 Fruit::s_consecutiveCount @ 0x00332a2c, GOT[0x774c].
     int digitsActive = g_ComboCount - 1;
     if (digitsActive < 0)  digitsActive = 0;
     if (digitsActive > 15) digitsActive = 15;
@@ -353,7 +353,7 @@ void ScoreControl::Update(float dt) {
     }
 
     // Stage 6: position + layer flags
-    // ASM-verified: 2026-05-09 v1.6.1 ScoreControl::Update @ 0x001ac5c0 (re-analyst)
+    // ASM-spec v1.6.1 ScoreControl::Update @0x001ac5c0
     // pos = base - stride * abs(m_TransitionTimer)
     // SCORE_MP_X_STRIDE (200.0 from DAT_00158c50) is the wave-transition slide
     // distance, NOT a per-player MP offset. Steady-state gameplay
@@ -379,7 +379,6 @@ void ScoreControl::Update(float dt) {
         m_DrawPosY = pos.y;
         m_DrawPosZ = pos.z;
         // wave-mode: recentre score banner via lerp toward anchor. binary @ 0x001589f0..0x00158ac6
-        // ASM-verified: 2026-05-18 v1.6.1 ScoreControl::Update @ 0x001ac5c0 (re-analyst)
         // Step 1: snap drawPos to pos+(24,0,0). Step 2: lerp toward anchor by waveTimer.
         if (game_work.pFontNumbers.IsValid()) {
             char scoreBuf[32];
@@ -574,7 +573,7 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Arcade x-mult font: binary loads game[+0x80] = pFontBlue2
         // ("fruit_ninja_numbers_blue2.fnt"). Verified 2026-05-09 (re-analyst
         // @ 0x00159238).
-        // ASM-verified: 2026-05-10 v1.6.1 ScoreControl::PreDraw @ 0x001ace80 (re-analyst).
+        // ASM-spec v1.6.1 ScoreControl::PreDraw @0x001ace80
         // Anchor uses raw pos (m_Pos.x/y), NOT m_DrawPosX/Y:
         //   X = pos.x - 18.0   (literal 0x41900000)
         //   Y = pos.y - 52.0   (DAT_001593d4 = 0x42500000)
@@ -607,7 +606,6 @@ void ScoreControl::PreDraw(float* /*hudScale*/) {
         // Active when |transTimer| < 1.0 AND m_HighscoreToShow > 0
         if (m_HighscoreToShow > 0 && transTimer > -1.0f && transTimer < 1.0f) {
             // Binary @ 0x001591BC: green-pulse lerp on highscore-reached banner.
-            // ASM-verified: 2026-05-03T00:00 v1.6.1 ScoreControl::PreDraw @ 0x001ace80 (asm-inspector)
             Colour col(0xB4, 0x80, 0x05, 200);  // base orange
             if (m_HighscoreToShow == m_DisplayedScore) {
                 s_BannerSinIdx += (!game_work.bM_Mode) ? 6 : 0;

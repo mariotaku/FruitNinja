@@ -681,7 +681,7 @@ void ShopListItem::DrawDescription() {
     bool isLocked = (m_pItemInfo->IsLocked() != 0);
     int8_t purchaseState = m_pItemInfo->m_RequirementType;
 
-    // ASM-verified: 2026-07-27T00:00Z v1.6.1 ShopListItem::DrawDescription @ 0x001b1f20 (asm-inspector)
+    // ASM-spec v1.6.1 ShopListItem::DrawDescription @0x001b1f20 (sub-block; body verified faithful)
     // Binary 0x001b1f74-0x001b2084: the prompt colour AND the prompt string id are
     // recomputed EVERY frame, before any box bookkeeping:
     //   Colour colour(0xBD,0,0,0xFF);                       // 0x001b1f7c mov r1,#0xbd

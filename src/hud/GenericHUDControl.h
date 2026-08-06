@@ -61,7 +61,7 @@
 //
 // HUDControl (inherited) base fields relevant to GenericHUDControl:
 //   +0x08 : Vec3 pos       (world pos; overwritten each PreDraw)
-//   +0x20 : Vec3 size      (computed scale; written each PreDraw)
+//   +0x20 : Vec3 size      (computed scale; ctor seeds Vec3::Zero, PreDraw rewrites it)
 //   +0x2c : float m_Timer  (computed angle; written each PreDraw)
 //   +0x34 : int m_LayerFlags / FLAGS (ctor param9 flags)
 //   +0x5c : Colour m_DrawColour (tint colour; alpha set each PreDraw)
