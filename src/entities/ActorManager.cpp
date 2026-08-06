@@ -90,7 +90,10 @@ void ActorManager::Initialise(int numTypes, int heapSize) {
 }
 
 // v1.6.1 ActorManager::Destroy @0x001d3b44.
-// ASM-verified: 2026-07-28T00:00Z v1.6.1 ActorManager::Destroy @ 0x001d3b44 (re-analyst)
+// DIFFERS: original = LinkedHeap::~LinkedHeap(m_pHeap) + operator delete
+//          (v1.6.1 ActorManager::Destroy @0x001d3b44), using delete[] m_pTypeLists
+//          because the port replaced LinkedHeap with new[] in Initialise.
+// ASM-spec v1.6.1 ActorManager::Destroy @0x001d3b44: 22 insns -- m_DebugDraw=false; Clear(); heap teardown; then m_pTypeLists/m_HeapSize/m_FreeCount/m_PendingDeactCount = 0.
 void ActorManager::Destroy() {
     m_DebugDraw = false;
     Clear();
@@ -185,10 +188,11 @@ Entity* ActorManager::Add(int entityType, bool /*unused — dead param in binary
 //   nothing in the image can reach it (LoadEntity @0x001d408c calls the OTHER
 //   overload, Add(long,bool) @0x001d3fac via PLT 0x001168e4 -- not this one);
 //   no-op-equivalent stub; v1.6.1 ActorManager::Add(Entity*,long) @ 0x001d3f54.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Add(Entity*,long) @ 0x001d3f54 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::Add(Entity*,long) @ 0x001d3f54: 22 insns. Guards are only `entity != 0`, `typeIdx >= 0`, `typeIdx < m_NumTypes` -- NO m_pTypeLists null test. All three fail paths return the UNCHANGED `entity` (`ldr r0,[sp,#4]`), not null; only entity==0 yields null.
 Entity* ActorManager::Add(Entity* entity, long typeIdx) {
-    if (!entity) return nullptr;
-    if (typeIdx < 0 || typeIdx >= (long)m_NumTypes || m_pTypeLists == nullptr) return nullptr;
+    if (!entity) return entity;
+    if (typeIdx < 0) return entity;
+    if (typeIdx >= (long)m_NumTypes) return entity;
     m_pTypeLists[typeIdx].push_back(entity);
     entity->entityType    = (int)typeIdx;
     entity->m_RecycleFlag = 0;
@@ -214,11 +218,9 @@ void ActorManager::Deactivate(Entity* entity) {
 // v1.6.1 ActorManager::Remove @0x001d3a44. Binary calls vtable+0xc (Release)
 // then operator delete.
 // Defunct: zero in-binary callers (no .plt thunk); v1.6.1 ActorManager::Remove @ 0x001d3a44.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Remove @ 0x001d3a44 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::Remove @ 0x001d3a44: 49 insns. Opens on `ldrb r0,[r1,#0x35]` -- no entity null test, no m_pTypeLists null test, no type range test. Matching node: if (!(flags & 0x20)) { Release() via vtable+0xc; deleting dtor via vtable+0x4 } then erase(it), return.
 void ActorManager::Remove(Entity* entity) {
-    if (!entity || m_pTypeLists == nullptr) return;
     const int type = entity->entityType;
-    if (type < 0 || type >= m_NumTypes) return;
     std::list<Entity*>& list = m_pTypeLists[type];
     for (std::list<Entity*>::iterator it = list.begin(); it != list.end(); ++it) {
         if (*it == entity) {
@@ -339,9 +341,8 @@ void ActorManager::PostLoad() {
 
 // v1.6.1 ActorManager::GetNumEntities(long) @0x001d3544. Binary returns list
 // size with NO active filtering.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities(long) @ 0x001d3544 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetNumEntities(long) @ 0x001d3544: 4 insns -- `r0 = m_pTypeLists + typeIdx*8; b std::list::size()`. No null check, no range check.
 int ActorManager::GetNumEntities(int typeIdx) {
-    if (!m_pTypeLists || typeIdx < 0 || typeIdx >= m_NumTypes) return 0;
     return (int)m_pTypeLists[typeIdx].size();
 }
 
@@ -367,13 +368,10 @@ int ActorManager::GetNumEntities(const long* typeIdxNullTerminated) {
 }
 
 // v1.6.1 ActorManager::GetNumEntities(long,long) @0x001d34e0.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::GetNumEntities(long,long) @ 0x001d34e0 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::GetNumEntities(long,long) @ 0x001d34e0: 25 insns -- swap if typeA > typeB, then sum m_pTypeLists[t].size() over [lo,hi). No m_pTypeLists null test, no lo<0 clamp, no hi>m_NumTypes clamp.
 int ActorManager::GetNumEntities(long typeA, long typeB) {
-    if (!m_pTypeLists) return 0;
     long lo = typeA < typeB ? typeA : typeB;
     long hi = typeA < typeB ? typeB : typeA;
-    if (lo < 0) lo = 0;
-    if (hi > m_NumTypes) hi = m_NumTypes;
     int total = 0;
     for (long t = lo; t < hi; t++) total += (int)m_pTypeLists[t].size();
     return total;

@@ -30,6 +30,7 @@
 // Cross-build safe: no lambdas, no auto, no range-for, no enum class.
 
 #include "entities/SlashEntity.h"
+#include "entities/ActorManager.h"
 #include "entities/Entity.h"
 #include "collision/ColSphere.h"
 #include "engine/input/InputEvent.h"
@@ -288,6 +289,20 @@ int main() {
     // call). Same fixture-supplies-the-global rule.
     static FruitSaveData s_saveData;
     game_work.m_SaveData = &s_saveData;
+
+    // Entity system, mirroring GameInit step 7 (v1.6.1 GameInit @0x001ce1c0):
+    // HeapCreate(0x20000) then ActorManager::Initialise(7, 0x2000). PlaySwipe
+    // (v1.6.1 SlashEntity::PlaySwipe @0x001e8550) calls ActorManager::GetNumEntities,
+    // whose binary body @0x001d3544 is FOUR instructions -- `r0 = m_pTypeLists +
+    // typeIdx*8; b std::list::size()` -- with no null test. Initialise is what
+    // allocates that array, so a fixture that skips it faults inside size().
+    // The port carried a null guard there until it was removed as port-added;
+    // per the standing rule the fixture supplies what real boot supplies rather
+    // than production re-growing a guard the binary lacks. The factory /
+    // hash-converter delegates GameInit also registers are omitted: this test
+    // creates no entities, it only reads the (empty) list sizes.
+    Mortar::Entity::HeapCreate(0x20000);
+    Mortar::ActorManager::GetInstance()->Initialise(7, 0x2000);
 
     test_crossing_hit();
     test_blank_miss();
