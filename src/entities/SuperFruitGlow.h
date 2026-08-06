@@ -8,19 +8,23 @@
 //   vtable @ 0x2CE3E8 (typeinfo 0x2CE428).
 //   sizeof(SuperFruitGlow): 0x8C (confirmed via SuperFruitControl `new 0x8c` allocation)
 //
-// ASM-verified: 2026-06-13T05:00Z v1.6.1 binary @ 0x001c06bc (asm-inspector)
+// ASM-spec v1.6.1 SuperFruitGlow::SuperFruitGlow(Fruit*) @0x001c06bc
+// (prior ASM-verified stamp here was contradicted by #137 triage -- the ctor
+// was missing m_Texture/size/m_Timer inits; no compile+diff has been run
+// since the fix, so this is not yet re-stamped ASM-verified).
 //
 // Layout: HUDControl3d base is 0x7C bytes. SuperFruitGlow own fields @ +0x7C..+0x8B.
 // Fields from spec at offsets +0x08..+0x78 are absolute offsets into the inherited
 // HUDControl3d (HUDControl) layout, aliased/renamed for SuperFruitGlow semantics:
 //   +0x08: HUDControl::pos       (Vec3 m_Pos)
 //   +0x14: HUDControl::m_HudScale (Vec3 m_BaseScale)
-//   +0x28: HUDControl::m_Timer   (float m_Spin — += dt*60 each Update; DrawOrder mirrors)
-//   +0x2c: (float m_SpinDraw — second spin slot; DrawOrder flips sign)
+//   +0x20: HUDControl::size      (Vec3; ctor sets = _Vector3<float>::One * 150.0f)
+//   +0x2c: HUDControl::m_Timer   (float; ctor sets = random phase in [10,170);
+//          Update += dt*60; DrawOrder mirrors sign for the second blade)
 //   +0x30: HUDControl::m_Active  (ctor sets 0x80? — actually m_LayerFlags at +0x34)
 //   +0x33: HUDControl::m_bPendingRemoval (m_Dead — set 1 when fade done)
 //   +0x5c: HUDControl::m_DrawColour (Colour m_Colour — alpha = trunc(75 * m_Fade))
-//   +0x74: HUDControl::m_bUseHUDScales (u8; ctor default=1)
+//   +0x74: HUDControl3d::m_Texture (SmartPtr<Texture>; ctor sets = SuperFruitGlow::GlowTexture)
 //
 // Own field map (ASM-verified from Update @ 0x1c0024):
 //   +0x7c: byte  m_bSliced    — set when host fruit is sliced; drives fade-out path
@@ -46,6 +50,10 @@ namespace Mortar { class MortarSound; }
 
 class SuperFruitGlow : public HUDControl3d {
 public:
+    // Glow halo texture ("rays.tex"), loaded by SuperFruitControl::LoadContent
+    // @0x001bda74 (LoadLocalisedTexture) and assigned to m_Texture in the ctor below.
+    static Mortar::SmartPtr<Mortar::Texture> GlowTexture;
+
     // Inherited HUDControl3d is 0x7C bytes. Own fields follow at +0x7C.
 
     // +0x7c: set when host fruit is sliced; drives fade-out path in Update.

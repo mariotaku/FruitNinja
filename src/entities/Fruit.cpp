@@ -1454,8 +1454,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // Note: port's m_CoinsMin/m_CoinsMax slots are the binary's "RandBonusBase/Max"
         // when used in this score path; same fields, dual-purpose semantics.
         // The only x2 in the binary is on COINS, not score -- no score *= 2.
+        // `score` is the binary's r7 local: it accumulates the base/crit value here,
+        // then the combo-streak unwind below adds to it, and only afterwards does
+        // AddToCurrentScore @0x001de584 bank the total.
+        int score = 0;
         {
-            int score = info->m_Score;
+            score = info->m_Score;
             if (m_bCritical) score += CRITICAL_SCORE;
             // TODO: v1.6.1 -- verify CoinsMin/Max score-override; binary uses these for
             // coin count only, not score
@@ -1464,9 +1468,6 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
                 score = info->m_CoinsMin
                       + (int)WaveManager::GetInstance()->GetRandom().Rand32(range);
             }
-            g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
-            AddToCurrentScore(score, (int)m_PlayerIdx,
-                                  /*trackFruit=*/true, /*sendNetPacket=*/false);
             // ASM-spec v1.6.1 Fruit::CollisionResponse coin drop @0x001de778-95c:
             {
                 int coinCount = 0;
@@ -1567,13 +1568,26 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
             PowerUpManager::GetInstance()->ActivatePower(hash, localPos, NULL);
         }
 
-        // Combo counter increment.
-        // ASM-verified v1.6.1 Fruit::CollisionResponse @0x001dddec/0x1dde14/0x1dde1c:
-        // combo resets when a DIFFERENT fruit TYPE continues the streak, not when a
-        // different player slashes. g_ComboFruitType == Fruit::s_consecutiveType.
-        if (g_ComboFruitType != (int)m_FruitType) {
-            g_ComboCount     = 0;
+        // Combo streak: same fruit TYPE continues it, a different type breaks and
+        // cashes it out. g_ComboFruitType == Fruit::s_consecutiveType.
+        // ASM-verified: 2026-08-06T00:00Z v1.6.1 Fruit::CollisionResponse @ 0x001ddde4..0x001ddf0c (asm-inspector)
+        if (g_ComboFruitType == (int)m_FruitType && info->m_bIsSuperFruit == 0) {
+            // Continue the streak. Combo mode plays a "combo-N" cue; no score yet.
+            if (g_ComboCount > 0 && game_work.gameMode == GAME_MODE_COMBO) {
+                char comboBuf[128];
+                snprintf(comboBuf, 0x80, "combo-%i", g_ComboCount);
+                game_work.mGameSound->SFXPlay(comboBuf, 1.0f, 1.0f,
+                    Mortar::Delegate1<bool, Mortar::MortarSound*>(), 0.0f);
+            }
+        } else {
+            // Streak broken -- cash it out. Awards 1<<n for n = count-1 down to 1;
+            // the decrement precedes the add, so 1<<0 never happens.
             g_ComboFruitType = (int)m_FruitType;
+            while (g_ComboCount > 1) {
+                g_ComboCount--;
+                if (game_work.gameMode == GAME_MODE_COMBO) score += (1 << g_ComboCount);
+            }
+            g_ComboCount = 0;
         }
         g_ComboCount += 1;
         // ASM-spec v1.6.1 Fruit::CollisionResponse @0x001dd500: unconditional call
@@ -1581,6 +1595,12 @@ int Fruit::CollisionResponse(Mortar::Entity* hitter,
         // g_ComboCount, arg2 = info->m_NameHash (FruitInfo+0x250, same hash passed to
         // UnlockSpecificOrderAchievement below).
         AchievementManager::GetInstance()->UnlockConsecutiveAchievement(g_ComboCount, info->m_NameHash);
+
+        // v1.6.1 Fruit::CollisionResponse @0x001de584: the score local (r7) is banked
+        // only after the combo unwind above has contributed its streak bonus.
+        g_FruitWasSliced_points = score;    // carry score for event fire at 0x1de5a0
+        AddToCurrentScore(score, (int)m_PlayerIdx,
+                          /*trackFruit=*/true, /*sendNetPacket=*/false);
         }
 
         // Defunct: P2P MP slice-broadcast block intentionally omitted -- v1.6.1 Fruit::CollisionResponse

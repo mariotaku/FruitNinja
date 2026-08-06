@@ -108,9 +108,18 @@ void ActorManager::Destroy() {
 }
 
 // v1.6.1 ActorManager::Clear @0x001d3690. Delete all entities in type lists + free pool.
-// ASM-verified: 2026-04-29T00:00Z v1.6.1 ActorManager::Clear @ 0x001d3690 (asm-inspector)
+// ASM-spec v1.6.1 ActorManager::Clear @ 0x001d3690:
+//   m_PendingDeactCount = 0;                    // unconditional, first statement
+//   if (m_pHeap && m_pTypeLists) {               // BOTH loops gated under one combined test
+//       for (t...) { ... }                       // type-list loop
+//       for (i...) { ... }                       // free-pool loop
+//       memset(m_FreePool, 0, sizeof(m_FreePool));
+//       m_FreeCount = 0;
+//   }
+// No ASM-verified -- no compile+diff has been run.
 void ActorManager::Clear() {
-    if (m_pTypeLists) {
+    m_PendingDeactCount = 0;
+    if (m_pHeap && m_pTypeLists) {
         for (int t = 0; t < m_NumTypes; t++) {
             std::list<Entity*>& list = m_pTypeLists[t];
             for (std::list<Entity*>::iterator it = list.begin(); it != list.end(); ++it) {
@@ -122,16 +131,16 @@ void ActorManager::Clear() {
             }
             list.clear();
         }
-    }
-    for (int i = 0; i < m_FreeCount; i++) {
-        Entity* e = m_FreePool[i];
-        if (e && !(e->flags & ENT_NO_DESTRUCT)) {
-            e->Release();
-            delete e;
+        for (int i = 0; i < m_FreeCount; i++) {
+            Entity* e = m_FreePool[i];
+            if (e && !(e->flags & ENT_NO_DESTRUCT)) {
+                e->Release();
+                delete e;
+            }
         }
+        std::memset(m_FreePool, 0, sizeof(m_FreePool));
+        m_FreeCount = 0;
     }
-    std::memset(m_FreePool, 0, sizeof(m_FreePool));
-    m_FreeCount = 0;
 }
 
 // --- Entity API -----------------------------------------------------------

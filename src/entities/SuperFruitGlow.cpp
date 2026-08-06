@@ -10,7 +10,12 @@
 #include "game/GameWork.h"
 #include "engine/audio/GameSound.h"
 #include "engine/audio/MortarSound.h"
+#include "engine/math/Random.h"
 #include <cstring>
+
+// Glow halo texture. Populated by SuperFruitControl::LoadContent once its
+// GlowTexture filename is resolved (see TODO in SuperFruitGlow.h).
+Mortar::SmartPtr<Mortar::Texture> SuperFruitGlow::GlowTexture;
 
 // DAT_001c01a4 = 60.0f — spin rate multiplier (m_Timer += dt*60)
 static const float SFG_SPIN_RATE = 60.0f;
@@ -63,6 +68,19 @@ SuperFruitGlow::SuperFruitGlow(Fruit* fruit)
     m_pSound = game_work.mGameSound->SFXPlay(
         "pome-lp", 1.0f, 0.0f,
         Mortar::Delegate1<bool, Mortar::MortarSound*>());
+
+    // ctor @ 0x001c06bc, tail: m_Texture/size/m_Timer inits.
+    // m_Texture = SuperFruitGlow::GlowTexture (SmartPtr assign).
+    // TODO: v1.6.1 0x001bda74 (SuperFruitControl::LoadContent) -- GlowTexture
+    // filename unresolved, so this currently assigns an empty texture.
+    m_Texture = SuperFruitGlow::GlowTexture;
+
+    // size (+0x20) = _Vector3<float>::One * 150.0f (DAT_001c0858).
+    size = _Vector3<float>::One() * SFG_BASE_SCALE_FACTOR;
+
+    // m_Timer (+0x2c) = T_1643(10, 170) @0x001bb950 -- random start phase so
+    // glows do not spin in lockstep: a + (int)((b-a)*RandF(1.0)).
+    m_Timer = (float)(int)(10.0f + Math::g_Random.RandF(160.0f));
 }
 
 // dtor @ 0x1c02b4

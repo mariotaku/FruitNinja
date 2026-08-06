@@ -1161,10 +1161,8 @@ void SuperFruitControl::LoadContent() {
     // ASM-spec v1.6.1 SuperFruitControl::LoadContent @0x001bda74
     FruitRay::RayTexture = Mortar::TextureManager::LoadLocalisedTexture("pomegranate_rays.tex");
 
-    // NOTE: v1.6.1 SuperFruitControl::LoadContent @0x001bda74 also loads
-    //   SuperFruitGlow::GlowTexture here (LoadLocalisedTexture; the filename arg
-    //   is still unresolved). Deferred until SuperFruitGlow::GlowTexture is ported
-    //   -- the glow (a separate entity) is what consumes it, not this control.
+    // ASM-spec v1.6.1 SuperFruitControl::LoadContent @0x001bda74:
+    SuperFruitGlow::GlowTexture = Mortar::TextureManager::LoadLocalisedTexture("rays.tex");
 }
 
 // Frees the finale visuals loaded by LoadContent. Nulls the file-static SmartPtr
@@ -1173,6 +1171,7 @@ void SuperFruitControl::UnLoadContent() {
     ShockWaveTexture = NULL;
     JibletModel = NULL;
     FruitRay::RayTexture = NULL;
+    SuperFruitGlow::GlowTexture = NULL;
 }
 
 // Port specific: diagnostic accessor for tests/tooling (not a binary symbol).

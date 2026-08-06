@@ -3,12 +3,12 @@
 
 // Analysed: 2026-05-02T00:00
 
-// g_ComboCount: BSS @ 0x0024d764, GOT[0x78f8] -> combo count int.
+// g_ComboCount: v1.6.1 Fruit::s_consecutiveCount @ 0x00332a2c, GOT[0x774c].
 // Written by Fruit::CollisionResponse (increment), Fruit::KillFruit (zero),
 // TimeControl::Update (zero on game-over), WaveManager::Reset (zero).
 extern int g_ComboCount;
 
-// g_ComboFruitType: BSS @ 0x001f3e4c, GOT[0x7478] -> Ghidra Fruit::s_consecutiveType.
+// g_ComboFruitType: v1.6.1 Fruit::s_consecutiveType @ 0x002d8d64, GOT[0x71b4].
 // Fruit-TYPE (m_FruitType, Fruit+0x3c) of the last fruit that continued the
 // current combo streak -- NOT a player index and NOT the digit/combo count.
 // Sentinel -1 = no fruit has continued a streak yet (cold-boot / after game-over).
