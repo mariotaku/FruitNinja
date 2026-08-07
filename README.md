@@ -31,9 +31,9 @@ The port running on the desktop host build.
 |---|---|
 | ![Main menu](docs/screenshots/main-menu.png) | ![Arcade mode, frenzy banner](docs/screenshots/arcade-frenzy.png) |
 
-The menu also adapts to a wider window:
+The port also has a widescreen mode (16:9):
 
-![Main menu at 1136x640](docs/screenshots/main-menu-wide.png)
+![Main menu in widescreen mode](docs/screenshots/main-menu-wide.png)
 
 ## Platforms
 
