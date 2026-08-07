@@ -59,7 +59,7 @@ void InputTranslatorWii::TransformIRNormalized(float nx, float ny, float& gx, fl
     Layout::TouchToGame(nx, ny, &gx, &gy);
 }
 
-// Mirrors InputTranslatorSDL::PointerPressMouseChannel, generalized to any
+// Mirrors InputTranslatorSDL::PointerPressHoverChannel, generalized to any
 // hover-blade channel (12-15). Pushes the press into the Mortar::Touch ring so
 // the hover blade claims a real slot -- without one it would raise no Touch<n>
 // action at all. No-op if the channel is already pressed.
@@ -73,7 +73,7 @@ void InputTranslatorWii::PointerPressChannel(int ch, float gx, float gy) {
     Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
 }
 
-// Mirrors InputTranslatorSDL::PointerReleaseMouseChannel. No-op if the
+// Mirrors InputTranslatorSDL::PointerReleaseHoverChannel. No-op if the
 // channel is not currently active.
 void InputTranslatorWii::PointerReleaseChannel(int ch) {
     if (!fingerActive[ch]) return;
@@ -157,14 +157,14 @@ void InputTranslatorWii::DrainWiimoteIR(int chan, bool irValid, bool aPressed, f
         bool wasButton = prevButtonDown[chan];
 
         // A down-edge LIFTS the blade (SDL_MOUSEBUTTONDOWN ->
-        // PointerReleaseMouseChannel: reposition without cutting; the menu
+        // PointerReleaseHoverChannel: reposition without cutting; the menu
         // click itself rides Role 1's Touch-slot press).
         if (aPressed && !wasButton) {
             PointerReleaseChannel(hoverCh);
         }
 
         // A up-edge re-presses at the pointer (SDL_MOUSEBUTTONUP: `inside &&
-        // heldMask == 0` -> PointerPressMouseChannel; here inside==irValid
+        // heldMask == 0` -> PointerPressHoverChannel; here inside==irValid
         // and heldMask==0 is !aPressed).
         if (!aPressed && wasButton && irValid) {
             PointerPressChannel(hoverCh, gx, gy);
@@ -172,7 +172,7 @@ void InputTranslatorWii::DrainWiimoteIR(int chan, bool irValid, bool aPressed, f
 
         // IR loss releases the blade -- pointing away from the screen is the
         // WPAD analogue of the cursor leaving the window
-        // (SDL_WINDOWEVENT_LEAVE -> PointerReleaseMouseChannel).
+        // (SDL_WINDOWEVENT_LEAVE -> PointerReleaseHoverChannel).
         if (!irValid && prevIRValid[chan]) {
             PointerReleaseChannel(hoverCh);
         }

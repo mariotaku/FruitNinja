@@ -53,23 +53,46 @@
 // reservation is host-only SDL glue.
 //
 // Port specific: MOTION MODE (FN::g_MotionMode, src/debug/DebugFlags.h;
-// toggle F5 / --motion; default OFF; host-only, no binary equivalent).
-// When ON, MOUSE_CHANNEL is driven from RAW SDL_MOUSEMOTION /
-// SDL_MOUSEBUTTONDOWN / SDL_MOUSEBUTTONUP instead of the SDL-synthesized
-// SDL_FINGER* events (DrainSDLEvent suppresses the synthesized ones for
-// fingerId==SDL_TOUCH_MOUSEID while motion mode is ON so the two paths never
-// double-drive the channel). Real touch fingers are unaffected in both modes.
-// This file only does CURSOR TRACKING -- the blade always follows the cursor;
-// the velocity gate that decides whether a fast-enough movement actually cuts
-// lives in SlashEntity::Update (see FN::MOTION_GATE_CHANNEL_MIN/MAX).
+// toggle F5 / --motion; host-only, no binary equivalent). The mouse plays TWO
+// roles, on TWO SEPARATE channels (the same split InputTranslatorWii already
+// uses for its press/hover roles):
+//
+//   MOUSE_CHANNEL (FN::POINTER_FINGER_CHANNEL, 15) -- the UI channel. Driven
+//     by the SDL-synthesized SDL_FINGER* stream in BOTH modes, so a click is
+//     an ordinary press on button-DOWN, a drag while held, a release on
+//     button-UP. Menus, widgets and scrollers only ever see this channel.
+//
+//   HOVER_CHANNEL (FN::MOTION_BLADE_CHANNEL, 14) -- the blade channel, live
+//     only while motion mode is ON. Driven from RAW SDL_MOUSEMOTION /
+//     SDL_MOUSEBUTTONDOWN / SDL_MOUSEBUTTONUP / SDL_WINDOWEVENT_LEAVE. It is
+//     held for as long as the cursor hovers, which is what lets the blade
+//     track the cursor with no button down. Because that press never ends,
+//     it is HIDDEN from the Tier A UI helpers (TouchInRegion / IsTouchDown /
+//     Touch::GetTouchInRegion skip FN::HOVER_BLADE_CHANNEL_FIRST..LAST) --
+//     otherwise it would latch every widget the cursor crossed and glue
+//     scrollers to the pointer.
+//
+// Net behaviour in motion mode: POINT to aim the blade, CLICK to press
+// buttons -- a Magic Remote / Wiimote model. This file only does CURSOR
+// TRACKING; the velocity gate that decides whether a fast-enough movement
+// actually cuts lives in SlashEntity::Update (see
+// FN::MOTION_GATE_CHANNEL_MIN/MAX).
 //   - Hovering with the cursor inside the window and no button held keeps
-//     MOUSE_CHANNEL pressed and moving -- the blade follows the cursor.
-//   - Pressing any mouse button LIFTS the blade (releases MOUSE_CHANNEL) so
-//     the user can reposition without cutting.
-//   - Releasing the last held button re-presses MOUSE_CHANNEL at the
-//     current position (if the cursor is still inside the window).
-//   - The cursor leaving the window releases MOUSE_CHANNEL.
-// When OFF, behaviour is identical to the synthesized-finger path.
+//     HOVER_CHANNEL pressed and moving -- the blade follows the cursor.
+//   - Pressing any mouse button LIFTS the blade (releases HOVER_CHANNEL) so
+//     the click cannot also cut, and so the two roles are never live at once
+//     (no double blade). The synthesized FINGERDOWN presses MOUSE_CHANNEL in
+//     the same drain, which is what makes the click land.
+//   - Releasing the last held button re-presses HOVER_CHANNEL at the current
+//     position (if the cursor is still inside the window).
+//   - The cursor leaving the window releases HOVER_CHANNEL.
+//   - Toggling FN::g_MotionMode releases HOVER_CHANNEL (DispatchForSimTick),
+//     so turning motion off can't leave the channel stuck held with no
+//     release event ever coming.
+// When OFF, HOVER_CHANNEL is never pressed and the mouse is exactly one
+// ordinary finger on MOUSE_CHANNEL.
+// Real touch fingers are unaffected in both modes; MapFingerId reserves both
+// MOUSE_CHANNEL and HOVER_CHANNEL so a touch can never claim either.
 //
 // Refresh-rate independence (#175):
 //
@@ -134,7 +157,13 @@ public:
     // (SDL_TOUCH_MOUSEID) so a real touch and the mouse never share a channel
     // -- one mouse == one finger. It still gets a real Mortar::Touch slot like
     // any other channel; only the SDL-side finger-id bookkeeping is reserved.
+    // This is the UI channel: ordinary press/release in BOTH modes.
     static const int MOUSE_CHANNEL = FN::POINTER_FINGER_CHANNEL;
+
+    // Port specific: MOTION MODE hover-blade channel -- also reserved (a touch
+    // can never claim it, see MapFingerId). Held continuously while the cursor
+    // is on screen, and invisible to UI widgets. See the header block above.
+    static const int HOVER_CHANNEL = FN::MOTION_BLADE_CHANNEL;
 
     // Latest game-space position per channel. Bookkeeping only -- the position
     // the game acts on is the one in the Mortar::Touch slot.
@@ -199,11 +228,18 @@ private:
 
     SDL_FingerID fingerMap[16];
 
-    // Port specific: MOTION MODE raw-mouse-drive helpers for MOUSE_CHANNEL.
-    // PointerPressMouseChannel is a no-op if MOUSE_CHANNEL is already active.
-    void PointerPressMouseChannel(float gx, float gy);
-    // PointerReleaseMouseChannel is a no-op if MOUSE_CHANNEL is not active.
-    void PointerReleaseMouseChannel();
+    // Port specific: MOTION MODE raw-mouse-drive helpers for HOVER_CHANNEL.
+    // PointerPressHoverChannel is a no-op if HOVER_CHANNEL is already active.
+    void PointerPressHoverChannel(float gx, float gy);
+    // PointerReleaseHoverChannel is a no-op if HOVER_CHANNEL is not active.
+    void PointerReleaseHoverChannel();
+
+    // Port specific: last FN::g_MotionMode seen by DispatchForSimTick. Nothing
+    // in SDL raises an event when the flag flips (SettingsScreen writes it
+    // directly), so the transition is polled here; on any change the hover
+    // blade is released, because motion-OFF stops feeding HOVER_CHANNEL and no
+    // release event would ever arrive for it.
+    bool motionModeWasOn;
 
 #ifdef FN_TEST
 public:

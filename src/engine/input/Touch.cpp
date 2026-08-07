@@ -5,6 +5,10 @@
 #include <cstring>
 #include <new>
 
+#ifndef __bada__
+#  include "debug/DebugFlags.h"
+#endif
+
 #ifdef FN_DEBUG_TOUCH
 #include "debug/Logger.h"
 #endif
@@ -14,6 +18,21 @@ namespace Mortar {
 // Binary BSS global @ GOT+0x80798 — rotating cursor for ___UpdateInternal.
 // Port maps this to a file-static (Touch is a singleton; behaviour is identical).
 static int s_slotCursor = 0;
+
+#ifndef __bada__
+// Port specific: true when this slot is driven by a HOVER BLADE channel
+// (FN::HOVER_BLADE_CHANNEL_FIRST..LAST, see debug/DebugFlags.h) rather than a
+// real finger press. Motion mode keeps its blade channel pressed continuously
+// so the blade tracks the cursor; a permanently-held press is meaningless to a
+// widget and would latch every button/checkbox/scroller the cursor crossed, so
+// the Tier A UI helpers below skip these slots. extId is the SDL channel + 1
+// (see InputTranslatorSDL::DrainSDLEvent); extId 0 is a free slot.
+static bool IsHoverBladeSlot(const TouchState& s) {
+    if (s.extId == 0) return false;
+    const int ch = (int)s.extId - 1;
+    return ch >= FN::HOVER_BLADE_CHANNEL_FIRST && ch <= FN::HOVER_BLADE_CHANNEL_LAST;
+}
+#endif
 
 Touch& Touch::GetInstance() {
     static Touch instance;
@@ -295,7 +314,11 @@ void Touch::SendIndividualTouchCallbacks(InputDevice* dev) {
 // reaches into Touch via GetMostRecentTouch / GetTouchPos directly).
 int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
                              int preferredSlot) const {
-    if (preferredSlot >= 0 && preferredSlot < MAX_SLOTS) {
+    if (preferredSlot >= 0 && preferredSlot < MAX_SLOTS
+#ifndef __bada__
+        && !IsHoverBladeSlot(states1[preferredSlot])
+#endif
+        ) {
         const TouchState& s = states1[preferredSlot];
         if (s.phase < 1) {
             float cx = s.currX, cy = s.currY;
@@ -305,6 +328,9 @@ int Touch::GetTouchInRegion(float left, float right, float bottom, float top,
     for (int i = 0; i < MAX_SLOTS; i++) {
         const TouchState& s = states1[i];
         if (s.phase >= 1) continue;
+#ifndef __bada__
+        if (IsHoverBladeSlot(s)) continue;
+#endif
         float cx = (float)s.currX, cy = (float)s.currY;
         if (cx >= left && cx <= right && cy >= bottom && cy <= top) return i;
     }
@@ -423,9 +449,18 @@ bool Touch::GetLivePos(int slot, float& x, float& y) const {
 // SliderControl, VerticalScroller, ComboBox). Port uses (left, right,
 // bottom, top) instead of binary's (x, y, w, h) -- numerically equivalent
 // since all call sites compute edges from pos +/- halfSize.
+//
+// Port specific: hover-blade slots are skipped (see Mortar::IsHoverBladeSlot
+// above). Motion mode's cursor blade is a permanently-held press; without this
+// skip every widget and scroller this helper feeds would latch onto it the
+// moment the cursor crossed their rect.
 int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
     Mortar::Touch& t = Mortar::Touch::GetInstance();
-    if (hint_slot >= 0 && hint_slot < Mortar::Touch::MAX_SLOTS) {
+    if (hint_slot >= 0 && hint_slot < Mortar::Touch::MAX_SLOTS
+#ifndef __bada__
+        && !Mortar::IsHoverBladeSlot(t.states1[hint_slot])
+#endif
+        ) {
         const Mortar::TouchState& s = t.states1[hint_slot];
         if (s.phase < 1) {
             float cx = s.currX, cy = s.currY;
@@ -435,6 +470,9 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
     for (int i = 0; i < Mortar::Touch::MAX_SLOTS; i++) {
         const Mortar::TouchState& s = t.states1[i];
         if (s.phase >= 1) continue;
+#ifndef __bada__
+        if (Mortar::IsHoverBladeSlot(s)) continue;
+#endif
         float cx = (float)s.currX, cy = (float)s.currY;
         if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) return i;
     }
@@ -453,9 +491,16 @@ int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot) {
 // MenuButton::Update toggle gate depends on `IsTouchDown == 2` to fire on
 // press-edge only and reject slice-drags through the button. Signature
 // matches binary verbatim (takes slot index, returns int 0/1/2).
+// Port specific: reports "up" for a hover-blade slot (see
+// Mortar::IsHoverBladeSlot above) so a motion-mode cursor press is invisible to
+// every UI consumer of this helper -- including IsSingleTouchPressed's
+// finger-count loop, which would otherwise never see a lone finger.
 int IsTouchDown(int slot) {
     const Mortar::Touch& t = Mortar::Touch::GetInstance();
     if (slot < 0 || slot >= Mortar::Touch::MAX_SLOTS) return 0;
+#ifndef __bada__
+    if (Mortar::IsHoverBladeSlot(t.states1[slot])) return 0;
+#endif
     int ph = t.states1[slot].phase;
     if (ph >= 1)  return 0;
     if (ph == -1) return 2;

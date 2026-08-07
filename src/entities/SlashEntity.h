@@ -333,10 +333,12 @@ private:
     // Port specific: EMA-smoothed |m_BladeDir| (px/sim-tick), updated in
     // Update() alongside the swipe-loop-volume bladeMag calc. Used only by
     // the FN::g_MotionMode speed gate (see Update()'s cut-decision block) --
-    // for the pointer blade (m_FingerId == FN::POINTER_FINGER_CHANNEL), a
-    // fruit/bomb cut is skipped while this stays below
-    // FN::g_MotionSpeedThreshold (slow = aim, fast flick = cut). Zero effect
-    // on touch blades or when motion mode is OFF.
+    // while motion mode is ON, a fruit/bomb cut is skipped for any blade whose
+    // slot is in FN::MOTION_GATE_CHANNEL_MIN..MAX while this stays below
+    // FN::g_MotionSpeedThreshold (slow = aim, fast flick = cut). The cursor
+    // blade rides FN::MOTION_BLADE_CHANNEL, but m_FingerId is the Mortar::Touch
+    // SLOT it landed in, not the channel -- hence the whole slot range is
+    // gated. Zero effect when motion mode is OFF.
     float m_SmoothedSpeed;
 
 public:

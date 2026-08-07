@@ -1697,8 +1697,10 @@ void SlashEntity::Update(float dt) {
         // InputTranslatorWii), but a cut only registers once its smoothed
         // speed clears FN::g_MotionSpeedThreshold: slow movement aims, a fast
         // flick cuts. FN::MOTION_GATE_CHANNEL_MIN/MAX (DebugFlags.h) is the
-        // single inclusive channel range gated -- SDL/host: just
-        // POINTER_FINGER_CHANNEL (15); Wii: [0, WII_POINTER_CHANNEL_LAST]
+        // single inclusive SLOT range gated -- SDL/host: all 8 Mortar::Touch
+        // slots, because m_FingerId is the SLOT the cursor's
+        // MOTION_BLADE_CHANNEL press happened to land in, not the channel
+        // number itself; Wii: [0, WII_POINTER_CHANNEL_LAST]
         // (0-3 A-press channels included so A is menu-click-only in motion
         // mode -- holding A must never produce an ungated slice -- plus the
         // 12-15 hover channels; 4-11 are unused, gating them is harmless).

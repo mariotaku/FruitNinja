@@ -16,19 +16,20 @@
 // POSTED UNCONDITIONALLY alongside the synthesized ones (SDL never
 // suppresses its own raw stream; SDL_HINT_TOUCH_MOUSE_EVENTS=0 only discards
 // synthetic-mouse-from-touch, not real mouse events) -- both streams fire
-// concurrently. InputTranslatorSDL::DrainSDLEvent explicitly suppresses the
-// synthesized SDL_TOUCH_MOUSEID finger (FINGERDOWN/MOTION/UP) whenever
-// FN::g_MotionMode is ON, so in that mode ONLY the raw mouse path
-// (MOUSE_CHANNEL / POINTER_FINGER_CHANNEL 15) is
-// live for the mouse: a button press LIFTS the blade, release RE-PRESSES it,
-// and hover-drag cuts are gated by SlashEntity's speed threshold. The
-// synthesized channel-0-style finger only drives anything when motion mode
-// is OFF, where it is the ordinary Mortar::Touch-slot press-to-slice path
-// (ungated, same as any real touch finger).
+// concurrently. InputTranslatorSDL::DrainSDLEvent feeds each stream to its
+// OWN channel: the synthesized SDL_TOUCH_MOUSEID finger always drives
+// MOUSE_CHANNEL (FN::POINTER_FINGER_CHANNEL 15, the UI channel -- ordinary
+// press/release in both modes), while the raw mouse path drives HOVER_CHANNEL
+// (FN::MOTION_BLADE_CHANNEL 14) and is
+// live only while FN::g_MotionMode is ON: a button press LIFTS the hover
+// blade, release RE-PRESSES it, and hover-drag cuts are gated by SlashEntity's
+// speed threshold. The hover channels are hidden from the Tier A UI helpers
+// (FN::HOVER_BLADE_CHANNEL_FIRST..LAST, see src/engine/input/Touch.cpp), so a
+// continuously-held hover press can never latch a widget or a scroller.
 //
-// The SDL mouse is therefore DE FACTO two channels depending on mode, and
-// each Wiimote mirrors both roles (always active; which one actually drives
-// a slice for a given gesture depends on g_MotionMode, mirroring SDL):
+// The SDL mouse is therefore two channels, and each Wiimote mirrors both
+// roles (always active; which one actually drives a slice for a given gesture
+// depends on g_MotionMode, mirroring SDL):
 //
 //  Role 1 -- "press finger" (SDL: the synthesized/real mouse-finger, live
 //    when motion mode is OFF). Feeds the Mortar::Touch ring/slots -- the
@@ -58,7 +59,7 @@
 //    bookkeeping, the SLOT the press lands in is what the game acts on.
 //    Wii mirror: remote N drives channel 12+N (FN::WII_POINTER_CHANNEL_FIRST
 //    + N, see src/debug/DebugFlags.h) -- the analogue of the mouse's
-//    POINTER_FINGER_CHANNEL (15):
+//    MOTION_BLADE_CHANNEL (14):
 //      - IR valid + A not held: channel pressed + position tracked
 //        (SDL_MOUSEMOTION with no button held),
 //      - A down-edge: release = blade lifts (SDL_MOUSEBUTTONDOWN),
@@ -178,8 +179,8 @@ private:
     void TransformIRNormalized(float nx, float ny, float& gx, float& gy);
 
     // Role 2 press/release helpers for the hover-blade channels (12-15) --
-    // mirrors InputTranslatorSDL::PointerPressMouseChannel /
-    // PointerReleaseMouseChannel.
+    // mirrors InputTranslatorSDL::PointerPressHoverChannel /
+    // PointerReleaseHoverChannel.
     // PointerPressChannel is a no-op if the channel is already active;
     // PointerReleaseChannel is a no-op if it is not.
     void PointerPressChannel(int ch, float gx, float gy);

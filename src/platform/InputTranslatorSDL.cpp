@@ -31,7 +31,9 @@
 #  define TLOG(...) ((void)0)
 #endif
 
-InputTranslatorSDL::InputTranslatorSDL() {
+InputTranslatorSDL::InputTranslatorSDL()
+    : motionModeWasOn(FN::g_MotionMode)
+{
     memset(fingerX, 0, sizeof(fingerX));
     memset(fingerY, 0, sizeof(fingerY));
     memset(fingerActive, 0, sizeof(fingerActive));
@@ -91,13 +93,13 @@ void InputTranslatorSDL::TransformTouchNormalized(float nx, float ny,
 // @0x001f1128/0x001f11c4/0x001f10a0). Port uses 16 SDL channels then clamps to
 // MAX_SLOTS=8 before Mortar::Touch -- benign superset.
 //
-// Port specific: MOUSE_CHANNEL is carved out of the 16-channel space for the
-// mouse only (see InputTranslatorSDL.h). The mouse always maps to
-// MOUSE_CHANNEL regardless of press/release history, so re-pressing a mouse
-// button deterministically returns to the same blade instead of drifting
-// onto whatever channel happens to be free. Touch fingers search only the
-// remaining channels, so a touch can never claim MOUSE_CHANNEL and the mouse
-// can never claim a touch's channel.
+// Port specific: MOUSE_CHANNEL and HOVER_CHANNEL are carved out of the
+// 16-channel space for the mouse only (see InputTranslatorSDL.h). The mouse
+// always maps to MOUSE_CHANNEL regardless of press/release history, so
+// re-pressing a mouse button deterministically returns to the same blade
+// instead of drifting onto whatever channel happens to be free. Touch fingers
+// search only the remaining channels, so a touch can never claim either
+// reserved channel and the mouse can never claim a touch's channel.
 int InputTranslatorSDL::MapFingerId(SDL_FingerID id) {
     if (id == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
         if (fingerActive[MOUSE_CHANNEL] && fingerMap[MOUSE_CHANNEL] == id)
@@ -110,15 +112,15 @@ int InputTranslatorSDL::MapFingerId(SDL_FingerID id) {
         return -1;  // mouse channel already busy (shouldn't happen -- one mouse device)
     }
 
-    // Check if this touch id is already mapped (skip the reserved mouse channel).
+    // Check if this touch id is already mapped (skip the reserved channels).
     for (int i = 0; i < 16; i++) {
-        if (i == MOUSE_CHANNEL) continue;
+        if (i == MOUSE_CHANNEL || i == HOVER_CHANNEL) continue;
         if (fingerActive[i] && fingerMap[i] == id)
             return i;
     }
-    // Find a free touch channel (skip the reserved mouse channel).
+    // Find a free touch channel (skip the reserved channels).
     for (int i = 0; i < 16; i++) {
-        if (i == MOUSE_CHANNEL) continue;
+        if (i == MOUSE_CHANNEL || i == HOVER_CHANNEL) continue;
         if (!fingerActive[i]) {
             fingerMap[i] = id;
             fingerActive[i] = true;
@@ -137,38 +139,40 @@ void InputTranslatorSDL::ReleaseFingerId(SDL_FingerID id) {
     }
 }
 
-// Port specific: MOTION MODE -- FINGERDOWN-equivalent for MOUSE_CHANNEL.
+// Port specific: MOTION MODE -- FINGERDOWN-equivalent for HOVER_CHANNEL.
 // Mirrors the SDL_FINGERDOWN branch: mark the channel active and push the press
 // into the Mortar::Touch ring so the cursor claims a real slot (without one it
 // would raise no Touch<n> action at all, and the pointer blade would be dead).
 // No-op if the channel is already pressed (repeated hover moves just update
 // position).
-void InputTranslatorSDL::PointerPressMouseChannel(float gx, float gy) {
-    if (fingerActive[MOUSE_CHANNEL]) return;
+//
+// HOVER_CHANNEL deliberately keeps its fingerMap entry unset: it is never
+// reached through MapFingerId/ReleaseFingerId (which key on SDL_TOUCH_MOUSEID,
+// and that id belongs to MOUSE_CHANNEL). Only this pair of helpers drives it.
+void InputTranslatorSDL::PointerPressHoverChannel(float gx, float gy) {
+    if (fingerActive[HOVER_CHANNEL]) return;
 
-    fingerMap[MOUSE_CHANNEL]    = (SDL_FingerID)SDL_TOUCH_MOUSEID;
-    fingerActive[MOUSE_CHANNEL] = true;
-    fingerX[MOUSE_CHANNEL]      = gx;
-    fingerY[MOUSE_CHANNEL]      = gy;
+    fingerActive[HOVER_CHANNEL] = true;
+    fingerX[HOVER_CHANNEL]      = gx;
+    fingerY[HOVER_CHANNEL]      = gy;
     // MOTION MODE has its own inside-the-window gate (SDL_MOUSEMOTION's
     // `inside` check + SDL_WINDOWEVENT_LEAVE) -- it never uses the
     // out-of-window suspend/resume path, so keep it clear here.
-    fingerSuspended[MOUSE_CHANNEL] = false;
+    fingerSuspended[HOVER_CHANNEL] = false;
 
-    Mortar::Touch::GetInstance().OnPressed(MOUSE_CHANNEL + 1, gx, gy);
-    TLOG("MOTION press ch=%d game=(%g,%g)\n", MOUSE_CHANNEL, gx, gy);
+    Mortar::Touch::GetInstance().OnPressed(HOVER_CHANNEL + 1, gx, gy);
+    TLOG("MOTION press ch=%d game=(%g,%g)\n", HOVER_CHANNEL, gx, gy);
 }
 
-// Port specific: MOTION MODE -- FINGERUP-equivalent for MOUSE_CHANNEL.
+// Port specific: MOTION MODE -- FINGERUP-equivalent for HOVER_CHANNEL.
 // Mirrors the SDL_FINGERUP branch. No-op if the channel is not currently active.
-void InputTranslatorSDL::PointerReleaseMouseChannel() {
-    if (!fingerActive[MOUSE_CHANNEL]) return;
+void InputTranslatorSDL::PointerReleaseHoverChannel() {
+    if (!fingerActive[HOVER_CHANNEL]) return;
 
-    fingerActive[MOUSE_CHANNEL] = false;
-    ReleaseFingerId((SDL_FingerID)SDL_TOUCH_MOUSEID);
+    fingerActive[HOVER_CHANNEL] = false;
 
-    Mortar::Touch::GetInstance().OnReleased(MOUSE_CHANNEL + 1);
-    TLOG("MOTION release ch=%d\n", MOUSE_CHANNEL);
+    Mortar::Touch::GetInstance().OnReleased(HOVER_CHANNEL + 1);
+    TLOG("MOTION release ch=%d\n", HOVER_CHANNEL);
 }
 
 // legacy wrapper -- no-op. The ring drain is DispatchForSimTick().
@@ -240,14 +244,11 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TLOG("SDL_FINGERDOWN fingerId=%lld nx=%.3f ny=%.3f pressure=%.3f\n",
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
              ev.tfinger.pressure);
-        // Port specific: motion mode drives MOUSE_CHANNEL from raw
-        // SDL_MOUSE* events instead -- suppress the SDL-synthesized
-        // finger event so the two paths don't double-drive the channel.
-        // Real touch fingers (fingerId != SDL_TOUCH_MOUSEID) pass through.
-        if (FN::g_MotionMode && ev.tfinger.fingerId == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
-            TLOG("  motion mode: suppressing synthesized mouse FINGERDOWN\n");
-            break;
-        }
+        // Port specific: the SDL-synthesized mouse finger drives MOUSE_CHANNEL
+        // in BOTH modes -- that is the UI channel and a click must mean the
+        // same thing with motion mode on or off. Motion mode's cursor-tracking
+        // blade lives on its own HOVER_CHANNEL (raw SDL_MOUSE* cases below),
+        // so the two paths never drive the same channel.
         int ch = MapFingerId(ev.tfinger.fingerId);
         if (ch < 0) { TLOG("  -> MapFingerId returned -1 (all 16 channels busy)\n"); break; }
 
@@ -271,12 +272,6 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         TLOG("SDL_FINGERMOTION fingerId=%lld nx=%.3f ny=%.3f d(%.3f,%.3f)\n",
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y,
              ev.tfinger.dx, ev.tfinger.dy);
-        // Port specific: motion mode suppresses the synthesized mouse
-        // finger event -- see SDL_FINGERDOWN above.
-        if (FN::g_MotionMode && ev.tfinger.fingerId == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
-            TLOG("  motion mode: suppressing synthesized mouse FINGERMOTION\n");
-            break;
-        }
         int ch = -1;
         for (int i = 0; i < 16; i++) {
             if (fingerActive[i] && fingerMap[i] == ev.tfinger.fingerId) {
@@ -346,12 +341,6 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     case SDL_FINGERUP: {
         TLOG("SDL_FINGERUP fingerId=%lld nx=%.3f ny=%.3f\n",
              (long long)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y);
-        // Port specific: motion mode suppresses the synthesized mouse
-        // finger event -- see SDL_FINGERDOWN above.
-        if (FN::g_MotionMode && ev.tfinger.fingerId == (SDL_FingerID)SDL_TOUCH_MOUSEID) {
-            TLOG("  motion mode: suppressing synthesized mouse FINGERUP\n");
-            break;
-        }
         int ch = -1;
         for (int i = 0; i < 16; i++) {
             if (fingerActive[i] && fingerMap[i] == ev.tfinger.fingerId) {
@@ -391,25 +380,26 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         break;
     }
 
-    // Port specific: MOTION MODE -- raw mouse press LIFTS the blade (so the
-    // user can reposition without cutting). Only meaningful while motion
-    // mode is ON; otherwise the button-down carries no special handling
-    // here (the synthesized SDL_FINGERDOWN drives the channel as usual).
+    // Port specific: MOTION MODE -- raw mouse press LIFTS the hover blade, so
+    // the click cannot also cut and the two mouse roles are never live at once
+    // (the synthesized SDL_FINGERDOWN presses MOUSE_CHANNEL in the same drain,
+    // which is what makes the click land). Only meaningful while motion mode
+    // is ON; otherwise HOVER_CHANNEL is never pressed and this is a no-op.
     case SDL_MOUSEBUTTONDOWN: {
         if (!FN::g_MotionMode) break;
         TLOG("MOTION MOUSEBUTTONDOWN -- lifting blade\n");
-        PointerReleaseMouseChannel();
+        PointerReleaseHoverChannel();
         break;
     }
 
-    // Port specific: MOTION MODE -- raw mouse motion drives MOUSE_CHANNEL
+    // Port specific: MOTION MODE -- raw mouse motion drives HOVER_CHANNEL
     // directly (the pointer blade tracks the cursor continuously; whether a
     // cut actually registers is decided by SlashEntity's speed gate). Only
     // while motion mode is ON and no button is currently held (ev.motion.state
     // is the button mask AT this motion event) and the cursor is inside the
-    // window. Off: SDL_MOUSEMOTION is ignored here as before -- the
-    // synthesized SDL_FINGERMOTION path (only emitted while a button is
-    // held) drives the blade instead.
+    // window. While a button IS held the hover blade stays lifted and the
+    // synthesized SDL_FINGERMOTION drives MOUSE_CHANNEL instead, so a drag
+    // scrolls/scrubs exactly as it does with motion mode off.
     case SDL_MOUSEMOTION: {
         if (!FN::g_MotionMode) break;
         if (ev.motion.state != 0) break;  // a button is held -- not hovering
@@ -429,11 +419,11 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         // Ensure pressed (no-op if already active), then apply the move --
         // same same-tick DOWN+MOTION merge the touch path already relies on
         // (see the FINGERDOWN comment in DispatchForSimTick).
-        PointerPressMouseChannel(gx, gy);
-        fingerX[MOUSE_CHANNEL] = gx;
-        fingerY[MOUSE_CHANNEL] = gy;
-        Mortar::Touch::GetInstance().OnMoved(MOUSE_CHANNEL + 1, gx, gy);
-        TLOG("MOTION MOUSEMOTION ch=%d game=(%g,%g)\n", MOUSE_CHANNEL, gx, gy);
+        PointerPressHoverChannel(gx, gy);
+        fingerX[HOVER_CHANNEL] = gx;
+        fingerY[HOVER_CHANNEL] = gy;
+        Mortar::Touch::GetInstance().OnMoved(HOVER_CHANNEL + 1, gx, gy);
+        TLOG("MOTION MOUSEMOTION ch=%d game=(%g,%g)\n", HOVER_CHANNEL, gx, gy);
         break;
     }
 
@@ -445,11 +435,10 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // no channel scan is needed here.
     case SDL_MOUSEBUTTONUP: {
         // Port specific: MOTION MODE -- releasing the last held button
-        // re-presses the blade at the current position (if the cursor is
-        // still inside the window). This replaces the plain release
-        // fallback below while motion mode is ON (PointerReleaseMouseChannel
-        // on button-down already lifted the blade, so fingerActive is false
-        // here and the fallback code below would be a no-op anyway).
+        // re-presses the HOVER blade at the current position (if the cursor is
+        // still inside the window), resuming cursor tracking. This does NOT
+        // replace the MOUSE_CHANNEL release below: that channel now carries
+        // the real click in both modes, so the fallback must still run.
         if (FN::g_MotionMode) {
             int ww = 0, wh = 0;
             if (window) SDL_GetWindowSize(window, &ww, &wh);
@@ -462,11 +451,10 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
                 float ny = (float)ev.button.y / (float)wh;
                 float gx, gy;
                 TransformTouchNormalized(nx, ny, gx, gy);
-                PointerPressMouseChannel(gx, gy);
+                PointerPressHoverChannel(gx, gy);
                 TLOG("MOTION MOUSEBUTTONUP -- re-press ch=%d game=(%g,%g)\n",
-                     MOUSE_CHANNEL, gx, gy);
+                     HOVER_CHANNEL, gx, gy);
             }
-            break;
         }
 
         SDL_FingerID mouseId = (SDL_FingerID)SDL_TOUCH_MOUSEID;
@@ -483,11 +471,11 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     }
 
     // Port specific: MOTION MODE -- the cursor leaving the window releases
-    // MOUSE_CHANNEL (the blade shouldn't stay armed off-screen).
+    // HOVER_CHANNEL (the blade shouldn't stay armed off-screen).
     case SDL_WINDOWEVENT: {
         if (FN::g_MotionMode && ev.window.event == SDL_WINDOWEVENT_LEAVE) {
             TLOG("MOTION WINDOWEVENT_LEAVE -- releasing blade\n");
-            PointerReleaseMouseChannel();
+            PointerReleaseHoverChannel();
         }
         break;
     }
@@ -522,5 +510,15 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
 // a non-zero extId/touchId in states1 for exactly one tick -- that one tick is
 // what makes SendIndividualTouchCallbacks' mask-4 release a true edge.
 void InputTranslatorSDL::DispatchForSimTick() {
+    // Port specific: FN::g_MotionMode is written directly by SettingsScreen /
+    // the F5 hotkey -- no SDL event announces the flip. Poll it here: on any
+    // transition, release the hover blade. Turning motion OFF stops feeding
+    // HOVER_CHANNEL, so without this the channel would stay held forever with
+    // no release ever queued (the slot never frees, and the blade never dies).
+    if (FN::g_MotionMode != motionModeWasOn) {
+        motionModeWasOn = FN::g_MotionMode;
+        PointerReleaseHoverChannel();
+    }
+
     Mortar::Touch::GetInstance().Update(0.0f);
 }

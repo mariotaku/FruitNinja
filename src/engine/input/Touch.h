@@ -172,6 +172,9 @@ public:
     // NOT the binary's same-named member `GetTouchInReigion @0x00242a98`
     // (Tier B, touchId-returning) -- that API is DEAD in the binary (zero
     // internal callers, only an unused public-symbol export). Don't conflate.
+    //
+    // Port specific: skips hover-blade slots, same as the free TouchInRegion
+    // below -- see its doc for why.
     int GetTouchInRegion(float left, float right, float bottom, float top,
                          int preferredSlot = -1) const;
 
@@ -242,11 +245,20 @@ public:
 // Port uses (left, right, bottom, top) instead of binary's (x, y, w, h)
 // because every call site already computes edges from pos +/- halfSize;
 // numerically equivalent.
+//
+// Port specific: slots driven by a HOVER BLADE channel
+// (FN::HOVER_BLADE_CHANNEL_FIRST..LAST, debug/DebugFlags.h) are SKIPPED. Motion
+// mode holds its blade channel pressed for as long as the cursor is on screen,
+// which is not a click and must never latch a widget. Blades are unaffected --
+// they reach SlashEntity through the per-finger Touch<n> action callbacks, not
+// through this helper.
 int TouchInRegion(float x0, float x1, float y0, float y1, int hint_slot);
 
 // v1.6.1 ::IsTouchDown @0x001ca69c (asm-verified 2026-05-17)
 // Returns 0=up, 1=held, 2=press-edge (just-pressed, one frame) for given slot.
 // Matches binary signature verbatim (int slot -> int 0/1/2).
+// Port specific: returns 0 for a hover-blade slot -- same rationale as
+// TouchInRegion above.
 int IsTouchDown(int slot);
 
 #if defined(__bada__)

@@ -43,14 +43,18 @@ namespace Mortar { class FontCacheObjectTTF; }
 //                   Display-only -- never gates actual audio. Toggle F4,
 //                   or launch with --osd-sfx (desktop) / web ?osdsfx=1.
 // g_MotionMode:     host-only velocity-gated pointer slash -- the pointer
-//                   blade (channel FN::POINTER_FINGER_CHANNEL) tracks the
+//                   blade (channel FN::MOTION_BLADE_CHANNEL) tracks the
 //                   raw cursor position continuously (same plumbing as the
 //                   retired "relax" mode), but a fruit/bomb cut only
 //                   registers when the blade's smoothed speed clears
 //                   g_MotionSpeedThreshold: slow movement aims, a fast
-//                   flick cuts. See src/platform/InputTranslatorSDL.cpp
+//                   flick cuts. The mouse BUTTON keeps its ordinary
+//                   press/release meaning on FN::POINTER_FINGER_CHANNEL in
+//                   both modes, so menus and widgets behave the same way
+//                   with motion mode on or off: point to aim, click to
+//                   press. See src/platform/InputTranslatorSDL.cpp
 //                   (cursor tracking) and src/entities/SlashEntity.cpp
-//                   (the speed gate). Off by default. Toggle F5, or launch
+//                   (the speed gate). Toggle F5, or launch
 //                   with --motion / web ?motion=1.
 // g_MotionSpeedThreshold: px-per-sim-tick cut threshold for g_MotionMode.
 //                   Tune live with F6 (down) / F8 (up), --motion-threshold=<f>
@@ -66,23 +70,49 @@ extern bool  g_ShowFps;                // Port specific: FPS counter overlay (to
 extern bool  g_FpsCap60;               // Port specific: cap render/present rate to 60fps (SettingsScreen "Limit to 60 FPS"), default OFF (native/display-refresh)
 extern bool  g_SuppressTextOverlay;    // Port specific: suppresses DebugText_Overlay for debug-drawn text
 extern bool  g_bOsdSfx;                // Port specific: OSD toast per SFX played (toggle F4, --osd-sfx, ?osdsfx=1)
-extern bool  g_MotionMode;             // Port specific: velocity-gated pointer slash (toggle F5, --motion), default OFF
+extern bool  g_MotionMode;             // Port specific: velocity-gated pointer slash (toggle F5, --motion), default ON
 extern float g_MotionSpeedThreshold;   // Port specific: g_MotionMode cut speed threshold, px/sim-tick (tune F6/F8, --motion-threshold=<f>)
 
 // Port specific: shared pointer/mouse finger channel constant -- single
-// source of truth for InputTranslatorSDL::MOUSE_CHANNEL and SlashEntity's
-// motion-mode gate (channel 15, the pointer's dedicated non-touch channel;
-// see InputTranslatorSDL.h). Lives here (not InputTranslatorSDL.h) so
-// SlashEntity.cpp can reference it without including the SDL translator header.
+// source of truth for InputTranslatorSDL::MOUSE_CHANNEL (channel 15, the
+// mouse's dedicated non-touch channel; see InputTranslatorSDL.h). This is the
+// UI channel: it carries ORDINARY press/release semantics in BOTH modes, so
+// menus, widgets and scrollers see a real click edge. Lives here (not
+// InputTranslatorSDL.h) so other TUs can reference it without including the
+// SDL translator header.
 static const int POINTER_FINGER_CHANNEL = 15;
+
+// Port specific: SDL/host MOTION MODE hover-blade channel. Deliberately NOT
+// POINTER_FINGER_CHANNEL: motion mode holds its channel pressed continuously
+// so the blade can track the cursor, and a permanently-held press on the UI
+// channel latches every widget and scroller the cursor passes over (the
+// press-edge would also arrive on button-UP instead of button-DOWN). Hover
+// channels are hidden from the Tier A UI helpers -- see TouchInRegion /
+// IsTouchDown / Touch::GetTouchInRegion in src/engine/input/Touch.cpp -- so
+// only the blade ever acts on them.
+static const int MOTION_BLADE_CHANNEL = 14;
 
 // Port specific: Wii motion-mode hover-blade channel range -- Wiimote N
 // (0-3) drives a pointer blade on channel (WII_POINTER_CHANNEL_FIRST + N),
-// the 4-remote analogue of the SDL mouse's POINTER_FINGER_CHANNEL (which is
-// this range's last channel). See src/platform/wii/InputTranslatorWii.h for
-// the full two-role input model.
+// the 4-remote analogue of the SDL mouse's MOTION_BLADE_CHANNEL. See
+// src/platform/wii/InputTranslatorWii.h for the full two-role input model.
 static const int WII_POINTER_CHANNEL_FIRST = 12;
 static const int WII_POINTER_CHANNEL_LAST  = 15;
+
+// Port specific: inclusive channel range whose Mortar::Touch slots carry a
+// continuously-held HOVER BLADE rather than a real finger press. The Tier A
+// UI helpers (TouchInRegion / IsTouchDown / Touch::GetTouchInRegion) skip
+// these slots outright, which is what stops a motion-mode pointer from
+// hijacking menus, scrollers and widgets. SlashEntity is unaffected: blades
+// are addressed by their Mortar::Touch SLOT through the per-finger action
+// callbacks, never through these helpers.
+#if defined(FRUIT_PLATFORM_WII)
+static const int HOVER_BLADE_CHANNEL_FIRST = WII_POINTER_CHANNEL_FIRST;
+static const int HOVER_BLADE_CHANNEL_LAST  = WII_POINTER_CHANNEL_LAST;
+#else
+static const int HOVER_BLADE_CHANNEL_FIRST = MOTION_BLADE_CHANNEL;
+static const int HOVER_BLADE_CHANNEL_LAST  = MOTION_BLADE_CHANNEL;
+#endif
 
 // Port specific: SlashEntity's motion-mode speed-gate range (see
 // SlashEntity::Update). SlashEntity::m_FingerId is the Mortar::Touch SLOT the

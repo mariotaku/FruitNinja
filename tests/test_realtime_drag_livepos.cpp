@@ -109,7 +109,8 @@ static void ResetTouch() {
 // from MapFingerId), not the SDL_FingerID (see InputTranslatorSDL.cpp ~299:
 // "Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy)"). A fresh
 // InputTranslatorSDL always maps its first real touch finger to channel 0
-// (MOUSE_CHANNEL=15 is reserved separately, see InputTranslatorSDL.h), so the
+// (MOUSE_CHANNEL=15 and HOVER_CHANNEL=14 are reserved, see
+// InputTranslatorSDL.h), so the
 // first finger pressed against a fresh `tr` always lands at extId==1 --
 // mirroring test_input_tick_invariant's own assertions (states1[s].extId==1
 // for the first finger). Callers here pass channel+1, not the SDL_FingerID.
