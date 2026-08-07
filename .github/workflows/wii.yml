@@ -5,6 +5,10 @@ name: Build Wii
 on:
   workflow_dispatch:
   push:
+    # Branch pushes only -- a v* tag push whose diff touches these paths would
+    # otherwise fire this build too, which has nothing to do with a release.
+    branches:
+      - '**'
     paths:
       - 'src/**'
       - 'tools/wii/**'

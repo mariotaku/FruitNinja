@@ -6,6 +6,11 @@ name: Build webOS
 on:
   workflow_dispatch:
   push:
+    # Branch pushes only. Without this, a v* tag push whose diff touches these
+    # paths ALSO fires this workflow directly, so a release would build twice --
+    # once here and once through webos-release.yml's workflow_call.
+    branches:
+      - '**'
     paths:
       - 'src/**'
       - 'deploy/webos/**'
@@ -183,11 +188,16 @@ jobs:
           fi
 
           # An .ipk is an ar archive holding data.tar[.gz]; the app root sits at
-          # usr/palm/applications/<id>/. GNU tar sniffs the compression on read,
-          # so -xO alone handles both .tar and .tar.gz members.
+          # usr/palm/applications/<id>/. tar does NOT sniff compression when the
+          # archive arrives on stdin -- it fails with "Archive is compressed, use
+          # -z option" -- so pick the decompressor from the member name instead.
           DATA_MEMBER="$(ar t "$IPK" | grep '^data\.tar' | head -n1)"
+          case "$DATA_MEMBER" in
+            *.gz) TAR_FLAGS=-xzO ;;
+            *)    TAR_FLAGS=-xO  ;;
+          esac
           PKG_VERSION="$(ar p "$IPK" "$DATA_MEMBER" \
-            | tar -xO --wildcards '*/appinfo.json' \
+            | tar "$TAR_FLAGS" --wildcards '*/appinfo.json' \
             | jq -r .version)"
           if [ "$PKG_VERSION" != "$FN_APP_VERSION" ]; then
             echo "ERROR: appinfo.json in the .ipk says '$PKG_VERSION', expected '$FN_APP_VERSION'" >&2
