@@ -1,0 +1,27 @@
+name: Release Wii
+run-name: "Release Wii ${{ github.ref_name }}"
+
+# Tag trigger for the Wii release. This exists as a separate file because a
+# single `on: push` block cannot express "branch pushes matching paths OR any
+# v* tag" -- GitHub ANDs the ref filter with the paths filter, and declaring
+# `tags` without `branches` would stop branch pushes triggering wii.yml at
+# all. Splitting keeps wii.yml's existing push behaviour byte-identical.
+#
+# The build itself is NOT duplicated here: wii.yml is called as a reusable
+# workflow, and its tail steps (asset rename + release) self-gate on a v* tag.
+#
+# webos-release.yml fires on the same tag. That is intended: both jobs publish
+# into the one release for that tag, each adding only its own assets.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release-wii:
+    name: Release (Wii)
+    # A reusable workflow can only be granted permissions the caller already
+    # has, so contents:write must be declared here too.
+    permissions:
+      contents: write
+    uses: ./.github/workflows/wii.yml

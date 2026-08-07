@@ -21,6 +21,12 @@ on:
       # The job uses the local fetch-game-assets composite action, so changes
       # to it must retrigger this build -- otherwise action fixes ship untested.
       - '.github/actions/**'
+  # Release path. A `push` trigger cannot express "branch pushes matching paths
+  # OR any v* tag": GitHub ANDs the ref filter with the paths filter, and
+  # declaring `tags` without `branches` would stop branch pushes triggering at
+  # all. So wii-release.yml owns the tag trigger and calls this workflow --
+  # one build definition, and the non-release path above is untouched.
+  workflow_call:
 
 env:
   # freetype-py + Pillow live in a venv: Ubuntu's python3 is externally-managed
@@ -34,6 +40,11 @@ jobs:
     # Ships devkitPPC + libogc + general-tools (elf2dol) and exports
     # DEVKITPRO=/opt/devkitpro, which cmake/wii.toolchain.cmake requires.
     container: devkitpro/devkitppc
+
+    # Needed only by the tag-gated publish step at the end (creating the
+    # release and uploading its asset). Every other run leaves it unused.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Source
@@ -122,3 +133,53 @@ jobs:
           name: wii-homebrew
           path: build/wii/fruit-ninja-wii.zip
           if-no-files-found: error
+
+      # ---- Release path (tag pushes only, via wii-release.yml) ----
+      #
+      # Everything below is gated on a v* tag, so a normal push still just
+      # builds and uploads the artifact above. The two Verify steps run first
+      # and fail the job, so a fontless or iconless package can never reach a
+      # release.
+
+      # CPack always names the package fruit-ninja-wii.zip, so every release
+      # would otherwise carry an identically named asset and a downloaded copy
+      # could not be traced back to a release. Unlike webOS -- where the .ipk
+      # embeds a version in appinfo.json and in its own filename -- the Wii
+      # package has no internal version field at all, so the tag in the
+      # filename is the only version marker there is.
+      - name: Name Release Asset After Tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          # github.ref_name is the caller's ref, i.e. the tag, even though this
+          # workflow runs as a reusable callee. Read it through env rather than
+          # expanding it into the run script -- a tag name is attacker-
+          # controllable text and must never be pasted into shell source.
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eo pipefail
+
+          # A tag containing a path separator would place the copy outside the
+          # build dir, and the glob below would then miss it (or pick up
+          # something else). Refuse the same shape webos.yml requires.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$'; then
+            echo "ERROR: tag '$TAG' does not match the release pattern v<MAJOR>.<MINOR>.<REV>-<PATCH>" >&2
+            echo "       e.g. v1.6.1-3 (upstream game version 1.6.1, port release 3)." >&2
+            exit 1
+          fi
+
+          cp build/wii/fruit-ninja-wii.zip "build/wii/fruit-ninja-wii-${TAG}.zip"
+          ls -l "build/wii/fruit-ninja-wii-${TAG}.zip"
+
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          # Creates the release for the pushed tag if it does not exist yet, and
+          # only adds assets to an existing one. webos-release.yml fires on the
+          # same tag and publishes into the same release, so nothing here may
+          # replace the whole asset set (clear_attachments) or set body /
+          # body_path -- leaving them unset keeps the webOS assets and the
+          # existing release notes untouched, whichever job lands first.
+          tag_name: ${{ github.ref_name }}
+          files: build/wii/fruit-ninja-wii-*.zip
