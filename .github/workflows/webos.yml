@@ -16,6 +16,12 @@ on:
       # The job uses the local fetch-game-assets composite action, so changes
       # to it must retrigger this build -- otherwise action fixes ship untested.
       - '.github/actions/**'
+  # Release path. A `push` trigger cannot express "branch pushes matching paths
+  # OR any v* tag": GitHub ANDs the ref filter with the paths filter, and
+  # declaring `tags` without `branches` would stop branch pushes triggering at
+  # all. So webos-release.yml owns the tag trigger and calls this workflow --
+  # one build definition, and the non-release path above is untouched.
+  workflow_call:
 
 env:
   WEBOS_SDK: /opt/arm-webos-linux-gnueabi_sdk-buildroot
@@ -25,6 +31,11 @@ jobs:
   build-webos:
     name: Build (webOS)
     runs-on: ubuntu-latest
+
+    # Needed only by the tag-gated publish steps at the end (creating the
+    # release and uploading its assets). Every other run leaves it unused.
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout Source
@@ -109,3 +120,61 @@ jobs:
         with:
           name: webos-ipk
           path: dist/*.ipk
+
+      # ---- Release path (tag pushes only, via webos-release.yml) ----
+      #
+      # Everything below is gated on a v* tag, so a normal push still just
+      # builds and uploads the artifact above. The Compatibility Check step
+      # runs first and fails the job on a bad ABI, so a broken .ipk can never
+      # reach a release.
+
+      - name: Generate Homebrew Manifest
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          # github.ref_name is the caller's ref, i.e. the tag, even though this
+          # workflow runs as a reusable callee.
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eo pipefail
+          IPK="$(ls dist/*.ipk | head -n1)"
+          IPK_NAME="$(basename "$IPK")"
+
+          # webosbrew-gen-manifest is the binary shipped by the
+          # webosbrew-toolbox-gen-manifest deb installed above (the deb name is
+          # not the command name). --root false: plain native app, no root.
+          # --icon must be a public URL; deploy/webos/icon.png is committed, so
+          # pin the raw URL to the tag rather than a branch, so an old
+          # manifest keeps resolving after main moves on.
+          webosbrew-gen-manifest \
+            --pkgfile "$IPK" \
+            --output dist/manifest.tmp.json \
+            --icon "https://raw.githubusercontent.com/${REPO}/${TAG}/deploy/webos/icon.png" \
+            --link "https://github.com/${REPO}" \
+            --root false
+
+          # gen-manifest fills ipkUrl with the *basename* of --pkgfile (it opens
+          # the file locally to hash it, so --pkgfile cannot be a URL). The repo
+          # generator urljoin()s ipkUrl against the manifest URL, so a bare name
+          # would resolve for repo.webosbrew.org -- but every manifest actually
+          # published there carries an absolute URL, and anything fetching the
+          # manifest on its own (Homebrew Channel install-from-URL, curl) needs
+          # one. Rewrite it to the release asset URL, which is predictable.
+          APP_ID="$(jq -r .id dist/manifest.tmp.json)"
+          jq --arg url "https://github.com/${REPO}/releases/download/${TAG}/${IPK_NAME}" \
+            '.ipkUrl = $url' dist/manifest.tmp.json > "dist/${APP_ID}.manifest.json"
+          rm dist/manifest.tmp.json
+
+          cat "dist/${APP_ID}.manifest.json"
+
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          # Creates the release for the pushed tag if it does not exist yet, and
+          # only adds assets to an existing one.
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/*.ipk
+            dist/*.manifest.json

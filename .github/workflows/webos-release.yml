@@ -1,0 +1,24 @@
+name: Release webOS
+run-name: "Release webOS ${{ github.ref_name }}"
+
+# Tag trigger for the webOS release. This exists as a separate file because a
+# single `on: push` block cannot express "branch pushes matching paths OR any
+# v* tag" -- GitHub ANDs the ref filter with the paths filter, and declaring
+# `tags` without `branches` would stop branch pushes triggering webos.yml at
+# all. Splitting keeps webos.yml's existing push behaviour byte-identical.
+#
+# The build itself is NOT duplicated here: webos.yml is called as a reusable
+# workflow, and its tail steps (manifest + release) self-gate on a v* tag.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release-webos:
+    name: Release (webOS)
+    # A reusable workflow can only be granted permissions the caller already
+    # has, so contents:write must be declared here too.
+    permissions:
+      contents: write
+    uses: ./.github/workflows/webos.yml
