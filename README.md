@@ -1,23 +1,23 @@
 # Fruit Ninja — Reverse-Engineered Port
 
-A faithful, from-scratch reimplementation of **Fruit Ninja v1.6.1** (the Samsung
-Bada release, built on Halfbrick's *Mortar* engine) in portable C++11, running on
-modern desktops, the web, the Nintendo Wii, and LG webOS TVs.
+A from-scratch reimplementation of **Fruit Ninja v1.6.1** in portable C++11. The
+original is the Samsung Bada release, built on Halfbrick's *Mortar* engine. This
+port runs on modern desktops, the web, the Nintendo Wii, and LG webOS TVs.
 
-The goal is **fidelity**: match the original's gameplay, physics, scoring, timing,
-and visual behaviour as closely as possible, reconstructed by reverse-engineering
-the original ARM binary. The RE record lives in the source itself — as
-`// ASM-verified:`, `// TODO:`, and `// DIFFERS:` comments next to the code they
-describe — not in separate design docs.
+The goal is **fidelity**. The port matches the original gameplay, physics,
+scoring, timing, and visual behavior as closely as possible. Every behavior comes
+from reverse-engineering the original ARM binary. The RE record lives in the
+source itself, as `// ASM-verified:`, `// TODO:`, and `// DIFFERS:` comments next
+to the code they describe. Separate design docs do not hold it.
 
 > [!IMPORTANT]
-> **Unofficial fan project — for preservation and educational purposes.**
-> This project is **not affiliated with, authorized, or endorsed by Halfbrick
-> Studios**. *Fruit Ninja*, its artwork, audio, models, and the name/logo are
-> © Halfbrick Studios and remain their property. **No game assets are included in
-> this repository.** To build and run, you must provide your own copy of the
-> original game's data — the build fetches/reads it from a local dump; it is never
-> committed or redistributed here. This repo contains only original
+> **Unofficial fan project, for preservation and education.**
+> This project has no affiliation with Halfbrick Studios. Halfbrick does not
+> authorize or endorse it. *Fruit Ninja*, its artwork, audio, models, name, and
+> logo are © Halfbrick Studios and remain their property. **This repository
+> includes no game assets.** You must supply your own copy of the original game
+> data to build and run. The build reads that data from a local dump. Nobody
+> commits or redistributes it here. This repository holds only original
 > reverse-engineered source code and tooling.
 
 ## Platforms
@@ -29,30 +29,34 @@ describe — not in separate design docs.
 | Nintendo Wii | devkitPPC / libogc / **GX** (no SDL) | Homebrew `.zip` | `tools/wii/build.sh` |
 | LG webOS TV | SDL2 + GLES2 (openlgtv buildroot NDK) | `.ipk` | `tools/webos/build.sh` |
 
-The renderer is a hand-written **OpenGL ES 2.0** shader pipeline (2D quads, 3D
-meshes, fonts, particles) — the original fixed-function ES1 path was fully
-migrated; the Wii target uses native GX.
+The renderer is a hand-written **OpenGL ES 2.0** shader pipeline. It draws 2D
+quads, 3D meshes, fonts, and particles. The port replaced the original
+fixed-function ES1 path completely. The Wii target uses native GX instead.
 
 ## Building
 
-All targets are CMake-based and need the original game data present locally (see
-the disclaimer above — assets are **not** shipped). Each backend's directory
-README has the details:
+Every target uses CMake. Every target also needs the original game data present
+locally, because this repository ships no assets. Each backend directory README
+has the details.
 
-- **Desktop:** configure with the committed CMake presets (`CMakePresets.json`);
-  vcpkg supplies SDL2 / SDL2_image / FreeType / tinyxml2.
-- **Web:** `tools/web/` — native Emscripten SDK; `tools/web/README.md`.
-- **Wii:** `tools/wii/build.sh` — devkitPPC/libogc; produces `fruit-ninja-wii.zip`.
-- **webOS:** `tools/webos/build.sh` — the openlgtv buildroot NDK (Linux/WSL);
-  produces a `.ipk`, verified with `webosbrew-ipk-verify`.
+- **Desktop:** configure with the committed CMake presets (`CMakePresets.json`).
+  vcpkg supplies SDL2, SDL2_image, FreeType, and tinyxml2.
+- **Web:** `tools/web/` uses the native Emscripten SDK. See `tools/web/README.md`.
+- **Wii:** `tools/wii/build.sh` uses devkitPPC and libogc. It produces
+  `fruit-ninja-wii.zip`.
+- **webOS:** `tools/webos/build.sh` uses the openlgtv buildroot NDK on Linux or
+  WSL. It produces an `.ipk`, checked with `webosbrew-ipk-verify`.
+
+GitHub Actions also builds the webOS `.ipk` and the Wii homebrew zip, and uploads
+each one as a workflow artifact. See `.github/workflows/`.
 
 ## Asset gallery
 
-The web deploy publishes a browsable **asset gallery** at `/gallery` — textures
-(streamed at runtime as byte-range slices straight out of the game's WebAssembly
-`.data` bundle, so nothing is duplicated) and the extracted 3D models. It is
-generated from the local game dump at build time (`tools/web/build-gallery.sh`);
-like everything else, no art is committed.
+The web deploy publishes a browsable **asset gallery** at `/gallery`. It shows
+the game textures and the extracted 3D models. The gallery streams each texture
+at runtime as a byte-range slice of the game's WebAssembly `.data` bundle, so it
+duplicates nothing. `tools/web/build-gallery.sh` generates the gallery from the
+local game dump at build time. It commits no art, like the rest of the build.
 
 ## Documentation
 
@@ -61,26 +65,26 @@ like everything else, no art is committed.
 - `docs/engine/` — the load-bearing reference set: file formats, static-init
   order, coordinate convention, the intentionally-skipped online-services list,
   and toolchain/ABI provenance.
-- Per-directory `README.md`s document each tool/pipeline.
+- Each directory has a `README.md` that documents its own tool or pipeline.
 
-## Reverse-engineering & toolchain
+## Reverse-engineering and toolchain
 
-The original is an ARM32 little-endian Bada ELF (Halfbrick Mortar engine, built
-with Sourcery G++ 4.4.1). An asm-verification pipeline (`tools/asm-verify/`)
-cross-compiles the port with the original toolchain and diffs it against the
-binary to keep the reimplementation faithful. Ghidra scripts used during RE live
-in `tools/ghidra/`.
+The original is an ARM32 little-endian Bada ELF. Halfbrick built it on the Mortar
+engine with Sourcery G++ 4.4.1. An asm-verification pipeline
+(`tools/asm-verify/`) cross-compiles the port with that original toolchain and
+diffs the result against the binary. This keeps the reimplementation faithful.
+`tools/ghidra/` holds the Ghidra scripts used during RE.
 
 ## License
 
-The reverse-engineered source code and tooling in this repository are released
-under the [MIT License](LICENSE) — © 2026 Mariotaku.
+The [MIT License](LICENSE) covers the reverse-engineered source code and tooling
+in this repository. © 2026 Mariotaku.
 
-Original *Fruit Ninja* game content, assets, and trademarks are © Halfbrick
-Studios, are **not** covered by the MIT License, and are not included or
-distributed here. See [NOTICE](NOTICE).
+Halfbrick Studios owns the original *Fruit Ninja* game content, assets, and
+trademarks. The MIT License does not cover them. This repository does not include
+or distribute them. See [NOTICE](NOTICE).
 
 ## Credits
 
-Reverse-engineering and port by Mariotaku. *Fruit Ninja* is a trademark of
-Halfbrick Studios.
+Mariotaku did the reverse-engineering and the port. *Fruit Ninja* is a trademark
+of Halfbrick Studios.
