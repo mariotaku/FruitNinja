@@ -5,7 +5,7 @@
     "type": "native",
     "main": "fruit-ninja",
     "title": "Fruit Ninja",
-    "appDescription": "Slice the flying fruit, dodge the bombs.",
+    "appDescription": "The worldwide smash hit game Fruit Ninja is now available on webOS (unofficial)!",
     "icon": "icon.png",
     "largeIcon": "icon_large.png",
     "iconColor": "#ffffff",
