@@ -22,6 +22,10 @@
 //     live capture position while held, and reports kReleasedInside /
 //     kReleasedOutside exactly once on release. Subclasses decide what each
 //     result means (toggle on release-inside, drag on held, etc).
+//   - If the owner takes a gesture over mid-drag (a scroller latching, a modal
+//     opening) and stops calling Update(), it MUST call CancelTouch(slot) at
+//     that moment -- otherwise the widget's next tick resolves a stale capture
+//     as a release and fires a phantom toggle. See CancelTouch below.
 //   - DrawBox()/DrawGlyphQuad()/DrawText() are thin wrappers around the
 //     established NineSlice / raw MatrixManager+Mesh / Font::DrawString
 //     idioms (see CheckBox.cpp / SliderControl.cpp for the reference pattern)
@@ -63,6 +67,25 @@ public:
     void Release() override { m_BoxTex.SetNull(); }
     bool SetToMultiplayerState() override { return false; }
     int GetType() override { return 100; }
+
+    // Drop the touch latch WITHOUT resolving it. Call this from whoever takes
+    // ownership of a gesture the widget is already tracking -- the owning
+    // screen's scroller, a modal that opens mid-drag -- so the widget stops at
+    // kNone instead of firing a release later.
+    //
+    // Why it exists: the widget only learns a touch ended by seeing
+    // IsTouchDown() go to 0, and it reports that as kReleasedInside/Outside off
+    // the CAPTURED press position. An owner that stops calling Update() while
+    // it drives the gesture leaves m_TouchId latched on a slot that is by then
+    // dead, so the widget's next tick takes the release branch and fires a
+    // phantom toggle. Cancel at the moment ownership transfers instead.
+    //
+    // `slot` is the Mortar::Touch slot being taken over; the call is a no-op
+    // unless the widget is latched on exactly that slot. Pass -1 to cancel
+    // whatever slot it holds. Safe to call when nothing is latched.
+    // Note UiDropdown runs its own state machine over the same m_TouchId, so
+    // this cancels its bar-tap latch too (it re-acquires cleanly next press).
+    void CancelTouch(int slot);
 
     void SetOnChange(const Mortar::Delegate0<void>& cb) { m_OnChange = cb; }
     void SetTint(Colour c) { m_Tint = c; }

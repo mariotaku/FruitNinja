@@ -160,6 +160,13 @@ public:
     // for the pos.y-rewrite contract this feeds.
     void UpdateScroll(float dt);
 
+    // Port specific: cancel every plate widget latched on `slot`. Called from
+    // UpdateScroll() the moment m_ScrollOwnsTouch latches, because from that
+    // point on Update() stops ticking the widgets -- a widget left latched
+    // would resolve its stale capture as a release on its NEXT tick and fire a
+    // phantom toggle. See UiWidget::CancelTouch.
+    void CancelWidgetTouches(int slot);
+
     // Port specific: advances m_AnimPhase/m_AnimTimer/m_PopupOffsetY/
     // m_BackdropAlpha each frame. Called first thing in Update(), before
     // UpdateScroll() and the widgets. See .cpp for the easing curves.

@@ -1225,6 +1225,13 @@ void SettingsScreen::UpdateScroll(float dt) {
             if (absDy > kScrollDeadZone && absDy >= absDx * kScrollVerticalBias) {
                 m_ScrollOwnsTouch = 1;
                 m_ScrollDragging = 1;
+                // Ownership just transferred: the widgets stop being ticked
+                // below, so cancel any that is still latched on this slot
+                // rather than leaving it to resolve a dead capture as a
+                // release later (phantom toggle). Mirrors the binary's own
+                // hand-off -- ScrollingMenu::Update @0x001b03b4 calls the
+                // collided item's cancel slot once the drag passes 5.0.
+                CancelWidgetTouches(m_ScrollTouchId);
             }
         }
     }
@@ -1233,6 +1240,22 @@ void SettingsScreen::UpdateScroll(float dt) {
     // below) -- runs once per PRESENTED frame instead of once per 60Hz sim
     // step, dt-scaled so it's rate-independent. UpdateScroll() only tracks
     // touch and sets m_ScrollVel now; it does NOT touch m_ScrollY.
+}
+
+// Port specific: see the header. Covers every widget Update() gates out on
+// m_ScrollOwnsTouch, plus m_LangDrop -- the dropdown keeps ticking, but while
+// CLOSED it latches through the same UiWidget::PollTouch, so a scroll that
+// starts on its bar would otherwise open the panel on release.
+void SettingsScreen::CancelWidgetTouches(int slot) {
+    if (m_LangDrop)     m_LangDrop->CancelTouch(slot);
+    if (m_MotionCb)     m_MotionCb->CancelTouch(slot);
+    if (m_SensSlider)   m_SensSlider->CancelTouch(slot);
+    if (m_FpsCb)        m_FpsCb->CancelTouch(slot);
+    if (m_NativeFpsCb)  m_NativeFpsCb->CancelTouch(slot);
+    if (m_WideScreenCb) m_WideScreenCb->CancelTouch(slot);
+#if defined(FRUIT_PLATFORM_WII)
+    if (m_LetterboxCb)  m_LetterboxCb->CancelTouch(slot);
+#endif
 }
 
 #ifndef __bada__

@@ -69,6 +69,12 @@ UiWidget::PressResult UiWidget::PollTouch() {
     return kHeld;
 }
 
+void UiWidget::CancelTouch(int slot) {
+    if (m_TouchId == -1) return;
+    if (slot != -1 && m_TouchId != slot) return;
+    m_TouchId = -1;
+}
+
 void UiWidget::DrawBox(float cx, float cy, float w, float h, Colour tint) {
     if (!m_BoxTex.IsValid()) return;
     Mortar::NineSlice::Draw(m_BoxTex.Get(), cx, cy, w, h,
