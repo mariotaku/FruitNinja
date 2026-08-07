@@ -7,8 +7,7 @@ on:
   workflow_dispatch:
   push:
     # Branch pushes only. Without this, a v* tag push whose diff touches these
-    # paths ALSO fires this workflow directly, so a release would build twice --
-    # once here and once through webos-release.yml's workflow_call.
+    # paths would fire this workflow again on top of the release run below.
     branches:
       - '**'
     paths:
@@ -21,12 +20,13 @@ on:
       # The job uses the local fetch-game-assets composite action, so changes
       # to it must retrigger this build -- otherwise action fixes ship untested.
       - '.github/actions/**'
-  # Release path. A `push` trigger cannot express "branch pushes matching paths
-  # OR any v* tag": GitHub ANDs the ref filter with the paths filter, and
-  # declaring `tags` without `branches` would stop branch pushes triggering at
-  # all. So webos-release.yml owns the tag trigger and calls this workflow --
-  # one build definition, and the non-release path above is untouched.
-  workflow_call:
+  # Release path. Publishing is driven by the release event, so the push
+  # filters above stay untouched. `published` rather than `created`: a release
+  # made as a draft and published later emits `published` but never `created`,
+  # so `published` covers that flow as well as a direct non-draft
+  # `gh release create`.
+  release:
+    types: [published]
 
 env:
   WEBOS_SDK: /opt/arm-webos-linux-gnueabi_sdk-buildroot
@@ -37,7 +37,7 @@ jobs:
     name: Build (webOS)
     runs-on: ubuntu-latest
 
-    # Needed only by the tag-gated publish steps at the end (creating the
+    # Needed only by the release-gated publish steps at the end (creating the
     # release and uploading its assets). Every other run leaves it unused.
     permissions:
       contents: write
@@ -112,7 +112,7 @@ jobs:
       - name: Fetch game assets
         uses: ./.github/actions/fetch-game-assets
 
-      # ---- Release versioning (tag pushes only) ----
+      # ---- Release versioning (release event only) ----
       #
       # webOS decides "is this an upgrade" by comparing the three numeric parts
       # of appinfo.json's version, so a hardcoded 1.6.1 makes every release look
@@ -127,17 +127,17 @@ jobs:
       # ares-package accepts arbitrarily wide parts, so there's no digit budget
       # to protect here.
       #
-      # Non-tag pushes skip this step entirely: FN_APP_VERSION stays unset,
+      # Plain pushes skip this step entirely: FN_APP_VERSION stays unset,
       # build.sh passes no -D, and CMake's own default applies as before.
       - name: Derive App Version From Tag
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'release'
         shell: bash
         env:
-          # github.ref_name is the caller's ref, i.e. the tag, even though this
-          # workflow runs as a reusable callee. Read it through env rather than
-          # expanding it into the run script -- a tag name is attacker-
-          # controllable text and must never be pasted into shell source.
-          TAG: ${{ github.ref_name }}
+          # The release's own tag -- unambiguous for this event. Read it through
+          # env rather than expanding it into the run script: a tag name is
+          # attacker-controllable text and must never be pasted into shell
+          # source.
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           set -eo pipefail
 
@@ -179,7 +179,7 @@ jobs:
       # appinfo.json it just packaged. So a matching name already proves the
       # appinfo carries this version -- unpacking the ar/tar to re-read the
       # same field verifies nothing extra.
-      # Skipped when FN_APP_VERSION is unset, i.e. on every non-tag push.
+      # Skipped when FN_APP_VERSION is unset, i.e. on every non-release run.
       - name: Verify Package Version
         if: env.FN_APP_VERSION != ''
         shell: bash
@@ -203,20 +203,19 @@ jobs:
           name: webos-ipk
           path: dist/*.ipk
 
-      # ---- Release path (tag pushes only, via webos-release.yml) ----
+      # ---- Release path (release event only) ----
       #
-      # Everything below is gated on a v* tag, so a normal push still just
-      # builds and uploads the artifact above. The Compatibility Check step
+      # Everything below is gated on the release event, so a normal push still
+      # just builds and uploads the artifact above. The Compatibility Check step
       # runs first and fails the job on a bad ABI, so a broken .ipk can never
       # reach a release.
 
       - name: Generate Homebrew Manifest
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'release'
         shell: bash
         env:
-          # github.ref_name is the caller's ref, i.e. the tag, even though this
-          # workflow runs as a reusable callee.
-          TAG: ${{ github.ref_name }}
+          # The release's own tag -- unambiguous for this event.
+          TAG: ${{ github.event.release.tag_name }}
           REPO: ${{ github.repository }}
         run: |
           set -eo pipefail
@@ -251,12 +250,15 @@ jobs:
           cat "dist/${APP_ID}.manifest.json"
 
       - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          # Creates the release for the pushed tag if it does not exist yet, and
-          # only adds assets to an existing one.
-          tag_name: ${{ github.ref_name }}
+          # Adds assets to the release that triggered this run. wii.yml fires on
+          # the same release and publishes into it too, so nothing here may
+          # replace the whole asset set (clear_attachments) or set body /
+          # body_path -- leaving them unset keeps the Wii asset and the existing
+          # release notes untouched, whichever job lands first.
+          tag_name: ${{ github.event.release.tag_name }}
           files: |
             dist/*.ipk
             dist/*.manifest.json

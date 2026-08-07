@@ -21,12 +21,13 @@ on:
       # The job uses the local fetch-game-assets composite action, so changes
       # to it must retrigger this build -- otherwise action fixes ship untested.
       - '.github/actions/**'
-  # Release path. A `push` trigger cannot express "branch pushes matching paths
-  # OR any v* tag": GitHub ANDs the ref filter with the paths filter, and
-  # declaring `tags` without `branches` would stop branch pushes triggering at
-  # all. So wii-release.yml owns the tag trigger and calls this workflow --
-  # one build definition, and the non-release path above is untouched.
-  workflow_call:
+  # Release path. Publishing is driven by the release event, so the push
+  # filters above stay untouched. `published` rather than `created`: a release
+  # made as a draft and published later emits `published` but never `created`,
+  # so `published` covers that flow as well as a direct non-draft
+  # `gh release create`.
+  release:
+    types: [published]
 
 env:
   # freetype-py + Pillow live in a venv: Ubuntu's python3 is externally-managed
@@ -41,8 +42,8 @@ jobs:
     # DEVKITPRO=/opt/devkitpro, which cmake/wii.toolchain.cmake requires.
     container: devkitpro/devkitppc
 
-    # Needed only by the tag-gated publish step at the end (creating the
-    # release and uploading its asset). Every other run leaves it unused.
+    # Needed only by the release-gated publish step at the end (uploading the
+    # release asset). Every other run leaves it unused.
     permissions:
       contents: write
 
@@ -134,12 +135,12 @@ jobs:
           path: build/wii/fruit-ninja-wii.zip
           if-no-files-found: error
 
-      # ---- Release path (tag pushes only, via wii-release.yml) ----
+      # ---- Release path (release event only) ----
       #
-      # Everything below is gated on a v* tag, so a normal push still just
-      # builds and uploads the artifact above. The two Verify steps run first
-      # and fail the job, so a fontless or iconless package can never reach a
-      # release.
+      # Everything below is gated on the release event, so a normal push still
+      # just builds and uploads the artifact above. The two Verify steps run
+      # first and fail the job, so a fontless or iconless package can never
+      # reach a release.
 
       # CPack always names the package fruit-ninja-wii.zip, so every release
       # would otherwise carry an identically named asset and a downloaded copy
@@ -148,14 +149,14 @@ jobs:
       # package has no internal version field at all, so the tag in the
       # filename is the only version marker there is.
       - name: Name Release Asset After Tag
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'release'
         shell: bash
         env:
-          # github.ref_name is the caller's ref, i.e. the tag, even though this
-          # workflow runs as a reusable callee. Read it through env rather than
-          # expanding it into the run script -- a tag name is attacker-
-          # controllable text and must never be pasted into shell source.
-          TAG: ${{ github.ref_name }}
+          # The release's own tag -- unambiguous for this event. Read it through
+          # env rather than expanding it into the run script: a tag name is
+          # attacker-controllable text and must never be pasted into shell
+          # source.
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           set -eo pipefail
 
@@ -172,14 +173,13 @@ jobs:
           ls -l "build/wii/fruit-ninja-wii-${TAG}.zip"
 
       - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          # Creates the release for the pushed tag if it does not exist yet, and
-          # only adds assets to an existing one. webos-release.yml fires on the
-          # same tag and publishes into the same release, so nothing here may
+          # Adds assets to the release that triggered this run. webos.yml fires
+          # on the same release and publishes into it too, so nothing here may
           # replace the whole asset set (clear_attachments) or set body /
           # body_path -- leaving them unset keeps the webOS assets and the
           # existing release notes untouched, whichever job lands first.
-          tag_name: ${{ github.ref_name }}
+          tag_name: ${{ github.event.release.tag_name }}
           files: build/wii/fruit-ninja-wii-*.zip
