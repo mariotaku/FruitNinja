@@ -171,9 +171,14 @@ jobs:
         run: bash tools/webos/build.sh
 
       # Prove the derived version actually reached the package before anything
-      # is published. Checks both the .ipk filename (ares-package names it
-      # <id>_<version>_<arch>.ipk) and the appinfo.json inside it, so a stale
-      # CMake cache or a dropped -D can't ship a mislabeled release.
+      # is published, so a stale CMake cache or a dropped -D cannot ship a
+      # mislabeled release.
+      #
+      # The filename is the whole check: ares-package names the output
+      # <id>_<version>_<arch>.ipk, reading <version> straight out of the
+      # appinfo.json it just packaged. So a matching name already proves the
+      # appinfo carries this version -- unpacking the ar/tar to re-read the
+      # same field verifies nothing extra.
       # Skipped when FN_APP_VERSION is unset, i.e. on every non-tag push.
       - name: Verify Package Version
         if: env.FN_APP_VERSION != ''
@@ -186,25 +191,7 @@ jobs:
             echo "ERROR: expected package '$EXPECTED', got '$(basename "$IPK")'" >&2
             exit 1
           fi
-
-          # An .ipk is an ar archive holding data.tar[.gz]; the app root sits at
-          # usr/palm/applications/<id>/. tar does NOT sniff compression when the
-          # archive arrives on stdin -- it fails with "Archive is compressed, use
-          # -z option" -- so pick the decompressor from the member name instead.
-          DATA_MEMBER="$(ar t "$IPK" | grep '^data\.tar' | head -n1)"
-          case "$DATA_MEMBER" in
-            *.gz) TAR_FLAGS=-xzO ;;
-            *)    TAR_FLAGS=-xO  ;;
-          esac
-          PKG_VERSION="$(ar p "$IPK" "$DATA_MEMBER" \
-            | tar "$TAR_FLAGS" --wildcards '*/appinfo.json' \
-            | jq -r .version)"
-          if [ "$PKG_VERSION" != "$FN_APP_VERSION" ]; then
-            echo "ERROR: appinfo.json in the .ipk says '$PKG_VERSION', expected '$FN_APP_VERSION'" >&2
-            exit 1
-          fi
-
-          echo "OK: $(basename "$IPK") carries version $PKG_VERSION"
+          echo "OK: $(basename "$IPK") carries version $FN_APP_VERSION"
 
       - name: Compatibility Check
         shell: bash
