@@ -16,9 +16,12 @@ to the code they describe. Separate design docs do not hold it.
 > authorize or endorse it. *Fruit Ninja*, its artwork, audio, models, name, and
 > logo are © Halfbrick Studios and remain their property. **This repository
 > includes no game assets.** You must supply your own copy of the original game
-> data to build and run. The build reads that data from a local dump. Nobody
-> commits or redistributes it here. This repository holds only original
-> reverse-engineered source code and tooling.
+> data to build and run. The build reads that data from a local dump. The source
+> tree holds only original reverse-engineered code and tooling.
+>
+> Built packages are a different matter. The webOS `.ipk`, the Wii zip, and the
+> web deploy all bundle the game data, because the game cannot run without it.
+> Do not redistribute them.
 
 ## Platforms
 

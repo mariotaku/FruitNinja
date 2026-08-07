@@ -15,7 +15,11 @@ Not covered / not distributed
 "Fruit Ninja", its name and logo, and all original game assets -- including but not
 limited to textures, artwork, audio, 3D models, fonts, strings, and level/design
 data -- are the property of Halfbrick Studios. They are NOT covered by the MIT
-License and are NOT included or distributed in this repository. Building or running
+License and are NOT included in this repository's source tree. Building or running
 this software requires you to supply your own copy of the original game's data.
+
+Built packages are a different matter. The webOS .ipk, the Wii homebrew zip, and
+the web deploy all bundle the game data, because the game cannot run without it.
+Those packages are therefore NOT for redistribution.
 
 All trademarks are the property of their respective owners.
