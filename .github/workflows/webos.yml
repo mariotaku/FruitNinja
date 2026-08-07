@@ -107,9 +107,94 @@ jobs:
       - name: Fetch game assets
         uses: ./.github/actions/fetch-game-assets
 
+      # ---- Release versioning (tag pushes only) ----
+      #
+      # webOS decides "is this an upgrade" by comparing the three numeric parts
+      # of appinfo.json's version, so a hardcoded 1.6.1 makes every release look
+      # identical to the TV. Map the tag to a version that always increases:
+      #
+      #   v<MAJOR>.<MINOR>.<REV>-<PATCH>  ->  MAJOR.((MINOR*100)+REV).PATCH
+      #
+      # i.e. v1.6.1-3 -> 1.601.3. The tag keeps the upstream game version
+      # MAJOR.MINOR.REV plus a port patch number, but webOS only has three
+      # fields -- folding REV into MINOR at *100 keeps ordering correct as long
+      # as REV stays below 100, and leaves PATCH free to count port releases.
+      # ares-package accepts arbitrarily wide parts, so there's no digit budget
+      # to protect here.
+      #
+      # Non-tag pushes skip this step entirely: FN_APP_VERSION stays unset,
+      # build.sh passes no -D, and CMake's own default applies as before.
+      - name: Derive App Version From Tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          # github.ref_name is the caller's ref, i.e. the tag, even though this
+          # workflow runs as a reusable callee. Read it through env rather than
+          # expanding it into the run script -- a tag name is attacker-
+          # controllable text and must never be pasted into shell source.
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eo pipefail
+
+          # Refuse anything that isn't the exact shape. Falling back to the
+          # default version here would publish a release whose .ipk claims 1.6.1
+          # and that no TV would ever offer as an upgrade -- fail the job loudly
+          # instead, while the tag can still be deleted and re-pushed.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$'; then
+            echo "ERROR: tag '$TAG' does not match the release pattern v<MAJOR>.<MINOR>.<REV>-<PATCH>" >&2
+            echo "       e.g. v1.6.1-3 (upstream game version 1.6.1, port release 3)." >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          UPSTREAM="${VERSION%%-*}"
+          PATCH="${VERSION##*-}"
+          MAJOR="${UPSTREAM%%.*}"
+          MINOR_REV="${UPSTREAM#*.}"
+          MINOR="${MINOR_REV%%.*}"
+          REV="${MINOR_REV##*.}"
+
+          # 10# forces base 10: bash reads a leading zero as octal, so a tag
+          # like v1.6.08-1 would otherwise abort with "value too great for base".
+          APP_VERSION="$((10#$MAJOR)).$((10#$MINOR * 100 + 10#$REV)).$((10#$PATCH))"
+
+          echo "tag $TAG -> FN_APP_VERSION $APP_VERSION"
+          echo "FN_APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+
       - name: Build + Package
         shell: bash
         run: bash tools/webos/build.sh
+
+      # Prove the derived version actually reached the package before anything
+      # is published. Checks both the .ipk filename (ares-package names it
+      # <id>_<version>_<arch>.ipk) and the appinfo.json inside it, so a stale
+      # CMake cache or a dropped -D can't ship a mislabeled release.
+      # Skipped when FN_APP_VERSION is unset, i.e. on every non-tag push.
+      - name: Verify Package Version
+        if: env.FN_APP_VERSION != ''
+        shell: bash
+        run: |
+          set -eo pipefail
+          IPK="$(ls dist/*.ipk | head -n1)"
+          EXPECTED="com.halfbrick.fruitninja_${FN_APP_VERSION}_arm.ipk"
+          if [ "$(basename "$IPK")" != "$EXPECTED" ]; then
+            echo "ERROR: expected package '$EXPECTED', got '$(basename "$IPK")'" >&2
+            exit 1
+          fi
+
+          # An .ipk is an ar archive holding data.tar[.gz]; the app root sits at
+          # usr/palm/applications/<id>/. GNU tar sniffs the compression on read,
+          # so -xO alone handles both .tar and .tar.gz members.
+          DATA_MEMBER="$(ar t "$IPK" | grep '^data\.tar' | head -n1)"
+          PKG_VERSION="$(ar p "$IPK" "$DATA_MEMBER" \
+            | tar -xO --wildcards '*/appinfo.json' \
+            | jq -r .version)"
+          if [ "$PKG_VERSION" != "$FN_APP_VERSION" ]; then
+            echo "ERROR: appinfo.json in the .ipk says '$PKG_VERSION', expected '$FN_APP_VERSION'" >&2
+            exit 1
+          fi
+
+          echo "OK: $(basename "$IPK") carries version $PKG_VERSION"
 
       - name: Compatibility Check
         shell: bash

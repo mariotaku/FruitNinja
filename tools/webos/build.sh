@@ -24,6 +24,9 @@
 #                  Default: $HOME/.venvs/fn-webos
 #   BUILD_DIR      CMake build tree. Default: build/webos
 #   DIST_DIR       Where the assembled app root + .ipk land. Default: dist
+#   FN_APP_VERSION appinfo.json version, and hence the .ipk filename.
+#                  Unset: the CMake default (FN_APP_VERSION in the root
+#                  CMakeLists.txt). CI derives it from the release tag.
 #
 # -e: exit on any non-zero. -o pipefail: a pipeline fails if ANY stage fails.
 set -eo pipefail
@@ -57,11 +60,20 @@ if ! command -v ares-package >/dev/null 2>&1; then
     exit 1
 fi
 
+# Pass -DFN_APP_VERSION only when the caller set one. An unconditional
+# -DFN_APP_VERSION="$FN_APP_VERSION" would write an empty string into the cache
+# and ship a version-less appinfo.json, instead of leaving CMake's default.
+CMAKE_EXTRA_ARGS=()
+if [ -n "${FN_APP_VERSION:-}" ]; then
+    CMAKE_EXTRA_ARGS+=(-DFN_APP_VERSION="$FN_APP_VERSION")
+fi
+
 cmake -B "$BUILD_DIR" \
     -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
     -DFRUIT_GL_API=ES2 \
     -DFRUIT_PLATFORM_WEBOS=ON \
-    -DPython3_EXECUTABLE="$VENV_PYTHON"
+    -DPython3_EXECUTABLE="$VENV_PYTHON" \
+    "${CMAKE_EXTRA_ARGS[@]}"
 
 cmake --build "$BUILD_DIR" --target fruit-ninja -j"$(nproc)"
 

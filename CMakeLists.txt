@@ -28,11 +28,17 @@ option(FRUIT_PLATFORM_WII "Build the Wii (GX/libogc2) platform target -- require
 # explicitly with -DFRUIT_PLATFORM_WEBOS=ON.
 option(FRUIT_PLATFORM_WEBOS "Build for webOS TV (SDL2 + GLES2)" OFF)
 
-# App version string, substituted into deploy/webos/appinfo.json (@FN_APPINFO_VERSION@)
+# App version string, substituted into deploy/webos/appinfo.json (@FN_APP_VERSION@)
 # and matching tools/wii/hbc/meta.xml's <version>. No PROJECT_VERSION is set on
 # the project() call below (this isn't versioned via CMake's own mechanism), so
 # this is the single source of truth for the shipped webOS package version.
-set(FN_APP_VERSION "1.6.1" CACHE STRING "App version string (webOS appinfo.json, etc.)")
+#
+# Release builds override it from the git tag: .github/workflows/webos.yml maps
+# tag `v<MAJOR>.<MINOR>.<REV>-<PATCH>` to `MAJOR.((MINOR*100)+REV).PATCH` and
+# passes it through tools/webos/build.sh. webOS decides "is this an upgrade" by
+# comparing the three numeric parts, so the shipped version has to increase per
+# release -- the default below is the upstream game version and never moves.
+set(FN_APP_VERSION "1.6.1" CACHE STRING "App version string (webOS appinfo.json, etc.); CI overrides it from the release tag")
 
 # --- Dynamic-TTF rasterizer backend (compile-time swappable) ---
 # FontCacheObjectTTF (src/engine/render/FontCacheObjectTTF.cpp) rasterizes
