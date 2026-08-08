@@ -5,8 +5,6 @@ rewritten from scratch in C++11. The goal is a close to 100% faithful
 recreation, with the minimum of optional additions to fit modern platforms and
 form factors.
 
-Bada died and took the game with it. This runs it on hardware you actually own.
-
 Unofficial fan project, not affiliated with Halfbrick. You need your own copy of
 the game data to build or run it — none of it is in this repo.
 
