@@ -18,9 +18,9 @@ the game data to build or run it — none of it is in this repo.
 
 Widescreen (16:9):
 
-![Main menu in widescreen](docs/screenshots/main-menu-wide.png)
-
-![Arcade mode in widescreen, freeze powerup and a critical combo](docs/screenshots/arcade-wide.png)
+| Main menu | Arcade mode |
+|---|---|
+| ![Main menu in widescreen](docs/screenshots/main-menu-wide.png) | ![Arcade mode in widescreen, freeze powerup and a critical combo](docs/screenshots/arcade-wide.png) |
 
 ## What's new
 
