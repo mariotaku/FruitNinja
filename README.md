@@ -66,8 +66,6 @@ Wii is playable but still rough around the edges; see `src/platform/wii/README.m
 
 ## How to develop
 
-Start with `docs/HANDOVER.md`.
-
 The RE record lives in the source, not in design docs. Every function carries
 what is known about it as a comment — `// ASM-verified:` for anything checked
 instruction-by-instruction against the binary, `// TODO: v1.6.1 0x...` for a gap

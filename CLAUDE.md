@@ -182,7 +182,7 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 
   **Tool output format (suggestion).** A tool's durable output should be a **machine-readable file** (JSON or similar) under `tmp/<tool>/` — that file is the single source of truth, queryable and consumable by other tools/agents. The **human/LLM-facing summary goes to stdout** as concise, ranked markdown/plaintext. Don't make markdown the data *product* (it isn't queryable and drifts); enrich/emit the structured file and render a short ranked summary to the terminal. (Pattern: `classify-divergences.py` enriches `report.json` with per-symbol `cause`/`likelihood` and prints the ranked shortlist to stdout — no markdown artifact.) Apply this when reworking any tool.
 
-  Do NOT commit these. The `docs/` tree is reserved for the small load-bearing reference docs (file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance, this CLAUDE.md, plus `docs/HANDOVER*.md` / `docs/port-plan.md` which capture project-wide policy that survives across sessions). Anything else — drafts, working notes, gap-survey snapshots, dispatch-shape proposals — belongs in `tmp/`. **RE backlog lives in Claude tasks (`TaskCreate`/`TaskList`), NOT in any `docs/` file.** The intentional-skip list lives in `docs/engine/online-services-audit.md`.
+  Do NOT commit these. The `docs/` tree is reserved for the small load-bearing reference docs (file formats, init order, coordinate convention, intentional-skip lists, toolchain provenance, this CLAUDE.md, plus `docs/port-plan.md` which captures port intent that survives across sessions). Anything else — drafts, working notes, handover/onboarding snapshots, gap surveys, audits, dispatch-shape proposals — belongs in `tmp/`. **Handover notes and TODO lists are volatile and never belong in the repo**, however tidy they look — they drift out of date and then mislead. Onboarding lives in the top-level `README.md`; policy lives here. **RE backlog lives in Claude tasks (`TaskCreate`/`TaskList`), NOT in any `docs/` file.** The intentional-skip list lives in `docs/engine/online-services-audit.md`.
 - **`printf` / log strings: ASCII only** — no emoji, no Unicode arrows (`→`/`←`/`↓`/`↑`), no fancy quotes, no en/em dashes, no box-drawing chars. The Windows console codepage mangles non-ASCII bytes regardless of toolchain. Use plain ASCII substitutes (`->`, `--`, `'`, etc.). Comments inside source files can use Unicode freely; this is a runtime-output rule.
 
 ## Key Files
@@ -190,7 +190,6 @@ Specialised agents handle distinct phases of the RE+port workflow. **Each agent 
 The canonical RE record is in `src/`. The surviving `docs/` set is small and load-bearing only — things you cannot derive from code:
 
 - `docs/README.md` — index for the below.
-- `docs/HANDOVER.md` — onboarding context.
 - `docs/port-plan.md` — high-level port intent.
 - `docs/resources.md` — asset directory layout, XML schemas, loading flow (data, not derivable from code).
 - `docs/source-files.md` — port file → binary symbol cross-reference index.

@@ -142,7 +142,7 @@ Optional ASAN build (clang64/MSYS2, separate `build/asan/` dir, `-DENABLE_ASAN=O
 
 ## Key paths
 - Source: `src/engine/` (Mortar engine), `src/entities/` (game entities), `src/game/` (game-side managers + screens), `src/hud/` (HUD), `src/screens/` (screen classes).
-- Reference docs (small, load-bearing only): `docs/HANDOVER*.md`, `docs/engine/` (formats, init order, coordinate system, online-services audit, build evidence), `docs/resources.md`. Project-wide RE backlog lives in Claude tasks (`TaskList`), not in any docs/ file.
+- Reference docs (small, load-bearing only): `docs/engine/` (formats, init order, coordinate system, online-services audit, build evidence), `docs/resources.md`. Project-wide RE backlog lives in Claude tasks (`TaskList`), not in any docs/ file.
 
 ## Before writing code
 1. Read the relevant `src/` file(s) to understand current state, including any `// TODO:` / `// ASM-verified:` markers in or near the function.
