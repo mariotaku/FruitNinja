@@ -6,7 +6,7 @@ recreation, with the minimum of optional additions to fit modern platforms and
 form factors.
 
 Unofficial fan project, not affiliated with Halfbrick. You need your own copy of
-the game data to build or run it — none of it is in this repo.
+the game data to build or run it.
 
 ## Screenshots
 
@@ -22,29 +22,22 @@ Widescreen (16:9):
 
 ## What's new
 
-Most of the port is deliberately identical to the original. These are the parts
-that aren't:
-
-- **Widescreen (16:9).** The original is a fixed 3:2 480x320. Turn it on in
-  Settings and restart — every hardcoded half-width in the layout goes through
-  `Layout::HalfWidth()` so the field, camera and HUD all re-anchor.
+- **Widescreen (16:9).** The original is a fixed 3:2 480x320. Opt in from
+  Settings; applies on restart.
 - **Motion mode.** Point to aim, flick to cut, instead of dragging a finger.
-  On by default. This is what makes an LG Magic Remote work.
-- **Native refresh rate.** The simulation still runs the original's fixed 60 Hz
-  tick — that part is not negotiable, it's what keeps the physics identical —
-  but frames interpolate on top, so a 120 Hz screen gets 120 fps.
-- **A settings screen.** v1.6.1 has no options UI whatsoever. This one has
-  language, motion mode and sensitivity, FPS counter, frame-rate and widescreen
-  toggles, and it actually saves them.
-- **webOS TV and Wii.** Plus desktop and the browser.
+  On by default, and what makes an LG Magic Remote work.
+- **Native refresh rate.** The sim keeps the original's fixed 60 Hz tick and
+  frames interpolate on top, so a 120 Hz screen gets 120 fps.
+- **A settings screen.** v1.6.1 has no options UI at all. This one saves your
+  language, input and display choices.
+- **webOS TV and Wii.**
 
 Smaller things: mouse-wheel scrolling, ESC/Back as a back key, F12 screenshots,
-optional HD textures, and a PWA build for the web that works offline.
+optional HD textures, and an offline-capable PWA build for the web.
 
 ## How to build
 
-Everything is CMake, and every target needs the original game data present
-locally.
+Everything is CMake.
 
 | Target | Backend | Output | Build with |
 |---|---|---|---|
@@ -53,36 +46,30 @@ locally.
 | LG webOS TV | SDL2 + GLES2 | `.ipk` | `tools/webos/build.sh` |
 | Nintendo Wii | devkitPPC + libogc, native GX | homebrew `.zip` | `tools/wii/build.sh` |
 
-Each of those has its own README with the details. The renderer is a
-hand-written GLES2 shader pipeline — the original's fixed-function ES1 path is
-gone — except on Wii, which draws through GX behind a GL shim.
+Each target has its own README with the setup details. CI builds the webOS
+`.ipk` and the Wii zip on every push, and attaches both to a GitHub release when
+one is published.
 
-CI builds the webOS `.ipk` and the Wii zip on every push, and attaches both to a
-GitHub release when one is published.
-
-Wii is playable but still rough around the edges; see `src/platform/wii/README.md`.
+Wii is playable but still rough; see `src/platform/wii/README.md`.
 
 ## How to develop
 
 The RE record lives in the source, not in design docs. Every function carries
-what is known about it as a comment — `// ASM-verified:` for anything checked
+what is known about it as a comment: `// ASM-verified:` for anything checked
 instruction-by-instruction against the binary, `// TODO: v1.6.1 0x...` for a gap
 with the address to go read, `// DIFFERS:` for a deliberate deviation and why,
-`// Defunct:` for the dead online services that are stubbed but kept in the call
-graph. Grep for them.
+`// Defunct:` for dead online services kept as stubs. Grep for them.
 
-`tools/asm-verify/` is the thing that keeps this honest: it cross-compiles the
-port with the binary's own toolchain (GCC 4.4.1) and diffs the ARM output
-against `FruitNinja.exe`, function by function, then ranks what actually looks
-like a bug. `bash tools/asm-verify/run.sh` — see `tools/asm-verify/README.md`.
+`tools/asm-verify/` keeps that honest. It cross-compiles the port with the
+binary's own toolchain (GCC 4.4.1) and diffs the ARM output against
+`FruitNinja.exe` function by function, then ranks what looks like a real bug.
+`bash tools/asm-verify/run.sh`, see `tools/asm-verify/README.md`.
 
-Tests are `ctest`; headless GL setup is in `tests/README.md`. Anything new with
-few dependencies and many dependents gets a unit test.
-
-`tools/README.md` indexes the rest — asset conversion, the web pipeline, the
-Ghidra scripts.
+Tests are `ctest`; headless GL setup is in `tests/README.md`.
+`tools/README.md` indexes the rest.
 
 ## License
 
-MIT for the code and tooling here. Fruit Ninja itself belongs to Halfbrick — see
-[NOTICE](NOTICE).
+[MIT](LICENSE) covers only the code and tooling written for this project.
+"Fruit Ninja", its name and logo, and all original game assets belong to
+Halfbrick Studios.
