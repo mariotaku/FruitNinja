@@ -1,9 +1,9 @@
 # Fruit Ninja — Reverse-Engineered Port
 
 Fruit Ninja v1.6.1 for Samsung Bada, reverse-engineered from the ARM binary and
-rewritten from scratch in C++11. The goal is to match the original exactly —
-same physics, same spawn patterns, same scoring, same timing — not to remake it
-or improve it. Where the port deliberately differs, the source says so.
+rewritten from scratch in C++11. The goal is a close to 100% faithful
+recreation, with the minimum of optional additions to fit modern platforms and
+form factors.
 
 Bada died and took the game with it. This runs it on hardware you actually own.
 
