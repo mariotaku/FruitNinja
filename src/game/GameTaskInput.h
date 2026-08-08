@@ -16,6 +16,16 @@
 //
 // This is the ONLY place the blade is wired to input. SlashEntity does not
 // subscribe to the InputManager itself.
+//
+// Port specific: because it is the only seam, it is also where the two
+// blade-suppression rules live (both fold away under __bada__):
+//   - the settings modal captures input, so no slot feeds a blade while it is up;
+//   - while FN::g_MotionMode is ON, a slot that originated on
+//     FN::MOTION_CLICK_ONLY_CHANNEL (the mouse's UI channel) feeds no blade, so
+//     a click drives widgets only and never draws or cuts. The blade then comes
+//     from the hover channel alone.
+// Both are per-slot decisions taken here, NOT at the SDL layer -- dropping the
+// finger in the translator is what used to move the press edge to button-UP.
 
 void GameTaskInitInput();
 

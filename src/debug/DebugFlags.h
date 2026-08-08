@@ -52,7 +52,9 @@ namespace Mortar { class FontCacheObjectTTF; }
 //                   press/release meaning on FN::POINTER_FINGER_CHANNEL in
 //                   both modes, so menus and widgets behave the same way
 //                   with motion mode on or off: point to aim, click to
-//                   press. See src/platform/InputTranslatorSDL.cpp
+//                   press. While motion mode is ON that click is UI-only --
+//                   it never feeds a blade, see MOTION_CLICK_ONLY_CHANNEL
+//                   below. See src/platform/InputTranslatorSDL.cpp
 //                   (cursor tracking) and src/entities/SlashEntity.cpp
 //                   (the speed gate). Toggle F5, or launch
 //                   with --motion / web ?motion=1.
@@ -112,6 +114,25 @@ static const int HOVER_BLADE_CHANNEL_LAST  = WII_POINTER_CHANNEL_LAST;
 #else
 static const int HOVER_BLADE_CHANNEL_FIRST = MOTION_BLADE_CHANNEL;
 static const int HOVER_BLADE_CHANNEL_LAST  = MOTION_BLADE_CHANNEL;
+#endif
+
+// Port specific: the channel whose touches are CLICK-ONLY while g_MotionMode
+// is ON. A Mortar::Touch slot that came from this channel (extId == channel+1)
+// is never fed to a SlashEntity, so the click drives UI and nothing else --
+// no trail, no cut. In motion mode the blade is the HOVER channel's job alone;
+// without this gate a fast button-drag is an ordinary touch and produces a
+// second, speed-gated, CUTTING blade on the UI channel.
+// -1 means "no such channel" -- the gate never matches.
+// The gate itself lives in src/game/GameTaskInput.cpp, at the seam where a
+// slot index becomes a blade (TouchDownCallback / PointerMoveCallback).
+// Wii is deliberately -1. Its press channels are 0-3 (the A button) and its
+// own acceptance spec keeps A's slice SPEED-GATED rather than suppressed (see
+// src/platform/wii/InputTranslatorWii.h, "Net behaviour"). The number would be
+// wrong there too: channel 15 is a Wii HOVER channel, not a click channel.
+#if defined(FRUIT_PLATFORM_WII)
+static const int MOTION_CLICK_ONLY_CHANNEL = -1;
+#else
+static const int MOTION_CLICK_ONLY_CHANNEL = POINTER_FINGER_CHANNEL;
 #endif
 
 // Port specific: SlashEntity's motion-mode speed-gate range (see

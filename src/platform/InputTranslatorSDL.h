@@ -61,6 +61,12 @@
 //     by the SDL-synthesized SDL_FINGER* stream in BOTH modes, so a click is
 //     an ordinary press on button-DOWN, a drag while held, a release on
 //     button-UP. Menus, widgets and scrollers only ever see this channel.
+//     While motion mode is ON it is CLICK-ONLY: the slot it lands in is not
+//     fed to a SlashEntity, so a button-drag draws no trail and cuts nothing
+//     (FN::MOTION_CLICK_ONLY_CHANNEL; the gate is in
+//     src/game/GameTaskInput.cpp). The suppression is deliberately NOT done
+//     here at the SDL layer -- dropping the finger is what used to put the
+//     press edge on button-UP and made clicks land one event late.
 //
 //   HOVER_CHANNEL (FN::MOTION_BLADE_CHANNEL, 14) -- the blade channel, live
 //     only while motion mode is ON. Driven from RAW SDL_MOUSEMOTION /
@@ -80,9 +86,11 @@
 //   - Hovering with the cursor inside the window and no button held keeps
 //     HOVER_CHANNEL pressed and moving -- the blade follows the cursor.
 //   - Pressing any mouse button LIFTS the blade (releases HOVER_CHANNEL) so
-//     the click cannot also cut, and so the two roles are never live at once
-//     (no double blade). The synthesized FINGERDOWN presses MOUSE_CHANNEL in
-//     the same drain, which is what makes the click land.
+//     the two roles are never live at once (no double blade). The synthesized
+//     FINGERDOWN presses MOUSE_CHANNEL in the same drain, which is what makes
+//     the click land. Consequence, by design: while a button is held there is
+//     NO blade at all -- the hover blade is lifted and MOUSE_CHANNEL is
+//     click-only. That is the pre-split behaviour ("click does not cut").
 //   - Releasing the last held button re-presses HOVER_CHANNEL at the current
 //     position (if the cursor is still inside the window).
 //   - The cursor leaving the window releases HOVER_CHANNEL.

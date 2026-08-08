@@ -11,7 +11,9 @@
 #include "game/GameWork.h"
 #include "entities/SlashEntity.h"
 #include "input/InputSink.h"
+#include "input/Touch.h"
 #include "hud/HUD.h"
+#include "debug/DebugFlags.h"
 
 // Port specific: the settings modal captures input -- while it is open the
 // per-finger blade must not be fed (see HUD::SetInputModal, src/hud/HUD.h).
@@ -26,6 +28,41 @@ static bool BladeInputSuppressed() {
 #else
     return game_work.mHud && game_work.mHud->GetInputModal() != nullptr;
 #endif
+}
+
+// Port specific: per-slot blade gate. Adds the motion-mode click rule on top of
+// the modal gate above.
+//
+// While FN::g_MotionMode is ON the blade belongs to the HOVER channel alone.
+// The mouse CLICK rides FN::MOTION_CLICK_ONLY_CHANNEL (the UI channel) and is a
+// perfectly ordinary press there -- widgets, scrollers and MenuButton all still
+// see it, because they read Mortar::Touch::states1 through TouchInRegion /
+// IsTouchDown, not through these callbacks. It must simply never become a
+// blade: a fast button-drag would otherwise draw a trail and cut fruit, which
+// is not what "point to aim, click to press" means.
+//
+// `slot` is the Mortar::Touch::states1 index. A slot's originating channel is
+// extId - 1 (the translators push extId = channel + 1), the same mechanism
+// Mortar::IsHoverBladeSlot uses in src/engine/input/Touch.cpp. Suppressing at
+// the SDL layer instead would put the press edge back on button-UP, which is
+// the off-by-one click bug this seam replaced.
+//
+// Folds to the plain modal gate under __bada__ (and on any platform whose
+// FN::MOTION_CLICK_ONLY_CHANNEL is -1, i.e. Wii), so cross-build ASM is
+// unchanged.
+static bool BladeInputSuppressedForSlot(unsigned int slot) {
+    if (BladeInputSuppressed()) return true;
+#ifndef __bada__
+    if (FN::g_MotionMode && FN::MOTION_CLICK_ONLY_CHANNEL >= 0) {
+        const Mortar::TouchState* s =
+            Mortar::Touch::GetInstance().GetSlot((int)slot);
+        if (s && s->extId == (uint32_t)(FN::MOTION_CLICK_ONLY_CHANNEL + 1))
+            return true;
+    }
+#else
+    (void)slot;
+#endif
+    return false;
 }
 
 // ASM-spec v1.6.1 GameTaskInitInput @ 0x001cae0c (thunk @ 0x0011512c): pending re-verification
@@ -215,7 +252,7 @@ bool PointerMoveCallback(InputEvent* ev) {
     if (n < 16) {
         if (sink) {
             sink->TouchMoveX(ev, &game_work.m_FingerSpawnPos[n]);
-        } else if (!BladeInputSuppressed()) {
+        } else if (!BladeInputSuppressedForSlot(n)) {
             g_pSlashEntities[n]->TouchMoveX(ev);
         }
         game_work.m_FingerSpawnPos[kc - INPUT_KEY_TOUCHAXISX1].x = px;
@@ -231,7 +268,7 @@ bool PointerMoveCallback(InputEvent* ev) {
             game_work.m_FingerSpawnPos[n].y = py;
             sink->TouchMoveY(ev, &game_work.m_FingerSpawnPos[n]);
         } else {
-            if (!BladeInputSuppressed()) {
+            if (!BladeInputSuppressedForSlot(n)) {
                 g_pSlashEntities[n]->TouchMoveY(ev);
             }
             game_work.m_FingerSpawnPos[kc - INPUT_KEY_TOUCHAXISY1].y = py;
@@ -379,7 +416,7 @@ bool TouchDownCallback(InputEvent* ev) {
     if (n < 16) {
         Mortar::InputSink* sink = game_work.m_pActiveTouchSink;
         if (!sink || !sink->TouchDown(ev, &game_work.m_FingerSpawnPos[n])) {
-            if (!BladeInputSuppressed()) {
+            if (!BladeInputSuppressedForSlot(n)) {
                 g_pSlashEntities[ev->m_KeyId - INPUT_KEY_TOUCH1]->TouchDown(ev);
             }
         }

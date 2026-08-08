@@ -380,11 +380,14 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
         break;
     }
 
-    // Port specific: MOTION MODE -- raw mouse press LIFTS the hover blade, so
-    // the click cannot also cut and the two mouse roles are never live at once
-    // (the synthesized SDL_FINGERDOWN presses MOUSE_CHANNEL in the same drain,
-    // which is what makes the click land). Only meaningful while motion mode
-    // is ON; otherwise HOVER_CHANNEL is never pressed and this is a no-op.
+    // Port specific: MOTION MODE -- raw mouse press LIFTS the hover blade so
+    // the two mouse roles are never live at once (the synthesized
+    // SDL_FINGERDOWN presses MOUSE_CHANNEL in the same drain, which is what
+    // makes the click land). The click itself cannot cut regardless -- the
+    // FN::MOTION_CLICK_ONLY_CHANNEL gate in src/game/GameTaskInput.cpp keeps
+    // that slot away from the blade -- so while a button is held there is no
+    // blade at all. Only meaningful while motion mode is ON; otherwise
+    // HOVER_CHANNEL is never pressed and this is a no-op.
     case SDL_MOUSEBUTTONDOWN: {
         if (!FN::g_MotionMode) break;
         TLOG("MOTION MOUSEBUTTONDOWN -- lifting blade\n");
