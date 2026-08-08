@@ -16,7 +16,11 @@ the game data to build or run it — none of it is in this repo.
 |---|---|
 | ![Main menu](docs/screenshots/main-menu.png) | ![Arcade mode, frenzy banner](docs/screenshots/arcade-frenzy.png) |
 
-![Main menu in widescreen mode](docs/screenshots/main-menu-wide.png)
+Widescreen (16:9):
+
+![Main menu in widescreen](docs/screenshots/main-menu-wide.png)
+
+![Arcade mode in widescreen, freeze powerup and a critical combo](docs/screenshots/arcade-wide.png)
 
 ## What's new
 
