@@ -1,105 +1,88 @@
 # Fruit Ninja — Reverse-Engineered Port
 
-A from-scratch reimplementation of **Fruit Ninja v1.6.1** in portable C++11. The
-original is the Samsung Bada release, built on Halfbrick's *Mortar* engine. This
-port runs on modern desktops, the web, the Nintendo Wii, and LG webOS TVs.
+Fruit Ninja v1.6.1 for Samsung Bada, reverse-engineered from the ARM binary and
+rewritten from scratch in C++11. The goal is to match the original exactly —
+same physics, same spawn patterns, same scoring, same timing — not to remake it
+or improve it. Where the port deliberately differs, the source says so.
 
-The goal is **fidelity**. The port matches the original gameplay, physics,
-scoring, timing, and visual behavior as closely as possible. Every behavior comes
-from reverse-engineering the original ARM binary. The RE record lives in the
-source itself, as `// ASM-verified:`, `// TODO:`, and `// DIFFERS:` comments next
-to the code they describe. Separate design docs do not hold it.
+Bada died and took the game with it. This runs it on hardware you actually own.
 
-> [!IMPORTANT]
-> **Unofficial fan project, for preservation and education.**
-> This project has no affiliation with Halfbrick Studios. Halfbrick does not
-> authorize or endorse it. *Fruit Ninja*, its artwork, audio, models, name, and
-> logo are © Halfbrick Studios and remain their property. **This repository
-> includes no game assets.** You must supply your own copy of the original game
-> data to build and run. The build reads that data from a local dump. The source
-> tree holds only original reverse-engineered code and tooling.
->
-> Built packages are a different matter. The webOS `.ipk`, the Wii zip, and the
-> web deploy all bundle the game data, because the game cannot run without it.
-> Do not redistribute them.
+Unofficial fan project, not affiliated with Halfbrick. You need your own copy of
+the game data to build or run it — none of it is in this repo.
 
 ## Screenshots
-
-The port running on the desktop host build.
 
 | Main menu | Arcade mode |
 |---|---|
 | ![Main menu](docs/screenshots/main-menu.png) | ![Arcade mode, frenzy banner](docs/screenshots/arcade-frenzy.png) |
 
-The port also has a widescreen mode (16:9):
-
 ![Main menu in widescreen mode](docs/screenshots/main-menu-wide.png)
 
-## Platforms
+## What's new
 
-| Target | Backend | Package | Build entry |
-|--------|---------|---------|-------------|
-| Desktop (Windows/Linux) | SDL2 + desktop OpenGL (ES2 shader path) | executable | CMake presets (`cmake --preset host`) |
-| Web | Emscripten / WebAssembly + WebGL (ES2) | static site | `tools/web/` |
-| Nintendo Wii | devkitPPC / libogc / **GX** (no SDL) | Homebrew `.zip` | `tools/wii/build.sh` |
-| LG webOS TV | SDL2 + GLES2 (openlgtv buildroot NDK) | `.ipk` | `tools/webos/build.sh` |
+Most of the port is deliberately identical to the original. These are the parts
+that aren't:
 
-The renderer is a hand-written **OpenGL ES 2.0** shader pipeline. It draws 2D
-quads, 3D meshes, fonts, and particles. The port replaced the original
-fixed-function ES1 path completely. The Wii target uses native GX instead.
+- **Widescreen (16:9).** The original is a fixed 3:2 480x320. Turn it on in
+  Settings and restart — every hardcoded half-width in the layout goes through
+  `Layout::HalfWidth()` so the field, camera and HUD all re-anchor.
+- **Motion mode.** Point to aim, flick to cut, instead of dragging a finger.
+  On by default. This is what makes an LG Magic Remote work.
+- **Native refresh rate.** The simulation still runs the original's fixed 60 Hz
+  tick — that part is not negotiable, it's what keeps the physics identical —
+  but frames interpolate on top, so a 120 Hz screen gets 120 fps.
+- **A settings screen.** v1.6.1 has no options UI whatsoever. This one has
+  language, motion mode and sensitivity, FPS counter, frame-rate and widescreen
+  toggles, and it actually saves them.
+- **webOS TV and Wii.** Plus desktop and the browser.
 
-## Building
+Smaller things: mouse-wheel scrolling, ESC/Back as a back key, F12 screenshots,
+optional HD textures, and a PWA build for the web that works offline.
 
-Every target uses CMake. Every target also needs the original game data present
-locally, because this repository ships no assets. Each backend directory README
-has the details.
+## How to build
 
-- **Desktop:** configure with the committed CMake presets (`CMakePresets.json`).
-  vcpkg supplies SDL2, SDL2_image, FreeType, and tinyxml2.
-- **Web:** `tools/web/` uses the native Emscripten SDK. See `tools/web/README.md`.
-- **Wii:** `tools/wii/build.sh` uses devkitPPC and libogc. It produces
-  `fruit-ninja-wii.zip`.
-- **webOS:** `tools/webos/build.sh` uses the openlgtv buildroot NDK on Linux or
-  WSL. It produces an `.ipk`, checked with `webosbrew-ipk-verify`.
+Everything is CMake, and every target needs the original game data present
+locally.
 
-GitHub Actions also builds the webOS `.ipk` and the Wii homebrew zip, and uploads
-each one as a workflow artifact. See `.github/workflows/`.
+| Target | Backend | Output | Build with |
+|---|---|---|---|
+| Desktop (Windows/Linux) | SDL2 + GL, ES2 shader path | executable | `cmake --preset host` |
+| Web | Emscripten + WebGL | static site | `tools/web/build.sh` |
+| LG webOS TV | SDL2 + GLES2 | `.ipk` | `tools/webos/build.sh` |
+| Nintendo Wii | devkitPPC + libogc, native GX | homebrew `.zip` | `tools/wii/build.sh` |
 
-## Asset gallery
+Each of those has its own README with the details. The renderer is a
+hand-written GLES2 shader pipeline — the original's fixed-function ES1 path is
+gone — except on Wii, which draws through GX behind a GL shim.
 
-The web deploy publishes a browsable **asset gallery** at `/gallery`. It shows
-the game textures and the extracted 3D models. The gallery streams each texture
-at runtime as a byte-range slice of the game's WebAssembly `.data` bundle, so it
-duplicates nothing. `tools/web/build-gallery.sh` generates the gallery from the
-local game dump at build time. It commits no art, like the rest of the build.
+CI builds the webOS `.ipk` and the Wii zip on every push, and attaches both to a
+GitHub release when one is published.
 
-## Documentation
+Wii is playable but still rough around the edges; see `src/platform/wii/README.md`.
 
-- `docs/HANDOVER.md` — contributor onboarding (start here).
-- `docs/port-plan.md` — the port's intent and scope.
-- `docs/engine/` — the load-bearing reference set: file formats, static-init
-  order, coordinate convention, the intentionally-skipped online-services list,
-  and toolchain/ABI provenance.
-- Each directory has a `README.md` that documents its own tool or pipeline.
+## How to develop
 
-## Reverse-engineering and toolchain
+Start with `docs/HANDOVER.md`.
 
-The original is an ARM32 little-endian Bada ELF. Halfbrick built it on the Mortar
-engine with Sourcery G++ 4.4.1. An asm-verification pipeline
-(`tools/asm-verify/`) cross-compiles the port with that original toolchain and
-diffs the result against the binary. This keeps the reimplementation faithful.
-`tools/ghidra/` holds the Ghidra scripts used during RE.
+The RE record lives in the source, not in design docs. Every function carries
+what is known about it as a comment — `// ASM-verified:` for anything checked
+instruction-by-instruction against the binary, `// TODO: v1.6.1 0x...` for a gap
+with the address to go read, `// DIFFERS:` for a deliberate deviation and why,
+`// Defunct:` for the dead online services that are stubbed but kept in the call
+graph. Grep for them.
+
+`tools/asm-verify/` is the thing that keeps this honest: it cross-compiles the
+port with the binary's own toolchain (GCC 4.4.1) and diffs the ARM output
+against `FruitNinja.exe`, function by function, then ranks what actually looks
+like a bug. `bash tools/asm-verify/run.sh` — see `tools/asm-verify/README.md`.
+
+Tests are `ctest`; headless GL setup is in `tests/README.md`. Anything new with
+few dependencies and many dependents gets a unit test.
+
+`tools/README.md` indexes the rest — asset conversion, the web pipeline, the
+Ghidra scripts.
 
 ## License
 
-The [MIT License](LICENSE) covers the reverse-engineered source code and tooling
-in this repository. © 2026 Mariotaku.
-
-Halfbrick Studios owns the original *Fruit Ninja* game content, assets, and
-trademarks. The MIT License does not cover them. This repository does not include
-or distribute them. See [NOTICE](NOTICE).
-
-## Credits
-
-Mariotaku did the reverse-engineering and the port. *Fruit Ninja* is a trademark
-of Halfbrick Studios.
+MIT for the code and tooling here. Fruit Ninja itself belongs to Halfbrick — see
+[NOTICE](NOTICE).
