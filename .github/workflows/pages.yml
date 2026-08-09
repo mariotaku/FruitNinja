@@ -32,6 +32,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # ---- ONE Python for the whole job ------------------------------------
+      # Set up FIRST so every later step sees the same interpreter: CMake's
+      # find_package(Python3) picks it up as Python3_EXECUTABLE (stage-assets.py
+      # / svg-to-webp.py / web-hash-assets.py), and build_pages.py /
+      # build-gallery.sh resolve `python3` to it too. Unlike /usr/bin/python3 it
+      # is not PEP 668 externally-managed, so plain `pip install` works -- which
+      # is why the python module deps below are pip'd here instead of apt'd
+      # (apt would install into /usr/bin/python3, invisible to this one).
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Pillow: texture WebP encode (stage-assets.py, svg-to-webp.py) + the
+      # gallery's mesh dump / fruit_atlas decode (build-gallery.sh).
+      # fontTools: CJK font subset (stage-assets.py; best-effort, ships the
+      # full font without it). resvg-py self-provisions via `pip install
+      # --target` inside svg-to-webp.py.
+      - name: Install Python build deps
+        run: python -m pip install --disable-pip-version-check Pillow fonttools
+
       # ---- Load the pinned emsdk version (single source of truth) ----------
       - name: Load pinned emsdk version
         run: |
@@ -45,13 +66,13 @@ jobs:
           version: ${{ env.EMSDK_VERSION }}
           actions-cache-folder: emsdk-cache
 
-      # ---- Install native staging deps (ninja, ffmpeg, font/image tooling) --
-      # resvg-py self-provisions via `pip install --target` inside build.sh;
-      # python3-pil/fonttools are what stage-assets.py uses on apt hosts.
+      # ---- Install native staging deps (ninja + ffmpeg binaries) -----------
+      # Binaries only -- python modules come from the pip step above, so they
+      # land in the interpreter every step actually uses.
       - name: Install native build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build ffmpeg fonttools python3-pil
+          sudo apt-get install -y ninja-build ffmpeg
 
       # ---- Download + extract game assets from archive.org -----------------
       - name: Fetch game assets
@@ -77,19 +98,6 @@ jobs:
           ls -lh build/web/manifest.webmanifest build/web/sw.js build/web/favicon.ico
 
       # ---- Assemble pages/ ------------------------------------------------
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      # actions/setup-python puts its own interpreter AHEAD of /usr/bin/python3
-      # on PATH, so the apt `python3-pil` installed further up is not importable
-      # from it. build-gallery.sh probes `python3` first, so Pillow has to exist
-      # in the setup-python interpreter too or the gallery step dies with
-      # "no python with Pillow (PIL) found".
-      - name: Install Pillow for the setup-python interpreter
-        run: python -m pip install --disable-pip-version-check Pillow
-
       - name: Assemble pages/
         run: python tools/web/build_pages.py
 
