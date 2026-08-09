@@ -82,6 +82,14 @@ jobs:
         with:
           python-version: "3.12"
 
+      # actions/setup-python puts its own interpreter AHEAD of /usr/bin/python3
+      # on PATH, so the apt `python3-pil` installed further up is not importable
+      # from it. build-gallery.sh probes `python3` first, so Pillow has to exist
+      # in the setup-python interpreter too or the gallery step dies with
+      # "no python with Pillow (PIL) found".
+      - name: Install Pillow for the setup-python interpreter
+        run: python -m pip install --disable-pip-version-check Pillow
+
       - name: Assemble pages/
         run: python tools/web/build_pages.py
 
