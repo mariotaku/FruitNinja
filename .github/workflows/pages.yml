@@ -1,7 +1,6 @@
 name: Pages
 
 # Manual deploy only -- the maintainer controls cadence.
-# Trigger: Actions tab -> Pages -> Run workflow
 on:
   workflow_dispatch:
 
@@ -10,114 +9,75 @@ permissions:
   pages: write
   id-token: write
 
-# Cancel any in-progress deploy when a new one is requested.
 concurrency:
   group: pages
   cancel-in-progress: true
 
-# Game asset source (archive.org download/extract/hash-pin) is documented in
-# .github/actions/fetch-game-assets/action.yml.
-#
-# EMSDK_VERSION (the pinned emsdk version) is loaded from tools/web/config.sh
-# at runtime (the "Load pinned emsdk version" step below) so the version lives
-# in ONE place, shared with tools/web/rebuild-web.sh. See config.sh for rationale.
-
 jobs:
-  # -------------------------------------------------------------------------
-  # Job 1: Build the web target
-  # -------------------------------------------------------------------------
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ---- ONE Python for the whole job ------------------------------------
-      # Set up FIRST so every later step sees the same interpreter: CMake's
-      # find_package(Python3) picks it up as Python3_EXECUTABLE (stage-assets.py
-      # / svg-to-webp.py / web-hash-assets.py), and build_pages.py /
-      # build-gallery.sh resolve `python3` to it too. Unlike /usr/bin/python3 it
-      # is not PEP 668 externally-managed, so plain `pip install` works -- which
-      # is why the python module deps below are pip'd here instead of apt'd
-      # (apt would install into /usr/bin/python3, invisible to this one).
+      # First, so every later step (CMake's Python3_EXECUTABLE, build_pages.py,
+      # build-gallery.sh) uses this one interpreter. Unlike /usr/bin/python3 it
+      # is not PEP 668 externally-managed, so pip works -- hence pip, not apt,
+      # for the python modules below.
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      # Pillow: texture WebP encode (stage-assets.py, svg-to-webp.py) + the
-      # gallery's mesh dump / fruit_atlas decode (build-gallery.sh).
-      # fontTools: CJK font subset (stage-assets.py; best-effort, ships the
-      # full font without it). resvg-py self-provisions via `pip install
-      # --target` inside svg-to-webp.py.
+      # resvg-py self-provisions via `pip install --target` in svg-to-webp.py.
       - name: Install Python build deps
         run: python -m pip install --disable-pip-version-check Pillow fonttools
 
-      # ---- Load the pinned emsdk version (single source of truth) ----------
+      # EMSDK_VERSION lives in tools/web/config.sh, shared with rebuild-web.sh.
       - name: Load pinned emsdk version
         run: |
           . tools/web/config.sh
           echo "EMSDK_VERSION=$EMSDK_VERSION" >> "$GITHUB_ENV"
 
-      # ---- Set up native Emscripten toolchain (emcc on PATH) ---------------
       - name: Set up emsdk ${{ env.EMSDK_VERSION }}
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: ${{ env.EMSDK_VERSION }}
           actions-cache-folder: emsdk-cache
 
-      # ---- Install native staging deps (ninja + ffmpeg binaries) -----------
-      # Binaries only -- python modules come from the pip step above, so they
-      # land in the interpreter every step actually uses.
       - name: Install native build deps
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build ffmpeg
 
-      # ---- Download + extract game assets from archive.org -----------------
+      # Source documented in .github/actions/fetch-game-assets/action.yml.
       - name: Fetch game assets
         uses: ./.github/actions/fetch-game-assets
 
-      # ---- Build web target with native Emscripten -------------------------
-      # Single entrypoint shared with local dev (tools/web/rebuild-web.sh calls
-      # the same script): configure-if-needed, race-safe two-step build, output
-      # verify + link retry. Same pinned emsdk version (6.0.0, emcc/ninja/ffmpeg
-      # now on PATH from the steps above) so the build is reproducible and
-      # matches the environment the shell.html / LEGACY_GL_EMULATION /
-      # glTexEnvi code was verified on.
+      # Same entrypoint as local dev (tools/web/rebuild-web.sh).
       - name: Build web bundle (tools/web/build.sh)
         run: bash tools/web/build.sh --release
 
       - name: Verify build outputs
         run: |
-          echo "=== build/web/ outputs ==="
-          # Entry is index.html (renamed from fruit-ninja.html); assets are hashed
-          # (fruit-ninja-<sha8>.*). Assert the key outputs + the PWA files exist.
           ls -lh build/web/index.html
           ls -lh build/web/fruit-ninja-*.js build/web/fruit-ninja-*.wasm build/web/fruit-ninja-*.data
           ls -lh build/web/manifest.webmanifest build/web/sw.js build/web/favicon.ico
 
-      # ---- Assemble pages/ ------------------------------------------------
       - name: Assemble pages/
         run: python tools/web/build_pages.py
 
       - name: Verify pages/ structure
         run: |
-          echo "=== pages/ (flat, game at root) ==="
           ls -la pages/
           test -f pages/index.html
           test -f pages/.nojekyll
           ls pages/fruit-ninja-*.js pages/fruit-ninja-*.wasm pages/fruit-ninja-*.data
 
-      # ---- Build asset gallery (<site>/gallery) ----------------------------
-      # Run AFTER build_pages.py -- it shutil.rmtree()s pages/ first, so the
-      # gallery must land after that or it gets wiped. Not committed: this
-      # regenerates it from the FruitNinjaBada dump downloaded above (same
-      # python3-pil installed in "Install native build deps").
+      # Must run after build_pages.py -- that rmtree()s pages/ first.
       - name: Build asset gallery
         run: bash tools/web/build-gallery.sh pages/gallery
 
-      # ---- Upload artifact ------------------------------------------------
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v6
 
@@ -126,9 +86,6 @@ jobs:
         with:
           path: pages/
 
-  # -------------------------------------------------------------------------
-  # Job 2: Deploy
-  # -------------------------------------------------------------------------
   deploy:
     needs: build
     runs-on: ubuntu-latest
