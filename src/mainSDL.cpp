@@ -208,6 +208,34 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: SDL-webOS unconditionally sets the shell property
+    // _WEBOS_ACCESS_POLICY_FORCESTRETCH = "true" (SDL_waylandwebos.c:179), so
+    // LSM always stretches our surface to fill the panel, ignoring aspect.
+    // Worse, the drawable never gets resized to the panel's true pixel count
+    // either -- the webOS shell registers no compositor configure/resize
+    // listener, so it stays exactly the size passed to SDL_CreateWindow. The
+    // window is therefore FORCED to 16:9 (the panel's aspect) so FORCESTRETCH
+    // becomes a uniform scale instead of an anamorphic one. Pillarboxing for
+    // the faithful 3:2 layout is NOT optional here -- there is no letterbox
+    // toggle on webOS (removed from Settings) -- it always happens inside
+    // that 16:9 buffer via Layout::ComputeViewport (see Layout.cpp).
+    // An explicit --window WxH (parsed above) still wins over this query.
+    if (!winExplicit) {
+        SDL_DisplayMode mode;
+        int h = 0;
+        if (SDL_GetDesktopDisplayMode(0, &mode) == 0 && mode.w > 0 && mode.h > 0) {
+            h = mode.h;
+        }
+        if (h <= 0) {
+            h = 1080;
+        }
+        winH = h;
+        winW = (int)(h * 16.0f / 9.0f + 0.5f);
+    }
+    LOG_INFO("mainSDL", "webOS window size: %dx%d (forced 16:9, fullscreen)", winW, winH);
+#endif
+
     // ASM-spec v1.6.1 FruitNinja::OnAppInitializing @0x001ef9e4:
     //   calls Osp::System::PowerManager::KeepScreenOnState(true, true) once at end of
     //   app init, unconditionally, never released -- screen held on for app lifetime.
@@ -242,11 +270,20 @@ int main(int argc, char* argv[]) {
     // and causes splats (z=-50) to paint over fruits (z>=+32).
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
+    Uint32 windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN;
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: SDL_SetWindowFullscreen() after creation is a no-op on
+    // the webOS shell (confirmed against the TV's built-in SDL). The flag
+    // must be passed to SDL_CreateWindow instead -- SDL core sets
+    // window->w/h before Wayland_CreateWindow runs, and GetBufferSize's
+    // fullscreen branch keys off SDL_WINDOW_FULLSCREEN.
+    windowFlags |= SDL_WINDOW_FULLSCREEN;
+#endif
     SDL_Window* window = SDL_CreateWindow(
         "Fruit Ninja",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         winW, winH,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
+        windowFlags
     );
     if (!window) {
         LOG_ERROR("mainSDL", "Window failed: %s", SDL_GetError());
