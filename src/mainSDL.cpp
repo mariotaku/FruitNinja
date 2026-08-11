@@ -220,18 +220,13 @@ int main(int argc, char* argv[]) {
     // the faithful 3:2 layout is NOT optional here -- there is no letterbox
     // toggle on webOS (removed from Settings) -- it always happens inside
     // that 16:9 buffer via Layout::ComputeViewport (see Layout.cpp).
-    // An explicit --window WxH (parsed above) still wins over this query.
+    // Only the ASPECT has to match; the SIZE does not. LSM scales whatever we
+    // give it up to the panel, so keep the small 640-tall buffer the other
+    // platforms use rather than rendering at the panel's full pixel count.
+    // An explicit --window WxH (parsed above) still wins.
     if (!winExplicit) {
-        SDL_DisplayMode mode;
-        int h = 0;
-        if (SDL_GetDesktopDisplayMode(0, &mode) == 0 && mode.w > 0 && mode.h > 0) {
-            h = mode.h;
-        }
-        if (h <= 0) {
-            h = 1080;
-        }
-        winH = h;
-        winW = (int)(h * 16.0f / 9.0f + 0.5f);
+        winW = 1136;   // ~16:9 at 640 tall, same size the widescreen pref uses
+        winH = 640;
     }
     LOG_INFO("mainSDL", "webOS window size: %dx%d (forced 16:9, fullscreen)", winW, winH);
 #endif
