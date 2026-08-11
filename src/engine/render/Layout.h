@@ -137,20 +137,20 @@ float MapX_impl(float x, const char* key);
 // viewport rect, shared by render (Game::renderFrame's glViewport) and
 // input (InputTranslatorSDL::TransformTouchNormalized). Computes the
 // largest EffectiveAspect()-shaped rect that fits inside winW x winH,
-// centred. When !IsWideLayout(), returns the full window unchanged
-// (0, 0, winW, winH) -- this is what keeps the non-widescreen path
-// byte-identical to pre-widescreen behaviour. Also returns the full window
-// unchanged when !IsLetterbox() (content stretches to fill instead of being
-// aspect-fit with bars) -- default IsLetterbox()==true preserves the fit
-// behaviour above, so this is a no-op unless something calls
-// SetLetterbox(false).
+// centred, whenever IsLetterbox() is on (default true) -- independent of
+// IsWideLayout(), since a compositor (webOS panel resize, Wii TV aspect)
+// can hand the app a window shape that doesn't match the content aspect
+// even without widescreen. Returns the full window unchanged
+// (0, 0, winW, winH) when !IsLetterbox() (content stretches to fill instead
+// of being aspect-fit with bars). A desktop window pre-sized to exactly
+// EffectiveAspect() (mainSDL.cpp's non-wide default) is a no-op here by
+// construction, so a non-widescreen host/web build that isn't resized stays
+// byte-identical to pre-Pass-3 behaviour.
 void ComputeViewport(int winW, int winH, int* outX, int* outY, int* outW, int* outH);
 
-// Port specific: Wii-only variant -- fits whenever IsLetterbox() is on,
-// regardless of IsWideLayout(). See Layout.cpp's comment for why Wii needs
-// this (its "window" is the TV's own physical aspect, never pre-shaped to
-// match the content aspect the way host/web's default window is). Not called
-// from any non-Wii TU.
+// Port specific: alias for ComputeViewport, kept so existing Wii call sites
+// don't need to change. ComputeViewport itself now always fits whenever
+// IsLetterbox() is on, so this is no longer a distinct behaviour.
 void ComputeViewportFitAlways(int winW, int winH, int* outX, int* outY, int* outW, int* outH);
 
 // Stores the most recently applied viewport rect + the window size it was
