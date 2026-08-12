@@ -21,15 +21,45 @@
 #include "platform/InputTranslatorSDL.h"
 #include "input/Touch.h"
 #include "debug/DebugFlags.h"
+#include "debug/Logger.h"
 #include "render/Layout.h"
 #include <cstring>
 
 #ifdef FN_DEBUG_TOUCH
-#  include "debug/Logger.h"
 #  define TLOG(fmt, ...) LOG_DEBUG("TOUCH", fmt, ##__VA_ARGS__)
 #else
 #  define TLOG(...) ((void)0)
 #endif
+
+// Port specific: SDL_HINT_MOUSE_TOUCH_EVENTS (mouse -> synthetic SDL_FINGER*)
+// was added in SDL 2.0.10; on any older SDL the hint string does not exist in
+// the library at all, so setting it (mainSDL.cpp, before SDL_Init) is a
+// silent no-op and no SDL_FINGER* ever arrives for a mouse device -- only
+// SDL_MOUSEBUTTONDOWN/UP/MOTION. This must be a RUNTIME check: the app
+// COMPILES against SDL 2.26.5 headers, but the webOS TV (lk5900) LOADS the
+// platform's own much older LG-customized libSDL2-2.0.so.0 (observed SONAME
+// libSDL2-2.0.so.0.4.1 -- somewhere in the 2.0.4-2.0.8 range: the string
+// "SDL_MOUSE_TOUCH_EVENTS" is absent from the .so, and SDL_GameControllerRumble
+// (added 2.0.9) is also missing). A compile-time SDL_VERSION_ATLEAST would see
+// 2.26.5 and wrongly assume the hint works. Confirmed on-device: only
+// SDL_MOUSEBUTTONDOWN/UP arrive (button=1, a real mouse id), never
+// SDL_FINGER*. Computed once, lazily, on first use.
+static bool MouseTouchFallbackActive() {
+    static bool s_bMouseTouchFallbackComputed = false;
+    static bool s_bMouseTouchFallback = false;
+    if (!s_bMouseTouchFallbackComputed) {
+        SDL_version v;
+        SDL_GetVersion(&v);
+        s_bMouseTouchFallback =
+            SDL_VERSIONNUM(v.major, v.minor, v.patch) < SDL_VERSIONNUM(2, 0, 10);
+        LOG_INFO("TOUCH", "SDL runtime %d.%d.%d detected -- mouse-touch fallback %s\n",
+                 (int)v.major, (int)v.minor, (int)v.patch,
+                 s_bMouseTouchFallback ? "ACTIVE (pre-2.0.10, no mouse->touch synthesis)"
+                                       : "inactive");
+        s_bMouseTouchFallbackComputed = true;
+    }
+    return s_bMouseTouchFallback;
+}
 
 InputTranslatorSDL::InputTranslatorSDL()
     : motionModeWasOn(FN::g_MotionMode)
@@ -388,10 +418,46 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // that slot away from the blade -- so while a button is held there is no
     // blade at all. Only meaningful while motion mode is ON; otherwise
     // HOVER_CHANNEL is never pressed and this is a no-op.
+    //
+    // Port specific: webOS TV delivers SDL_MOUSEBUTTONDOWN/UP for a real
+    // pointer device (button=1, a genuine mouse id, not SDL_TOUCH_MOUSEID) --
+    // SDL_HINT_MOUSE_TOUCH_EVENTS synthesis does not raise SDL_FINGERDOWN
+    // there because the TV's runtime SDL predates 2.0.10, the version that
+    // introduced the hint (see MouseTouchFallbackActive above). Bada hardware
+    // is touch-only and has no mouse device, so there is no binary semantic
+    // to match here -- this is the same event-driven fallback shape as the
+    // SDL_MOUSEBUTTONUP case below, mirrored onto the press edge. Gated on
+    // MouseTouchFallbackActive() so SDL >= 2.0.10 (desktop/web) never runs
+    // this path; the fingerActive[MOUSE_CHANNEL] guard is kept as a second,
+    // belt-and-suspenders idempotency check.
     case SDL_MOUSEBUTTONDOWN: {
-        if (!FN::g_MotionMode) break;
-        TLOG("MOTION MOUSEBUTTONDOWN -- lifting blade\n");
-        PointerReleaseHoverChannel();
+        if (FN::g_MotionMode) {
+            TLOG("MOTION MOUSEBUTTONDOWN -- lifting blade\n");
+            PointerReleaseHoverChannel();
+        }
+
+        if (MouseTouchFallbackActive() &&
+            ev.button.button == SDL_BUTTON_LEFT && !fingerActive[MOUSE_CHANNEL]) {
+            int ww = 0, wh = 0;
+            if (window) SDL_GetWindowSize(window, &ww, &wh);
+            if (ww > 0 && wh > 0) {
+                float nx = (float)ev.button.x / (float)ww;
+                float ny = (float)ev.button.y / (float)wh;
+
+                int ch = MapFingerId((SDL_FingerID)SDL_TOUCH_MOUSEID);
+                if (ch >= 0) {
+                    float gx, gy;
+                    TransformTouchNormalized(nx, ny, gx, gy);
+                    fingerX[ch] = gx;
+                    fingerY[ch] = gy;
+                    fingerSuspended[ch] = false;
+                    TLOG("MOUSEBUTTONDOWN (fallback) ch=%d raw=(%g,%g) game=(%g,%g)\n",
+                         ch, nx, ny, gx, gy);
+
+                    Mortar::Touch::GetInstance().OnPressed(ch + 1, gx, gy);
+                }
+            }
+        }
         break;
     }
 
@@ -404,6 +470,54 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // synthesized SDL_FINGERMOTION drives MOUSE_CHANNEL instead, so a drag
     // scrolls/scrubs exactly as it does with motion mode off.
     case SDL_MOUSEMOTION: {
+        // Port specific: pre-2.0.10 mouse-touch fallback -- drag edge. No
+        // synthetic SDL_FINGERMOTION arrives on these SDL builds, so MOUSE_
+        // CHANNEL would otherwise stay frozen at its press position for the
+        // whole drag (dead sliders / dead Settings-plate scroll on webOS TV).
+        // Mirrors the SDL_FINGERMOTION case above for MOUSE_CHANNEL only,
+        // including the out-of-window suspend/resume handling, gated on a
+        // fallback press actually being live (fingerActive[MOUSE_CHANNEL]).
+        // Independent of the motion-mode hover-cursor block below -- MOUSE_
+        // CHANNEL (pressed drag) and HOVER_CHANNEL (unpressed cursor) are
+        // separate channels and both run in the same event when applicable.
+        if (MouseTouchFallbackActive() && fingerActive[MOUSE_CHANNEL]) {
+            int ww = 0, wh = 0;
+            if (window) SDL_GetWindowSize(window, &ww, &wh);
+            if (ww > 0 && wh > 0) {
+                float nx = (float)ev.motion.x / (float)ww;
+                float ny = (float)ev.motion.y / (float)wh;
+
+                bool wasOut = fingerSuspended[MOUSE_CHANNEL];
+                bool nowOut = IsOutOfWindow(nx, ny);
+
+                if (!wasOut && nowOut) {
+                    TLOG("MOUSEMOTION (fallback) OUT-OF-WINDOW ch=%d -- synthesizing release at last in-bounds (%g,%g)\n",
+                         MOUSE_CHANNEL, fingerX[MOUSE_CHANNEL], fingerY[MOUSE_CHANNEL]);
+                    Mortar::Touch::GetInstance().OnReleased(MOUSE_CHANNEL + 1);
+                    fingerSuspended[MOUSE_CHANNEL] = true;
+                } else if (wasOut && !nowOut) {
+                    float gx, gy;
+                    TransformTouchNormalized(nx, ny, gx, gy);
+                    fingerX[MOUSE_CHANNEL] = gx;
+                    fingerY[MOUSE_CHANNEL] = gy;
+                    fingerSuspended[MOUSE_CHANNEL] = false;
+                    TLOG("MOUSEMOTION (fallback) RE-ENTER-WINDOW ch=%d game=(%g,%g) -- synthesizing fresh press\n",
+                         MOUSE_CHANNEL, gx, gy);
+                    Mortar::Touch::GetInstance().OnPressed(MOUSE_CHANNEL + 1, gx, gy);
+                } else if (wasOut) {
+                    TransformTouchNormalized(nx, ny, fingerX[MOUSE_CHANNEL], fingerY[MOUSE_CHANNEL]);
+                    TLOG("MOUSEMOTION (fallback) MOVE (suspended, still out) ch=%d\n", MOUSE_CHANNEL);
+                } else {
+                    float gx, gy;
+                    TransformTouchNormalized(nx, ny, gx, gy);
+                    fingerX[MOUSE_CHANNEL] = gx;
+                    fingerY[MOUSE_CHANNEL] = gy;
+                    TLOG("MOUSEMOTION (fallback) MOVE ch=%d game=(%g,%g)\n", MOUSE_CHANNEL, gx, gy);
+                    Mortar::Touch::GetInstance().OnMoved(MOUSE_CHANNEL + 1, gx, gy);
+                }
+            }
+        }
+
         if (!FN::g_MotionMode) break;
         if (ev.motion.state != 0) break;  // a button is held -- not hovering
 
@@ -435,7 +549,13 @@ void InputTranslatorSDL::DrainSDLEvent(const SDL_Event& ev, SDL_Window* window) 
     // SDL_MOUSEBUTTONUP only, leaving fingerActive set for SDL_TOUCH_MOUSEID.
     // Handle it here as the event-driven fallback for the mouse channel.
     // Port specific: the mouse is always MOUSE_CHANNEL (see MapFingerId), so
-    // no channel scan is needed here.
+    // no channel scan is needed here. Deliberately NOT gated on
+    // MouseTouchFallbackActive() -- desktop SDL (>= 2.0.10) can still hit
+    // this path per the comment above, so it must keep running unconditionally.
+    // It also pairs correctly with a press that came from the pre-2.0.10
+    // SDL_MOUSEBUTTONDOWN fallback: that path maps the mouse through the same
+    // MapFingerId(SDL_TOUCH_MOUSEID), so fingerActive[MOUSE_CHANNEL] and
+    // fingerMap[MOUSE_CHANNEL] are set identically either way.
     case SDL_MOUSEBUTTONUP: {
         // Port specific: MOTION MODE -- releasing the last held button
         // re-presses the HOVER blade at the current position (if the cursor is
