@@ -30,6 +30,7 @@
 #include "platform/AppDirSDL.h"
 #include "platform/SaveDirSDL.h"
 #include <cstdio>
+#include <cstdarg>
 #include <cstring>
 #include <ctime>
 #include <vector>
@@ -282,6 +283,40 @@ bool Game::init(void* win, void* gl) {
 // tick that also runs UpdatePoints (head-cap reconcile). This is the #173 fix.
 // Focus-loss / WINDOW events still fire ReleaseAllFingers() immediately (#162).
 // Non-touch keyboard/debug events are handled inline as before (#163 fidelity).
+#ifdef FN_DEBUG_TOUCH
+// Port specific: FN_DEBUG_TOUCH sink. Mirrors each input event to a file as
+// well as the log, so the events can be read back off a device whose stdout we
+// do not own (a webOS app launched from the TV's own launcher). First writable
+// path wins; a NULL file just drops the line.
+static void FnTouchDebugLog(const char* fmt, ...) {
+    static FILE* s_pFile   = NULL;
+    static bool  s_bTried  = false;
+    if (!s_bTried) {
+        s_bTried = true;
+        const char* paths[] = { "/tmp/fn-touch.log", "fn-touch.log" };
+        for (unsigned i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i) {
+            s_pFile = fopen(paths[i], "w");
+            if (s_pFile) {
+                LOG_INFO("TOUCH", "event log -> %s", paths[i]);
+                break;
+            }
+        }
+    }
+
+    char line[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(line, sizeof(line), fmt, args);
+    va_end(args);
+
+    LOG_DEBUG("TOUCH", "poll %s\n", line);
+    if (s_pFile) {
+        fprintf(s_pFile, "%s\n", line);
+        fflush(s_pFile);   // the app is killed, not closed -- flush every line
+    }
+}
+#endif
+
 void Game::pollInput() {
     SDL_Event ev;
     while (SDL_PollEvent(&ev)) {
@@ -291,14 +326,26 @@ void Game::pollInput() {
         // if MOUSEBUTTONDOWN shows here instead of FINGERDOWN, the hint is not active.
         // MOUSEMOTION is intentionally excluded -- it fires every frame the
         // cursor moves and we don't handle it (touch uses FINGER* events).
-        if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP ||
-            ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION || ev.type == SDL_FINGERUP) {
-            LOG_DEBUG("TOUCH", "poll ev.type=0x%x (%s)\n", ev.type,
-                ev.type == SDL_MOUSEBUTTONDOWN ? "MOUSEBUTTONDOWN" :
-                ev.type == SDL_MOUSEBUTTONUP   ? "MOUSEBUTTONUP" :
-                ev.type == SDL_FINGERDOWN       ? "FINGERDOWN" :
-                ev.type == SDL_FINGERMOTION     ? "FINGERMOTION" :
-                ev.type == SDL_FINGERUP         ? "FINGERUP" : "?");
+        if (ev.type == SDL_MOUSEBUTTONDOWN || ev.type == SDL_MOUSEBUTTONUP) {
+            // which == SDL_TOUCH_MOUSEID marks a mouse event SDL synthesized
+            // from a real touch; a device that only has a pointer never sets it.
+            FnTouchDebugLog("%s button=%d which=%u x=%d y=%d",
+                ev.type == SDL_MOUSEBUTTONDOWN ? "MOUSEBUTTONDOWN" : "MOUSEBUTTONUP",
+                (int)ev.button.button, (unsigned)ev.button.which,
+                ev.button.x, ev.button.y);
+        } else if (ev.type == SDL_FINGERDOWN || ev.type == SDL_FINGERMOTION ||
+                   ev.type == SDL_FINGERUP) {
+            FnTouchDebugLog("%s finger=%d nx=%.4f ny=%.4f",
+                ev.type == SDL_FINGERDOWN   ? "FINGERDOWN" :
+                ev.type == SDL_FINGERMOTION ? "FINGERMOTION" : "FINGERUP",
+                (int)ev.tfinger.fingerId, ev.tfinger.x, ev.tfinger.y);
+        } else if (ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) {
+            // A TV remote's OK/click can arrive as a key rather than a pointer
+            // button. Log it so we can tell the two apart on device.
+            FnTouchDebugLog("%s scancode=%d keycode=%d (%s)",
+                ev.type == SDL_KEYDOWN ? "KEYDOWN" : "KEYUP",
+                (int)ev.key.keysym.scancode, (int)ev.key.keysym.sym,
+                SDL_GetKeyName(ev.key.keysym.sym));
         }
 #endif
         if (ev.type == SDL_QUIT) {
