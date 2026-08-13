@@ -27,7 +27,8 @@ Widescreen (16:9):
 - **Motion mode.** Point to aim, flick to cut, instead of dragging a finger.
   On by default, and what makes an LG Magic Remote work.
 - **Native refresh rate.** The sim keeps the original's fixed 60 Hz tick and
-  frames interpolate on top, so a 120 Hz screen gets 120 fps.
+  frames interpolate on top, so a 120 Hz screen gets 120 fps. Desktop and web
+  only -- the webOS UI layer does not appear to draw past 60.
 - **A settings screen.** v1.6.1 has no options UI at all. This one saves your
   language, input and display choices.
 - **webOS TV and Wii.**
