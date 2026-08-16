@@ -11,8 +11,9 @@ namespace Debug {
     // step (Game::stepUpdate(), src/GameSDL.cpp -- *SDL.cpp, excluded from
     // the __bada__ cross-build). Read by the log output callback
     // (FnSdlLogToStdout in mainSDL.cpp / mainEmscripten.cpp) to prefix every
-    // line with "[NNNNNN]". Not reset on new-game; reflects ticks since
-    // process start.
+    // line with "[NNNNNN]", and by the pre-SDL_Init fallback path in
+    // LoggerSDL.cpp, which prints the same format directly. Not reset on
+    // new-game; reflects ticks since process start.
     extern unsigned int g_LogTick;
 
 #ifdef __GNUC__

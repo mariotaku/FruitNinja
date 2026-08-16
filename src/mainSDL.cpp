@@ -75,6 +75,79 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
 }
 
 int main(int argc, char* argv[]) {
+    // Disable stdout buffering so log lines flush immediately. Without
+    // this, line-buffered stdout silently drops the last few logs when
+    // the process crashes (SEGV doesn't flush). Critical for debugging.
+    setvbuf(stdout, nullptr, _IONBF, 0);
+    setvbuf(stderr, nullptr, _IONBF, 0);
+
+    // Port specific: an unattended/remote run (CI, overnight, webosbrew user
+    // running headless) has nobody there to click a dialog. A crash/assert/
+    // abort() must terminate the process, never HANG it behind an invisible
+    // "Microsoft Visual C++ Runtime Library" modal. Route the Debug CRT's
+    // error/assert/warn reports to stderr instead of a MessageBox, and stop
+    // the OS's own WER crash dialog too. Do NOT remove this to "restore" the
+    // dialogs -- a hang is worse than a visible crash for unattended runs.
+#if defined(_WIN32) && defined(_MSC_VER)
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR,  _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_WARN,   _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_WARN,   _CRTDBG_FILE_STDERR);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+#endif
+
+    // Win32 + _DEBUG only: register an unhandled-SEH filter that prints
+    // exception code, faulting address, and a symbolised stack trace
+    // to stderr before the OS terminates the process. No-op elsewhere.
+    FN::InstallCrashHandler();
+
+    // Synthesize SDL_FINGER* events from SDL_MOUSE* so the InputTranslator
+    // only needs to handle the touch path. SDL produces the synthetic
+    // events with finger id = SDL_TOUCH_MOUSEID.
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
+    // ...and DISABLE the reverse (touch -> mouse). SDL's default is "1",
+    // which makes a real touch ALSO emit synthetic mouse events; combined
+    // with MOUSE_TOUCH_EVENTS=1 above that round-trips a single physical
+    // touch back into a SECOND synthetic SDL_FINGER* event, doubling input.
+    // We want exactly one touch per physical pointer action: mouse is
+    // converted to touch (one-way) and the input path is touch-only.
+    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
+
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: claim the TV remote's Back key for the app.
+    //
+    // webOS routes Back to the system by default -- the launcher closes the app
+    // and SDL never sees a key event. SDL-webOS reads this hint when it creates
+    // the shell surface and, when set, sets the Wayland surface property
+    // "_WEBOS_ACCESS_POLICY_KEYS_BACK" = "true" (SDL_waylandwebos.c, webOS-2.30.x),
+    // which makes LSM deliver Back to us as a normal SDL_KEYDOWN instead.
+    // Must be set before the window is created (see FN_SCANCODE_WEBOS_BACK in
+    // GameSDL.cpp for the receiving end).
+    //
+    // Deliberately NOT done for the Exit key: Exit must keep closing the app.
+    SDL_SetHint(SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK, "true");
+#endif
+
+    // Port specific: route SDL_Log output to stdout (see FnSdlLogToStdout above).
+    // Registered as early as possible so every subsequent SDL log goes through it.
+    SDL_LogSetOutputFunction(FnSdlLogToStdout, NULL);
+
+    // Port specific: SDL_Init runs FIRST, ahead of every LOG_* producing step
+    // below (Game ctor, app/save dir resolution, LoadSettings). LG's webOS SDL2
+    // crashes inside SDL_LogMessageV before SDL_Init -- its PmLog path calls a
+    // function pointer that only gets dlsym'd during SDL_Init (see the
+    // pre-init fallback in src/debug/LoggerSDL.cpp). Keeping SDL_Init above the
+    // logging work means normal startup logs still go through SDL as before.
+    // The hints above must stay ahead of SDL_Init; everything moved below it
+    // only has to run before SDL_CreateWindow / game.init().
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
+        LOG_ERROR("mainSDL", "SDL_Init failed: %s", SDL_GetError());
+        return 1;
+    }
+
     // Port specific: construct the Game singleton and resolve data_dir/save_dir
     // up front (mirrors Game::init(), GameSDL.cpp) so GetSettingsSavePath() --
     // which reads Game::GetInstance() -- resolves to the same path
@@ -142,71 +215,6 @@ int main(int argc, char* argv[]) {
         winH = 640;
     }
 #endif
-
-    // Disable stdout buffering so log lines flush immediately. Without
-    // this, line-buffered stdout silently drops the last few logs when
-    // the process crashes (SEGV doesn't flush). Critical for debugging.
-    setvbuf(stdout, nullptr, _IONBF, 0);
-    setvbuf(stderr, nullptr, _IONBF, 0);
-
-    // Port specific: an unattended/remote run (CI, overnight, webosbrew user
-    // running headless) has nobody there to click a dialog. A crash/assert/
-    // abort() must terminate the process, never HANG it behind an invisible
-    // "Microsoft Visual C++ Runtime Library" modal. Route the Debug CRT's
-    // error/assert/warn reports to stderr instead of a MessageBox, and stop
-    // the OS's own WER crash dialog too. Do NOT remove this to "restore" the
-    // dialogs -- a hang is worse than a visible crash for unattended runs.
-#if defined(_WIN32) && defined(_MSC_VER)
-    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
-    _CrtSetReportMode(_CRT_ERROR,  _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ERROR,  _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
-    _CrtSetReportMode(_CRT_WARN,   _CRTDBG_MODE_FILE);
-    _CrtSetReportFile(_CRT_WARN,   _CRTDBG_FILE_STDERR);
-    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
-#endif
-
-    // Win32 + _DEBUG only: register an unhandled-SEH filter that prints
-    // exception code, faulting address, and a symbolised stack trace
-    // to stderr before the OS terminates the process. No-op elsewhere.
-    FN::InstallCrashHandler();
-
-    // Synthesize SDL_FINGER* events from SDL_MOUSE* so the InputTranslator
-    // only needs to handle the touch path. SDL produces the synthetic
-    // events with finger id = SDL_TOUCH_MOUSEID.
-    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "1");
-    // ...and DISABLE the reverse (touch -> mouse). SDL's default is "1",
-    // which makes a real touch ALSO emit synthetic mouse events; combined
-    // with MOUSE_TOUCH_EVENTS=1 above that round-trips a single physical
-    // touch back into a SECOND synthetic SDL_FINGER* event, doubling input.
-    // We want exactly one touch per physical pointer action: mouse is
-    // converted to touch (one-way) and the input path is touch-only.
-    SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
-
-#if defined(FRUIT_PLATFORM_WEBOS)
-    // Port specific: claim the TV remote's Back key for the app.
-    //
-    // webOS routes Back to the system by default -- the launcher closes the app
-    // and SDL never sees a key event. SDL-webOS reads this hint when it creates
-    // the shell surface and, when set, sets the Wayland surface property
-    // "_WEBOS_ACCESS_POLICY_KEYS_BACK" = "true" (SDL_waylandwebos.c, webOS-2.30.x),
-    // which makes LSM deliver Back to us as a normal SDL_KEYDOWN instead.
-    // Must be set before the window is created (see FN_SCANCODE_WEBOS_BACK in
-    // GameSDL.cpp for the receiving end).
-    //
-    // Deliberately NOT done for the Exit key: Exit must keep closing the app.
-    SDL_SetHint(SDL_HINT_WEBOS_ACCESS_POLICY_KEYS_BACK, "true");
-#endif
-
-    // Port specific: route SDL_Log output to stdout (see FnSdlLogToStdout above).
-    // Registered as early as possible so every subsequent SDL log goes through it.
-    SDL_LogSetOutputFunction(FnSdlLogToStdout, NULL);
-
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        LOG_ERROR("mainSDL", "SDL_Init failed: %s", SDL_GetError());
-        return 1;
-    }
 
 #if defined(FRUIT_PLATFORM_WEBOS)
     // Port specific: SDL-webOS unconditionally sets the shell property
