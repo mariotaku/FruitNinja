@@ -215,6 +215,7 @@ void Renderer::DrawShaded2D(const void* verts, int vertCount, int stride,
 void Renderer::Flush2D() {
     const size_t bytes = m_Batch2D.size();
     if (bytes == 0) return;
+    ++m_DrawCallCount;
     const int vertCount = (int)(bytes / sizeof(Shaded2DVertex));
     GLStateShadow& st = m_GLState;
 
@@ -273,6 +274,20 @@ void Renderer::Flush2D() {
         return;
     }
 
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: webOS TV drivers (Mali-class tilers) stall or ghost the
+    // whole ring when glBufferSubData writes a buffer that earlier draws in
+    // the same (or previous, still-rendering) frame reference -- a serialised
+    // CPU/GPU sync per Flush2D, dozens of times a frame. Respecifying the
+    // buffer each flush hands the driver fresh storage instead (the orphan
+    // idiom ARM recommends). Same buffer object at offset 0, so the attrib
+    // pointers stay valid. Draw output is identical.
+    glBufferData(GL_ARRAY_BUFFER, size, packed, GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, vertCount);
+    m_Batch2D.clear();
+    return;
+#endif
+
     if (m_RingCursor + size > kRingSize) {
         // Orphan: fresh storage, rewind. Avoids stalling on verts still in
         // flight (the WebGL-safe streaming idiom).
@@ -295,6 +310,7 @@ void Renderer::DrawMesh3D(GLuint vbo, GLuint ibo, int vertCount, int indexCount,
     // Stage-2 barrier: 2D verts submitted before this mesh must be drawn
     // before it (2D/3D interleave via the depth buffer -- order matters).
     Flush2D();
+    ++m_DrawCallCount;
     GLStateShadow& st = m_GLState;
 
     if (!st.programValid || st.program != m_Mesh3D.Program()) {

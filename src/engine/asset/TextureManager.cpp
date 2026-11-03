@@ -76,6 +76,21 @@ Mortar::SmartPtr<Texture> TextureManager::Load(const char* path,
     const char* resolvedPath = path;
     bool isHd = false;
 #ifdef FN_ENABLE_HD_ASSETS
+    // Port specific: consult the cache BEFORE probing the disk. The probe is
+    // a stat, and on a miss (the usual case) ResolvePathCI's per-component
+    // stat + readdir of the whole texture directory -- costly on TV flash for
+    // every Load of an already-cached texture. Assets are read-only at
+    // runtime, so a cached HD entry proves the HD file exists, and a cached
+    // plain entry proves it didn't when that entry was loaded.
+    {
+        const bool haveHdPath = BuildHdPath(path, hdPath, sizeof(hdPath));
+        if (haveHdPath) {
+            Mortar::SmartPtr<Texture> hdHit = Find(StringHash(hdPath));
+            if (hdHit.IsValid()) return hdHit;
+        }
+        Mortar::SmartPtr<Texture> plainHit = Find(StringHash(path));
+        if (plainHit.IsValid()) return plainHit;
+    }
     if (BuildHdPath(path, hdPath, sizeof(hdPath)) && Mortar::File::Exists(hdPath, 0)) {
         LOG_DEBUG(kHdLogTag, "Using HD texture: %s", hdPath);
         resolvedPath = hdPath;

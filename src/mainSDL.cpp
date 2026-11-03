@@ -211,6 +211,17 @@ int main(int argc, char* argv[]) {
             FN::g_bOsdSfx = true;
         } else if (strcmp(argv[i], "--fps") == 0) {
             FN::g_ShowFps = true;
+#if defined(FRUIT_PLATFORM_WEBOS)
+        } else if (const char* fps = strstr(argv[i], "\"fps\"")) {
+            // Port specific: webOS hands a native app its launch params as a
+            // JSON string argument, and a TV remote has no F3 -- so
+            //   ares-launch -d <tv> com.halfbrick.fruitninja -p '{"fps":true}'
+            // toggles the FPS/perf overlay. showFps is persisted by
+            // SaveSettings, so it sticks until launched with "fps":false.
+            fps += 5;
+            while (*fps == ' ' || *fps == ':') ++fps;
+            FN::g_ShowFps = (strncmp(fps, "true", 4) == 0);
+#endif
         } else if (strcmp(argv[i], "--widescreen") == 0) {
 #ifndef __bada__
             Layout::SetWideLayout(true);

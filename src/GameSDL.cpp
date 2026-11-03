@@ -137,6 +137,16 @@ static double s_fpsWindowSecs   = 0.0;
 static int    s_fpsWindowFrames = 0;
 static const double kFpsWindowTarget = 0.5;  // recompute every ~0.5 seconds
 
+// Port specific: perf breakdown for the same overlay, accumulated over the same
+// window (performance-counter ticks). SIM = fixed-step updates, DRAW = CPU time
+// in renderFrame before the swap (includes any driver stall inside GL calls),
+// SWAP = SDL_GL_SwapWindow (vsync wait + GPU backpressure). DC = GL draw calls
+// per frame (Renderer::m_DrawCallCount). Read on-device to see where a slow
+// frame goes; only collected while the overlay is on.
+static Uint64 s_perfSimTicks  = 0;
+static Uint64 s_perfDrawTicks = 0;
+static Uint64 s_perfSwapTicks = 0;
+
 // Port specific: wall-clock timestamp of the previous renderFrame call, used
 // to age OSD toasts at display cadence (independent of the 60 Hz sim rate).
 static Uint64 s_osdLastCounter = 0;
@@ -710,7 +720,9 @@ void Game::renderFrame(float alpha, int steps) {
         r->Flush2D();
     }
     do_screenshot_if_requested(static_cast<SDL_Window*>(window));
+    Uint64 swapStart = SDL_GetPerformanceCounter();
     SDL_GL_SwapWindow(static_cast<SDL_Window*>(window));
+    s_perfSwapTicks += SDL_GetPerformanceCounter() - swapStart;
 }
 
 // Port specific: one complete game tick — poll, step, render.
@@ -763,8 +775,20 @@ void Game::run() {
             s_fpsWindowFrames += 1;
             if (s_fpsWindowSecs >= kFpsWindowTarget) {
                 s_currentFps      = static_cast<float>(s_fpsWindowFrames / s_fpsWindowSecs);
+                const double perFrameMs = 1000.0 / (freq * s_fpsWindowFrames);
+                int drawCalls = 0;
+                if (Renderer* r = Renderer::GetInstance()) {
+                    drawCalls = r->m_DrawCallCount / s_fpsWindowFrames;
+                    r->m_DrawCallCount = 0;
+                }
+                char detail[96];
+                snprintf(detail, sizeof(detail), "SIM %.1f  DRAW %.1f  SWAP %.1f MS  DC %d",
+                         s_perfSimTicks * perFrameMs, s_perfDrawTicks * perFrameMs,
+                         s_perfSwapTicks * perFrameMs, drawCalls);
+                FN::DebugFps_SetDetail(detail);
                 s_fpsWindowSecs   = 0.0;
                 s_fpsWindowFrames = 0;
+                s_perfSimTicks = s_perfDrawTicks = s_perfSwapTicks = 0;
             }
         }
 
@@ -795,12 +819,14 @@ void Game::run() {
         bool freeze = m_bBackgrounded &&
                       game_work.mMainScreen && game_work.mMainScreen->IsInGameplay();
         int steps = freeze ? 0 : driver.advance(ms);
+        Uint64 simStart = SDL_GetPerformanceCounter();
         for (int i = 0; i < steps && running; ++i) {
             stepUpdate();
 #if defined(FN_RENDER_INTERP) && FN_RENDER_INTERP
             fn::RenderInterp::Get().SnapshotAfterStep();
 #endif
         }
+        s_perfSimTicks += SDL_GetPerformanceCounter() - simStart;
 
         // Port specific: no binary counterpart. Per-PRESENT UI tick (see
         // Game.h tickRealtimeUi) -- runs once per rendered/presented frame
@@ -824,7 +850,10 @@ void Game::run() {
             tickRealtimeUi(static_cast<float>(dtPresent));
         }
 
+        Uint64 drawStart = SDL_GetPerformanceCounter();
+        Uint64 swapBefore = s_perfSwapTicks;
         renderFrame(static_cast<float>(driver.alpha()), steps);
+        s_perfDrawTicks += (SDL_GetPerformanceCounter() - drawStart) - (s_perfSwapTicks - swapBefore);
 
         // Port specific: "Limit to 60 FPS" (FN::g_FpsCap60, SettingsScreen
         // checkbox) -- caps PRESENT rate only, sim stays the fixed 60 Hz

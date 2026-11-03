@@ -490,6 +490,16 @@ if (EMSCRIPTEN AND NOT FN_WEB_DEBUG)
     add_compile_definitions(FN_LOG_ERRORS_ONLY=1)
     message(STATUS "Emscripten: non-error logging compiled out (FN_LOG_ERRORS_ONLY)")
 endif()
+# webOS: same, for a different sink. LG's system SDL2 routes every
+# SDL_LogMessage through PmLog (see LoggerSDL.cpp), and the stdout mirror is
+# unbuffered + fflush'd per line, so each log is a blocking write on the main
+# thread -- several per slice (GameSound logs every SFX play). Turn
+# FN_WEBOS_VERBOSE_LOGS on (or FN_DEBUG_TOUCH) for on-device debugging.
+option(FN_WEBOS_VERBOSE_LOGS "Keep INFO/DEBUG logging in the webOS build" OFF)
+if (FRUIT_PLATFORM_WEBOS AND NOT FN_WEBOS_VERBOSE_LOGS AND NOT FN_DEBUG_TOUCH)
+    add_compile_definitions(FN_LOG_ERRORS_ONLY=1)
+    message(STATUS "webOS: non-error logging compiled out (FN_LOG_ERRORS_ONLY)")
+endif()
 
 # --- Emscripten profiling build (Chrome/Firefox flame-graph profiling) ---
 # Keeps C++ function names in the wasm name section (--profiling-funcs) so the

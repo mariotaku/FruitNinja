@@ -210,6 +210,10 @@ struct Renderer {
     // stage-1 path. Compile-time default override: FN_2D_PRETRANSFORM_DEFAULT.
     bool m_Merge2DPreTransform;
 
+    // Port specific: GL draw calls issued (Flush2D + DrawMesh3D) since the
+    // perf overlay last read and reset it (GameSDL.cpp). Diagnostic only.
+    int m_DrawCallCount;
+
     // Port specific: no binary counterpart. Wraps glPolygonMode(GL_FRONT_AND_BACK,
     // GL_LINE/GL_FILL) for the F2 wireframe debug toggle. No-op where glPolygonMode
     // is unavailable (GLES / Emscripten) -- same guard the call site used to have.

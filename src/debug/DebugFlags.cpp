@@ -430,6 +430,15 @@ static Mortar::FontCacheObjectTTF* s_FpsFontCache = 0;
 static Mortar::BakedStringTTF* s_FpsBaked = 0;
 // Last integer value that s_FpsBaked was built for (sentinel -1 = not yet built).
 static int s_FpsLastInt = -1;
+// Port specific: optional perf breakdown appended after "FPS NNN" (set by the
+// platform main loop via DebugFps_SetDetail). s_FpsLastDetail is the detail
+// text s_FpsBaked was built with.
+static char s_FpsDetail[96]     = "";
+static char s_FpsLastDetail[96] = "";
+
+void DebugFps_SetDetail(const char* text) {
+    snprintf(s_FpsDetail, sizeof(s_FpsDetail), "%s", text ? text : "");
+}
 
 static Mortar::FontCacheObjectTTF* EnsureFpsFontCache() {
     if (!s_FpsTTFFont.IsValid()) {
@@ -468,13 +477,18 @@ void DebugFps_Draw(float fps) {
 
     const int fpsInt = (int)(fps + 0.5f);
 
-    if (fpsInt != s_FpsLastInt) {
+    if (fpsInt != s_FpsLastInt || strcmp(s_FpsDetail, s_FpsLastDetail) != 0) {
         delete s_FpsBaked;
         s_FpsBaked = 0;
         s_FpsLastInt = -1;
 
-        char buf[16];
-        snprintf(buf, sizeof(buf), "FPS %d", fpsInt);
+        char buf[128];
+        if (s_FpsDetail[0]) {
+            snprintf(buf, sizeof(buf), "FPS %d  %s", fpsInt, s_FpsDetail);
+        } else {
+            snprintf(buf, sizeof(buf), "FPS %d", fpsInt);
+        }
+        memcpy(s_FpsLastDetail, s_FpsDetail, sizeof(s_FpsLastDetail));
 
         // Plain white, size 12, no circle, no gradient, no glow.
         // weight=0 (left-aligned), FONT_EFFECT_NONE.

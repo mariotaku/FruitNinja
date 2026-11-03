@@ -169,6 +169,11 @@ void DebugHUDBounds_Draw();
 // No-op when g_ShowFps is false or fps <= 0.
 void DebugFps_Draw(float fps);
 
+// Port specific: extra text drawn after "FPS NNN" (e.g. the per-frame
+// sim/draw/swap ms and draw-call breakdown GameSDL.cpp's run() measures).
+// Empty string = plain "FPS NNN". Copied; rebuilds the baked string on change.
+void DebugFps_SetDetail(const char* text);
+
 // Draw a thick line from m_TailPos to m_HeadPos for every active blade
 // (IsBladeActive() == true). Yellow line + small end-cap markers.
 // Call from GameDraw after DebugHitbox_Draw / DebugHUDBounds_Draw.
@@ -225,6 +230,7 @@ static const bool  g_MotionMode          = false;
 inline void DebugHitbox_Draw()  {}
 inline void DebugHUDBounds_Draw() {}
 inline void DebugFps_Draw(float) {}
+inline void DebugFps_SetDetail(const char*) {}
 inline void DebugBladeTrails_Draw() {}
 inline void DebugText_Overlay(float, float,
                                bool,

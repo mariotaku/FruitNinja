@@ -29,7 +29,7 @@
 Renderer* Renderer::s_instance = nullptr;
 
 #if defined(FRUIT_PLATFORM_WII)
-Renderer::Renderer() : m_Merge2DPreTransform(false), m_WhiteTexBuf(nullptr), m_WhiteTex(kWhiteTexSentinel) {}
+Renderer::Renderer() : m_Merge2DPreTransform(false), m_DrawCallCount(0), m_WhiteTexBuf(nullptr), m_WhiteTex(kWhiteTexSentinel) {}
 
 // Stage-2 2D batching is GL-backend only; GX draws immediately, so the
 // barrier call sites (DisplayManager, portable setters) link against this.
@@ -37,6 +37,7 @@ void Renderer::Flush2D() {}
 #else
 Renderer::Renderer()
     : m_Merge2DPreTransform(FN_2D_PRETRANSFORM_DEFAULT != 0),
+      m_DrawCallCount(0),
       m_QuadVBO(0), m_WhiteTex(0), m_RingCursor(0),
       m_BatchTex(0), m_BatchPreXf(false) {
     memset(&m_GLState, 0, sizeof(m_GLState));
