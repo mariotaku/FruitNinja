@@ -86,7 +86,10 @@ jobs:
         uses: robinraju/release-downloader@v1.9
         with:
           repository: "webosbrew/ares-cli-rs"
-          latest: true
+          # v0.7.0 writes every directory as 0777. Older releases write 0775,
+          # which webOS 1 installs as root:root, so the jailed app cannot
+          # create its Save/ directory.
+          tag: "v0.7.0"
           # Pin the host arch: releases ship both _amd64 and _arm64 .deb, and a
           # bare "ares-package_*.deb" glob pulls BOTH -- the later
           # "apt-get install ./temp/*.deb" then fails on the foreign-arch package.
