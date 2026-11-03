@@ -74,6 +74,25 @@ static void FnSdlLogToStdout(void* /*userdata*/, int /*category*/, SDL_LogPriori
     fflush(stdout);
 }
 
+// Teardown for every exit from main() after SDL_Init.
+// Game::~Game() chains to Game::shutdown() -> End() -> GameDestroy(), which
+// dereferences engine singletons (e.g. Mortar::MeshManager) that only exist
+// after Game::init() ran GameInitialise(). The Game is deleted only when init
+// succeeded. On an early exit it is left to the process exit.
+struct SdlTeardownGuard {
+    SDL_Window* window;
+    SDL_GLContext gl;
+    Game* game;
+    bool gameBooted;
+    SdlTeardownGuard() : window(NULL), gl(NULL), game(NULL), gameBooted(false) {}
+    ~SdlTeardownGuard() {
+        if (gl) SDL_GL_DeleteContext(gl);
+        if (window) SDL_DestroyWindow(window);
+        SDL_Quit();
+        if (gameBooted) delete game;
+    }
+};
+
 int main(int argc, char* argv[]) {
     // Disable stdout buffering so log lines flush immediately. Without
     // this, line-buffered stdout silently drops the last few logs when
@@ -148,6 +167,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    SdlTeardownGuard guard;
+
     // Port specific: construct the Game singleton and resolve data_dir/save_dir
     // up front (mirrors Game::init(), GameSDL.cpp) so GetSettingsSavePath() --
     // which reads Game::GetInstance() -- resolves to the same path
@@ -156,7 +177,9 @@ int main(int argc, char* argv[]) {
     // would silently load from (and only ever save to) two different paths --
     // i.e. never actually load. save_dir goes through the same shared
     // Mortar_ResolveSaveDir() resolver Game::init calls, so the two can't drift.
-    Game game;
+    // Heap-allocated so a failed boot can skip ~Game (see SdlTeardownGuard).
+    guard.game = new Game;
+    Game& game = *guard.game;
 #if defined(FRUIT_PLATFORM_WEBOS)
     std::string appDir = fn_webos_app_dir();
     game.data_dir = appDir + "/Data";
@@ -290,9 +313,9 @@ int main(int argc, char* argv[]) {
     );
     if (!window) {
         LOG_ERROR("mainSDL", "Window failed: %s", SDL_GetError());
-        SDL_Quit();
         return 1;
     }
+    guard.window = window;
 
     // Logged BEFORE the call: on Windows a software-GL fallback (Mesa
     // llvmpipe) hitting the real display adapter instead can hard-terminate
@@ -305,10 +328,9 @@ int main(int argc, char* argv[]) {
     SDL_GLContext gl = SDL_GL_CreateContext(window);
     if (!gl) {
         LOG_ERROR("mainSDL", "GL context failed: %s", SDL_GetError());
-        SDL_DestroyWindow(window);
-        SDL_Quit();
         return 1;
     }
+    guard.gl = gl;
     SDL_GL_SetSwapInterval(1);
 
     if (!gl_load_functions()) {
@@ -333,8 +355,8 @@ int main(int argc, char* argv[]) {
     // Without a real depth buffer GL_DEPTH_TEST is a no-op and later-drawn
     // splats would paint over fruits regardless of z values.
     {
-        int gotDepth = 0;
-        SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &gotDepth);
+        GLint gotDepth = 0;
+        glGetIntegerv(GL_DEPTH_BITS, &gotDepth);
         LOG_INFO("GL", "depth buffer bits: %d (requested 24)", gotDepth);
         if (gotDepth == 0) {
             LOG_ERROR("GL", "FATAL: context has 0 depth bits; depth test cannot occlude (splats would cover fruits).");
@@ -347,6 +369,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    guard.gameBooted = true;
     game.run();
 
     // Port specific: save on normal window-close, BEFORE shutdown(). The binary
@@ -363,9 +386,5 @@ int main(int argc, char* argv[]) {
     GameTaskSaveOnExit();
 
     game.shutdown();
-
-    SDL_GL_DeleteContext(gl);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
     return 0;
 }
