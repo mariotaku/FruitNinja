@@ -1,0 +1,9 @@
+{
+  "id": "puss",
+  "title": "Gato con Botas Ninja",
+  "version": "1.0",
+  "appid": "FNDLC_PIB",
+  "pkg_name": "FruitNinjaDLC_PussInBoots.pkg",
+  "replaces": ["textures", "sfx", "strings"],
+  "notes": "Crossover Puss in Boots / Gato con Botas. Assets en packs/puss/Data/"
+}

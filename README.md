@@ -31,7 +31,7 @@ Widescreen (16:9):
   only -- the webOS UI layer does not appear to draw past 60.
 - **A settings screen.** v1.6.1 has no options UI at all. This one saves your
   language, input and display choices.
-- **webOS TV and Wii.**
+- **webOS TV, Wii, and PS3 (scaffold).**
 
 Smaller things: mouse-wheel scrolling, ESC/Back as a back key, F12 screenshots,
 optional HD textures, and an offline-capable PWA build for the web.
@@ -46,12 +46,37 @@ Everything is CMake.
 | Web | Emscripten + WebGL | static site | `tools/web/build.sh` |
 | LG webOS TV | SDL2 + GLES2 | `.ipk` | `tools/webos/build.sh` |
 | Nintendo Wii | devkitPPC + libogc, native GX | homebrew `.zip` | `tools/wii/build.sh` |
+| PlayStation 3 | PSL1GHT (scaffold) | `.elf` / `.pkg` | `tools/ps3/build.sh` |
 
 Each target has its own README with the setup details. CI builds the webOS
 `.ipk` and the Wii zip on every push, and attaches both to a GitHub release when
 one is published.
 
 Wii is playable but still rough; see `src/platform/wii/README.md`.
+
+### PlayStation 3 (scaffold)
+
+Opt-in only (`FRUIT_PLATFORM_PS3`). Needs [ps3toolchain](https://github.com/ps3dev/ps3toolchain) + [PSL1GHT](https://github.com/ps3dev/PSL1GHT). Details: `src/platform/ps3/README.md` and `src/platform/ps3/ENABLE.md`.
+
+```bash
+export PS3DEV=/usr/local/ps3dev
+export PSL1GHT=$PS3DEV/psl1ght
+export PATH=$PS3DEV/bin:$PS3DEV/ppu/bin:$PATH
+
+# If CMakeLists is missing PS3 wiring on this branch:
+bash tools/ps3/apply-cmake-ps3.sh
+
+bash tools/ps3/build.sh          # ELF
+bash tools/ps3/build.sh pkg      # TestBuildFruitNinja1.0.pkg
+bash tools/ps3/package-assets.sh # FruitNinjaNECESARRYAssets.PKG (your Data/)
+bash tools/ps3/package-dlc.sh skittles   # optional DLC packs
+```
+
+**Input (DualShock 3):** left stick = blade, Cross (X) = cut, right stick = UI.
+
+**Status:** platform scaffolding + pad translator + packaging scripts. RSX
+display / full game loop still TODO. Does not change host/web/webOS/Wii builds
+when the option is OFF.
 
 ## How to develop
 

@@ -1,0 +1,100 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -28,6 +28,13 @@
+ # explicitly with -DFRUIT_PLATFORM_WEBOS=ON.
+ option(FRUIT_PLATFORM_WEBOS "Build for webOS TV (SDL2 + GLES2)" OFF)
+ 
++# --- PS3 port scaffolding (OFF by default; needs PSL1GHT / ps3toolchain) ---
++# When ON, adds src/platform/ps3 sources and a fruit-ninja ELF suitable for
++# fself/pkg packaging. Requires -DCMAKE_TOOLCHAIN_FILE=cmake/ps3.toolchain.cmake
++# (or the toolchain file forces FRUIT_PLATFORM_PS3=ON). See src/platform/ps3/README.md.
++# Default OFF: zero effect on host/web/webOS/Wii configures.
++option(FRUIT_PLATFORM_PS3 "Build the PS3 (PSL1GHT) platform target -- requires ps3toolchain" OFF)
++
+ # App version string, substituted into deploy/webos/appinfo.json (@FN_APP_VERSION@)
+ # and matching tools/wii/hbc/meta.xml's <version>. No PROJECT_VERSION is set on
+ # the project() call below (this isn't versioned via CMake's own mechanism), so
+@@ -151,6 +158,13 @@
+     add_compile_definitions(FRUIT_PLATFORM_WII=1)
+ endif()
+ 
++# Propagate FRUIT_PLATFORM_PS3 for #ifdef guards in src/platform/ps3/*.
++if (FRUIT_PLATFORM_PS3)
++    add_compile_definitions(FRUIT_PLATFORM_PS3=1)
++    # Cell PPU is big-endian; reuse the same endian gates as Wii where applicable.
++    add_compile_definitions(FN_BIG_ENDIAN=1)
++endif()
++
+ # Auto-enable FRUIT_PLATFORM_WEBOS when cross-compiling with the webOS
+ # buildroot toolchain (CMAKE_CXX_COMPILER_TARGET / CMAKE_SYSROOT are only
+ # populated after project() processes CMAKE_TOOLCHAIN_FILE, hence this runs
+@@ -553,7 +567,7 @@
+ # Wii has no SDL2/SDL2_image/FreeType -- GX handles video, ASND/AESND audio,
+ # libfat filesystem, WPAD input. Guard each dependency block below so a Wii
+ # configure never touches FetchContent/find_package for these; nothing in
+ # src/platform/wii links against them (see src/platform/wii/README.md).
+-if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
++if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII AND NOT FRUIT_PLATFORM_PS3)
+ 
+ if (FRUIT_PLATFORM_WEBOS)
+@@ -643,7 +657,7 @@
+ #   1. System package (MSYS2: mingw-w64-SDL2_image, Linux: libsdl2-image-dev).
+ #   2. MSVC: FetchContent prebuilt VC zip from libsdl-org/SDL_image releases.
+ set(_SDL2_IMAGE_VER 2.8.2)
+ 
+-if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII)
++if(NOT FN_ASM_VERIFY AND NOT FRUIT_PLATFORM_WII AND NOT FRUIT_PLATFORM_PS3)
+ 
+ find_package(SDL2_image QUIET)
+@@ -827,6 +841,10 @@
+     # GameInitialise.cpp. mainWii.cpp mkdir()s this at boot (it doesn't ship
+     # with the staged asset deploy).
+     set(FN_SAVE_DIR_PATH "sd:/apps/fruitninja/save")
++elseif (FRUIT_PLATFORM_PS3)
++    # PS3: data from installed assets/DLC pkgs under the game title USRDIR.
++    set(FN_DATA_DIR_PATH "/dev_hdd0/game/FNASSET01/USRDIR/Data")
++    set(FN_SAVE_DIR_PATH "/dev_hdd0/game/FNTEST100/USRDIR/save")
+ else()
+     # Host now reads from the staged dir (WebP-transcoded textures), not
+     # FruitNinjaBada/Data directly -- see fn_asset_staging below.
+@@ -864,12 +882,11 @@
+     add_subdirectory(src/debug)
+     add_subdirectory(src/resource)
+ 
+-    if (FRUIT_PLATFORM_WII)
+-        # No SDL2 on Wii -- GX/ASND/libfat/WPAD replace it entirely (see
+-        # src/platform/wii/README.md). tinyxml2 is portable C++ and still
+-        # links; mortar_engine's own OpenGL::GL link is skipped for this
+-        # platform too (see src/engine/CMakeLists.txt).
++    if (FRUIT_PLATFORM_WII OR FRUIT_PLATFORM_PS3)
++        # No SDL2 on Wii/PS3 -- platform backends replace it.
+         target_link_libraries(fruit-ninja-game PUBLIC
+             tinyxml2::tinyxml2 mortar_engine
+         )
+     else()
+@@ -1393,6 +1410,17 @@
+     set(CPACK_INCLUDE_TOPLEVEL_DIRECTORY OFF)
+     set(CPACK_PACKAGE_DIRECTORY ${CMAKE_BINARY_DIR})
+     include(CPack)
++elseif (FRUIT_PLATFORM_PS3)
++    # PS3 entry point -- scaffolding. Requires cmake/ps3.toolchain.cmake +
++    # -DFRUIT_PLATFORM_PS3=ON (toolchain may force the option ON).
++    # See src/platform/ps3/README.md. Package with tools/ps3/package.sh.
++    add_executable(fruit-ninja src/platform/ps3/mainPS3.cpp)
++    if (TARGET fn_asset_staging)
++        add_dependencies(fruit-ninja fn_asset_staging)
++    endif()
++    fn_link_game_engine_group(fruit-ninja PRIVATE)
++    target_link_libraries(fruit-ninja PRIVATE
++        -lio -lsysutil -lrt -llv2 -lm)
+ else()
+     # Native desktop/webOS entry point. FRUIT_PLATFORM_WEBOS reuses this
+     # exact branch (it is neither EMSCRIPTEN nor FRUIT_PLATFORM_WII) --
+@@ -1540,7 +1568,7 @@
+     message(STATUS "FN_DEBUG_TOUCH = ON")
+ endif()
+ 
+-if (NOT EMSCRIPTEN AND NOT FRUIT_PLATFORM_WII AND NOT FRUIT_PLATFORM_WEBOS)
++if (NOT EMSCRIPTEN AND NOT FRUIT_PLATFORM_WII AND NOT FRUIT_PLATFORM_WEBOS AND NOT FRUIT_PLATFORM_PS3)
+     # --- ctest ---
+     # Wii/webOS: cross-compiled ARM/PPC binaries can't run on the host anyway,

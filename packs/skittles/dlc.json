@@ -1,0 +1,9 @@
+{
+  "id": "skittles",
+  "title": "Skittles Ninja",
+  "version": "1.0",
+  "appid": "FNDLC_SKT",
+  "pkg_name": "FruitNinjaDLC_Skittles.pkg",
+  "replaces": ["textures", "sfx", "strings"],
+  "notes": "Reskin de caramelos Skittles. Poner assets en packs/skittles/Data/"
+}
