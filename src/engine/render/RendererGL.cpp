@@ -98,6 +98,16 @@ void Renderer::shutdown() {
         glDeleteBuffers(1, &m_QuadVBO);
         m_QuadVBO = 0;
     }
+#if defined(FRUIT_PLATFORM_WEBOS)
+    for (int i = 0; i < kPoolVBOCount; ++i) {
+        if (m_PoolVBO[i]) {
+            glDeleteBuffers(1, &m_PoolVBO[i]);
+            m_PoolVBO[i] = 0;
+        }
+        m_PoolVBOCap[i] = 0;
+    }
+    m_PoolVBONext = 0;
+#endif
     // Port specific: no binary counterpart. s_instance was never cleared here,
     // so it dangled past Game::renderer's stack lifetime; atexit singleton
     // teardown (PowerUpManager/TextureManager/PSPParticleManager freeing
@@ -245,6 +255,39 @@ void Renderer::Flush2D() {
         st.boundTexValid = true;
     }
 
+    const GLsizeiptr size = (GLsizeiptr)bytes;
+    const void* packed = &m_Batch2D[0];
+
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: webOS TV vendor GL drivers stall the CPU on a
+    // glBufferSubData into a buffer that earlier draws of the same frame
+    // still reference. Each flush takes its own VBO from a round-robin pool,
+    // so a buffer is reused only after the pool wraps, and it is orphaned on
+    // reuse so the driver never syncs on in-flight storage. Mesa-class
+    // drivers are faster with the ring below, hence webOS-only.
+    {
+        const int i = m_PoolVBONext;
+        m_PoolVBONext = (m_PoolVBONext + 1) % kPoolVBOCount;
+        if (!m_PoolVBO[i]) glGenBuffers(1, &m_PoolVBO[i]);
+        glBindBuffer(GL_ARRAY_BUFFER, m_PoolVBO[i]);
+        if (!st.ringReady) {
+            glEnableVertexAttribArray(0);
+            glEnableVertexAttribArray(1);
+            glEnableVertexAttribArray(2);
+            st.ringReady = true;
+        }
+        if (size > m_PoolVBOCap[i]) {
+            m_PoolVBOCap[i] = (size + 4095) & ~(GLsizeiptr)4095;
+        }
+        glBufferData(GL_ARRAY_BUFFER, m_PoolVBOCap[i], NULL, GL_DYNAMIC_DRAW);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, size, packed);
+        ConfigureRingAttribs();  // attrib pointers capture the bound buffer object
+        glDrawArrays(GL_TRIANGLES, 0, vertCount);
+        m_Batch2D.clear();
+        return;
+    }
+#endif
+
     // Bind the ring unconditionally: GL_ARRAY_BUFFER may have been rebound
     // (mesh uploads) since the batch opened. The attrib POINTERS captured
     // the ring buffer OBJECT, so only the upload target needs re-asserting;
@@ -257,9 +300,6 @@ void Renderer::Flush2D() {
         ConfigureRingAttribs();
         st.ringReady = true;
     }
-
-    const GLsizeiptr size = (GLsizeiptr)bytes;
-    const void* packed = &m_Batch2D[0];
     if (size > kRingSize) {
         // Oversize fallback (cannot occur via DrawShaded2D, which breaks the
         // batch before it outgrows the ring; kept for the degenerate case of

@@ -41,6 +41,11 @@ Renderer::Renderer()
       m_BatchTex(0), m_BatchPreXf(false) {
     memset(&m_GLState, 0, sizeof(m_GLState));
     memset(m_BatchMVP, 0, sizeof(m_BatchMVP));
+#if defined(FRUIT_PLATFORM_WEBOS)
+    memset(m_PoolVBO, 0, sizeof(m_PoolVBO));
+    memset(m_PoolVBOCap, 0, sizeof(m_PoolVBOCap));
+    m_PoolVBONext = 0;
+#endif
 }
 #endif
 

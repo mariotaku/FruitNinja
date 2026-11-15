@@ -43,6 +43,11 @@
 //   - 2D vertex data streams through a persistent ring inside m_QuadVBO via
 //     glBufferSubData (orphan + rewind on wrap); attribs 0/1/2 stay
 //     configured for the canonical Shaded2DVertex layout between 2D draws.
+//     On webOS (FRUIT_PLATFORM_WEBOS) Flush2D skips the ring and instead
+//     uploads each batch into its own VBO from a round-robin pool
+//     (m_PoolVBO), orphaning the slot on every reuse. Vendor TV drivers
+//     stall on glBufferSubData into a buffer that earlier draws of the same
+//     frame still reference.
 //   - RULE: any code that binds unit-0 GL_TEXTURE_2D directly must go
 //     through BindTexture2D (sampling intent, lazy) or BindTextureForUpload
 //     (texture create/upload, immediate) so the shadow never desyncs; any
@@ -315,6 +320,15 @@ private:
     };
     GLStateShadow m_GLState;
     GLsizeiptr m_RingCursor;              // next free byte in the ring (24-aligned)
+
+#if defined(FRUIT_PLATFORM_WEBOS)
+    // Port specific: webOS 2D upload pool (see Flush2D). One VBO per flush,
+    // handed out round-robin; storage capacity per slot only grows.
+    enum { kPoolVBOCount = 192 };
+    GLuint     m_PoolVBO[kPoolVBOCount];  // lazily glGenBuffers'd; 0 = not yet created
+    GLsizeiptr m_PoolVBOCap[kPoolVBOCount]; // allocated bytes per slot (4096-rounded)
+    int        m_PoolVBONext;             // next slot to use
+#endif
 
     // Port specific (stage 2): pending 2D batch. m_Batch2D holds packed
     // Shaded2DVertex bytes (always GL_TRIANGLES after strip expansion);
